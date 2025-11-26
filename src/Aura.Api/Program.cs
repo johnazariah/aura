@@ -4,11 +4,11 @@ using Aura.Foundation.Llm;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Add Aspire service defaults (telemetry, health checks, resilience)
+builder.AddServiceDefaults();
+
 // Add Aura Foundation services
 builder.Services.AddAuraFoundation(builder.Configuration);
-
-// Add health checks
-builder.Services.AddHealthChecks();
 
 // Add CORS for the VS Code extension
 builder.Services.AddCors(options =>
@@ -22,6 +22,9 @@ builder.Services.AddCors(options =>
 });
 
 var app = builder.Build();
+
+// Map Aspire default endpoints (health, alive)
+app.MapDefaultEndpoints();
 
 // Enable CORS
 app.UseCors();

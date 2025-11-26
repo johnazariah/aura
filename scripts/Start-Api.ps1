@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Start the Aura API server for local development.
+    Start the Aura AppHost server for local development.
 
 .DESCRIPTION
     Runs the Aura API on http://localhost:5300 with hot-reload enabled.
@@ -23,7 +23,7 @@ Write-Host ""
 
 Push-Location $projectRoot
 try {
-    dotnet run --project src/Aura.Api
+    dotnet run --project src/Aura.AppHost
 }
 finally {
     Pop-Location
