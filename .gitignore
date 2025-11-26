@@ -1,0 +1,42 @@
+# Build outputs
+bin/
+obj/
+out/
+
+# IDE
+.vs/
+.vscode/
+*.user
+*.suo
+
+# Rider
+.idea/
+
+# NuGet
+*.nupkg
+packages/
+
+# Node
+node_modules/
+
+# Test results
+TestResults/
+*.trx
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local config
+appsettings.Local.json
+appsettings.*.Local.json
+*.local.json
+
+# Secrets
+secrets.json
+*.pfx
+*.key
