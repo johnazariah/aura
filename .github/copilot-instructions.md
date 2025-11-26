@@ -151,3 +151,11 @@ dotnet test
 # Run (after AppHost is created)
 dotnet run --project src/Aura.AppHost
 ```
+
+## Development Environment
+
+**Container Runtime** (README says "Docker" for discoverability, but we use):
+- **Windows**: Podman
+- **macOS**: OrbStack
+
+Both are Docker-compatible, so Aspire works seamlessly with either.
