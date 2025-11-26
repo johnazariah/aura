@@ -1,5 +1,6 @@
 namespace Aura.Foundation.Modules;
 
+using Aura.Foundation.Agents;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
