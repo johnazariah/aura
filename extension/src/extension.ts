@@ -1,9 +1,10 @@
 import * as vscode from 'vscode';
 import { StatusTreeProvider } from './providers/statusTreeProvider';
-import { AgentTreeProvider } from './providers/agentTreeProvider';
+import { AgentTreeProvider, AgentItem } from './providers/agentTreeProvider';
 import { HealthCheckService } from './services/healthCheckService';
-import { AuraApiService } from './services/auraApiService';
+import { AuraApiService, AgentInfo } from './services/auraApiService';
 
+let auraApiService: AuraApiService;
 let healthCheckService: HealthCheckService;
 let statusTreeProvider: StatusTreeProvider;
 let agentTreeProvider: AgentTreeProvider;
@@ -14,7 +15,7 @@ export async function activate(context: vscode.ExtensionContext) {
     console.log('Aura extension activating...');
 
     // Initialize services
-    const auraApiService = new AuraApiService();
+    auraApiService = new AuraApiService();
     healthCheckService = new HealthCheckService(auraApiService);
     
     // Initialize tree providers
@@ -51,6 +52,14 @@ export async function activate(context: vscode.ExtensionContext) {
         vscode.window.showInformationMessage('Stopping Aura services... (Aspire orchestration coming soon)');
     });
 
+    const executeAgentCommand = vscode.commands.registerCommand('aura.executeAgent', async (item?: AgentItem) => {
+        await executeAgent(item);
+    });
+
+    const quickExecuteCommand = vscode.commands.registerCommand('aura.quickExecute', async () => {
+        await executeAgent();
+    });
+
     // Subscribe to configuration changes
     const configWatcher = vscode.workspace.onDidChangeConfiguration(e => {
         if (e.affectsConfiguration('aura')) {
@@ -66,6 +75,8 @@ export async function activate(context: vscode.ExtensionContext) {
         refreshCommand,
         startCommand,
         stopCommand,
+        executeAgentCommand,
+        quickExecuteCommand,
         configWatcher
     );
 
@@ -126,6 +137,83 @@ function setupAutoRefresh(): void {
 
     if (autoRefresh) {
         refreshInterval = setInterval(refreshAll, 10000); // 10 seconds
+    }
+}
+
+async function executeAgent(item?: AgentItem): Promise<void> {
+    try {
+        // Get agent - either from context menu item or prompt user to select
+        let agentId: string;
+        let agentName: string;
+
+        if (item && item.agent.id !== 'offline') {
+            agentId = item.agent.id;
+            agentName = item.agent.name;
+        } else {
+            // Fetch agents and let user pick
+            const agents = await auraApiService.getAgents();
+            if (agents.length === 0) {
+                vscode.window.showWarningMessage('No agents available');
+                return;
+            }
+
+            interface AgentPickItem extends vscode.QuickPickItem {
+                id: string;
+            }
+
+            const pickItems: AgentPickItem[] = agents.map((a: AgentInfo) => ({ 
+                label: a.name, 
+                description: a.model, 
+                id: a.id 
+            }));
+
+            const picked = await vscode.window.showQuickPick(pickItems, { 
+                placeHolder: 'Select an agent to execute' 
+            });
+
+            if (!picked) {
+                return;
+            }
+
+            agentId = picked.id;
+            agentName = picked.label;
+        }
+
+        // Get the prompt from user
+        const prompt = await vscode.window.showInputBox({
+            prompt: `Enter prompt for ${agentName}`,
+            placeHolder: 'What would you like the agent to do?'
+        });
+
+        if (!prompt) {
+            return;
+        }
+
+        // Get workspace path if available
+        const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+
+        // Show progress
+        await vscode.window.withProgress(
+            {
+                location: vscode.ProgressLocation.Notification,
+                title: `Executing ${agentName}...`,
+                cancellable: false
+            },
+            async () => {
+                const result = await auraApiService.executeAgent(agentId, prompt, workspacePath);
+                
+                // Show result in a new document
+                const doc = await vscode.workspace.openTextDocument({
+                    content: `# Agent: ${agentName}\n\n## Prompt\n${prompt}\n\n## Response\n${result}`,
+                    language: 'markdown'
+                });
+                await vscode.window.showTextDocument(doc);
+            }
+        );
+
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        vscode.window.showErrorMessage(`Failed to execute agent: ${message}`);
     }
 }
 

@@ -22,13 +22,18 @@ export class AuraApiService {
 
     constructor() {
         this.httpClient = axios.create({
-            timeout: 10000
+            timeout: 10000  // 10s for health checks and agent list
         });
     }
 
     getBaseUrl(): string {
         const config = vscode.workspace.getConfiguration('aura');
         return config.get<string>('apiUrl', 'http://localhost:5300');
+    }
+
+    getExecutionTimeout(): number {
+        const config = vscode.workspace.getConfiguration('aura');
+        return config.get<number>('executionTimeout', 120000);  // 2 minutes default
     }
 
     async getHealth(): Promise<HealthResponse> {
@@ -51,10 +56,11 @@ export class AuraApiService {
     }
 
     async executeAgent(agentId: string, prompt: string, workspacePath?: string): Promise<string> {
-        const response = await this.httpClient.post(`${this.getBaseUrl()}/api/agents/${agentId}/execute`, {
-            prompt,
-            workspacePath
-        });
+        const response = await this.httpClient.post(
+            `${this.getBaseUrl()}/api/agents/${agentId}/execute`,
+            { prompt, workspacePath },
+            { timeout: this.getExecutionTimeout() }  // Use longer timeout for LLM execution
+        );
         return response.data.content;
     }
 }

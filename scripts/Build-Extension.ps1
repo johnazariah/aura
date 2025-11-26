@@ -69,7 +69,7 @@ try {
     # Remove old VSIX files
     Get-ChildItem -Path . -Filter "*.vsix" | Remove-Item -Force
 
-    vsce package --no-dependencies
+    vsce package --no-dependencies --allow-missing-repository
     if ($LASTEXITCODE -ne 0) {
         throw "VSIX packaging failed"
     }

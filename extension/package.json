@@ -51,6 +51,16 @@
         "command": "aura.stopServices",
         "title": "Stop Aura Services",
         "icon": "$(debug-stop)"
+      },
+      {
+        "command": "aura.executeAgent",
+        "title": "Execute Agent",
+        "icon": "$(run)"
+      },
+      {
+        "command": "aura.quickExecute",
+        "title": "Aura: Execute Agent",
+        "icon": "$(run)"
       }
     ],
     "menus": {
@@ -59,6 +69,13 @@
           "command": "aura.refreshStatus",
           "when": "view == aura.status",
           "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "aura.executeAgent",
+          "when": "view == aura.agents && viewItem == agent",
+          "group": "inline"
         }
       ]
     },
@@ -79,6 +96,11 @@
           "type": "boolean",
           "default": true,
           "description": "Automatically refresh status every 10 seconds"
+        },
+        "aura.executionTimeout": {
+          "type": "number",
+          "default": 120000,
+          "description": "Timeout in milliseconds for agent execution (default: 2 minutes)"
         }
       }
     }

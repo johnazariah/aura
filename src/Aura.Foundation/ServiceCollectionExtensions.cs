@@ -49,14 +49,24 @@ public static class ServiceCollectionExtensions
     {
         // Configure options
         services.Configure<LlmOptions>(configuration.GetSection(LlmOptions.SectionName));
+        services.Configure<OllamaOptions>(configuration.GetSection(OllamaOptions.SectionName));
 
         // Registry
         services.AddSingleton<ILlmProviderRegistry, LlmProviderRegistry>();
 
-        // Stub provider for development (will be replaced by OllamaProvider in Phase 2)
+        // Ollama provider with typed HttpClient
+        services.AddHttpClient<OllamaProvider>(client =>
+        {
+            var ollamaSection = configuration.GetSection(OllamaOptions.SectionName);
+            var baseUrl = ollamaSection["BaseUrl"] ?? "http://localhost:11434";
+            client.BaseAddress = new Uri(baseUrl);
+            client.Timeout = TimeSpan.FromSeconds(300);
+        });
+
+        // Stub provider for testing/fallback
         services.AddSingleton<StubLlmProvider>();
 
-        // Register stub provider on startup
+        // Register providers on startup
         services.AddHostedService<LlmProviderInitializer>();
 
         return services;

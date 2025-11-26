@@ -1,5 +1,9 @@
 # Aura
 
+[![CI](https://github.com/johnazariah/aura/actions/workflows/ci.yml/badge.svg)](https://github.com/johnazariah/aura/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/johnazariah/aura/graph/badge.svg)](https://codecov.io/gh/johnazariah/aura)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 **Local-first, privacy-safe AI foundation for knowledge work.**
 
 Think of it as **"Windows Recall, but local and safe"** - your data never leaves your machine.
