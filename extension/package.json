@@ -1,0 +1,108 @@
+{
+  "name": "aura",
+  "displayName": "Aura - AI Development Assistant",
+  "description": "Local-first AI assistant for knowledge work",
+  "version": "0.1.0",
+  "publisher": "aura",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "aura",
+          "title": "Aura",
+          "icon": "resources/aura-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "aura": [
+        {
+          "id": "aura.status",
+          "name": "System Status"
+        },
+        {
+          "id": "aura.agents",
+          "name": "Agents"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "aura.refreshStatus",
+        "title": "Refresh Status",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "aura.startServices",
+        "title": "Start Aura Services",
+        "icon": "$(play)"
+      },
+      {
+        "command": "aura.stopServices",
+        "title": "Stop Aura Services",
+        "icon": "$(debug-stop)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "aura.refreshStatus",
+          "when": "view == aura.status",
+          "group": "navigation"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Aura",
+      "properties": {
+        "aura.apiUrl": {
+          "type": "string",
+          "default": "http://localhost:5300",
+          "description": "URL for the Aura API"
+        },
+        "aura.ollamaUrl": {
+          "type": "string",
+          "default": "http://localhost:11434",
+          "description": "URL for the Ollama service"
+        },
+        "aura.autoRefresh": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically refresh status every 10 seconds"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run package",
+    "compile": "webpack",
+    "watch": "webpack --watch",
+    "package": "webpack --mode production --devtool hidden-source-map",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^6.13.0",
+    "@typescript-eslint/parser": "^6.13.0",
+    "eslint": "^8.54.0",
+    "ts-loader": "^9.5.1",
+    "typescript": "^5.3.2",
+    "webpack": "^5.89.0",
+    "webpack-cli": "^5.1.4"
+  },
+  "dependencies": {
+    "axios": "^1.6.2"
+  }
+}
