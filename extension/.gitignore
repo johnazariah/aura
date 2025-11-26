@@ -1,0 +1,19 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+out/
+
+# VSIX packages
+*.vsix
+
+# TypeScript
+*.tsbuildinfo
+
+# VS Code
+.vscode-test/
+
+# OS
+.DS_Store
+Thumbs.db
