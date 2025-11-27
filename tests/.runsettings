@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Default runsettings: excludes Integration and E2E tests for fast feedback -->
+<RunSettings>
+  <RunConfiguration>
+    <TestCaseFilter>Category!=Integration&amp;Category!=E2E</TestCaseFilter>
+  </RunConfiguration>
+</RunSettings>

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- All tests runsettings: runs all tests including Integration and E2E -->
+<RunSettings>
+  <RunConfiguration>
+    <!-- No filter - runs everything -->
+  </RunConfiguration>
+</RunSettings>
