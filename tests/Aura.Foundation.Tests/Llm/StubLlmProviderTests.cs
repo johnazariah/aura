@@ -36,9 +36,8 @@ public class StubLlmProviderTests
         var result = await _sut.GenerateAsync("any-model", prompt);
 
         // Assert
-        result.IsSuccess.Should().BeTrue();
-        result.Value.Content.Should().Contain(prompt);
-        result.Value.Content.Should().Contain("[Stub response to:");
+        result.Content.Should().Contain(prompt);
+        result.Content.Should().Contain("[Stub response to:");
     }
 
     [Fact]
@@ -51,8 +50,7 @@ public class StubLlmProviderTests
         var result = await _sut.GenerateAsync(model, "test prompt");
 
         // Assert
-        result.IsSuccess.Should().BeTrue();
-        result.Value.Model.Should().Be(model);
+        result.Model.Should().Be(model);
     }
 
     [Fact]
@@ -70,9 +68,8 @@ public class StubLlmProviderTests
         var result = await _sut.ChatAsync("any-model", messages);
 
         // Assert
-        result.IsSuccess.Should().BeTrue();
-        result.Value.Content.Should().Contain("[Stub chat response to:");
-        result.Value.Content.Should().Contain("How are you?"); // Last user message
+        result.Content.Should().Contain("[Stub chat response to:");
+        result.Content.Should().Contain("How are you?"); // Last user message
     }
 
     [Fact]
@@ -103,6 +100,18 @@ public class StubLlmProviderTests
         var result = await _sut.GenerateAsync("model", "test");
 
         // Assert
-        result.Value.TokensUsed.Should().BeGreaterThan(0);
+        result.TokensUsed.Should().BeGreaterThan(0);
+    }
+
+    [Fact]
+    public async Task GenerateAsync_ThrowsWhenCancelled()
+    {
+        // Arrange
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        // Act & Assert
+        await _sut.Invoking(x => x.GenerateAsync("model", "test", cancellationToken: cts.Token))
+            .Should().ThrowAsync<OperationCanceledException>();
     }
 }

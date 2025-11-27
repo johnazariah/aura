@@ -1,0 +1,13 @@
+#!/bin/sh
+# Git hook dispatcher for Windows
+# Executes the PowerShell version of the hook
+
+HOOK_NAME=$(basename "$0")
+SCRIPT_DIR=$(dirname "$0")
+
+if [ -f "$SCRIPT_DIR/$HOOK_NAME.ps1" ]; then
+    pwsh -NoProfile -ExecutionPolicy Bypass -File "$SCRIPT_DIR/$HOOK_NAME.ps1" "$@"
+    exit $?
+fi
+
+exit 0

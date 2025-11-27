@@ -6,10 +6,10 @@ namespace Aura.Foundation.Tests.Agents;
 
 using Aura.Foundation.Agents;
 using Aura.Foundation.Llm;
-using CSharpFunctionalExtensions;
 using FluentAssertions;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 using Xunit;
 
 /// <summary>
@@ -76,16 +76,14 @@ public class ConfigurableAgentTests
             Arg.Any<IReadOnlyList<ChatMessage>>(),
             Arg.Any<double>(),
             Arg.Any<CancellationToken>())
-            .Returns(Result.Success<LlmResponse, LlmError>(
-                new LlmResponse("Hello!", TokensUsed: 10)));
+            .Returns(new LlmResponse("Hello!", TokensUsed: 10));
 
         // Act
         var result = await agent.ExecuteAsync(context);
 
         // Assert
-        result.IsSuccess.Should().BeTrue();
-        result.Value.Content.Should().Be("Hello!");
-        result.Value.TokensUsed.Should().Be(10);
+        result.Content.Should().Be("Hello!");
+        result.TokensUsed.Should().Be(10);
     }
 
     [Fact]
@@ -102,7 +100,7 @@ public class ConfigurableAgentTests
             Arg.Do<IReadOnlyList<ChatMessage>>(m => capturedMessages = m),
             Arg.Any<double>(),
             Arg.Any<CancellationToken>())
-            .Returns(Result.Success<LlmResponse, LlmError>(new LlmResponse("Hi!")));
+            .Returns(new LlmResponse("Hi!"));
 
         // Act
         await agent.ExecuteAsync(context);
@@ -132,7 +130,7 @@ public class ConfigurableAgentTests
             Arg.Do<IReadOnlyList<ChatMessage>>(m => capturedMessages = m),
             Arg.Any<double>(),
             Arg.Any<CancellationToken>())
-            .Returns(Result.Success<LlmResponse, LlmError>(new LlmResponse("Done!")));
+            .Returns(new LlmResponse("Done!"));
 
         // Act
         await agent.ExecuteAsync(context);
@@ -143,7 +141,7 @@ public class ConfigurableAgentTests
     }
 
     [Fact]
-    public async Task ExecuteAsync_ReturnsErrorWhenProviderNotFound()
+    public async Task ExecuteAsync_ThrowsWhenProviderNotFound()
     {
         // Arrange
         var definition = CreateDefinition("test-agent", provider: "unknown-provider");
@@ -154,12 +152,10 @@ public class ConfigurableAgentTests
             .Returns(false);
         _providerRegistry.GetDefaultProvider().Returns((ILlmProvider?)null);
 
-        // Act
-        var result = await agent.ExecuteAsync(context);
-
-        // Assert
-        result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be(AgentErrorCode.ProviderUnavailable);
+        // Act & Assert
+        var act = async () => await agent.ExecuteAsync(context);
+        await act.Should().ThrowAsync<AgentException>()
+            .Where(e => e.Code == AgentErrorCode.ProviderUnavailable);
     }
 
     [Fact]
@@ -177,7 +173,7 @@ public class ConfigurableAgentTests
             Arg.Any<IReadOnlyList<ChatMessage>>(),
             Arg.Any<double>(),
             Arg.Any<CancellationToken>())
-            .Returns(Result.Success<LlmResponse, LlmError>(new LlmResponse("Fallback!")));
+            .Returns(new LlmResponse("Fallback!"));
 
         _providerRegistry.TryGetProvider("unknown-provider", out Arg.Any<ILlmProvider?>())
             .Returns(false);
@@ -187,12 +183,11 @@ public class ConfigurableAgentTests
         var result = await agent.ExecuteAsync(context);
 
         // Assert
-        result.IsSuccess.Should().BeTrue();
-        result.Value.Content.Should().Be("Fallback!");
+        result.Content.Should().Be("Fallback!");
     }
 
     [Fact]
-    public async Task ExecuteAsync_ReturnsErrorOnLlmFailure()
+    public async Task ExecuteAsync_ThrowsOnLlmFailure()
     {
         // Arrange
         var definition = CreateDefinition("test-agent");
@@ -204,25 +199,22 @@ public class ConfigurableAgentTests
             Arg.Any<IReadOnlyList<ChatMessage>>(),
             Arg.Any<double>(),
             Arg.Any<CancellationToken>())
-            .Returns(Result.Failure<LlmResponse, LlmError>(
-                LlmError.GenerationFailed("Model crashed")));
+            .ThrowsAsync(LlmException.GenerationFailed("Model crashed"));
 
-        // Act
-        var result = await agent.ExecuteAsync(context);
-
-        // Assert
-        result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be(AgentErrorCode.ExecutionFailed);
+        // Act & Assert
+        var act = async () => await agent.ExecuteAsync(context);
+        await act.Should().ThrowAsync<AgentException>()
+            .Where(e => e.Code == AgentErrorCode.ExecutionFailed);
     }
 
     [Fact]
-    public async Task ExecuteAsync_ReturnsCancelledOnCancellation()
+    public async Task ExecuteAsync_PropagatesCancellation()
     {
         // Arrange
         var definition = CreateDefinition("test-agent");
         var agent = new ConfigurableAgent(definition, _providerRegistry, _logger);
         var context = AgentContext.FromPrompt("Hello!");
-        var cts = new CancellationTokenSource();
+        using var cts = new CancellationTokenSource();
         cts.Cancel();
 
         _provider.ChatAsync(
@@ -230,14 +222,11 @@ public class ConfigurableAgentTests
             Arg.Any<IReadOnlyList<ChatMessage>>(),
             Arg.Any<double>(),
             Arg.Any<CancellationToken>())
-            .Returns<Result<LlmResponse, LlmError>>(_ => throw new OperationCanceledException());
+            .ThrowsAsync(new OperationCanceledException());
 
-        // Act
-        var result = await agent.ExecuteAsync(context, cts.Token);
-
-        // Assert
-        result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be(AgentErrorCode.Cancelled);
+        // Act & Assert
+        var act = async () => await agent.ExecuteAsync(context, cts.Token);
+        await act.Should().ThrowAsync<OperationCanceledException>();
     }
 
     [Fact]
@@ -259,7 +248,7 @@ public class ConfigurableAgentTests
             Arg.Do<IReadOnlyList<ChatMessage>>(m => capturedMessages = m),
             Arg.Any<double>(),
             Arg.Any<CancellationToken>())
-            .Returns(Result.Success<LlmResponse, LlmError>(new LlmResponse("Response!")));
+            .Returns(new LlmResponse("Response!"));
 
         // Act
         await agent.ExecuteAsync(context);
@@ -287,7 +276,7 @@ public class ConfigurableAgentTests
             Arg.Any<IReadOnlyList<ChatMessage>>(),
             Arg.Do<double>(t => capturedTemperature = t),
             Arg.Any<CancellationToken>())
-            .Returns(Result.Success<LlmResponse, LlmError>(new LlmResponse("Hi!")));
+            .Returns(new LlmResponse("Hi!"));
 
         // Act
         await agent.ExecuteAsync(context);
@@ -314,6 +303,9 @@ public class ConfigurableAgentTests
             Temperature: temperature,
             SystemPrompt: systemPrompt,
             Capabilities: [],
+            Priority: AgentDefinition.DefaultPriority,
+            Languages: [],
+            Tags: [],
             Tools: []);
     }
 }

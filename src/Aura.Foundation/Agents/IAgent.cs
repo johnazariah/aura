@@ -4,8 +4,6 @@
 
 namespace Aura.Foundation.Agents;
 
-using CSharpFunctionalExtensions;
-
 /// <summary>
 /// Core contract for all agents in the Aura system.
 /// Agents process work items using LLM providers.
@@ -27,8 +25,10 @@ public interface IAgent
     /// </summary>
     /// <param name="context">The execution context.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>Result containing output or error.</returns>
-    Task<Result<AgentOutput, AgentError>> ExecuteAsync(
+    /// <returns>The agent output.</returns>
+    /// <exception cref="AgentException">Thrown when execution fails.</exception>
+    /// <exception cref="OperationCanceledException">Thrown when cancelled.</exception>
+    Task<AgentOutput> ExecuteAsync(
         AgentContext context,
         CancellationToken cancellationToken = default);
 }

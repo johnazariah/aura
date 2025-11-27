@@ -39,7 +39,7 @@ public class OllamaProviderTests
     }
 
     [Fact]
-    public async Task GenerateAsync_SuccessfulResponse_ReturnsSuccess()
+    public async Task GenerateAsync_SuccessfulResponse_ReturnsResponse()
     {
         // Arrange
         var responseContent = new
@@ -58,45 +58,40 @@ public class OllamaProviderTests
         var result = await sut.GenerateAsync("test-model", "Hello");
 
         // Assert
-        result.IsSuccess.Should().BeTrue();
-        result.Value.Content.Should().Be("Generated text response");
-        result.Value.Model.Should().Be("test-model");
-        result.Value.TokensUsed.Should().Be(30); // 10 + 20
-        result.Value.FinishReason.Should().Be("stop");
+        result.Content.Should().Be("Generated text response");
+        result.Model.Should().Be("test-model");
+        result.TokensUsed.Should().Be(30); // 10 + 20
+        result.FinishReason.Should().Be("stop");
     }
 
     [Fact]
-    public async Task GenerateAsync_HttpError_ReturnsFailure()
+    public async Task GenerateAsync_HttpError_ThrowsLlmException()
     {
         // Arrange
         var handler = CreateMockHandler(HttpStatusCode.InternalServerError, new { error = "Server error" });
         var sut = CreateProvider(handler);
 
-        // Act
-        var result = await sut.GenerateAsync("test-model", "Hello");
-
-        // Assert
-        result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be(LlmErrorCode.GenerationFailed);
+        // Act & Assert
+        var act = async () => await sut.GenerateAsync("test-model", "Hello");
+        await act.Should().ThrowAsync<LlmException>()
+            .Where(e => e.Code == LlmErrorCode.GenerationFailed);
     }
 
     [Fact]
-    public async Task GenerateAsync_ConnectionError_ReturnsUnavailable()
+    public async Task GenerateAsync_ConnectionError_ThrowsLlmException()
     {
         // Arrange
         var handler = new FailingHttpHandler(new HttpRequestException("Connection refused"));
         var sut = CreateProvider(handler);
 
-        // Act
-        var result = await sut.GenerateAsync("test-model", "Hello");
-
-        // Assert
-        result.IsFailure.Should().BeTrue();
-        result.Error.Code.Should().Be(LlmErrorCode.Unavailable);
+        // Act & Assert
+        var act = async () => await sut.GenerateAsync("test-model", "Hello");
+        await act.Should().ThrowAsync<LlmException>()
+            .Where(e => e.Code == LlmErrorCode.Unavailable);
     }
 
     [Fact]
-    public async Task ChatAsync_SuccessfulResponse_ReturnsSuccess()
+    public async Task ChatAsync_SuccessfulResponse_ReturnsResponse()
     {
         // Arrange
         var responseContent = new
@@ -120,9 +115,8 @@ public class OllamaProviderTests
         var result = await sut.ChatAsync("test-model", messages);
 
         // Assert
-        result.IsSuccess.Should().BeTrue();
-        result.Value.Content.Should().Be("Chat response");
-        result.Value.TokensUsed.Should().Be(20); // 5 + 15
+        result.Content.Should().Be("Chat response");
+        result.TokensUsed.Should().Be(20); // 5 + 15
     }
 
     [Fact]

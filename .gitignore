@@ -40,3 +40,5 @@ appsettings.*.Local.json
 secrets.json
 *.pfx
 *.key
+
+.fake

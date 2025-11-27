@@ -72,6 +72,24 @@ public sealed class AgentRegistry : IAgentRegistry, IDisposable
     }
 
     /// <inheritdoc/>
+    public IReadOnlyList<IAgent> GetByCapability(string capability, string? language = null)
+    {
+        return _agents.Values
+            .Where(a => a.Metadata.Capabilities.Contains(capability, StringComparer.OrdinalIgnoreCase))
+            .Where(a => language is null
+                || a.Metadata.Languages.Count == 0  // Polyglot agents match any language
+                || a.Metadata.Languages.Contains(language, StringComparer.OrdinalIgnoreCase))
+            .OrderBy(a => a.Metadata.Priority)
+            .ToList();
+    }
+
+    /// <inheritdoc/>
+    public IAgent? GetBestForCapability(string capability, string? language = null)
+    {
+        return GetByCapability(capability, language).FirstOrDefault();
+    }
+
+    /// <inheritdoc/>
     public void Register(IAgent agent)
     {
         var isUpdate = _agents.ContainsKey(agent.AgentId);

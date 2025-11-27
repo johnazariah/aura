@@ -6,7 +6,6 @@ namespace Aura.Foundation.Agents;
 
 using System.Text;
 using Aura.Foundation.Llm;
-using CSharpFunctionalExtensions;
 using Microsoft.Extensions.Logging;
 
 /// <summary>
@@ -42,7 +41,7 @@ public sealed class ConfigurableAgent : IAgent
     public AgentMetadata Metadata => _definition.ToMetadata();
 
     /// <inheritdoc/>
-    public async Task<Result<AgentOutput, AgentError>> ExecuteAsync(
+    public async Task<AgentOutput> ExecuteAsync(
         AgentContext context,
         CancellationToken cancellationToken = default)
     {
@@ -60,8 +59,7 @@ public sealed class ConfigurableAgent : IAgent
             provider = _providerRegistry.GetDefaultProvider();
             if (provider is null)
             {
-                return Result.Failure<AgentOutput, AgentError>(
-                    AgentError.ProviderUnavailable(_definition.Provider));
+                throw AgentException.ProviderUnavailable(_definition.Provider);
             }
         }
 
@@ -71,36 +69,31 @@ public sealed class ConfigurableAgent : IAgent
             var messages = BuildMessages(context);
 
             // Execute via LLM
-            var result = await provider.ChatAsync(
+            var response = await provider.ChatAsync(
                 _definition.Model,
                 messages,
                 _definition.Temperature,
                 cancellationToken).ConfigureAwait(false);
 
-            if (result.IsFailure)
-            {
-                return Result.Failure<AgentOutput, AgentError>(
-                    MapLlmError(result.Error));
-            }
-
-            var response = result.Value;
-
             _logger.LogInformation(
                 "Agent {AgentId} completed, tokens={Tokens}",
                 AgentId, response.TokensUsed);
 
-            return Result.Success<AgentOutput, AgentError>(
-                new AgentOutput(response.Content, response.TokensUsed));
+            return new AgentOutput(response.Content, response.TokensUsed);
         }
         catch (OperationCanceledException)
         {
-            return Result.Failure<AgentOutput, AgentError>(AgentError.Cancelled());
+            throw; // Let cancellation propagate
+        }
+        catch (LlmException ex)
+        {
+            _logger.LogError(ex, "Agent {AgentId} LLM execution failed", AgentId);
+            throw AgentException.ExecutionFailed(ex.Message, ex);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Agent {AgentId} execution failed", AgentId);
-            return Result.Failure<AgentOutput, AgentError>(
-                AgentError.ExecutionFailed(ex.Message, ex.ToString()));
+            throw AgentException.ExecutionFailed(ex.Message, ex);
         }
     }
 
@@ -144,17 +137,5 @@ public sealed class ConfigurableAgent : IAgent
             string.Empty);
 
         return remaining;
-    }
-
-    private static AgentError MapLlmError(LlmError error)
-    {
-        return error.Code switch
-        {
-            LlmErrorCode.Unavailable => AgentError.ProviderUnavailable(error.Message),
-            LlmErrorCode.ModelNotFound => AgentError.ModelNotFound(error.Message, "unknown"),
-            LlmErrorCode.Timeout => AgentError.Timeout(30),
-            LlmErrorCode.Cancelled => AgentError.Cancelled(),
-            _ => AgentError.ExecutionFailed(error.Message, error.Details),
-        };
     }
 }

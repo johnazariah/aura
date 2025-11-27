@@ -31,6 +31,23 @@ public interface IAgentRegistry
     bool TryGetAgent(string agentId, out IAgent? agent);
 
     /// <summary>
+    /// Gets agents with the specified capability, sorted by priority (lowest first).
+    /// If language is specified, filters to agents that support that language (or are polyglot).
+    /// </summary>
+    /// <param name="capability">The capability to filter by (from <see cref="Capabilities"/>).</param>
+    /// <param name="language">Optional language to filter by (null = any language).</param>
+    /// <returns>Matching agents sorted by priority (lowest = most specialized first).</returns>
+    IReadOnlyList<IAgent> GetByCapability(string capability, string? language = null);
+
+    /// <summary>
+    /// Gets the best agent for a capability (lowest priority = most specialized).
+    /// </summary>
+    /// <param name="capability">The capability to find an agent for.</param>
+    /// <param name="language">Optional language to filter by (null = any language).</param>
+    /// <returns>The best matching agent, or null if none found.</returns>
+    IAgent? GetBestForCapability(string capability, string? language = null);
+
+    /// <summary>
     /// Gets agents matching the specified tags.
     /// </summary>
     /// <param name="tags">Tags to match (any match).</param>

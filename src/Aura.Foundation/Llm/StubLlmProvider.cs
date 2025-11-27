@@ -5,7 +5,6 @@
 namespace Aura.Foundation.Llm;
 
 using Aura.Foundation.Agents;
-using CSharpFunctionalExtensions;
 using Microsoft.Extensions.Logging;
 
 /// <summary>
@@ -35,7 +34,7 @@ public sealed class StubLlmProvider : ILlmProvider
     public string ProviderId => "stub";
 
     /// <inheritdoc/>
-    public Task<Result<LlmResponse, LlmError>> GenerateAsync(
+    public Task<LlmResponse> GenerateAsync(
         string model,
         string prompt,
         double temperature = 0.7,
@@ -45,10 +44,7 @@ public sealed class StubLlmProvider : ILlmProvider
             "Stub generate: model={Model}, prompt_length={PromptLength}, temp={Temperature}",
             model, prompt.Length, temperature);
 
-        if (cancellationToken.IsCancellationRequested)
-        {
-            return Task.FromResult(Result.Failure<LlmResponse, LlmError>(LlmError.Cancelled()));
-        }
+        cancellationToken.ThrowIfCancellationRequested();
 
         var response = new LlmResponse(
             Content: $"[Stub response to: {TruncatePrompt(prompt)}]",
@@ -56,11 +52,11 @@ public sealed class StubLlmProvider : ILlmProvider
             Model: model,
             FinishReason: "stop");
 
-        return Task.FromResult(Result.Success<LlmResponse, LlmError>(response));
+        return Task.FromResult(response);
     }
 
     /// <inheritdoc/>
-    public Task<Result<LlmResponse, LlmError>> ChatAsync(
+    public Task<LlmResponse> ChatAsync(
         string model,
         IReadOnlyList<ChatMessage> messages,
         double temperature = 0.7,
@@ -70,10 +66,7 @@ public sealed class StubLlmProvider : ILlmProvider
             "Stub chat: model={Model}, messages={MessageCount}, temp={Temperature}",
             model, messages.Count, temperature);
 
-        if (cancellationToken.IsCancellationRequested)
-        {
-            return Task.FromResult(Result.Failure<LlmResponse, LlmError>(LlmError.Cancelled()));
-        }
+        cancellationToken.ThrowIfCancellationRequested();
 
         var lastUserMessage = messages.LastOrDefault(m => m.Role == ChatRole.User)?.Content ?? "empty";
         var tokenCount = messages.Sum(m => m.Content.Length) / 4;
@@ -84,7 +77,7 @@ public sealed class StubLlmProvider : ILlmProvider
             Model: model,
             FinishReason: "stop");
 
-        return Task.FromResult(Result.Success<LlmResponse, LlmError>(response));
+        return Task.FromResult(response);
     }
 
     /// <inheritdoc/>

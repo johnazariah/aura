@@ -160,10 +160,21 @@ var candidates = registry.GetByCapability("csharp-coding");
 var selected = candidates.First(); // RoslynAgent
 ```
 
+### Priority Semantics
+
+Lower priority number = more specialized = selected first.
+
+| Range | Meaning | Examples |
+|-------|---------|----------|
+| 10-30 | Specialist | RoslynAgent (C# only), PythonExpertAgent |
+| 40-60 | Domain expert | CodingAgent, TestingAgent, BibleStudyAgent |
+| 70-90 | Generalist | ChatAgent (fallback for anything) |
+
 ### Capability Vocabulary
 
 | Capability | Description | Example Agents |
 |------------|-------------|----------------|
+| `chat` | General conversation | ChatAgent |
 | `coding` | General code generation | CodingAgent |
 | `csharp-coding` | C# specific | RoslynAgent, CSharpAgent |
 | `python-coding` | Python specific | PythonAgent |
@@ -221,23 +232,35 @@ registry.Changed += (sender, args) =>
 };
 ```
 
-## API Registration
+## Default Chat Agent
 
-For coded agents or external agents:
+Aura ships with a default chat agent (`agents/chat-agent.md`) that serves as the fallback for any request:
 
-```http
-POST /api/agents
-Content-Type: application/json
+```markdown
+# Chat Agent
 
-{
-  "name": "Custom Python Agent",
-  "capabilities": ["coding", "python-coding"],
-  "priority": 55,
-  "provider": "ollama",
-  "model": "codellama:13b",
-  "systemPrompt": "You are an expert Python developer..."
-}
+## Metadata
+
+- **Priority**: 80
+- **Provider**: ollama
+- **Model**: llama3.2:3b
+
+## Capabilities
+
+- chat
+- conversation
+- general
+
+## System Prompt
+
+You are a helpful assistant. Answer questions clearly and concisely.
+If you don't know something, say so.
 ```
+
+This agent:
+- Is always available as a fallback
+- Has low priority (80) so specialists are preferred
+- Uses a small, fast model for quick responses
 
 ## Agent Execution Model
 
@@ -267,9 +290,28 @@ Content-Type: application/json
 └─────────────────────────────────────────────────────────────┘
 ```
 
-## Open Questions
+## Design Decisions
 
-1. **Capability inheritance** - Should `csharp-coding` imply `coding`?
-2. **Agent versioning** - How to handle breaking changes in agent definitions?
-3. **Agent dependencies** - Can agents declare dependencies on other agents?
-4. **Concurrent execution limits** - Max parallel agents per provider?
+### Capability Inheritance
+
+**No implicit inheritance.** If an agent handles `csharp-coding`, it must also list `coding` if it wants to be considered for general coding tasks. This keeps matching simple and explicit.
+
+### Agent Sources
+
+Agents come from exactly two sources:
+
+1. **Markdown agents** (`agents/*.md`) - Hot-reloaded, user-extensible
+2. **Coded agents** (IAgent implementations) - Ship with Aura releases
+
+**No external registration.** Agents don't announce themselves over HTTP. This keeps the system simple and predictable for end users.
+
+### Agent Versioning
+
+Markdown agents are versioned by file content (hot-reload replaces in-place).
+Coded agents are versioned with Aura releases.
+
+### Concurrent Execution
+
+No hard limits. The LLM provider is the bottleneck (Ollama serializes requests to the same model). Multiple agents can execute concurrently if they use different providers or if Ollama has capacity.
+
+See [11-agent-discovery.md](11-agent-discovery.md) for complete discovery and selection specification.

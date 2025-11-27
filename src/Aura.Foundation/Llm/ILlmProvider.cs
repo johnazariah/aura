@@ -5,7 +5,6 @@
 namespace Aura.Foundation.Llm;
 
 using Aura.Foundation.Agents;
-using CSharpFunctionalExtensions;
 
 /// <summary>
 /// Interface for LLM providers (Ollama, MAF, etc.).
@@ -24,8 +23,10 @@ public interface ILlmProvider
     /// <param name="prompt">The prompt text.</param>
     /// <param name="temperature">Temperature for sampling.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>The generated text or an error.</returns>
-    Task<Result<LlmResponse, LlmError>> GenerateAsync(
+    /// <returns>The generated response.</returns>
+    /// <exception cref="LlmException">Thrown when generation fails.</exception>
+    /// <exception cref="OperationCanceledException">Thrown when cancelled.</exception>
+    Task<LlmResponse> GenerateAsync(
         string model,
         string prompt,
         double temperature = 0.7,
@@ -38,8 +39,10 @@ public interface ILlmProvider
     /// <param name="messages">The conversation messages.</param>
     /// <param name="temperature">Temperature for sampling.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>The generated response or an error.</returns>
-    Task<Result<LlmResponse, LlmError>> ChatAsync(
+    /// <returns>The generated response.</returns>
+    /// <exception cref="LlmException">Thrown when generation fails.</exception>
+    /// <exception cref="OperationCanceledException">Thrown when cancelled.</exception>
+    Task<LlmResponse> ChatAsync(
         string model,
         IReadOnlyList<ChatMessage> messages,
         double temperature = 0.7,
@@ -75,32 +78,42 @@ public sealed record LlmResponse(
     string? FinishReason = null);
 
 /// <summary>
-/// Error from an LLM provider.
+/// Exception thrown by LLM providers.
 /// </summary>
-/// <param name="Code">Error code.</param>
-/// <param name="Message">Error message.</param>
-/// <param name="Details">Optional details.</param>
-public sealed record LlmError(LlmErrorCode Code, string Message, string? Details = null)
+public sealed class LlmException : Exception
 {
+    /// <summary>
+    /// Initializes a new instance of the <see cref="LlmException"/> class.
+    /// </summary>
+    /// <param name="code">Error code.</param>
+    /// <param name="message">Error message.</param>
+    /// <param name="innerException">Optional inner exception.</param>
+    public LlmException(LlmErrorCode code, string message, Exception? innerException = null)
+        : base(message, innerException)
+    {
+        Code = code;
+    }
+
+    /// <summary>
+    /// Gets the error code.
+    /// </summary>
+    public LlmErrorCode Code { get; }
+
     /// <summary>Provider is not available.</summary>
-    public static LlmError Unavailable(string provider) =>
+    public static LlmException Unavailable(string provider) =>
         new(LlmErrorCode.Unavailable, $"LLM provider '{provider}' is not available");
 
     /// <summary>Model not found.</summary>
-    public static LlmError ModelNotFound(string model) =>
+    public static LlmException ModelNotFound(string model) =>
         new(LlmErrorCode.ModelNotFound, $"Model '{model}' not found");
 
     /// <summary>Generation failed.</summary>
-    public static LlmError GenerationFailed(string message, string? details = null) =>
-        new(LlmErrorCode.GenerationFailed, message, details);
+    public static LlmException GenerationFailed(string message, Exception? inner = null) =>
+        new(LlmErrorCode.GenerationFailed, message, inner);
 
     /// <summary>Request timed out.</summary>
-    public static LlmError Timeout() =>
+    public static LlmException Timeout() =>
         new(LlmErrorCode.Timeout, "Request timed out");
-
-    /// <summary>Request was cancelled.</summary>
-    public static LlmError Cancelled() =>
-        new(LlmErrorCode.Cancelled, "Request was cancelled");
 }
 
 /// <summary>
@@ -122,9 +135,6 @@ public enum LlmErrorCode
 
     /// <summary>Request timed out.</summary>
     Timeout,
-
-    /// <summary>Request cancelled.</summary>
-    Cancelled,
 }
 
 /// <summary>

@@ -8,7 +8,6 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Aura.Foundation.Agents;
-using CSharpFunctionalExtensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -49,7 +48,7 @@ public sealed class OllamaProvider : ILlmProvider
     public string ProviderId => "ollama";
 
     /// <inheritdoc/>
-    public async Task<Result<LlmResponse, LlmError>> GenerateAsync(
+    public async Task<LlmResponse> GenerateAsync(
         string model,
         string prompt,
         double temperature = 0.7,
@@ -84,8 +83,7 @@ public sealed class OllamaProvider : ILlmProvider
                     "Ollama generate failed: {StatusCode} - {Error}",
                     response.StatusCode, errorContent);
 
-                return Result.Failure<LlmResponse, LlmError>(
-                    LlmError.GenerationFailed($"HTTP {response.StatusCode}", errorContent));
+                throw LlmException.GenerationFailed($"HTTP {response.StatusCode}: {errorContent}");
             }
 
             var result = await response.Content.ReadFromJsonAsync<OllamaGenerateResponse>(
@@ -93,42 +91,37 @@ public sealed class OllamaProvider : ILlmProvider
 
             if (result is null)
             {
-                return Result.Failure<LlmResponse, LlmError>(
-                    LlmError.GenerationFailed("Empty response from Ollama"));
+                throw LlmException.GenerationFailed("Empty response from Ollama");
             }
 
-            var llmResponse = new LlmResponse(
+            return new LlmResponse(
                 Content: result.Response ?? string.Empty,
                 TokensUsed: (result.PromptEvalCount ?? 0) + (result.EvalCount ?? 0),
                 Model: result.Model ?? model,
                 FinishReason: result.Done ? "stop" : null);
-
-            return Result.Success<LlmResponse, LlmError>(llmResponse);
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            return Result.Failure<LlmResponse, LlmError>(LlmError.Cancelled());
         }
         catch (OperationCanceledException)
         {
-            return Result.Failure<LlmResponse, LlmError>(LlmError.Timeout());
+            throw; // Let cancellation propagate
+        }
+        catch (LlmException)
+        {
+            throw; // Already an LlmException
         }
         catch (HttpRequestException ex)
         {
             _logger.LogError(ex, "Ollama connection failed");
-            return Result.Failure<LlmResponse, LlmError>(
-                LlmError.Unavailable("ollama"));
+            throw LlmException.Unavailable("ollama");
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Ollama generate error");
-            return Result.Failure<LlmResponse, LlmError>(
-                LlmError.GenerationFailed(ex.Message));
+            throw LlmException.GenerationFailed(ex.Message, ex);
         }
     }
 
     /// <inheritdoc/>
-    public async Task<Result<LlmResponse, LlmError>> ChatAsync(
+    public async Task<LlmResponse> ChatAsync(
         string model,
         IReadOnlyList<ChatMessage> messages,
         double temperature = 0.7,
@@ -167,8 +160,7 @@ public sealed class OllamaProvider : ILlmProvider
                     "Ollama chat failed: {StatusCode} - {Error}",
                     response.StatusCode, errorContent);
 
-                return Result.Failure<LlmResponse, LlmError>(
-                    LlmError.GenerationFailed($"HTTP {response.StatusCode}", errorContent));
+                throw LlmException.GenerationFailed($"HTTP {response.StatusCode}: {errorContent}");
             }
 
             var result = await response.Content.ReadFromJsonAsync<OllamaChatResponse>(
@@ -176,37 +168,32 @@ public sealed class OllamaProvider : ILlmProvider
 
             if (result is null)
             {
-                return Result.Failure<LlmResponse, LlmError>(
-                    LlmError.GenerationFailed("Empty response from Ollama"));
+                throw LlmException.GenerationFailed("Empty response from Ollama");
             }
 
-            var llmResponse = new LlmResponse(
+            return new LlmResponse(
                 Content: result.Message?.Content ?? string.Empty,
                 TokensUsed: (result.PromptEvalCount ?? 0) + (result.EvalCount ?? 0),
                 Model: result.Model ?? model,
                 FinishReason: result.Done ? "stop" : null);
-
-            return Result.Success<LlmResponse, LlmError>(llmResponse);
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            return Result.Failure<LlmResponse, LlmError>(LlmError.Cancelled());
         }
         catch (OperationCanceledException)
         {
-            return Result.Failure<LlmResponse, LlmError>(LlmError.Timeout());
+            throw; // Let cancellation propagate
+        }
+        catch (LlmException)
+        {
+            throw; // Already an LlmException
         }
         catch (HttpRequestException ex)
         {
             _logger.LogError(ex, "Ollama connection failed");
-            return Result.Failure<LlmResponse, LlmError>(
-                LlmError.Unavailable("ollama"));
+            throw LlmException.Unavailable("ollama");
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Ollama chat error");
-            return Result.Failure<LlmResponse, LlmError>(
-                LlmError.GenerationFailed(ex.Message));
+            throw LlmException.GenerationFailed(ex.Message, ex);
         }
     }
 

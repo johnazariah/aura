@@ -76,22 +76,48 @@ ISSUES
 
 ### 2. Agents Panel (TreeView)
 
-Shows registered agents.
+Shows registered agents sorted by priority (specialists first).
 
 ```
 AGENTS
-├── ✓ Roslyn Agent (csharp-coding) [60]
-├── ✓ Python Agent (python-coding) [60]
+├── ✓ Roslyn Agent (csharp-coding, validation) [30]
+├── ✓ Python Agent (python-coding) [40]
+├── ✓ Coding Agent (coding) [60]
 ├── ✓ Testing Agent (testing) [50]
-├── ✓ Business Analyst (requirements-analysis) [10]
-└── + Add Agent...
+├── ✓ Chat Agent (chat, general) [80]          ← Default fallback
+└── 📁 agents/ folder
 ```
 
+**Badge meanings:**
+- `[30]` = Priority (lower = more specialized)
+- Capabilities shown in parentheses
+
 **Actions:**
-- View details (click)
-- Disable/Enable (toggle)
-- Remove (right-click, if runtime-registered)
-- Add new agent (button)
+- View details (click) → Shows capabilities, provider, model, description
+- Open in editor (right-click on markdown agents)
+- Refresh (reload from agents/ folder)
+
+**Agent Details Panel:**
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ Roslyn Agent                                         [Close]│
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│ Priority: 30 (Specialist)                                    │
+│ Capabilities: csharp-coding, csharp-validation, refactoring │
+│ Provider: ollama                                             │
+│ Model: qwen2.5-coder:7b                                      │
+│                                                              │
+│ Description:                                                 │
+│ Generates C# code with Roslyn-based compilation and         │
+│ validation. Iterates until code compiles successfully.       │
+│                                                              │
+│ Source: Coded (ships with Aura)                              │
+│                                                              │
+│ [Test Agent] [View Source]                                   │
+└─────────────────────────────────────────────────────────────┘
+```
 
 ### 3. Workflows Panel (TreeView)
 

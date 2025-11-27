@@ -9,14 +9,20 @@ namespace Aura.Foundation.Agents;
 /// </summary>
 /// <param name="Name">Human-readable name for the agent.</param>
 /// <param name="Description">Description of what the agent does.</param>
+/// <param name="Capabilities">Fixed vocabulary capabilities for routing (see <see cref="Agents.Capabilities"/>).</param>
+/// <param name="Priority">Agent priority. Lower = more specialized, selected first. Default 50.</param>
+/// <param name="Languages">Languages this agent supports (null = polyglot, handles any language).</param>
 /// <param name="Provider">LLM provider to use (e.g., "ollama", "maf").</param>
 /// <param name="Model">Model to use with the provider.</param>
 /// <param name="Temperature">Temperature for LLM sampling (0.0-1.0).</param>
 /// <param name="Tools">List of tool names this agent can use.</param>
-/// <param name="Tags">Tags for categorization and filtering.</param>
+/// <param name="Tags">User-defined tags for filtering (open vocabulary).</param>
 public sealed record AgentMetadata(
     string Name,
     string Description,
+    IReadOnlyList<string> Capabilities,
+    int Priority = 50,
+    IReadOnlyList<string>? Languages = null,
     string Provider = "ollama",
     string Model = "qwen2.5-coder:7b",
     double Temperature = 0.7,
@@ -24,12 +30,22 @@ public sealed record AgentMetadata(
     IReadOnlyList<string>? Tags = null)
 {
     /// <summary>
+    /// Gets the capabilities for this agent (fixed vocabulary for routing).
+    /// </summary>
+    public IReadOnlyList<string> Capabilities { get; } = Capabilities ?? [];
+
+    /// <summary>
+    /// Gets the languages this agent supports (empty = polyglot).
+    /// </summary>
+    public IReadOnlyList<string> Languages { get; } = Languages ?? [];
+
+    /// <summary>
     /// Gets the tools available to this agent.
     /// </summary>
     public IReadOnlyList<string> Tools { get; } = Tools ?? [];
 
     /// <summary>
-    /// Gets the tags for this agent.
+    /// Gets the tags for this agent (open vocabulary for user filtering).
     /// </summary>
     public IReadOnlyList<string> Tags { get; } = Tags ?? [];
 }

@@ -14,7 +14,10 @@ namespace Aura.Foundation.Agents;
 /// <param name="Model">Model to use with the provider.</param>
 /// <param name="Temperature">Temperature for LLM sampling.</param>
 /// <param name="SystemPrompt">The system prompt template.</param>
-/// <param name="Capabilities">List of capabilities/tags.</param>
+/// <param name="Capabilities">Fixed vocabulary capabilities for routing.</param>
+/// <param name="Priority">Agent priority. Lower = more specialized.</param>
+/// <param name="Languages">Languages this agent supports (empty = polyglot).</param>
+/// <param name="Tags">User-defined tags for filtering.</param>
 /// <param name="Tools">List of tools available to the agent.</param>
 public sealed record AgentDefinition(
     string AgentId,
@@ -25,6 +28,9 @@ public sealed record AgentDefinition(
     double Temperature,
     string SystemPrompt,
     IReadOnlyList<string> Capabilities,
+    int Priority,
+    IReadOnlyList<string> Languages,
+    IReadOnlyList<string> Tags,
     IReadOnlyList<string> Tools)
 {
     /// <summary>
@@ -43,15 +49,23 @@ public sealed record AgentDefinition(
     public const double DefaultTemperature = 0.7;
 
     /// <summary>
+    /// Gets the default priority.
+    /// </summary>
+    public const int DefaultPriority = 50;
+
+    /// <summary>
     /// Creates an AgentMetadata instance from this definition.
     /// </summary>
     /// <returns>Agent metadata.</returns>
     public AgentMetadata ToMetadata() => new(
         Name: Name,
         Description: Description,
+        Capabilities: Capabilities,
+        Priority: Priority,
+        Languages: Languages,
         Provider: Provider,
         Model: Model,
         Temperature: Temperature,
         Tools: Tools,
-        Tags: Capabilities);
+        Tags: Tags);
 }

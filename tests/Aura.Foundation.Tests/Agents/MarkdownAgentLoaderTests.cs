@@ -205,8 +205,148 @@ public class MarkdownAgentLoaderTests
         definition!.Provider.Should().Be(AgentDefinition.DefaultProvider);
         definition.Model.Should().Be(AgentDefinition.DefaultModel);
         definition.Temperature.Should().Be(AgentDefinition.DefaultTemperature);
+        definition.Priority.Should().Be(AgentDefinition.DefaultPriority);
         definition.Capabilities.Should().BeEmpty();
+        definition.Languages.Should().BeEmpty();
+        definition.Tags.Should().BeEmpty();
         definition.Tools.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Parse_ExtractsPriorityFromMetadata()
+    {
+        // Arrange
+        var content = """
+            # Specialized Agent
+
+            ## Metadata
+
+            - **Name**: Specialized Agent
+            - **Description**: A specialized agent
+            - **Priority**: 20
+
+            ## System Prompt
+
+            You are an agent.
+            """;
+
+        // Act
+        var definition = _loader.Parse("specialized-agent", content);
+
+        // Assert
+        definition.Should().NotBeNull();
+        definition!.Priority.Should().Be(20);
+    }
+
+    [Fact]
+    public void Parse_ExtractsLanguagesSection()
+    {
+        // Arrange
+        var content = """
+            # C# Agent
+
+            ## Metadata
+
+            - **Name**: C# Agent
+            - **Description**: A C# specialist
+
+            ## Capabilities
+
+            - coding
+
+            ## Languages
+
+            - csharp
+            - fsharp
+
+            ## System Prompt
+
+            You are an agent.
+            """;
+
+        // Act
+        var definition = _loader.Parse("csharp-agent", content);
+
+        // Assert
+        definition.Should().NotBeNull();
+        definition!.Languages.Should().HaveCount(2);
+        definition.Languages.Should().Contain("csharp");
+        definition.Languages.Should().Contain("fsharp");
+    }
+
+    [Fact]
+    public void Parse_ExtractsTagsSection()
+    {
+        // Arrange
+        var content = """
+            # Tagged Agent
+
+            ## Metadata
+
+            - **Name**: Tagged Agent
+            - **Description**: An agent with tags
+
+            ## Tags
+
+            - user-tag-1
+            - user-tag-2
+
+            ## System Prompt
+
+            You are an agent.
+            """;
+
+        // Act
+        var definition = _loader.Parse("tagged-agent", content);
+
+        // Assert
+        definition.Should().NotBeNull();
+        definition!.Tags.Should().HaveCount(2);
+        definition.Tags.Should().Contain("user-tag-1");
+        definition.Tags.Should().Contain("user-tag-2");
+    }
+
+    [Fact]
+    public void Parse_DistinguishesCapabilitiesFromTags()
+    {
+        // Arrange
+        var content = """
+            # Full Agent
+
+            ## Metadata
+
+            - **Name**: Full Agent
+            - **Description**: An agent with both capabilities and tags
+            - **Priority**: 30
+
+            ## Capabilities
+
+            - coding
+            - review
+
+            ## Languages
+
+            - csharp
+
+            ## Tags
+
+            - my-custom-tag
+            - another-tag
+
+            ## System Prompt
+
+            You are an agent.
+            """;
+
+        // Act
+        var definition = _loader.Parse("full-agent", content);
+
+        // Assert
+        definition.Should().NotBeNull();
+        definition!.Capabilities.Should().BeEquivalentTo(["coding", "review"]);
+        definition.Languages.Should().BeEquivalentTo(["csharp"]);
+        definition.Tags.Should().BeEquivalentTo(["my-custom-tag", "another-tag"]);
+        definition.Priority.Should().Be(30);
     }
 
     [Fact]
@@ -325,6 +465,9 @@ public class MarkdownAgentLoaderTests
             Temperature: 0.8,
             SystemPrompt: "You are a test agent.",
             Capabilities: ["coding", "testing"],
+            Priority: 50,
+            Languages: ["csharp"],
+            Tags: ["tag1"],
             Tools: ["validate_code"]);
 
         // Act
@@ -336,7 +479,10 @@ public class MarkdownAgentLoaderTests
         metadata.Provider.Should().Be("ollama");
         metadata.Model.Should().Be("llama3:8b");
         metadata.Temperature.Should().Be(0.8);
-        metadata.Tags.Should().BeEquivalentTo(["coding", "testing"]);
+        metadata.Capabilities.Should().BeEquivalentTo(["coding", "testing"]);
+        metadata.Priority.Should().Be(50);
+        metadata.Languages.Should().BeEquivalentTo(["csharp"]);
+        metadata.Tags.Should().BeEquivalentTo(["tag1"]);
         metadata.Tools.Should().BeEquivalentTo(["validate_code"]);
     }
 }

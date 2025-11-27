@@ -70,6 +70,8 @@ public sealed partial class MarkdownAgentLoader : IAgentLoader
             // Extract sections
             var metadataSection = ExtractSection(content, "Metadata");
             var capabilitiesSection = ExtractSection(content, "Capabilities");
+            var languagesSection = ExtractSection(content, "Languages");
+            var tagsSection = ExtractSection(content, "Tags");
             var toolsSection = ExtractSection(content, "Tools Available");
             var systemPromptSection = ExtractSection(content, "System Prompt");
 
@@ -86,14 +88,36 @@ public sealed partial class MarkdownAgentLoader : IAgentLoader
             var provider = metadata.GetValueOrDefault("provider", AgentDefinition.DefaultProvider);
             var model = metadata.GetValueOrDefault("model", AgentDefinition.DefaultModel);
             var temperatureStr = metadata.GetValueOrDefault("temperature", AgentDefinition.DefaultTemperature.ToString(CultureInfo.InvariantCulture));
+            var priorityStr = metadata.GetValueOrDefault("priority", AgentDefinition.DefaultPriority.ToString(CultureInfo.InvariantCulture));
 
             if (!double.TryParse(temperatureStr, NumberStyles.Float, CultureInfo.InvariantCulture, out var temperature))
             {
                 temperature = AgentDefinition.DefaultTemperature;
             }
 
+            if (!int.TryParse(priorityStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var priority))
+            {
+                priority = AgentDefinition.DefaultPriority;
+            }
+
             // Parse capabilities (list items)
             var capabilities = ParseListItems(capabilitiesSection ?? string.Empty);
+
+            // Validate capabilities against fixed vocabulary
+            foreach (var cap in capabilities)
+            {
+                if (!Capabilities.IsValid(cap))
+                {
+                    _logger.LogWarning("Agent {AgentId} has unknown capability: {Capability}. Valid capabilities: {ValidCapabilities}",
+                        agentId, cap, string.Join(", ", Capabilities.All));
+                }
+            }
+
+            // Parse languages (list items, empty = polyglot)
+            var languages = ParseListItems(languagesSection ?? string.Empty);
+
+            // Parse tags (list items, open vocabulary for user filtering)
+            var tags = ParseListItems(tagsSection ?? string.Empty);
 
             // Parse tools (extract tool names from the section)
             var tools = ParseToolNames(toolsSection ?? string.Empty);
@@ -107,6 +131,9 @@ public sealed partial class MarkdownAgentLoader : IAgentLoader
                 Temperature: temperature,
                 SystemPrompt: systemPromptSection.Trim(),
                 Capabilities: capabilities,
+                Priority: priority,
+                Languages: languages,
+                Tags: tags,
                 Tools: tools);
         }
         catch (Exception ex)

@@ -6,7 +6,6 @@ namespace Aura.Foundation.Tests.Agents;
 
 using System.IO.Abstractions.TestingHelpers;
 using Aura.Foundation.Agents;
-using CSharpFunctionalExtensions;
 using FluentAssertions;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
@@ -268,14 +267,126 @@ public class AgentRegistryTests
         _registry.GetAgent("Test-Agent").Should().Be(agent);
     }
 
-    private static IAgent CreateMockAgent(string id, string name, IReadOnlyList<string>? tags = null)
+    [Fact]
+    public void GetByCapability_ReturnsAgentsWithMatchingCapability()
     {
-        var metadata = new AgentMetadata(name, "Test description", Tags: tags);
+        // Arrange
+        var codingAgent = CreateMockAgent("coding-agent", "Coding Agent", capabilities: [Capabilities.Coding]);
+        var chatAgent = CreateMockAgent("chat-agent", "Chat Agent", capabilities: [Capabilities.Chat]);
+        var multiAgent = CreateMockAgent("multi-agent", "Multi Agent", capabilities: [Capabilities.Coding, Capabilities.Review]);
+        _registry.Register(codingAgent);
+        _registry.Register(chatAgent);
+        _registry.Register(multiAgent);
+
+        // Act
+        var result = _registry.GetByCapability(Capabilities.Coding);
+
+        // Assert
+        result.Should().HaveCount(2);
+        result.Should().Contain(codingAgent);
+        result.Should().Contain(multiAgent);
+    }
+
+    [Fact]
+    public void GetByCapability_ReturnsSortedByPriority()
+    {
+        // Arrange (lower priority = more specialized = returned first)
+        var specialized = CreateMockAgent("specialized", "Specialized", capabilities: [Capabilities.Coding], priority: 20);
+        var generalist = CreateMockAgent("generalist", "Generalist", capabilities: [Capabilities.Coding], priority: 80);
+        var domain = CreateMockAgent("domain", "Domain", capabilities: [Capabilities.Coding], priority: 50);
+        _registry.Register(generalist);
+        _registry.Register(specialized);
+        _registry.Register(domain);
+
+        // Act
+        var result = _registry.GetByCapability(Capabilities.Coding);
+
+        // Assert
+        result.Should().HaveCount(3);
+        result[0].Should().Be(specialized);  // Priority 20
+        result[1].Should().Be(domain);       // Priority 50
+        result[2].Should().Be(generalist);   // Priority 80
+    }
+
+    [Fact]
+    public void GetByCapability_WithLanguage_FiltersToMatchingOrPolyglot()
+    {
+        // Arrange
+        var csharpAgent = CreateMockAgent("csharp", "C# Agent", capabilities: [Capabilities.Coding], languages: ["csharp"]);
+        var polyglot = CreateMockAgent("polyglot", "Polyglot", capabilities: [Capabilities.Coding], languages: []); // Empty = polyglot
+        var pythonAgent = CreateMockAgent("python", "Python Agent", capabilities: [Capabilities.Coding], languages: ["python"]);
+        _registry.Register(csharpAgent);
+        _registry.Register(polyglot);
+        _registry.Register(pythonAgent);
+
+        // Act
+        var result = _registry.GetByCapability(Capabilities.Coding, "csharp");
+
+        // Assert
+        result.Should().HaveCount(2);
+        result.Should().Contain(csharpAgent);
+        result.Should().Contain(polyglot);
+        result.Should().NotContain(pythonAgent);
+    }
+
+    [Fact]
+    public void GetBestForCapability_ReturnsLowestPriorityAgent()
+    {
+        // Arrange
+        var specialized = CreateMockAgent("specialized", "Specialized", capabilities: [Capabilities.Coding], priority: 20);
+        var generalist = CreateMockAgent("generalist", "Generalist", capabilities: [Capabilities.Coding], priority: 80);
+        _registry.Register(generalist);
+        _registry.Register(specialized);
+
+        // Act
+        var result = _registry.GetBestForCapability(Capabilities.Coding);
+
+        // Assert
+        result.Should().Be(specialized);
+    }
+
+    [Fact]
+    public void GetBestForCapability_ReturnsNullWhenNoMatch()
+    {
+        // Arrange
+        var chatAgent = CreateMockAgent("chat", "Chat", capabilities: [Capabilities.Chat]);
+        _registry.Register(chatAgent);
+
+        // Act
+        var result = _registry.GetBestForCapability(Capabilities.Coding);
+
+        // Assert
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public void GetByCapability_IsCaseInsensitive()
+    {
+        // Arrange
+        var agent = CreateMockAgent("agent", "Agent", capabilities: ["CODING"]);
+        _registry.Register(agent);
+
+        // Act
+        var result = _registry.GetByCapability("coding");
+
+        // Assert
+        result.Should().HaveCount(1);
+    }
+
+    private static IAgent CreateMockAgent(string id, string name, IReadOnlyList<string>? tags = null, IReadOnlyList<string>? capabilities = null, int priority = 50, IReadOnlyList<string>? languages = null)
+    {
+        var metadata = new AgentMetadata(
+            name,
+            "Test description",
+            Capabilities: capabilities ?? [],
+            Priority: priority,
+            Languages: languages,
+            Tags: tags);
         var agent = Substitute.For<IAgent>();
         agent.AgentId.Returns(id);
         agent.Metadata.Returns(metadata);
         agent.ExecuteAsync(Arg.Any<AgentContext>(), Arg.Any<CancellationToken>())
-            .Returns(Task.FromResult(Result.Success<AgentOutput, AgentError>(AgentOutput.FromText("test"))));
+            .Returns(Task.FromResult(AgentOutput.FromText("test")));
         return agent;
     }
 }

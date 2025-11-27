@@ -5,68 +5,75 @@
 namespace Aura.Foundation.Agents;
 
 /// <summary>
-/// Error from an agent execution.
+/// Exception thrown by agents.
 /// </summary>
-/// <param name="Code">Error code for programmatic handling.</param>
-/// <param name="Message">Human-readable error message.</param>
-/// <param name="Details">Additional error details.</param>
-public sealed record AgentError(AgentErrorCode Code, string Message, string? Details = null)
+public sealed class AgentException : Exception
 {
     /// <summary>
-    /// Creates an error for agent not found.
+    /// Initializes a new instance of the <see cref="AgentException"/> class.
+    /// </summary>
+    /// <param name="code">Error code for programmatic handling.</param>
+    /// <param name="message">Human-readable error message.</param>
+    /// <param name="innerException">Optional inner exception.</param>
+    public AgentException(AgentErrorCode code, string message, Exception? innerException = null)
+        : base(message, innerException)
+    {
+        Code = code;
+    }
+
+    /// <summary>
+    /// Gets the error code for programmatic handling.
+    /// </summary>
+    public AgentErrorCode Code { get; }
+
+    /// <summary>
+    /// Creates an exception for agent not found.
     /// </summary>
     /// <param name="agentId">The agent ID that was not found.</param>
-    /// <returns>An agent error.</returns>
-    public static AgentError NotFound(string agentId) =>
+    /// <returns>An agent exception.</returns>
+    public static AgentException NotFound(string agentId) =>
         new(AgentErrorCode.NotFound, $"Agent '{agentId}' not found");
 
     /// <summary>
-    /// Creates an error for execution failure.
+    /// Creates an exception for execution failure.
     /// </summary>
     /// <param name="message">The error message.</param>
-    /// <param name="details">Optional details.</param>
-    /// <returns>An agent error.</returns>
-    public static AgentError ExecutionFailed(string message, string? details = null) =>
-        new(AgentErrorCode.ExecutionFailed, message, details);
+    /// <param name="innerException">Optional inner exception.</param>
+    /// <returns>An agent exception.</returns>
+    public static AgentException ExecutionFailed(string message, Exception? innerException = null) =>
+        new(AgentErrorCode.ExecutionFailed, message, innerException);
 
     /// <summary>
-    /// Creates an error for provider unavailable.
+    /// Creates an exception for provider unavailable.
     /// </summary>
     /// <param name="provider">The provider name.</param>
-    /// <returns>An agent error.</returns>
-    public static AgentError ProviderUnavailable(string provider) =>
+    /// <returns>An agent exception.</returns>
+    public static AgentException ProviderUnavailable(string provider) =>
         new(AgentErrorCode.ProviderUnavailable, $"LLM provider '{provider}' is not available");
 
     /// <summary>
-    /// Creates an error for model not found.
+    /// Creates an exception for model not found.
     /// </summary>
     /// <param name="model">The model name.</param>
     /// <param name="provider">The provider name.</param>
-    /// <returns>An agent error.</returns>
-    public static AgentError ModelNotFound(string model, string provider) =>
+    /// <returns>An agent exception.</returns>
+    public static AgentException ModelNotFound(string model, string provider) =>
         new(AgentErrorCode.ModelNotFound, $"Model '{model}' not found on provider '{provider}'");
 
     /// <summary>
-    /// Creates an error for timeout.
+    /// Creates an exception for timeout.
     /// </summary>
     /// <param name="timeoutSeconds">The timeout in seconds.</param>
-    /// <returns>An agent error.</returns>
-    public static AgentError Timeout(int timeoutSeconds) =>
+    /// <returns>An agent exception.</returns>
+    public static AgentException Timeout(int timeoutSeconds) =>
         new(AgentErrorCode.Timeout, $"Agent execution timed out after {timeoutSeconds} seconds");
 
     /// <summary>
-    /// Creates an error for cancellation.
-    /// </summary>
-    /// <returns>An agent error.</returns>
-    public static AgentError Cancelled() =>
-        new(AgentErrorCode.Cancelled, "Agent execution was cancelled");
-
-    /// <summary>
-    /// Creates a validation error.
+    /// Creates a validation exception.
     /// </summary>
     /// <param name="message">The validation message.</param>
-    /// <returns>An agent error.</returns>
-    public static AgentError ValidationFailed(string message) =>
+    /// <returns>An agent exception.</returns>
+    public static AgentException ValidationFailed(string message) =>
         new(AgentErrorCode.ValidationFailed, message);
 }
 
@@ -92,9 +99,6 @@ public enum AgentErrorCode
 
     /// <summary>Execution timed out.</summary>
     Timeout,
-
-    /// <summary>Execution cancelled.</summary>
-    Cancelled,
 
     /// <summary>Validation failed.</summary>
     ValidationFailed,
