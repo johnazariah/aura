@@ -450,3 +450,6 @@ app.Run();
 record ExecuteAgentRequest(string Prompt, string? WorkspacePath = null);
 record CreateConversationRequest(string AgentId, string? Title = null, string? WorkspacePath = null);
 record AddMessageRequest(string Content);
+
+// Make Program accessible for WebApplicationFactory
+public partial class Program { }
