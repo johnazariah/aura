@@ -60,6 +60,34 @@ export async function activate(context: vscode.ExtensionContext) {
         await executeAgent();
     });
 
+    const selectAgentCommand = vscode.commands.registerCommand('aura.selectAgent', async (agent: AgentInfo) => {
+        // Store selected agent and show quick action menu
+        const actions = [
+            { label: '$(comment) Chat with this agent', action: 'chat' },
+            { label: '$(info) View details', action: 'details' },
+            { label: '$(copy) Copy agent ID', action: 'copy' }
+        ];
+
+        const selected = await vscode.window.showQuickPick(actions, {
+            placeHolder: `${agent.name} - Select action`
+        });
+
+        if (!selected) return;
+
+        switch (selected.action) {
+            case 'chat':
+                await executeAgentById(agent.id, agent.name);
+                break;
+            case 'details':
+                showAgentDetails(agent);
+                break;
+            case 'copy':
+                await vscode.env.clipboard.writeText(agent.id);
+                vscode.window.showInformationMessage(`Copied agent ID: ${agent.id}`);
+                break;
+        }
+    });
+
     // Subscribe to configuration changes
     const configWatcher = vscode.workspace.onDidChangeConfiguration(e => {
         if (e.affectsConfiguration('aura')) {
@@ -77,6 +105,7 @@ export async function activate(context: vscode.ExtensionContext) {
         stopCommand,
         executeAgentCommand,
         quickExecuteCommand,
+        selectAgentCommand,
         configWatcher
     );
 
@@ -138,6 +167,63 @@ function setupAutoRefresh(): void {
     if (autoRefresh) {
         refreshInterval = setInterval(refreshAll, 10000); // 10 seconds
     }
+}
+
+async function executeAgentById(agentId: string, agentName: string): Promise<void> {
+    const prompt = await vscode.window.showInputBox({
+        prompt: `Enter prompt for ${agentName}`,
+        placeHolder: 'What would you like the agent to do?'
+    });
+
+    if (!prompt) {
+        return;
+    }
+
+    const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+
+    await vscode.window.withProgress(
+        {
+            location: vscode.ProgressLocation.Notification,
+            title: `Executing ${agentName}...`,
+            cancellable: false
+        },
+        async () => {
+            const result = await auraApiService.executeAgent(agentId, prompt, workspacePath);
+            
+            const doc = await vscode.workspace.openTextDocument({
+                content: `# Agent: ${agentName}\n\n## Prompt\n${prompt}\n\n## Response\n${result}`,
+                language: 'markdown'
+            });
+            await vscode.window.showTextDocument(doc);
+        }
+    );
+}
+
+function showAgentDetails(agent: AgentInfo): void {
+    const capabilities = agent.capabilities?.join(', ') || 'none';
+    const languages = agent.languages?.join(', ') || 'all';
+    const priority = agent.priority ?? 'default';
+    
+    const details = `
+# ${agent.name}
+
+## Overview
+- **ID:** ${agent.id}
+- **Model:** ${agent.model}
+- **Provider:** ${agent.provider || 'ollama'}
+- **Priority:** ${priority}
+
+## Capabilities
+${capabilities}
+
+## Language Support
+${languages}
+`;
+
+    vscode.workspace.openTextDocument({
+        content: details.trim(),
+        language: 'markdown'
+    }).then(doc => vscode.window.showTextDocument(doc));
 }
 
 async function executeAgent(item?: AgentItem): Promise<void> {

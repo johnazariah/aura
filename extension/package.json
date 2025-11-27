@@ -61,6 +61,11 @@
         "command": "aura.quickExecute",
         "title": "Aura: Execute Agent",
         "icon": "$(run)"
+      },
+      {
+        "command": "aura.selectAgent",
+        "title": "Select Agent",
+        "icon": "$(symbol-event)"
       }
     ],
     "menus": {
@@ -68,6 +73,11 @@
         {
           "command": "aura.refreshStatus",
           "when": "view == aura.status",
+          "group": "navigation"
+        },
+        {
+          "command": "aura.refreshStatus",
+          "when": "view == aura.agents",
           "group": "navigation"
         }
       ],

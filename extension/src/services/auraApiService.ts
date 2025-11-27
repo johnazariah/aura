@@ -5,6 +5,9 @@ export interface AgentInfo {
     id: string;
     name: string;
     description: string;
+    capabilities: string[];
+    priority: number;
+    languages?: string[];
     provider: string;
     model: string;
     tags: string[];
@@ -44,6 +47,28 @@ export class AuraApiService {
     async getAgents(): Promise<AgentInfo[]> {
         const response = await this.httpClient.get(`${this.getBaseUrl()}/api/agents`);
         return response.data;
+    }
+
+    async getAgentsByCapability(capability: string, language?: string): Promise<AgentInfo[]> {
+        let url = `${this.getBaseUrl()}/api/agents?capability=${encodeURIComponent(capability)}`;
+        if (language) {
+            url += `&language=${encodeURIComponent(language)}`;
+        }
+        const response = await this.httpClient.get(url);
+        return response.data;
+    }
+
+    async getBestAgent(capability: string, language?: string): Promise<AgentInfo | null> {
+        try {
+            let url = `${this.getBaseUrl()}/api/agents/best?capability=${encodeURIComponent(capability)}`;
+            if (language) {
+                url += `&language=${encodeURIComponent(language)}`;
+            }
+            const response = await this.httpClient.get(url);
+            return response.data;
+        } catch {
+            return null;
+        }
     }
 
     async getAgentById(agentId: string): Promise<AgentInfo | null> {
