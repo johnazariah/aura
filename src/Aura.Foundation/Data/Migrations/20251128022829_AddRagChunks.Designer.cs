@@ -3,6 +3,7 @@ using System;
 using Aura.Foundation.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Pgvector;
@@ -12,9 +13,11 @@ using Pgvector;
 namespace Aura.Foundation.Data.Migrations
 {
     [DbContext(typeof(AuraDbContext))]
-    partial class AuraDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251128022829_AddRagChunks")]
+    partial class AddRagChunks
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

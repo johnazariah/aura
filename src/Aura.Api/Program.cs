@@ -16,7 +16,7 @@ builder.AddServiceDefaults();
 // Connection string comes from Aspire AppHost via configuration
 var connectionString = builder.Configuration.GetConnectionString("auradb");
 builder.Services.AddDbContext<AuraDbContext>(options =>
-    options.UseNpgsql(connectionString));
+    options.UseNpgsql(connectionString, o => o.UseVector()));
 
 // Add Aura Foundation services
 builder.Services.AddAuraFoundation(builder.Configuration);
