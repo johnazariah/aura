@@ -306,6 +306,51 @@ app.MapPost("/api/agents/{agentId}/execute", async (
     }
 });
 
+// RAG-enriched agent execution
+app.MapPost("/api/agents/{agentId}/execute/rag", async (
+    string agentId,
+    ExecuteWithRagRequest request,
+    IRagEnrichedExecutor executor,
+    AuraDbContext db,
+    CancellationToken cancellationToken) =>
+{
+    var stopwatch = Stopwatch.StartNew();
+    
+    try
+    {
+        var output = await executor.ExecuteAsync(
+            agentId,
+            request.Prompt,
+            request.WorkspacePath,
+            request.UseRag,
+            request.TopK.HasValue ? new RagQueryOptions { TopK = request.TopK.Value } : null,
+            cancellationToken);
+
+        stopwatch.Stop();
+
+        return Results.Ok(new
+        {
+            content = output.Content,
+            tokensUsed = output.TokensUsed,
+            artifacts = output.Artifacts,
+            ragEnriched = true,
+            durationMs = stopwatch.ElapsedMilliseconds
+        });
+    }
+    catch (AgentException ex)
+    {
+        return Results.BadRequest(new
+        {
+            error = ex.Message,
+            code = ex.Code.ToString()
+        });
+    }
+    catch (OperationCanceledException)
+    {
+        return Results.StatusCode(499);
+    }
+});
+
 // Conversation endpoints
 app.MapGet("/api/conversations", async (AuraDbContext db, int? limit) =>
 {
@@ -709,6 +754,11 @@ app.Run();
 
 // Request models
 record ExecuteAgentRequest(string Prompt, string? WorkspacePath = null);
+record ExecuteWithRagRequest(
+    string Prompt,
+    string? WorkspacePath = null,
+    bool? UseRag = null,
+    int? TopK = null);
 record CreateConversationRequest(string AgentId, string? Title = null, string? WorkspacePath = null);
 record AddMessageRequest(string Content);
 

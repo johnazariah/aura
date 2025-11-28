@@ -88,6 +88,7 @@ public static class ServiceCollectionExtensions
     {
         // Configure RAG options
         services.Configure<RagOptions>(configuration.GetSection(RagOptions.SectionName));
+        services.Configure<RagExecutionOptions>(configuration.GetSection(RagExecutionOptions.SectionName));
 
         // Register embedding provider (OllamaProvider implements IEmbeddingProvider)
         services.AddScoped<IEmbeddingProvider>(sp => sp.GetRequiredService<OllamaProvider>());
@@ -97,6 +98,9 @@ public static class ServiceCollectionExtensions
 
         // RAG service
         services.AddScoped<IRagService, RagService>();
+
+        // RAG-enriched executor
+        services.AddScoped<IRagEnrichedExecutor, RagEnrichedExecutor>();
 
         return services;
     }

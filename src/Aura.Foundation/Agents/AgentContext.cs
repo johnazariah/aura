@@ -4,6 +4,8 @@
 
 namespace Aura.Foundation.Agents;
 
+using Aura.Foundation.Rag;
+
 /// <summary>
 /// Context passed to an agent during execution.
 /// </summary>
@@ -26,6 +28,16 @@ public sealed record AgentContext(
     /// Gets additional properties.
     /// </summary>
     public IReadOnlyDictionary<string, object> Properties { get; } = Properties ?? new Dictionary<string, object>();
+
+    /// <summary>
+    /// Gets the RAG context - relevant content retrieved from the indexed knowledge base.
+    /// </summary>
+    public string? RagContext { get; init; }
+
+    /// <summary>
+    /// Gets the individual RAG results with metadata (source, score, etc.).
+    /// </summary>
+    public IReadOnlyList<RagResult>? RagResults { get; init; }
 
     /// <summary>
     /// Creates a context with just a prompt.
