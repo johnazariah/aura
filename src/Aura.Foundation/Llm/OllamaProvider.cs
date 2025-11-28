@@ -14,8 +14,9 @@ using Microsoft.Extensions.Options;
 /// <summary>
 /// Ollama LLM provider implementation.
 /// Communicates with local Ollama instance via HTTP API.
+/// Also provides embedding generation via IEmbeddingProvider.
 /// </summary>
-public sealed class OllamaProvider : ILlmProvider
+public sealed class OllamaProvider : ILlmProvider, IEmbeddingProvider
 {
     private readonly HttpClient _httpClient;
     private readonly ILogger<OllamaProvider> _logger;
@@ -31,9 +32,6 @@ public sealed class OllamaProvider : ILlmProvider
     /// <summary>
     /// Initializes a new instance of the <see cref="OllamaProvider"/> class.
     /// </summary>
-    /// <param name="httpClient">HTTP client configured for Ollama.</param>
-    /// <param name="options">Ollama configuration options.</param>
-    /// <param name="logger">Logger instance.</param>
     public OllamaProvider(
         HttpClient httpClient,
         IOptions<OllamaOptions> options,
@@ -71,7 +69,7 @@ public sealed class OllamaProvider : ILlmProvider
             using var cts = CreateTimeoutCts(cancellationToken);
 
             var response = await _httpClient.PostAsJsonAsync(
-                $"{_options.BaseUrl}/api/generate",
+                _options.BaseUrl + "/api/generate",
                 request,
                 JsonOptions,
                 cts.Token).ConfigureAwait(false);
@@ -79,15 +77,11 @@ public sealed class OllamaProvider : ILlmProvider
             if (!response.IsSuccessStatusCode)
             {
                 var errorContent = await response.Content.ReadAsStringAsync(cts.Token).ConfigureAwait(false);
-                _logger.LogError(
-                    "Ollama generate failed: {StatusCode} - {Error}",
-                    response.StatusCode, errorContent);
-
-                throw LlmException.GenerationFailed($"HTTP {response.StatusCode}: {errorContent}");
+                _logger.LogError("Ollama generate failed: {StatusCode} - {Error}", response.StatusCode, errorContent);
+                throw LlmException.GenerationFailed("HTTP " + response.StatusCode + ": " + errorContent);
             }
 
-            var result = await response.Content.ReadFromJsonAsync<OllamaGenerateResponse>(
-                JsonOptions, cts.Token).ConfigureAwait(false);
+            var result = await response.Content.ReadFromJsonAsync<OllamaGenerateResponse>(JsonOptions, cts.Token).ConfigureAwait(false);
 
             if (result is null)
             {
@@ -100,14 +94,8 @@ public sealed class OllamaProvider : ILlmProvider
                 Model: result.Model ?? model,
                 FinishReason: result.Done ? "stop" : null);
         }
-        catch (OperationCanceledException)
-        {
-            throw; // Let cancellation propagate
-        }
-        catch (LlmException)
-        {
-            throw; // Already an LlmException
-        }
+        catch (OperationCanceledException) { throw; }
+        catch (LlmException) { throw; }
         catch (HttpRequestException ex)
         {
             _logger.LogError(ex, "Ollama connection failed");
@@ -127,9 +115,7 @@ public sealed class OllamaProvider : ILlmProvider
         double temperature = 0.7,
         CancellationToken cancellationToken = default)
     {
-        _logger.LogDebug(
-            "Ollama chat: model={Model}, messages={MessageCount}, temp={Temperature}",
-            model, messages.Count, temperature);
+        _logger.LogDebug("Ollama chat: model={Model}, messages={MessageCount}, temp={Temperature}", model, messages.Count, temperature);
 
         try
         {
@@ -148,7 +134,7 @@ public sealed class OllamaProvider : ILlmProvider
             using var cts = CreateTimeoutCts(cancellationToken);
 
             var response = await _httpClient.PostAsJsonAsync(
-                $"{_options.BaseUrl}/api/chat",
+                _options.BaseUrl + "/api/chat",
                 request,
                 JsonOptions,
                 cts.Token).ConfigureAwait(false);
@@ -156,15 +142,11 @@ public sealed class OllamaProvider : ILlmProvider
             if (!response.IsSuccessStatusCode)
             {
                 var errorContent = await response.Content.ReadAsStringAsync(cts.Token).ConfigureAwait(false);
-                _logger.LogError(
-                    "Ollama chat failed: {StatusCode} - {Error}",
-                    response.StatusCode, errorContent);
-
-                throw LlmException.GenerationFailed($"HTTP {response.StatusCode}: {errorContent}");
+                _logger.LogError("Ollama chat failed: {StatusCode} - {Error}", response.StatusCode, errorContent);
+                throw LlmException.GenerationFailed("HTTP " + response.StatusCode + ": " + errorContent);
             }
 
-            var result = await response.Content.ReadFromJsonAsync<OllamaChatResponse>(
-                JsonOptions, cts.Token).ConfigureAwait(false);
+            var result = await response.Content.ReadFromJsonAsync<OllamaChatResponse>(JsonOptions, cts.Token).ConfigureAwait(false);
 
             if (result is null)
             {
@@ -177,14 +159,8 @@ public sealed class OllamaProvider : ILlmProvider
                 Model: result.Model ?? model,
                 FinishReason: result.Done ? "stop" : null);
         }
-        catch (OperationCanceledException)
-        {
-            throw; // Let cancellation propagate
-        }
-        catch (LlmException)
-        {
-            throw; // Already an LlmException
-        }
+        catch (OperationCanceledException) { throw; }
+        catch (LlmException) { throw; }
         catch (HttpRequestException ex)
         {
             _logger.LogError(ex, "Ollama connection failed");
@@ -198,42 +174,96 @@ public sealed class OllamaProvider : ILlmProvider
     }
 
     /// <inheritdoc/>
-    public async Task<bool> IsModelAvailableAsync(
+    public async Task<float[]> GenerateEmbeddingAsync(
         string model,
+        string text,
         CancellationToken cancellationToken = default)
+    {
+        _logger.LogDebug("Ollama embed: model={Model}, text_length={TextLength}", model, text.Length);
+
+        try
+        {
+            var request = new OllamaEmbedRequest { Model = model, Input = text };
+            using var cts = CreateTimeoutCts(cancellationToken);
+
+            var response = await _httpClient.PostAsJsonAsync(
+                _options.BaseUrl + "/api/embed",
+                request,
+                JsonOptions,
+                cts.Token).ConfigureAwait(false);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await response.Content.ReadAsStringAsync(cts.Token).ConfigureAwait(false);
+                _logger.LogError("Ollama embed failed: {StatusCode} - {Error}", response.StatusCode, errorContent);
+                throw LlmException.GenerationFailed("HTTP " + response.StatusCode + ": " + errorContent);
+            }
+
+            var result = await response.Content.ReadFromJsonAsync<OllamaEmbedResponse>(JsonOptions, cts.Token).ConfigureAwait(false);
+
+            if (result?.Embeddings is null || result.Embeddings.Count == 0)
+            {
+                throw LlmException.GenerationFailed("Empty embedding response from Ollama");
+            }
+
+            return result.Embeddings[0];
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (LlmException) { throw; }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogError(ex, "Ollama connection failed for embeddings");
+            throw LlmException.Unavailable("ollama");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Ollama embedding error");
+            throw LlmException.GenerationFailed(ex.Message, ex);
+        }
+    }
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<float[]>> GenerateEmbeddingsAsync(
+        string model,
+        IReadOnlyList<string> texts,
+        CancellationToken cancellationToken = default)
+    {
+        _logger.LogDebug("Ollama embed batch: model={Model}, count={Count}", model, texts.Count);
+
+        var results = new List<float[]>(texts.Count);
+        foreach (var text in texts)
+        {
+            var embedding = await GenerateEmbeddingAsync(model, text, cancellationToken).ConfigureAwait(false);
+            results.Add(embedding);
+        }
+        return results;
+    }
+
+    /// <inheritdoc/>
+    public async Task<bool> IsModelAvailableAsync(string model, CancellationToken cancellationToken = default)
     {
         try
         {
             var models = await ListModelsAsync(cancellationToken).ConfigureAwait(false);
             return models.Any(m => m.Name.Equals(model, StringComparison.OrdinalIgnoreCase));
         }
-        catch
-        {
-            return false;
-        }
+        catch { return false; }
     }
 
     /// <inheritdoc/>
-    public async Task<IReadOnlyList<ModelInfo>> ListModelsAsync(
-        CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<ModelInfo>> ListModelsAsync(CancellationToken cancellationToken = default)
     {
         try
         {
             var response = await _httpClient.GetFromJsonAsync<OllamaTagsResponse>(
-                $"{_options.BaseUrl}/api/tags",
+                _options.BaseUrl + "/api/tags",
                 JsonOptions,
                 cancellationToken).ConfigureAwait(false);
 
-            if (response?.Models is null)
-            {
-                return [];
-            }
+            if (response?.Models is null) return [];
 
             return response.Models
-                .Select(m => new ModelInfo(
-                    Name: m.Name ?? "unknown",
-                    Size: m.Size,
-                    ModifiedAt: m.ModifiedAt))
+                .Select(m => new ModelInfo(Name: m.Name ?? "unknown", Size: m.Size, ModifiedAt: m.ModifiedAt))
                 .ToList();
         }
         catch (Exception ex)
@@ -246,25 +276,16 @@ public sealed class OllamaProvider : ILlmProvider
     /// <summary>
     /// Checks if Ollama is available and responding.
     /// </summary>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>True if Ollama is healthy.</returns>
     public async Task<bool> IsHealthyAsync(CancellationToken cancellationToken = default)
     {
         try
         {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(cts.Token, cancellationToken);
-
-            var response = await _httpClient.GetAsync(
-                $"{_options.BaseUrl}/api/tags",
-                linked.Token).ConfigureAwait(false);
-
+            var response = await _httpClient.GetAsync(_options.BaseUrl + "/api/tags", linked.Token).ConfigureAwait(false);
             return response.IsSuccessStatusCode;
         }
-        catch
-        {
-            return false;
-        }
+        catch { return false; }
     }
 
     private CancellationTokenSource CreateTimeoutCts(CancellationToken cancellationToken)
@@ -332,6 +353,18 @@ public sealed class OllamaProvider : ILlmProvider
         public DateTimeOffset? ModifiedAt { get; init; }
     }
 
+    private sealed record OllamaEmbedRequest
+    {
+        public required string Model { get; init; }
+        public required string Input { get; init; }
+    }
+
+    private sealed record OllamaEmbedResponse
+    {
+        public List<float[]>? Embeddings { get; init; }
+        public string? Model { get; init; }
+    }
+
     #endregion
 }
 
@@ -351,4 +384,7 @@ public sealed class OllamaOptions
 
     /// <summary>Gets or sets the default model to use.</summary>
     public string DefaultModel { get; set; } = "qwen2.5-coder:7b";
+
+    /// <summary>Gets or sets the default embedding model.</summary>
+    public string DefaultEmbeddingModel { get; set; } = "nomic-embed-text";
 }

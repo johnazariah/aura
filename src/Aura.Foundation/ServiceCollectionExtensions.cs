@@ -7,6 +7,7 @@ namespace Aura.Foundation;
 using System.IO.Abstractions;
 using Aura.Foundation.Agents;
 using Aura.Foundation.Llm;
+using Aura.Foundation.Rag;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -30,6 +31,9 @@ public static class ServiceCollectionExtensions
 
         // LLM services
         services.AddLlmServices(configuration);
+
+        // RAG services
+        services.AddRagServices(configuration);
 
         // Agent services
         services.AddAgentServices(configuration);
@@ -68,6 +72,31 @@ public static class ServiceCollectionExtensions
 
         // Register providers on startup
         services.AddHostedService<LlmProviderInitializer>();
+
+        return services;
+    }
+
+    /// <summary>
+    /// Adds RAG (Retrieval-Augmented Generation) services.
+    /// </summary>
+    /// <param name="services">The service collection.</param>
+    /// <param name="configuration">Configuration instance.</param>
+    /// <returns>The service collection for chaining.</returns>
+    public static IServiceCollection AddRagServices(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        // Configure RAG options
+        services.Configure<RagOptions>(configuration.GetSection(RagOptions.SectionName));
+
+        // Register embedding provider (OllamaProvider implements IEmbeddingProvider)
+        services.AddScoped<IEmbeddingProvider>(sp => sp.GetRequiredService<OllamaProvider>());
+
+        // Text chunker
+        services.AddSingleton<TextChunker>();
+
+        // RAG service
+        services.AddScoped<IRagService, RagService>();
 
         return services;
     }

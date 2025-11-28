@@ -74,6 +74,7 @@ public static class Capabilities
 **File:** `src/Aura.Foundation/Agents/AgentMetadata.cs`
 
 **Changes:**
+
 - Add `Capabilities` (required, replaces routing function of Tags)
 - Add `Priority` (int, default 50)
 - Add `Languages` (optional, null = polyglot)
@@ -106,6 +107,7 @@ public sealed record AgentMetadata(
 **File:** `src/Aura.Foundation/Agents/AgentDefinition.cs`
 
 **Changes:**
+
 - Add `Priority` parameter
 - Add `Languages` parameter
 - Add `Tags` parameter (separate from Capabilities)
@@ -152,6 +154,7 @@ public sealed record AgentDefinition(
 **File:** `src/Aura.Foundation/Agents/IAgentRegistry.cs`
 
 **Changes:**
+
 - Add `GetByCapability(string capability, string? language = null)`
 - Add `GetBestForCapability(string capability, string? language = null)`
 - Keep `GetAgentsByTags` for backward compatibility
@@ -220,6 +223,7 @@ public IAgent? GetBestForCapability(string capability, string? language = null)
 **File:** `src/Aura.Foundation/Agents/MarkdownAgentLoader.cs`
 
 **Changes:**
+
 - Parse `## Languages` section
 - Parse `## Tags` section (separate from Capabilities)
 - Parse `Priority` from Metadata section
@@ -589,6 +593,7 @@ Provide:
 **File:** `tests/Aura.Foundation.Tests/Agents/AgentRegistryTests.cs`
 
 Add tests for:
+
 - `GetByCapability` returns agents sorted by priority
 - `GetByCapability` with language filters correctly
 - `GetBestForCapability` returns lowest priority agent
@@ -598,6 +603,7 @@ Add tests for:
 **File:** `tests/Aura.Foundation.Tests/Agents/MarkdownAgentLoaderTests.cs`
 
 Add tests for:
+
 - Parsing Priority field
 - Parsing Languages section
 - Parsing Tags section (separate from Capabilities)
@@ -608,6 +614,7 @@ Add tests for:
 ## Implementation Checklist
 
 ### Infrastructure Changes
+
 - [ ] Create `Capabilities.cs` with fixed vocabulary
 - [ ] Update `AgentMetadata.cs` with Capabilities, Priority, Languages
 - [ ] Update `AgentDefinition.cs` with Priority, Languages, Tags
@@ -617,6 +624,7 @@ Add tests for:
 - [ ] Update API endpoints in `Program.cs`
 
 ### Agent Files
+
 - [ ] Verify `agents/chat-agent.md` format
 - [ ] Verify `agents/coding-agent.md` format
 - [ ] Create `agents/issue-digester-agent.md`
@@ -626,11 +634,13 @@ Add tests for:
 - [ ] Create `agents/code-review-agent.md`
 
 ### Tests
+
 - [ ] AgentRegistry capability selection tests
 - [ ] MarkdownAgentLoader parsing tests
 - [ ] API endpoint tests
 
 ### Future (Roslyn Agent)
+
 - [ ] Create `RoslynAgent.cs` coded agent (requires Roslyn SDK integration)
 
 ---
@@ -815,6 +825,7 @@ def test_validate_email():
     assert validate_email("invalid") == False
     assert validate_email("user@.com") == False
 ```
+
 ```
 
 ---
@@ -981,6 +992,7 @@ public class AuthController(IUserService userService) // Added
 ```
 
 [System re-runs build, passes to fixer again if more errors]
+
 ```
 
 ---
@@ -1059,7 +1071,7 @@ Code Review Agent:
    ```csharp
    user.Password = request.Password; // ❌ Must hash!
    ```
-   
+
 2. **Missing validation (Medium)**: No null check on email at line 28
 
 ### Suggestions
@@ -1071,6 +1083,7 @@ Code Review Agent:
 
 - Clean separation of AuthService from controller
 - Proper async/await usage throughout
+
 ```
 
 ---
@@ -1460,6 +1473,7 @@ public class AuthService
 ```
 
 ✓ Compiled successfully (2 iterations)
+
 ```
 
 ---

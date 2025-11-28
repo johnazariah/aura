@@ -5,6 +5,7 @@
 namespace Aura.Foundation.Data;
 
 using Aura.Foundation.Data.Entities;
+using Aura.Foundation.Rag;
 using Microsoft.EntityFrameworkCore;
 
 /// <summary>
@@ -41,10 +42,14 @@ public class AuraDbContext : DbContext
     /// <summary>Gets the agent executions.</summary>
     public DbSet<AgentExecution> AgentExecutions => Set<AgentExecution>();
 
+    /// <summary>Gets the RAG chunks for vector search.</summary>
+    public DbSet<RagChunk> RagChunks => Set<RagChunk>();
+
     /// <inheritdoc/>
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+        modelBuilder.HasPostgresExtension("vector");
         ConfigureFoundationEntities(modelBuilder);
     }
 
@@ -119,6 +124,25 @@ public class AuraDbContext : DbContext
             entity.HasIndex(e => e.AgentId);
             entity.HasIndex(e => e.StartedAt);
             entity.HasIndex(e => e.Success);
+        });
+
+        // RagChunk configuration for vector search
+        modelBuilder.Entity<RagChunk>(entity =>
+        {
+            entity.ToTable("rag_chunks");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id").HasDefaultValueSql("gen_random_uuid()");
+            entity.Property(e => e.ContentId).HasColumnName("content_id").HasMaxLength(500).IsRequired();
+            entity.Property(e => e.ChunkIndex).HasColumnName("chunk_index");
+            entity.Property(e => e.Content).HasColumnName("content").IsRequired();
+            entity.Property(e => e.ContentType).HasColumnName("content_type").HasConversion<string>().HasMaxLength(50);
+            entity.Property(e => e.SourcePath).HasColumnName("source_path").HasMaxLength(1000);
+            entity.Property(e => e.Embedding).HasColumnName("embedding").HasColumnType("vector(768)");
+            entity.Property(e => e.MetadataJson).HasColumnName("metadata").HasColumnType("jsonb");
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+
+            entity.HasIndex(e => e.ContentId);
+            entity.HasIndex(e => new { e.ContentId, e.ChunkIndex }).IsUnique();
         });
     }
 }

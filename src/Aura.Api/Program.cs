@@ -3,6 +3,7 @@ using Aura.Foundation.Agents;
 using Aura.Foundation.Data;
 using Aura.Foundation.Data.Entities;
 using Aura.Foundation.Llm;
+using Aura.Foundation.Rag;
 using Microsoft.EntityFrameworkCore;
 using System.Diagnostics;
 
@@ -71,15 +72,34 @@ app.MapGet("/health/db", async (AuraDbContext db) =>
     }
 });
 
-app.MapGet("/health/rag", async (IServiceProvider sp) =>
+app.MapGet("/health/rag", async (IRagService ragService) =>
 {
-    // TODO: Add actual RAG health check in Phase 3
-    return new
+    try
     {
-        healthy = true,
-        details = "RAG check not yet implemented",
-        timestamp = DateTime.UtcNow
-    };
+        var healthy = await ragService.IsHealthyAsync();
+        var stats = healthy ? await ragService.GetStatsAsync() : null;
+        return Results.Ok(new
+        {
+            healthy,
+            details = healthy
+                ? "RAG service operational - " + (stats?.TotalChunks ?? 0) + " chunks indexed"
+                : "RAG service unavailable",
+            totalDocuments = stats?.TotalDocuments ?? 0,
+            totalChunks = stats?.TotalChunks ?? 0,
+            timestamp = DateTime.UtcNow
+        });
+    }
+    catch (Exception ex)
+    {
+        return Results.Ok(new
+        {
+            healthy = false,
+            details = ex.Message,
+            totalDocuments = 0,
+            totalChunks = 0,
+            timestamp = DateTime.UtcNow
+        });
+    }
 });
 
 app.MapGet("/health/ollama", async (ILlmProviderRegistry registry) =>
@@ -96,7 +116,7 @@ app.MapGet("/health/ollama", async (ILlmProviderRegistry registry) =>
         return Results.Ok(new
         {
             healthy = true,
-            details = $"{models.Count} models available",
+            details = models.Count + " models available",
             models = models.Select(m => m.Name).ToList(),
             timestamp = DateTime.UtcNow
         });
@@ -138,7 +158,7 @@ app.MapGet("/api/agents/best", (IAgentRegistry registry, string capability, stri
     var agent = registry.GetBestForCapability(capability, language);
     if (agent is null)
     {
-        return Results.NotFound(new { error = $"No agent found for capability '{capability}'" + (language is not null ? $" with language '{language}'" : "") });
+        return Results.NotFound(new { error = "No agent found for capability '" + capability + "'" + (language is not null ? " with language '" + language + "'" : "") });
     }
 
     return Results.Ok(new
@@ -160,7 +180,7 @@ app.MapGet("/api/agents/{agentId}", (string agentId, IAgentRegistry registry) =>
     var agent = registry.GetAgent(agentId);
     if (agent is null)
     {
-        return Results.NotFound(new { error = $"Agent '{agentId}' not found" });
+        return Results.NotFound(new { error = "Agent '" + agentId + "' not found" });
     }
 
     return Results.Ok(new
@@ -189,7 +209,7 @@ app.MapPost("/api/agents/{agentId}/execute", async (
     var agent = registry.GetAgent(agentId);
     if (agent is null)
     {
-        return Results.NotFound(new { error = $"Agent '{agentId}' not found" });
+        return Results.NotFound(new { error = "Agent '" + agentId + "' not found" });
     }
 
     // Start timing
@@ -218,8 +238,18 @@ app.MapPost("/api/agents/{agentId}/execute", async (
         execution.Success = true;
         execution.Response = output.Content;
         execution.TokensUsed = output.TokensUsed;
-        db.AgentExecutions.Add(execution);
-        await db.SaveChangesAsync(cancellationToken);
+
+        // Try to save execution record, but do not fail if DB is unavailable
+        try
+        {
+            db.AgentExecutions.Add(execution);
+            await db.SaveChangesAsync(cancellationToken);
+        }
+        catch (Exception dbEx)
+        {
+            // Log but do not fail - DB might not be set up yet
+            app.Logger.LogWarning(dbEx, "Failed to save execution record - database may not be initialized");
+        }
 
         return Results.Ok(new
         {
@@ -235,8 +265,17 @@ app.MapPost("/api/agents/{agentId}/execute", async (
         execution.CompletedAt = DateTimeOffset.UtcNow;
         execution.Success = false;
         execution.ErrorMessage = ex.Message;
-        db.AgentExecutions.Add(execution);
-        await db.SaveChangesAsync(cancellationToken);
+
+        // Try to save execution record, but do not fail if DB is unavailable
+        try
+        {
+            db.AgentExecutions.Add(execution);
+            await db.SaveChangesAsync(cancellationToken);
+        }
+        catch (Exception dbEx)
+        {
+            app.Logger.LogWarning(dbEx, "Failed to save execution record - database may not be initialized");
+        }
 
         return Results.BadRequest(new
         {
@@ -251,8 +290,17 @@ app.MapPost("/api/agents/{agentId}/execute", async (
         execution.CompletedAt = DateTimeOffset.UtcNow;
         execution.Success = false;
         execution.ErrorMessage = "Cancelled";
-        db.AgentExecutions.Add(execution);
-        await db.SaveChangesAsync(CancellationToken.None);
+
+        // Try to save execution record, but do not fail if DB is unavailable
+        try
+        {
+            db.AgentExecutions.Add(execution);
+            await db.SaveChangesAsync(CancellationToken.None);
+        }
+        catch (Exception dbEx)
+        {
+            app.Logger.LogWarning(dbEx, "Failed to save execution record - database may not be initialized");
+        }
 
         return Results.StatusCode(499); // Client Closed Request
     }
@@ -324,7 +372,7 @@ app.MapPost("/api/conversations", async (CreateConversationRequest request, Aura
     db.Conversations.Add(conversation);
     await db.SaveChangesAsync();
 
-    return Results.Created($"/api/conversations/{conversation.Id}", new
+    return Results.Created("/api/conversations/" + conversation.Id, new
     {
         id = conversation.Id,
         title = conversation.Title,
@@ -360,7 +408,7 @@ app.MapPost("/api/conversations/{id:guid}/messages", async (
     var agent = registry.GetAgent(conversation.AgentId);
     if (agent is null)
     {
-        return Results.BadRequest(new { error = $"Agent '{conversation.AgentId}' not found" });
+        return Results.BadRequest(new { error = "Agent '" + conversation.AgentId + "' not found" });
     }
 
     var context = new AgentContext(
@@ -444,12 +492,245 @@ app.MapGet("/api/executions", async (AuraDbContext db, int? limit, bool? failedO
     return Results.Ok(executions);
 });
 
+// =============================================================================
+// RAG Endpoints
+// =============================================================================
+
+// Index content
+app.MapPost("/api/rag/index", async (
+    IndexContentRequest request,
+    IRagService ragService,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var contentType = Enum.TryParse<RagContentType>(request.ContentType, true, out var ct)
+            ? ct
+            : RagContentType.PlainText;
+
+        var content = new RagContent(request.ContentId, request.Text, contentType)
+        {
+            SourcePath = request.SourcePath,
+            Language = request.Language,
+        };
+
+        await ragService.IndexAsync(content, cancellationToken);
+
+        return Results.Ok(new
+        {
+            success = true,
+            contentId = request.ContentId,
+            message = "Content indexed successfully"
+        });
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new
+        {
+            success = false,
+            error = ex.Message
+        });
+    }
+});
+
+// Index a directory
+app.MapPost("/api/rag/index/directory", async (
+    IndexDirectoryRequest request,
+    IRagService ragService,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        if (!Directory.Exists(request.Path))
+        {
+            return Results.NotFound(new
+            {
+                success = false,
+                error = "Directory not found: " + request.Path
+            });
+        }
+
+        var options = new RagIndexOptions
+        {
+            IncludePatterns = request.IncludePatterns,
+            ExcludePatterns = request.ExcludePatterns,
+            Recursive = request.Recursive ?? true,
+        };
+
+        var count = await ragService.IndexDirectoryAsync(request.Path, options, cancellationToken);
+
+        return Results.Ok(new
+        {
+            success = true,
+            path = request.Path,
+            filesIndexed = count,
+            message = count + " files indexed successfully"
+        });
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new
+        {
+            success = false,
+            error = ex.Message
+        });
+    }
+});
+
+// Query the RAG index
+app.MapPost("/api/rag/query", async (
+    RagQueryRequest request,
+    IRagService ragService,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var options = new RagQueryOptions
+        {
+            TopK = request.TopK ?? 5,
+            MinScore = request.MinScore,
+            SourcePathPrefix = request.SourcePathPrefix,
+        };
+
+        var results = await ragService.QueryAsync(request.Query, options, cancellationToken);
+
+        return Results.Ok(new
+        {
+            query = request.Query,
+            resultCount = results.Count,
+            results = results.Select(r => new
+            {
+                contentId = r.ContentId,
+                chunkIndex = r.ChunkIndex,
+                text = r.Text,
+                score = r.Score,
+                sourcePath = r.SourcePath,
+                contentType = r.ContentType.ToString()
+            })
+        });
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new
+        {
+            error = ex.Message
+        });
+    }
+});
+
+// Get RAG statistics
+app.MapGet("/api/rag/stats", async (IRagService ragService, CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var stats = await ragService.GetStatsAsync(cancellationToken);
+
+        return Results.Ok(new
+        {
+            totalDocuments = stats.TotalDocuments,
+            totalChunks = stats.TotalChunks,
+            chunksByType = (stats.ByContentType ?? new Dictionary<RagContentType, int>()).ToDictionary(
+                kv => kv.Key.ToString(),
+                kv => kv.Value
+            )
+        });
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new
+        {
+            error = ex.Message
+        });
+    }
+});
+
+// Remove content from index
+app.MapDelete("/api/rag/{contentId}", async (
+    string contentId,
+    IRagService ragService,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        // URL decode the contentId (it might be a file path)
+        var decodedId = Uri.UnescapeDataString(contentId);
+        var removed = await ragService.RemoveAsync(decodedId, cancellationToken);
+
+        if (!removed)
+        {
+            return Results.NotFound(new
+            {
+                success = false,
+                error = "Content not found: " + decodedId
+            });
+        }
+
+        return Results.Ok(new
+        {
+            success = true,
+            contentId = decodedId,
+            message = "Content removed from index"
+        });
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new
+        {
+            success = false,
+            error = ex.Message
+        });
+    }
+});
+
+// Clear entire RAG index
+app.MapDelete("/api/rag", async (IRagService ragService, CancellationToken cancellationToken) =>
+{
+    try
+    {
+        await ragService.ClearAsync(cancellationToken);
+
+        return Results.Ok(new
+        {
+            success = true,
+            message = "RAG index cleared"
+        });
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new
+        {
+            success = false,
+            error = ex.Message
+        });
+    }
+});
+
 app.Run();
 
 // Request models
 record ExecuteAgentRequest(string Prompt, string? WorkspacePath = null);
 record CreateConversationRequest(string AgentId, string? Title = null, string? WorkspacePath = null);
 record AddMessageRequest(string Content);
+
+// RAG request models
+record IndexContentRequest(
+    string ContentId,
+    string Text,
+    string? ContentType = null,
+    string? SourcePath = null,
+    string? Language = null);
+
+record IndexDirectoryRequest(
+    string Path,
+    IReadOnlyList<string>? IncludePatterns = null,
+    IReadOnlyList<string>? ExcludePatterns = null,
+    bool? Recursive = null);
+
+record RagQueryRequest(
+    string Query,
+    int? TopK = null,
+    double? MinScore = null,
+    string? SourcePathPrefix = null);
 
 // Make Program accessible for WebApplicationFactory
 public partial class Program { }
