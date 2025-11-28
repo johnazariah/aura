@@ -6,6 +6,7 @@ namespace Aura.Foundation;
 
 using System.IO.Abstractions;
 using Aura.Foundation.Agents;
+using Aura.Foundation.Conversations;
 using Aura.Foundation.Llm;
 using Aura.Foundation.Rag;
 using Microsoft.Extensions.Configuration;
@@ -34,6 +35,9 @@ public static class ServiceCollectionExtensions
 
         // RAG services
         services.AddRagServices(configuration);
+
+        // Conversation services
+        services.AddConversationServices(configuration);
 
         // Agent services
         services.AddAgentServices(configuration);
@@ -89,6 +93,7 @@ public static class ServiceCollectionExtensions
         // Configure RAG options
         services.Configure<RagOptions>(configuration.GetSection(RagOptions.SectionName));
         services.Configure<RagExecutionOptions>(configuration.GetSection(RagExecutionOptions.SectionName));
+        services.Configure<RagWatcherOptions>(configuration.GetSection(RagWatcherOptions.SectionName));
 
         // Register embedding provider (OllamaProvider implements IEmbeddingProvider)
         services.AddScoped<IEmbeddingProvider>(sp => sp.GetRequiredService<OllamaProvider>());
@@ -102,6 +107,23 @@ public static class ServiceCollectionExtensions
         // RAG-enriched executor
         services.AddScoped<IRagEnrichedExecutor, RagEnrichedExecutor>();
 
+        // Incremental indexer (background service for file watching)
+        services.AddSingleton<IncrementalIndexer>();
+
+        return services;
+    }
+
+    /// <summary>
+    /// Adds conversation services with RAG context persistence.
+    /// </summary>
+    /// <param name="services">The service collection.</param>
+    /// <param name="configuration">Configuration instance.</param>
+    /// <returns>The service collection for chaining.</returns>
+    public static IServiceCollection AddConversationServices(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        services.AddScoped<IConversationService, ConversationService>();
         return services;
     }
 

@@ -39,6 +39,9 @@ public class AuraDbContext : DbContext
     /// <summary>Gets the messages.</summary>
     public DbSet<Message> Messages => Set<Message>();
 
+    /// <summary>Gets the message RAG contexts.</summary>
+    public DbSet<MessageRagContext> MessageRagContexts => Set<MessageRagContext>();
+
     /// <summary>Gets the agent executions.</summary>
     public DbSet<AgentExecution> AgentExecutions => Set<AgentExecution>();
 
@@ -95,6 +98,31 @@ public class AuraDbContext : DbContext
 
             entity.HasIndex(e => e.ConversationId);
             entity.HasIndex(e => e.CreatedAt);
+        });
+
+        // MessageRagContext configuration - stores RAG context used in messages
+        modelBuilder.Entity<MessageRagContext>(entity =>
+        {
+            entity.ToTable("message_rag_contexts");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.MessageId).HasColumnName("message_id");
+            entity.Property(e => e.Query).HasColumnName("query").IsRequired();
+            entity.Property(e => e.ContentId).HasColumnName("content_id").HasMaxLength(500).IsRequired();
+            entity.Property(e => e.ChunkIndex).HasColumnName("chunk_index");
+            entity.Property(e => e.ChunkContent).HasColumnName("chunk_content").IsRequired();
+            entity.Property(e => e.Score).HasColumnName("score");
+            entity.Property(e => e.SourcePath).HasColumnName("source_path").HasMaxLength(1000);
+            entity.Property(e => e.ContentType).HasColumnName("content_type").HasConversion<string>().HasMaxLength(50);
+            entity.Property(e => e.RetrievedAt).HasColumnName("retrieved_at");
+
+            entity.HasOne(e => e.Message)
+                .WithMany()
+                .HasForeignKey(e => e.MessageId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(e => e.MessageId);
+            entity.HasIndex(e => e.ContentId);
         });
 
         // AgentExecution configuration

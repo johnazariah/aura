@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <!-- Aura logo - stylized 'A' with circular element -->
+  <circle cx="16" cy="16" r="14" fill="#4CAF50" opacity="0.2"/>
+  <circle cx="16" cy="16" r="10" fill="#4CAF50"/>
+  <text x="16" y="21" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="white" text-anchor="middle">A</text>
+  <!-- Status dot - green for healthy -->
+  <circle cx="24" cy="24" r="6" fill="#4CAF50" stroke="white" stroke-width="2"/>
+</svg>

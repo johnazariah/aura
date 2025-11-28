@@ -1,0 +1,121 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Aura.Tray.StatusWindow"
+        Title="Aura Status"
+        Width="400"
+        Height="350"
+        WindowStartupLocation="CenterScreen"
+        CanResize="False"
+        ShowInTaskbar="True"
+        SystemDecorations="Full">
+    
+    <Window.Styles>
+        <Style Selector="TextBlock.header">
+            <Setter Property="FontSize" Value="16"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Margin" Value="0,0,0,10"/>
+        </Style>
+        <Style Selector="Border.statusCard">
+            <Setter Property="Background" Value="#2D2D30"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Padding" Value="12"/>
+            <Setter Property="Margin" Value="0,4"/>
+        </Style>
+        <Style Selector="Ellipse.statusDot">
+            <Setter Property="Width" Value="12"/>
+            <Setter Property="Height" Value="12"/>
+            <Setter Property="Margin" Value="0,0,8,0"/>
+        </Style>
+    </Window.Styles>
+    
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        
+        <!-- Header -->
+        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,16">
+            <Ellipse x:Name="OverallStatusDot" Classes="statusDot" Fill="Gray"/>
+            <TextBlock x:Name="OverallStatusText" Classes="header" Text="Checking Status..."/>
+        </StackPanel>
+        
+        <!-- Component Status Cards -->
+        <StackPanel Grid.Row="1">
+            <!-- API Status -->
+            <Border Classes="statusCard">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <Ellipse x:Name="ApiStatusDot" Grid.Column="0" Classes="statusDot" Fill="Gray"/>
+                    <StackPanel Grid.Column="1">
+                        <TextBlock Text="API Server" FontWeight="SemiBold"/>
+                        <TextBlock x:Name="ApiStatusDetails" Text="Checking..." Foreground="Gray" FontSize="12"/>
+                    </StackPanel>
+                    <TextBlock x:Name="ApiStatusText" Grid.Column="2" Text="..." VerticalAlignment="Center"/>
+                </Grid>
+            </Border>
+            
+            <!-- Ollama Status -->
+            <Border Classes="statusCard">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <Ellipse x:Name="OllamaStatusDot" Grid.Column="0" Classes="statusDot" Fill="Gray"/>
+                    <StackPanel Grid.Column="1">
+                        <TextBlock Text="Ollama (LLM)" FontWeight="SemiBold"/>
+                        <TextBlock x:Name="OllamaStatusDetails" Text="Checking..." Foreground="Gray" FontSize="12"/>
+                    </StackPanel>
+                    <TextBlock x:Name="OllamaStatusText" Grid.Column="2" Text="..." VerticalAlignment="Center"/>
+                </Grid>
+            </Border>
+            
+            <!-- PostgreSQL Status -->
+            <Border Classes="statusCard">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <Ellipse x:Name="PostgresStatusDot" Grid.Column="0" Classes="statusDot" Fill="Gray"/>
+                    <StackPanel Grid.Column="1">
+                        <TextBlock Text="PostgreSQL (Database)" FontWeight="SemiBold"/>
+                        <TextBlock x:Name="PostgresStatusDetails" Text="Checking..." Foreground="Gray" FontSize="12"/>
+                    </StackPanel>
+                    <TextBlock x:Name="PostgresStatusText" Grid.Column="2" Text="..." VerticalAlignment="Center"/>
+                </Grid>
+            </Border>
+            
+            <!-- RAG Status -->
+            <Border Classes="statusCard">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <Ellipse x:Name="RagStatusDot" Grid.Column="0" Classes="statusDot" Fill="Gray"/>
+                    <StackPanel Grid.Column="1">
+                        <TextBlock Text="RAG Index" FontWeight="SemiBold"/>
+                        <TextBlock x:Name="RagStatusDetails" Text="Checking..." Foreground="Gray" FontSize="12"/>
+                    </StackPanel>
+                    <TextBlock x:Name="RagStatusText" Grid.Column="2" Text="..." VerticalAlignment="Center"/>
+                </Grid>
+            </Border>
+        </StackPanel>
+        
+        <!-- Footer -->
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+            <TextBlock x:Name="LastCheckedText" Text="Last checked: --" Foreground="Gray" FontSize="11" VerticalAlignment="Center" Margin="0,0,16,0"/>
+            <Button x:Name="RefreshButton" Content="Refresh" Click="OnRefreshClick"/>
+        </StackPanel>
+    </Grid>
+</Window>

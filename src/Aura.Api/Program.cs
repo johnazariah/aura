@@ -1,3 +1,6 @@
+using System.Globalization;
+using Serilog;
+using Serilog.Events;
 using Aura.Foundation;
 using Aura.Foundation.Agents;
 using Aura.Foundation.Data;
@@ -8,6 +11,36 @@ using Microsoft.EntityFrameworkCore;
 using System.Diagnostics;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Configure as Windows Service when installed as service
+builder.Host.UseWindowsService(options =>
+{
+    options.ServiceName = "AuraService";
+});
+
+// Configure Serilog for file logging
+var logPath = Path.Combine(
+    Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+    "Aura", "logs", "aura-.log");
+var logDir = Path.GetDirectoryName(logPath);
+if (!string.IsNullOrEmpty(logDir) && !Directory.Exists(logDir))
+{
+    Directory.CreateDirectory(logDir);
+}
+
+builder.Host.UseSerilog((context, services, configuration) =>
+{
+    configuration
+        .MinimumLevel.Information()
+        .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
+        .Enrich.FromLogContext()
+        .WriteTo.Console(formatProvider: CultureInfo.InvariantCulture)
+        .WriteTo.File(
+            logPath,
+            rollingInterval: RollingInterval.Day,
+            retainedFileCountLimit: 7,
+            formatProvider: CultureInfo.InvariantCulture);
+});
 
 // Add Aspire service defaults (telemetry, health checks, resilience)
 builder.AddServiceDefaults();
