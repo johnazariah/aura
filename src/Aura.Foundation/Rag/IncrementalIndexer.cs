@@ -6,6 +6,7 @@ namespace Aura.Foundation.Rag;
 
 using System.IO.Abstractions;
 using System.Threading.Channels;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -16,7 +17,7 @@ using Microsoft.Extensions.Options;
 /// </summary>
 public sealed class IncrementalIndexer : BackgroundService, IDisposable
 {
-    private readonly IRagService _ragService;
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly IFileSystem _fileSystem;
     private readonly ILogger<IncrementalIndexer> _logger;
     private readonly RagWatcherOptions _options;
@@ -31,12 +32,12 @@ public sealed class IncrementalIndexer : BackgroundService, IDisposable
     /// Initializes a new instance of the <see cref="IncrementalIndexer"/> class.
     /// </summary>
     public IncrementalIndexer(
-        IRagService ragService,
+        IServiceScopeFactory scopeFactory,
         IFileSystem fileSystem,
         IOptions<RagWatcherOptions> options,
         ILogger<IncrementalIndexer> logger)
     {
-        _ragService = ragService;
+        _scopeFactory = scopeFactory;
         _fileSystem = fileSystem;
         _logger = logger;
         _options = options.Value;
@@ -179,21 +180,24 @@ public sealed class IncrementalIndexer : BackgroundService, IDisposable
     {
         _logger.LogDebug("Processing {ChangeType}: {Path}", change.ChangeType, change.Path);
 
+        using var scope = _scopeFactory.CreateScope();
+        var ragService = scope.ServiceProvider.GetRequiredService<IRagService>();
+
         switch (change.ChangeType)
         {
             case FileChangeType.Created:
             case FileChangeType.Modified:
-                await IndexFileAsync(change.Path, cancellationToken).ConfigureAwait(false);
+                await IndexFileAsync(ragService, change.Path, cancellationToken).ConfigureAwait(false);
                 break;
 
             case FileChangeType.Deleted:
-                await _ragService.RemoveAsync(change.Path, cancellationToken).ConfigureAwait(false);
+                await ragService.RemoveAsync(change.Path, cancellationToken).ConfigureAwait(false);
                 _logger.LogInformation("Removed from index: {Path}", change.Path);
                 break;
         }
     }
 
-    private async Task IndexFileAsync(string path, CancellationToken cancellationToken)
+    private async Task IndexFileAsync(IRagService ragService, string path, CancellationToken cancellationToken)
     {
         if (!_fileSystem.File.Exists(path))
         {
@@ -204,13 +208,13 @@ public sealed class IncrementalIndexer : BackgroundService, IDisposable
         {
             var content = await _fileSystem.File.ReadAllTextAsync(path, cancellationToken).ConfigureAwait(false);
             var ragContent = RagContent.FromFile(path, content);
-            await _ragService.IndexAsync(ragContent, cancellationToken).ConfigureAwait(false);
+            await ragService.IndexAsync(ragContent, cancellationToken).ConfigureAwait(false);
             _logger.LogInformation("Indexed: {Path}", path);
         }
         catch (IOException ex) when (ex.HResult == -2147024864)
         {
             await Task.Delay(100, cancellationToken).ConfigureAwait(false);
-            await IndexFileAsync(path, cancellationToken).ConfigureAwait(false);
+            await IndexFileAsync(ragService, path, cancellationToken).ConfigureAwait(false);
         }
     }
 
