@@ -20,6 +20,35 @@ export interface HealthResponse {
     version?: string;
 }
 
+export interface RagHealthResponse {
+    healthy: boolean;
+    details: string;
+    totalDocuments: number;
+    totalChunks: number;
+}
+
+export interface RagIndexResult {
+    success: boolean;
+    filesIndexed: number;
+    message: string;
+}
+
+export interface RagQueryResult {
+    contentId: string;
+    chunkIndex: number;
+    text: string;
+    score: number;
+    sourcePath?: string;
+    contentType: string;
+}
+
+export interface RagExecuteResult {
+    content: string;
+    tokensUsed: number;
+    ragEnriched: boolean;
+    durationMs: number;
+}
+
 export class AuraApiService {
     private httpClient: AxiosInstance;
 
@@ -41,6 +70,11 @@ export class AuraApiService {
 
     async getHealth(): Promise<HealthResponse> {
         const response = await this.httpClient.get(`${this.getBaseUrl()}/health`);
+        return response.data;
+    }
+
+    async getRagHealth(): Promise<RagHealthResponse> {
+        const response = await this.httpClient.get(`${this.getBaseUrl()}/health/rag`);
         return response.data;
     }
 
@@ -84,8 +118,58 @@ export class AuraApiService {
         const response = await this.httpClient.post(
             `${this.getBaseUrl()}/api/agents/${agentId}/execute`,
             { prompt, workspacePath },
-            { timeout: this.getExecutionTimeout() }  // Use longer timeout for LLM execution
+            { timeout: this.getExecutionTimeout() }
         );
         return response.data.content;
+    }
+
+    // =====================
+    // RAG Methods
+    // =====================
+
+    async indexDirectory(
+        path: string,
+        includePatterns?: string[],
+        excludePatterns?: string[],
+        recursive: boolean = true
+    ): Promise<RagIndexResult> {
+        const response = await this.httpClient.post(
+            `${this.getBaseUrl()}/api/rag/index/directory`,
+            { path, includePatterns, excludePatterns, recursive },
+            { timeout: 300000 }  // 5 minutes for indexing
+        );
+        return response.data;
+    }
+
+    async queryRag(query: string, topK: number = 5): Promise<RagQueryResult[]> {
+        const response = await this.httpClient.post(
+            `${this.getBaseUrl()}/api/rag/query`,
+            { query, topK },
+            { timeout: 30000 }
+        );
+        return response.data.results;
+    }
+
+    async executeAgentWithRag(
+        agentId: string,
+        prompt: string,
+        workspacePath?: string,
+        topK: number = 5
+    ): Promise<RagExecuteResult> {
+        const response = await this.httpClient.post(
+            `${this.getBaseUrl()}/api/agents/${agentId}/execute/rag`,
+            { prompt, workspacePath, useRag: true, topK },
+            { timeout: this.getExecutionTimeout() }
+        );
+        return response.data;
+    }
+
+    async getRagStats(): Promise<{ totalDocuments: number; totalChunks: number }> {
+        const response = await this.httpClient.get(`${this.getBaseUrl()}/api/rag/stats`);
+        return response.data;
+    }
+
+    async clearRagIndex(): Promise<void> {
+        await this.httpClient.delete(`${this.getBaseUrl()}/api/rag`);
     }
 }

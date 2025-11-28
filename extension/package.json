@@ -66,6 +66,26 @@
         "command": "aura.selectAgent",
         "title": "Select Agent",
         "icon": "$(symbol-event)"
+      },
+      {
+        "command": "aura.indexWorkspace",
+        "title": "Aura: Index Workspace for RAG",
+        "icon": "$(database)"
+      },
+      {
+        "command": "aura.askWithRag",
+        "title": "Aura: Ask About Codebase (RAG)",
+        "icon": "$(search)"
+      },
+      {
+        "command": "aura.showRagStats",
+        "title": "Aura: Show RAG Statistics",
+        "icon": "$(info)"
+      },
+      {
+        "command": "aura.clearRagIndex",
+        "title": "Aura: Clear RAG Index",
+        "icon": "$(trash)"
       }
     ],
     "menus": {
