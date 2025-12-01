@@ -7,6 +7,9 @@ using Aura.Foundation.Data;
 using Aura.Foundation.Data.Entities;
 using Aura.Foundation.Llm;
 using Aura.Foundation.Rag;
+using Aura.Module.Developer;
+using Aura.Module.Developer.Data.Entities;
+using Aura.Module.Developer.Services;
 using Microsoft.EntityFrameworkCore;
 using System.Diagnostics;
 
@@ -53,6 +56,10 @@ builder.Services.AddDbContext<AuraDbContext>(options =>
 
 // Add Aura Foundation services
 builder.Services.AddAuraFoundation(builder.Configuration);
+
+// Add Developer Module
+var developerModule = new DeveloperModule();
+developerModule.ConfigureServices(builder.Services, builder.Configuration);
 
 // Add CORS for the VS Code extension
 builder.Services.AddCors(options =>
@@ -997,6 +1004,426 @@ app.MapDelete("/api/git/worktrees", async (
     
     return Results.BadRequest(new { success = false, error = result.Error });
 });
+
+// =============================================================================
+// Developer Module Endpoints
+// =============================================================================
+
+// Issue endpoints
+app.MapPost("/api/developer/issues", async (
+    CreateIssueRequest request,
+    IIssueService issueService,
+    CancellationToken ct) =>
+{
+    var issue = await issueService.CreateAsync(
+        request.Title,
+        request.Description,
+        request.RepositoryPath,
+        ct);
+
+    return Results.Created($"/api/developer/issues/{issue.Id}", new
+    {
+        id = issue.Id,
+        title = issue.Title,
+        description = issue.Description,
+        status = issue.Status.ToString(),
+        repositoryPath = issue.RepositoryPath,
+        createdAt = issue.CreatedAt
+    });
+});
+
+app.MapGet("/api/developer/issues", async (
+    IIssueService issueService,
+    string? status,
+    CancellationToken ct) =>
+{
+    IssueStatus? statusFilter = null;
+    if (!string.IsNullOrEmpty(status) && Enum.TryParse<IssueStatus>(status, true, out var s))
+    {
+        statusFilter = s;
+    }
+
+    var issues = await issueService.ListAsync(statusFilter, ct);
+
+    return Results.Ok(new
+    {
+        count = issues.Count,
+        issues = issues.Select(i => new
+        {
+            id = i.Id,
+            title = i.Title,
+            description = i.Description,
+            status = i.Status.ToString(),
+            repositoryPath = i.RepositoryPath,
+            hasWorkflow = i.Workflow is not null,
+            workflowId = i.Workflow?.Id,
+            workflowStatus = i.Workflow?.Status.ToString(),
+            createdAt = i.CreatedAt,
+            updatedAt = i.UpdatedAt
+        })
+    });
+});
+
+app.MapGet("/api/developer/issues/{id:guid}", async (
+    Guid id,
+    IIssueService issueService,
+    CancellationToken ct) =>
+{
+    var issue = await issueService.GetByIdWithWorkflowAsync(id, ct);
+    if (issue is null)
+    {
+        return Results.NotFound(new { error = $"Issue {id} not found" });
+    }
+
+    return Results.Ok(new
+    {
+        id = issue.Id,
+        title = issue.Title,
+        description = issue.Description,
+        status = issue.Status.ToString(),
+        repositoryPath = issue.RepositoryPath,
+        workflow = issue.Workflow is null ? null : new
+        {
+            id = issue.Workflow.Id,
+            status = issue.Workflow.Status.ToString(),
+            gitBranch = issue.Workflow.GitBranch,
+            workspacePath = issue.Workflow.WorkspacePath,
+            stepCount = issue.Workflow.Steps.Count,
+            createdAt = issue.Workflow.CreatedAt
+        },
+        createdAt = issue.CreatedAt,
+        updatedAt = issue.UpdatedAt
+    });
+});
+
+app.MapPut("/api/developer/issues/{id:guid}", async (
+    Guid id,
+    UpdateIssueRequest request,
+    IIssueService issueService,
+    CancellationToken ct) =>
+{
+    try
+    {
+        var issue = await issueService.UpdateAsync(id, request.Title, request.Description, ct);
+        return Results.Ok(new
+        {
+            id = issue.Id,
+            title = issue.Title,
+            description = issue.Description,
+            status = issue.Status.ToString(),
+            updatedAt = issue.UpdatedAt
+        });
+    }
+    catch (InvalidOperationException ex)
+    {
+        return Results.NotFound(new { error = ex.Message });
+    }
+});
+
+app.MapDelete("/api/developer/issues/{id:guid}", async (
+    Guid id,
+    IIssueService issueService,
+    CancellationToken ct) =>
+{
+    await issueService.DeleteAsync(id, ct);
+    return Results.NoContent();
+});
+
+// Workflow endpoints
+app.MapPost("/api/developer/issues/{issueId:guid}/workflow", async (
+    Guid issueId,
+    IWorkflowService workflowService,
+    CancellationToken ct) =>
+{
+    try
+    {
+        var workflow = await workflowService.CreateFromIssueAsync(issueId, ct);
+        return Results.Created($"/api/developer/workflows/{workflow.Id}", new
+        {
+            id = workflow.Id,
+            issueId = workflow.IssueId,
+            status = workflow.Status.ToString(),
+            gitBranch = workflow.GitBranch,
+            workspacePath = workflow.WorkspacePath,
+            createdAt = workflow.CreatedAt
+        });
+    }
+    catch (InvalidOperationException ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+});
+
+app.MapGet("/api/developer/workflows", async (
+    IWorkflowService workflowService,
+    string? status,
+    CancellationToken ct) =>
+{
+    WorkflowStatus? statusFilter = null;
+    if (!string.IsNullOrEmpty(status) && Enum.TryParse<WorkflowStatus>(status, true, out var s))
+    {
+        statusFilter = s;
+    }
+
+    var workflows = await workflowService.ListAsync(statusFilter, ct);
+
+    return Results.Ok(new
+    {
+        count = workflows.Count,
+        workflows = workflows.Select(w => new
+        {
+            id = w.Id,
+            issueId = w.IssueId,
+            issueTitle = w.Issue?.Title ?? w.WorkItemTitle,
+            status = w.Status.ToString(),
+            gitBranch = w.GitBranch,
+            workspacePath = w.WorkspacePath,
+            stepCount = w.Steps.Count,
+            completedSteps = w.Steps.Count(s => s.Status == StepStatus.Completed),
+            createdAt = w.CreatedAt,
+            updatedAt = w.UpdatedAt
+        })
+    });
+});
+
+app.MapGet("/api/developer/workflows/{id:guid}", async (
+    Guid id,
+    IWorkflowService workflowService,
+    CancellationToken ct) =>
+{
+    var workflow = await workflowService.GetByIdWithStepsAsync(id, ct);
+    if (workflow is null)
+    {
+        return Results.NotFound(new { error = $"Workflow {id} not found" });
+    }
+
+    return Results.Ok(new
+    {
+        id = workflow.Id,
+        issueId = workflow.IssueId,
+        issueTitle = workflow.Issue?.Title ?? workflow.WorkItemTitle,
+        issueDescription = workflow.Issue?.Description ?? workflow.WorkItemDescription,
+        status = workflow.Status.ToString(),
+        gitBranch = workflow.GitBranch,
+        workspacePath = workflow.WorkspacePath,
+        repositoryPath = workflow.RepositoryPath,
+        digestedContext = workflow.DigestedContext,
+        executionPlan = workflow.ExecutionPlan,
+        steps = workflow.Steps.OrderBy(s => s.Order).Select(s => new
+        {
+            id = s.Id,
+            order = s.Order,
+            name = s.Name,
+            capability = s.Capability,
+            description = s.Description,
+            status = s.Status.ToString(),
+            assignedAgentId = s.AssignedAgentId,
+            attempts = s.Attempts,
+            output = s.Output,
+            error = s.Error,
+            startedAt = s.StartedAt,
+            completedAt = s.CompletedAt
+        }),
+        createdAt = workflow.CreatedAt,
+        updatedAt = workflow.UpdatedAt,
+        completedAt = workflow.CompletedAt
+    });
+});
+
+app.MapPost("/api/developer/workflows/{id:guid}/digest", async (
+    Guid id,
+    IWorkflowService workflowService,
+    CancellationToken ct) =>
+{
+    try
+    {
+        var workflow = await workflowService.DigestAsync(id, ct);
+        return Results.Ok(new
+        {
+            id = workflow.Id,
+            status = workflow.Status.ToString(),
+            digestedContext = workflow.DigestedContext,
+            message = "Workflow digested successfully"
+        });
+    }
+    catch (InvalidOperationException ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+});
+
+app.MapPost("/api/developer/workflows/{id:guid}/plan", async (
+    Guid id,
+    IWorkflowService workflowService,
+    CancellationToken ct) =>
+{
+    try
+    {
+        var workflow = await workflowService.PlanAsync(id, ct);
+        return Results.Ok(new
+        {
+            id = workflow.Id,
+            status = workflow.Status.ToString(),
+            stepCount = workflow.Steps.Count,
+            steps = workflow.Steps.OrderBy(s => s.Order).Select(s => new
+            {
+                id = s.Id,
+                order = s.Order,
+                name = s.Name,
+                capability = s.Capability,
+                description = s.Description
+            }),
+            message = "Workflow planned successfully"
+        });
+    }
+    catch (InvalidOperationException ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+});
+
+app.MapPost("/api/developer/workflows/{workflowId:guid}/steps/{stepId:guid}/execute", async (
+    Guid workflowId,
+    Guid stepId,
+    ExecuteStepRequest? request,
+    IWorkflowService workflowService,
+    CancellationToken ct) =>
+{
+    try
+    {
+        var step = await workflowService.ExecuteStepAsync(workflowId, stepId, request?.AgentId, ct);
+        return Results.Ok(new
+        {
+            id = step.Id,
+            name = step.Name,
+            status = step.Status.ToString(),
+            assignedAgentId = step.AssignedAgentId,
+            output = step.Output,
+            attempts = step.Attempts,
+            startedAt = step.StartedAt,
+            completedAt = step.CompletedAt
+        });
+    }
+    catch (InvalidOperationException ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+});
+
+app.MapPost("/api/developer/workflows/{id:guid}/steps", async (
+    Guid id,
+    AddStepRequest request,
+    IWorkflowService workflowService,
+    CancellationToken ct) =>
+{
+    try
+    {
+        var step = await workflowService.AddStepAsync(
+            id,
+            request.Name,
+            request.Capability,
+            request.Description,
+            request.AfterOrder,
+            ct);
+
+        return Results.Created($"/api/developer/workflows/{id}/steps/{step.Id}", new
+        {
+            id = step.Id,
+            order = step.Order,
+            name = step.Name,
+            capability = step.Capability,
+            description = step.Description,
+            status = step.Status.ToString()
+        });
+    }
+    catch (InvalidOperationException ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+});
+
+app.MapDelete("/api/developer/workflows/{workflowId:guid}/steps/{stepId:guid}", async (
+    Guid workflowId,
+    Guid stepId,
+    IWorkflowService workflowService,
+    CancellationToken ct) =>
+{
+    await workflowService.RemoveStepAsync(workflowId, stepId, ct);
+    return Results.NoContent();
+});
+
+app.MapPost("/api/developer/workflows/{id:guid}/complete", async (
+    Guid id,
+    IWorkflowService workflowService,
+    CancellationToken ct) =>
+{
+    try
+    {
+        var workflow = await workflowService.CompleteAsync(id, ct);
+        return Results.Ok(new
+        {
+            id = workflow.Id,
+            status = workflow.Status.ToString(),
+            completedAt = workflow.CompletedAt,
+            message = "Workflow completed successfully"
+        });
+    }
+    catch (InvalidOperationException ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+});
+
+app.MapPost("/api/developer/workflows/{id:guid}/cancel", async (
+    Guid id,
+    IWorkflowService workflowService,
+    CancellationToken ct) =>
+{
+    try
+    {
+        var workflow = await workflowService.CancelAsync(id, ct);
+        return Results.Ok(new
+        {
+            id = workflow.Id,
+            status = workflow.Status.ToString(),
+            message = "Workflow cancelled"
+        });
+    }
+    catch (InvalidOperationException ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+});
+
+app.MapPost("/api/developer/workflows/{id:guid}/chat", async (
+    Guid id,
+    WorkflowChatRequest request,
+    IWorkflowService workflowService,
+    CancellationToken ct) =>
+{
+    try
+    {
+        var response = await workflowService.ChatAsync(id, request.Message, ct);
+        return Results.Ok(new
+        {
+            response = response.Response,
+            planModified = response.PlanModified,
+            stepsAdded = response.StepsAdded.Select(s => new
+            {
+                id = s.Id,
+                order = s.Order,
+                name = s.Name,
+                capability = s.Capability
+            }),
+            stepsRemoved = response.StepsRemoved
+        });
+    }
+    catch (InvalidOperationException ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+});
+
 app.Run();
 
 // Request models
@@ -1051,4 +1478,27 @@ record CreateWorktreeRequest(
     string BranchName,
     string? WorktreePath = null,
     string? BaseBranch = null);
+
+// Developer Module request models
+record CreateIssueRequest(
+    string Title,
+    string? Description = null,
+    string? RepositoryPath = null);
+
+record UpdateIssueRequest(
+    string? Title = null,
+    string? Description = null);
+
+record ExecuteStepRequest(
+    string? AgentId = null);
+
+record AddStepRequest(
+    string Name,
+    string Capability,
+    string? Description = null,
+    int? AfterOrder = null);
+
+record WorkflowChatRequest(
+    string Message);
+
 public partial class Program { }

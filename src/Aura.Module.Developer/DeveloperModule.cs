@@ -6,6 +6,9 @@ namespace Aura.Module.Developer;
 
 using Aura.Foundation.Agents;
 using Aura.Foundation.Modules;
+using Aura.Module.Developer.Data;
+using Aura.Module.Developer.Services;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -30,9 +33,16 @@ public sealed class DeveloperModule : IAuraModule
     /// <inheritdoc/>
     public void ConfigureServices(IServiceCollection services, IConfiguration config)
     {
-        // Developer-specific services will be added here
-        // e.g., services.AddScoped<IWorkflowService, WorkflowService>();
-        // e.g., services.AddScoped<IGitWorktreeService, GitWorktreeService>();
+        // Get connection string from configuration (shared with Foundation)
+        var connectionString = config.GetConnectionString("auradb");
+
+        // Register DeveloperDbContext (uses same database as Foundation)
+        services.AddDbContext<DeveloperDbContext>(options =>
+            options.UseNpgsql(connectionString, o => o.UseVector()));
+
+        // Register Developer Module services
+        services.AddScoped<IIssueService, IssueService>();
+        services.AddScoped<IWorkflowService, WorkflowService>();
     }
 
     /// <inheritdoc/>

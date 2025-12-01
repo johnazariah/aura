@@ -13,7 +13,16 @@ public sealed class Workflow
     /// <summary>Gets or sets the unique identifier.</summary>
     public Guid Id { get; set; }
 
-    /// <summary>Gets or sets the work item identifier (e.g., "github:owner/repo#123").</summary>
+    /// <summary>Gets or sets the linked issue ID (nullable for backward compatibility).</summary>
+    public Guid? IssueId { get; set; }
+
+    /// <summary>Gets or sets the linked issue.</summary>
+    public Issue? Issue { get; set; }
+
+    /// <summary>Gets or sets the repository path (original repo, before worktree).</summary>
+    public string? RepositoryPath { get; set; }
+
+    /// <summary>Gets or sets the work item identifier (e.g., "local:{issueId}" or "github:owner/repo#123").</summary>
     public required string WorkItemId { get; set; }
 
     /// <summary>Gets or sets the work item title.</summary>
@@ -37,11 +46,17 @@ public sealed class Workflow
     /// <summary>Gets or sets the digested context as JSON (RAG output).</summary>
     public string? DigestedContext { get; set; }
 
+    /// <summary>Gets or sets the execution plan as JSON (from planning agent).</summary>
+    public string? ExecutionPlan { get; set; }
+
     /// <summary>Gets or sets when the workflow was created.</summary>
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
     /// <summary>Gets or sets when the workflow was last updated.</summary>
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>Gets or sets when the workflow was completed.</summary>
+    public DateTimeOffset? CompletedAt { get; set; }
 
     /// <summary>Gets or sets the workflow steps.</summary>
     public ICollection<WorkflowStep> Steps { get; set; } = [];
