@@ -245,7 +245,12 @@ public sealed class OllamaProvider : ILlmProvider, IEmbeddingProvider
         try
         {
             var models = await ListModelsAsync(cancellationToken).ConfigureAwait(false);
-            return models.Any(m => m.Name.Equals(model, StringComparison.OrdinalIgnoreCase));
+            // Support flexible matching: "nomic-embed-text" matches "nomic-embed-text:latest"
+            // Also handle case where user specifies full name with tag
+            return models.Any(m =>
+                m.Name.Equals(model, StringComparison.OrdinalIgnoreCase) ||
+                m.Name.StartsWith(model + ":", StringComparison.OrdinalIgnoreCase) ||
+                model.StartsWith(m.Name.Split(':')[0] + ":", StringComparison.OrdinalIgnoreCase));
         }
         catch { return false; }
     }

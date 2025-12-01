@@ -4,6 +4,10 @@
   "description": "Local-first AI assistant for knowledge work",
   "version": "0.1.0",
   "publisher": "aura",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/johnazariah/aura"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -68,14 +72,14 @@
         "icon": "$(symbol-event)"
       },
       {
+        "command": "aura.openChat",
+        "title": "Aura: Open Chat",
+        "icon": "$(comment-discussion)"
+      },
+      {
         "command": "aura.indexWorkspace",
         "title": "Aura: Index Workspace for RAG",
         "icon": "$(database)"
-      },
-      {
-        "command": "aura.askWithRag",
-        "title": "Aura: Ask About Codebase (RAG)",
-        "icon": "$(search)"
       },
       {
         "command": "aura.showRagStats",

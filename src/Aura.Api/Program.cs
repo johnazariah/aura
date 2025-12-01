@@ -67,6 +67,24 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
+// Apply EF Core migrations on startup (required for pgvector)
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AuraDbContext>();
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    try
+    {
+        logger.LogInformation("Applying database migrations...");
+        db.Database.Migrate();
+        logger.LogInformation("Database migrations applied successfully");
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Failed to apply database migrations");
+        throw;
+    }
+}
+
 // Map Aspire default endpoints (health, alive)
 app.MapDefaultEndpoints();
 
@@ -783,6 +801,202 @@ app.MapDelete("/api/rag", async (IRagService ragService, CancellationToken cance
     }
 });
 
+
+// ==== Tool Endpoints ====
+
+// List all tools
+app.MapGet("/api/tools", (Aura.Foundation.Tools.IToolRegistry toolRegistry) =>
+{
+    var tools = toolRegistry.GetAllTools();
+    return Results.Ok(new
+    {
+        count = tools.Count,
+        tools = tools.Select(t => new
+        {
+            toolId = t.ToolId,
+            name = t.Name,
+            description = t.Description,
+            categories = t.Categories,
+            requiresConfirmation = t.RequiresConfirmation,
+            inputSchema = t.InputSchema
+        })
+    });
+});
+
+// Execute a tool
+app.MapPost("/api/tools/{toolId}/execute", async (
+    string toolId,
+    ExecuteToolRequest request,
+    Aura.Foundation.Tools.IToolRegistry toolRegistry,
+    CancellationToken ct) =>
+{
+    var input = new Aura.Foundation.Tools.ToolInput
+    {
+        ToolId = toolId,
+        WorkingDirectory = request.WorkingDirectory,
+        Parameters = request.Parameters ?? new Dictionary<string, object?>()
+    };
+    
+    var result = await toolRegistry.ExecuteAsync(input, ct);
+    
+    if (result.Success)
+    {
+        return Results.Ok(new
+        {
+            success = true,
+            output = result.Output,
+            duration = result.Duration.TotalMilliseconds
+        });
+    }
+    
+    return Results.BadRequest(new
+    {
+        success = false,
+        error = result.Error,
+        duration = result.Duration.TotalMilliseconds
+    });
+});
+
+// ==== Git Endpoints ====
+
+// Get git status
+app.MapGet("/api/git/status", async (
+    string path,
+    Aura.Foundation.Git.IGitService gitService,
+    CancellationToken ct) =>
+{
+    var result = await gitService.GetStatusAsync(path, ct);
+    
+    if (result.Success)
+    {
+        return Results.Ok(new
+        {
+            success = true,
+            branch = result.Value!.CurrentBranch,
+            isDirty = result.Value.IsDirty,
+            modifiedFiles = result.Value.ModifiedFiles,
+            untrackedFiles = result.Value.UntrackedFiles,
+            stagedFiles = result.Value.StagedFiles
+        });
+    }
+    
+    return Results.BadRequest(new { success = false, error = result.Error });
+});
+
+// Create a branch
+app.MapPost("/api/git/branch", async (
+    CreateBranchRequest request,
+    Aura.Foundation.Git.IGitService gitService,
+    CancellationToken ct) =>
+{
+    var result = await gitService.CreateBranchAsync(
+        request.RepoPath, 
+        request.BranchName, 
+        request.BaseBranch, 
+        ct);
+    
+    if (result.Success)
+    {
+        return Results.Ok(new
+        {
+            success = true,
+            branch = result.Value!.Name,
+            isCurrent = result.Value.IsCurrent
+        });
+    }
+    
+    return Results.BadRequest(new { success = false, error = result.Error });
+});
+
+// Commit changes
+app.MapPost("/api/git/commit", async (
+    CommitRequest request,
+    Aura.Foundation.Git.IGitService gitService,
+    CancellationToken ct) =>
+{
+    var result = await gitService.CommitAsync(request.RepoPath, request.Message, ct);
+    
+    if (result.Success)
+    {
+        return Results.Ok(new { success = true, sha = result.Value });
+    }
+    
+    return Results.BadRequest(new { success = false, error = result.Error });
+});
+
+// ==== Worktree Endpoints ====
+
+// List worktrees
+app.MapGet("/api/git/worktrees", async (
+    string repoPath,
+    Aura.Foundation.Git.IGitWorktreeService worktreeService,
+    CancellationToken ct) =>
+{
+    var result = await worktreeService.ListAsync(repoPath, ct);
+    
+    if (result.Success)
+    {
+        return Results.Ok(new
+        {
+            success = true,
+            worktrees = result.Value!.Select(w => new
+            {
+                path = w.Path,
+                branch = w.Branch,
+                commitSha = w.CommitSha,
+                isMainWorktree = w.IsMainWorktree,
+                isLocked = w.IsLocked,
+                lockReason = w.LockReason
+            })
+        });
+    }
+    
+    return Results.BadRequest(new { success = false, error = result.Error });
+});
+
+// Create worktree
+app.MapPost("/api/git/worktrees", async (
+    CreateWorktreeRequest request,
+    Aura.Foundation.Git.IGitWorktreeService worktreeService,
+    CancellationToken ct) =>
+{
+    var result = await worktreeService.CreateAsync(
+        request.RepoPath,
+        request.BranchName,
+        request.WorktreePath,
+        request.BaseBranch,
+        ct);
+    
+    if (result.Success)
+    {
+        return Results.Ok(new
+        {
+            success = true,
+            path = result.Value!.Path,
+            branch = result.Value.Branch,
+            commitSha = result.Value.CommitSha
+        });
+    }
+    
+    return Results.BadRequest(new { success = false, error = result.Error });
+});
+
+// Remove worktree
+app.MapDelete("/api/git/worktrees", async (
+    string path,
+    bool? force,
+    Aura.Foundation.Git.IGitWorktreeService worktreeService,
+    CancellationToken ct) =>
+{
+    var result = await worktreeService.RemoveAsync(path, force ?? false, ct);
+    
+    if (result.Success)
+    {
+        return Results.Ok(new { success = true, message = "Worktree removed" });
+    }
+    
+    return Results.BadRequest(new { success = false, error = result.Error });
+});
 app.Run();
 
 // Request models
@@ -816,4 +1030,25 @@ record RagQueryRequest(
     string? SourcePathPrefix = null);
 
 // Make Program accessible for WebApplicationFactory
+
+// Tool request models
+record ExecuteToolRequest(
+    string? WorkingDirectory = null,
+    Dictionary<string, object?>? Parameters = null);
+
+// Git request models
+record CreateBranchRequest(
+    string RepoPath,
+    string BranchName,
+    string? BaseBranch = null);
+
+record CommitRequest(
+    string RepoPath,
+    string Message);
+
+record CreateWorktreeRequest(
+    string RepoPath,
+    string BranchName,
+    string? WorktreePath = null,
+    string? BaseBranch = null);
 public partial class Program { }

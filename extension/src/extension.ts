@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { StatusTreeProvider } from './providers/statusTreeProvider';
 import { AgentTreeProvider, AgentItem } from './providers/agentTreeProvider';
+import { ChatWindowProvider } from './providers/chatWindowProvider';
 import { HealthCheckService } from './services/healthCheckService';
 import { AuraApiService, AgentInfo } from './services/auraApiService';
 
@@ -8,6 +9,7 @@ let auraApiService: AuraApiService;
 let healthCheckService: HealthCheckService;
 let statusTreeProvider: StatusTreeProvider;
 let agentTreeProvider: AgentTreeProvider;
+let chatWindowProvider: ChatWindowProvider;
 let statusBarItem: vscode.StatusBarItem;
 let refreshInterval: NodeJS.Timeout | undefined;
 
@@ -21,6 +23,7 @@ export async function activate(context: vscode.ExtensionContext) {
     // Initialize tree providers
     statusTreeProvider = new StatusTreeProvider(healthCheckService);
     agentTreeProvider = new AgentTreeProvider(auraApiService);
+    chatWindowProvider = new ChatWindowProvider(context.extensionUri, auraApiService);
 
     // Register tree views
     const statusView = vscode.window.createTreeView('aura.status', {
@@ -63,7 +66,6 @@ export async function activate(context: vscode.ExtensionContext) {
     const selectAgentCommand = vscode.commands.registerCommand('aura.selectAgent', async (agent: AgentInfo) => {
         const actions = [
             { label: '$(comment) Chat with this agent', action: 'chat' },
-            { label: '$(search) Ask with RAG context', action: 'rag' },
             { label: '$(info) View details', action: 'details' },
             { label: '$(copy) Copy agent ID', action: 'copy' }
         ];
@@ -76,10 +78,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
         switch (selected.action) {
             case 'chat':
-                await executeAgentById(agent.id, agent.name);
-                break;
-            case 'rag':
-                await askWithRag(agent.id, agent.name);
+                await openChatWindow(agent);
                 break;
             case 'details':
                 showAgentDetails(agent);
@@ -91,13 +90,37 @@ export async function activate(context: vscode.ExtensionContext) {
         }
     });
 
+    // Open Chat command
+    const openChatCommand = vscode.commands.registerCommand('aura.openChat', async () => {
+        try {
+            const agents = await auraApiService.getAgents();
+            if (agents.length === 0) {
+                vscode.window.showWarningMessage('No agents available');
+                return;
+            }
+
+            const items = agents.map(a => ({
+                label: a.name,
+                description: a.model,
+                detail: a.description,
+                agent: a
+            }));
+
+            const selected = await vscode.window.showQuickPick(items, {
+                placeHolder: 'Select an agent to chat with'
+            });
+
+            if (selected) {
+                await chatWindowProvider.openChatWindow(selected.agent);
+            }
+        } catch (error) {
+            vscode.window.showErrorMessage('Failed to load agents');
+        }
+    });
+
     // RAG Commands
     const indexWorkspaceCommand = vscode.commands.registerCommand('aura.indexWorkspace', async () => {
         await indexWorkspace();
-    });
-
-    const askWithRagCommand = vscode.commands.registerCommand('aura.askWithRag', async () => {
-        await askWithRag();
     });
 
     const showRagStatsCommand = vscode.commands.registerCommand('aura.showRagStats', async () => {
@@ -126,8 +149,8 @@ export async function activate(context: vscode.ExtensionContext) {
         executeAgentCommand,
         quickExecuteCommand,
         selectAgentCommand,
+        openChatCommand,
         indexWorkspaceCommand,
-        askWithRagCommand,
         showRagStatsCommand,
         clearRagIndexCommand,
         configWatcher
@@ -198,101 +221,6 @@ async function indexWorkspace(): Promise<void> {
             }
         }
     );
-}
-
-async function askWithRag(agentId?: string, agentName?: string): Promise<void> {
-    try {
-        // If no agent specified, let user pick
-        if (!agentId) {
-            const agents = await auraApiService.getAgents();
-            if (agents.length === 0) {
-                vscode.window.showWarningMessage('No agents available');
-                return;
-            }
-
-            // Default to chat-agent if available
-            const chatAgent = agents.find(a => a.id === 'chat-agent');
-            
-            interface AgentPickItem extends vscode.QuickPickItem {
-                id: string;
-            }
-
-            const pickItems: AgentPickItem[] = agents.map((a: AgentInfo) => ({
-                label: a.name,
-                description: a.model,
-                id: a.id,
-                picked: a.id === 'chat-agent'
-            }));
-
-            const picked = await vscode.window.showQuickPick(pickItems, {
-                placeHolder: 'Select an agent (chat-agent recommended for RAG)'
-            });
-
-            if (!picked) return;
-            agentId = picked.id;
-            agentName = picked.label;
-        }
-
-        // Get the question
-        const prompt = await vscode.window.showInputBox({
-            prompt: `Ask about your codebase (with RAG context)`,
-            placeHolder: 'How does the authentication work?'
-        });
-
-        if (!prompt) return;
-
-        const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-
-        // Execute with RAG
-        await vscode.window.withProgress(
-            {
-                location: vscode.ProgressLocation.Notification,
-                title: `Searching codebase and asking ${agentName}...`,
-                cancellable: false
-            },
-            async (progress) => {
-                progress.report({ message: 'Querying knowledge base...' });
-
-                const result = await auraApiService.executeAgentWithRag(
-                    agentId!,
-                    prompt,
-                    workspacePath,
-                    5  // Top 5 results
-                );
-
-                // Show result in a nicely formatted document
-                const content = formatRagResponse(agentName!, prompt, result);
-                
-                const doc = await vscode.workspace.openTextDocument({
-                    content,
-                    language: 'markdown'
-                });
-                await vscode.window.showTextDocument(doc);
-            }
-        );
-
-    } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unknown error';
-        vscode.window.showErrorMessage(`RAG query failed: ${message}`);
-    }
-}
-
-function formatRagResponse(
-    agentName: string,
-    prompt: string,
-    result: { content: string; tokensUsed: number; ragEnriched: boolean; durationMs: number }
-): string {
-    return `# 🔍 RAG Query Result
-
-## Question
-${prompt}
-
-## Answer
-${result.content}
-
----
-*Agent: ${agentName} | RAG: ${result.ragEnriched ? '✓ Enabled' : '✗ Disabled'} | Tokens: ${result.tokensUsed} | Time: ${result.durationMs}ms*
-`;
 }
 
 async function showRagStats(): Promise<void> {
@@ -390,6 +318,10 @@ function setupAutoRefresh(): void {
     if (autoRefresh) {
         refreshInterval = setInterval(refreshAll, 10000);
     }
+}
+
+async function openChatWindow(agent: AgentInfo): Promise<void> {
+    await chatWindowProvider.openChatWindow(agent);
 }
 
 async function executeAgentById(agentId: string, agentName: string): Promise<void> {

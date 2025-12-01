@@ -10,11 +10,37 @@ export interface ServiceStatus {
     lastChecked?: Date;
 }
 
+export interface OllamaModelInfo {
+    name: string;
+    size: number;  // bytes
+    parameterSize: string;
+    quantization: string;
+    family: string;
+}
+
+export interface OllamaRunningModel {
+    name: string;
+    sizeVram: number;  // bytes in VRAM
+    expiresAt: Date;
+}
+
+export interface OllamaStatus extends ServiceStatus {
+    models?: OllamaModelInfo[];
+    runningModels?: OllamaRunningModel[];
+    totalModelSize?: number;  // total size of all models on disk
+}
+
+export interface RagStatus extends ServiceStatus {
+    totalDocuments?: number;
+    totalChunks?: number;
+    chunksByType?: Record<string, number>;
+}
+
 export interface HealthStatuses {
     api: ServiceStatus;
-    ollama: ServiceStatus;
+    ollama: OllamaStatus;
     database: ServiceStatus;
-    rag: ServiceStatus;
+    rag: RagStatus;
 }
 
 export class HealthCheckService {
@@ -98,17 +124,53 @@ export class HealthCheckService {
 
         try {
             const start = Date.now();
-            const response = await this.httpClient.get(`${url}/api/tags`);
+            
+            // Get available models
+            const tagsResponse = await this.httpClient.get(`${url}/api/tags`);
             const responseTime = Date.now() - start;
 
-            const models = response.data?.models || [];
+            const rawModels = tagsResponse.data?.models || [];
+            const models: OllamaModelInfo[] = rawModels.map((m: any) => ({
+                name: m.name,
+                size: m.size || 0,
+                parameterSize: m.details?.parameter_size || 'unknown',
+                quantization: m.details?.quantization_level || 'unknown',
+                family: m.details?.family || 'unknown'
+            }));
+
+            const totalModelSize = models.reduce((sum, m) => sum + m.size, 0);
+
+            // Get running models (loaded in memory)
+            let runningModels: OllamaRunningModel[] = [];
+            try {
+                const psResponse = await this.httpClient.get(`${url}/api/ps`);
+                const rawRunning = psResponse.data?.models || [];
+                runningModels = rawRunning.map((m: any) => ({
+                    name: m.name,
+                    sizeVram: m.size_vram || m.size || 0,
+                    expiresAt: m.expires_at ? new Date(m.expires_at) : new Date()
+                }));
+            } catch {
+                // /api/ps might not be available in older Ollama versions
+            }
+
             const modelCount = models.length;
+            const loadedCount = runningModels.length;
+            const loadedVram = runningModels.reduce((sum, m) => sum + m.sizeVram, 0);
+
+            let details = `${modelCount} model${modelCount !== 1 ? 's' : ''}`;
+            if (loadedCount > 0) {
+                details += ` (${loadedCount} loaded, ${this.formatBytes(loadedVram)} VRAM)`;
+            }
 
             this.statuses.ollama = {
                 status: 'healthy',
                 url,
                 responseTime,
-                details: `${modelCount} model${modelCount !== 1 ? 's' : ''} available`,
+                details,
+                models,
+                runningModels,
+                totalModelSize,
                 lastChecked: new Date()
             };
         } catch (error) {
@@ -165,10 +227,27 @@ export class HealthCheckService {
             const response = await this.httpClient.get(`${url}/health/rag`);
             const responseTime = Date.now() - start;
 
+            const totalDocuments = response.data?.totalDocuments || 0;
+            const totalChunks = response.data?.totalChunks || 0;
+
+            // Also fetch detailed stats
+            let chunksByType: Record<string, number> = {};
+            try {
+                const statsResponse = await this.httpClient.get(`${url}/api/rag/stats`);
+                chunksByType = statsResponse.data?.chunksByType || {};
+            } catch {
+                // Stats endpoint might fail, continue anyway
+            }
+
+            let details = `${totalDocuments} doc${totalDocuments !== 1 ? 's' : ''}, ${totalChunks} chunks`;
+
             this.statuses.rag = {
                 status: response.data?.healthy ? 'healthy' : 'unhealthy',
                 responseTime,
-                details: response.data?.details || 'Index ready',
+                details,
+                totalDocuments,
+                totalChunks,
+                chunksByType,
                 lastChecked: new Date()
             };
         } catch (error) {
@@ -203,5 +282,13 @@ export class HealthCheckService {
             return error.message;
         }
         return 'Unknown error';
+    }
+
+    private formatBytes(bytes: number): string {
+        if (bytes === 0) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
     }
 }

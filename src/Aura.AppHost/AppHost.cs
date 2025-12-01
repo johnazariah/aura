@@ -3,8 +3,10 @@
 
 var builder = DistributedApplication.CreateBuilder(args);
 
-// PostgreSQL for persistent storage (Phase 3)
+// PostgreSQL with pgvector extension for RAG embeddings
+// Using pgvector/pgvector image which has the extension pre-installed
 var postgres = builder.AddPostgres("postgres")
+    .WithImage("pgvector/pgvector", "pg17")
     .WithDataVolume("aura-postgres-data")
     .WithPgAdmin();
 

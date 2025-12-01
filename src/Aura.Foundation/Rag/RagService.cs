@@ -9,6 +9,7 @@ using System.Text.Json;
 using Aura.Foundation.Data;
 using Aura.Foundation.Data.Entities;
 using Aura.Foundation.Llm;
+using Aura.Foundation.Rag.Ingestors;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -24,6 +25,7 @@ public sealed class RagService : IRagService
     private readonly AuraDbContext _dbContext;
     private readonly IEmbeddingProvider _embeddingProvider;
     private readonly IFileSystem _fileSystem;
+    private readonly IIngestorRegistry _ingestorRegistry;
     private readonly ILogger<RagService> _logger;
     private readonly RagOptions _options;
     private readonly TextChunker _chunker;
@@ -35,12 +37,14 @@ public sealed class RagService : IRagService
         AuraDbContext dbContext,
         IEmbeddingProvider embeddingProvider,
         IFileSystem fileSystem,
+        IIngestorRegistry ingestorRegistry,
         IOptions<RagOptions> options,
         ILogger<RagService> logger)
     {
         _dbContext = dbContext;
         _embeddingProvider = embeddingProvider;
         _fileSystem = fileSystem;
+        _ingestorRegistry = ingestorRegistry;
         _logger = logger;
         _options = options.Value;
         _chunker = new TextChunker(_options.ChunkSize, _options.ChunkOverlap);
@@ -148,9 +152,20 @@ public sealed class RagService : IRagService
                 try
                 {
                     var content = await _fileSystem.File.ReadAllTextAsync(filePath, cancellationToken).ConfigureAwait(false);
-                    var ragContent = RagContent.FromFile(filePath, content, options.ContentType);
 
-                    await IndexAsync(ragContent, cancellationToken).ConfigureAwait(false);
+                    // Use smart ingestor if available
+                    var ingestor = _ingestorRegistry.GetIngestor(filePath);
+                    if (ingestor is not null)
+                    {
+                        await IndexWithIngestorAsync(filePath, content, ingestor, cancellationToken).ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        // Fallback to simple indexing
+                        var ragContent = RagContent.FromFile(filePath, content, options.ContentType);
+                        await IndexAsync(ragContent, cancellationToken).ConfigureAwait(false);
+                    }
+
                     indexedCount++;
                 }
                 catch (Exception ex)
@@ -321,6 +336,99 @@ public sealed class RagService : IRagService
             _logger.LogError(ex, "RAG health check failed");
             return false;
         }
+    }
+
+    /// <summary>
+    /// Indexes a file using a smart ingestor that understands the file structure.
+    /// </summary>
+    private async Task IndexWithIngestorAsync(
+        string filePath,
+        string content,
+        IContentIngestor ingestor,
+        CancellationToken cancellationToken)
+    {
+        _logger.LogDebug("Indexing {FilePath} with {Ingestor}", filePath, ingestor.IngestorId);
+
+        // Remove existing chunks for this file
+        await RemoveAsync(filePath, cancellationToken).ConfigureAwait(false);
+
+        // Get structured chunks from ingestor
+        var chunks = await ingestor.IngestAsync(filePath, content, cancellationToken).ConfigureAwait(false);
+
+        if (chunks.Count == 0)
+        {
+            _logger.LogWarning("No chunks generated for: {FilePath}", filePath);
+            return;
+        }
+
+        _logger.LogDebug("Ingestor produced {ChunkCount} chunks for {FilePath}", chunks.Count, filePath);
+
+        // Generate embeddings for all chunk texts
+        var chunkTexts = chunks.Select(c => c.Text).ToList();
+        var embeddings = await _embeddingProvider.GenerateEmbeddingsAsync(
+            _options.EmbeddingModel,
+            chunkTexts,
+            cancellationToken).ConfigureAwait(false);
+
+        // Store chunks with embeddings
+        for (var i = 0; i < chunks.Count; i++)
+        {
+            var chunk = chunks[i];
+            var metadata = new Dictionary<string, string>
+            {
+                ["chunkType"] = chunk.ChunkType,
+            };
+
+            if (chunk.Title is not null)
+            {
+                metadata["title"] = chunk.Title;
+            }
+
+            if (chunk.Language is not null)
+            {
+                metadata["language"] = chunk.Language;
+            }
+
+            if (chunk.StartLine.HasValue)
+            {
+                metadata["startLine"] = chunk.StartLine.Value.ToString();
+            }
+
+            if (chunk.EndLine.HasValue)
+            {
+                metadata["endLine"] = chunk.EndLine.Value.ToString();
+            }
+
+            // Merge any additional metadata from the chunk
+            if (chunk.Metadata is not null)
+            {
+                foreach (var kv in chunk.Metadata)
+                {
+                    metadata[kv.Key] = kv.Value;
+                }
+            }
+
+            var ragChunk = new RagChunk
+            {
+                Id = Guid.NewGuid(),
+                ContentId = filePath,
+                ChunkIndex = i,
+                Content = chunk.Text,
+                ContentType = ingestor.ContentType,
+                SourcePath = filePath,
+                Embedding = new Vector(embeddings[i]),
+                MetadataJson = JsonSerializer.Serialize(metadata),
+                CreatedAt = DateTimeOffset.UtcNow,
+            };
+
+            _dbContext.RagChunks.Add(ragChunk);
+        }
+
+        await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+        _logger.LogInformation(
+            "Indexed {ChunkCount} chunks for {FilePath} using {Ingestor}",
+            chunks.Count, filePath, ingestor.IngestorId);
     }
 
     private static bool MatchesPattern(string filePath, string pattern)

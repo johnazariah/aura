@@ -7,8 +7,11 @@ namespace Aura.Foundation;
 using System.IO.Abstractions;
 using Aura.Foundation.Agents;
 using Aura.Foundation.Conversations;
+using Aura.Foundation.Git;
 using Aura.Foundation.Llm;
 using Aura.Foundation.Rag;
+using Aura.Foundation.Shell;
+using Aura.Foundation.Tools;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -30,6 +33,15 @@ public static class ServiceCollectionExtensions
         // File system abstraction
         services.AddSingleton<IFileSystem, FileSystem>();
 
+        // Shell/Process services
+        services.AddShellServices(configuration);
+
+        // Git services
+        services.AddGitServices(configuration);
+
+        // Tool registry
+        services.AddToolServices(configuration);
+
         // LLM services
         services.AddLlmServices(configuration);
 
@@ -42,6 +54,44 @@ public static class ServiceCollectionExtensions
         // Agent services
         services.AddAgentServices(configuration);
 
+        return services;
+    }
+
+    /// <summary>
+    /// Adds shell/process execution services.
+    /// </summary>
+    public static IServiceCollection AddShellServices(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        services.AddSingleton<IProcessRunner, ProcessRunner>();
+        return services;
+    }
+
+    /// <summary>
+    /// Adds Git services.
+    /// </summary>
+    public static IServiceCollection AddGitServices(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        services.AddSingleton<IGitService, GitService>();
+        services.AddSingleton<IGitWorktreeService, GitWorktreeService>();
+        return services;
+    }
+
+    /// <summary>
+    /// Adds tool registry services.
+    /// </summary>
+    public static IServiceCollection AddToolServices(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        services.AddSingleton<IToolRegistry, ToolRegistry>();
+
+        // Register built-in tools after all services are built
+        services.AddHostedService<ToolRegistryInitializer>();
+        
         return services;
     }
 
@@ -100,6 +150,9 @@ public static class ServiceCollectionExtensions
 
         // Text chunker
         services.AddSingleton<TextChunker>();
+
+        // Content ingestors for smart file processing
+        services.AddSingleton<Rag.Ingestors.IIngestorRegistry, Rag.Ingestors.IngestorRegistry>();
 
         // RAG service
         services.AddScoped<IRagService, RagService>();
