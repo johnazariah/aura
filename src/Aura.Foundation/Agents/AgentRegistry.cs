@@ -86,7 +86,47 @@ public sealed class AgentRegistry : IAgentRegistry, IDisposable
     /// <inheritdoc/>
     public IAgent? GetBestForCapability(string capability, string? language = null)
     {
-        return GetByCapability(capability, language).FirstOrDefault();
+        var agent = GetByCapability(capability, language).FirstOrDefault();
+        if (agent is not null)
+        {
+            return agent;
+        }
+
+        // Try fallback to base capability (e.g., "csharp-coding" -> "coding")
+        var baseCapability = GetBaseCapability(capability);
+        if (baseCapability is not null && baseCapability != capability)
+        {
+            _logger.LogDebug("No agent for '{Capability}', falling back to '{BaseCapability}'",
+                capability, baseCapability);
+            return GetByCapability(baseCapability, language).FirstOrDefault();
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Extracts the base capability from a specialized capability name.
+    /// E.g., "csharp-coding" -> "coding", "python-testing" -> "testing"
+    /// </summary>
+    private static string? GetBaseCapability(string capability)
+    {
+        // Known base capabilities
+        var baseCapabilities = new[] { "coding", "testing", "review", "documentation", "analysis", "fixing", "chat" };
+
+        foreach (var baseCapability in baseCapabilities)
+        {
+            if (capability.EndsWith($"-{baseCapability}", StringComparison.OrdinalIgnoreCase))
+            {
+                return baseCapability;
+            }
+
+            if (capability.StartsWith($"{baseCapability}-", StringComparison.OrdinalIgnoreCase))
+            {
+                return baseCapability;
+            }
+        }
+
+        return null;
     }
 
     /// <inheritdoc/>
