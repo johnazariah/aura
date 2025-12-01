@@ -15,25 +15,16 @@ using Microsoft.Extensions.Options;
 /// <summary>
 /// Registry that loads prompt templates from .prompt files.
 /// </summary>
-public sealed partial class PromptRegistry : IPromptRegistry
+/// <remarks>
+/// Initializes a new instance of the <see cref="PromptRegistry"/> class.
+/// </remarks>
+public sealed partial class PromptRegistry(
+    IFileSystem fileSystem,
+    IOptions<PromptOptions> options,
+    ILogger<PromptRegistry> logger) : IPromptRegistry
 {
-    private readonly IFileSystem _fileSystem;
-    private readonly ILogger<PromptRegistry> _logger;
-    private readonly PromptOptions _options;
+    private readonly PromptOptions _options = options.Value;
     private readonly ConcurrentDictionary<string, PromptTemplate> _prompts = new(StringComparer.OrdinalIgnoreCase);
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="PromptRegistry"/> class.
-    /// </summary>
-    public PromptRegistry(
-        IFileSystem fileSystem,
-        IOptions<PromptOptions> options,
-        ILogger<PromptRegistry> logger)
-    {
-        _fileSystem = fileSystem;
-        _options = options.Value;
-        _logger = logger;
-    }
 
     /// <inheritdoc/>
     public PromptTemplate? GetPrompt(string name)
@@ -67,7 +58,7 @@ public sealed partial class PromptRegistry : IPromptRegistry
             LoadFromDirectory(directory);
         }
 
-        _logger.LogInformation("Loaded {Count} prompts", _prompts.Count);
+        logger.LogInformation("Loaded {Count} prompts", _prompts.Count);
     }
 
     /// <summary>
@@ -75,13 +66,13 @@ public sealed partial class PromptRegistry : IPromptRegistry
     /// </summary>
     public void LoadFromDirectory(string directory)
     {
-        if (!_fileSystem.Directory.Exists(directory))
+        if (!fileSystem.Directory.Exists(directory))
         {
-            _logger.LogDebug("Prompt directory not found: {Directory}", directory);
+            logger.LogDebug("Prompt directory not found: {Directory}", directory);
             return;
         }
 
-        var files = _fileSystem.Directory.GetFiles(directory, "*.prompt", SearchOption.AllDirectories);
+        var files = fileSystem.Directory.GetFiles(directory, "*.prompt", SearchOption.AllDirectories);
 
         foreach (var file in files)
         {
@@ -91,15 +82,15 @@ public sealed partial class PromptRegistry : IPromptRegistry
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Failed to load prompt: {File}", file);
+                logger.LogWarning(ex, "Failed to load prompt: {File}", file);
             }
         }
     }
 
     private void LoadPromptFile(string filePath)
     {
-        var content = _fileSystem.File.ReadAllText(filePath);
-        var fileName = _fileSystem.Path.GetFileNameWithoutExtension(filePath);
+        var content = fileSystem.File.ReadAllText(filePath);
+        var fileName = fileSystem.Path.GetFileNameWithoutExtension(filePath);
 
         // Parse frontmatter if present (YAML-style)
         string? description = null;
@@ -136,7 +127,7 @@ public sealed partial class PromptRegistry : IPromptRegistry
 
         _prompts[fileName] = prompt;
 
-        _logger.LogDebug("Loaded prompt: {Name} from {Path}", fileName, filePath);
+        logger.LogDebug("Loaded prompt: {Name} from {Path}", fileName, filePath);
     }
 
     /// <summary>

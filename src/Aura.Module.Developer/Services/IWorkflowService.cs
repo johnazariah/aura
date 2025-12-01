@@ -12,12 +12,18 @@ using Aura.Module.Developer.Data.Entities;
 public interface IWorkflowService
 {
     /// <summary>
-    /// Creates a workflow from an issue.
+    /// Creates a new workflow.
     /// </summary>
-    /// <param name="issueId">The issue ID.</param>
+    /// <param name="title">The workflow title.</param>
+    /// <param name="description">The workflow description.</param>
+    /// <param name="repositoryPath">Optional repository path.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>The created workflow.</returns>
-    Task<Workflow> CreateFromIssueAsync(Guid issueId, CancellationToken ct = default);
+    Task<Workflow> CreateAsync(
+        string title,
+        string? description = null,
+        string? repositoryPath = null,
+        CancellationToken ct = default);
 
     /// <summary>
     /// Gets a workflow by ID.
@@ -44,12 +50,19 @@ public interface IWorkflowService
     Task<IReadOnlyList<Workflow>> ListAsync(WorkflowStatus? status = null, CancellationToken ct = default);
 
     /// <summary>
-    /// Digests the issue context using RAG and the issue-digester agent.
+    /// Deletes a workflow and all its steps.
     /// </summary>
     /// <param name="workflowId">The workflow ID.</param>
     /// <param name="ct">Cancellation token.</param>
-    /// <returns>The updated workflow with digested context.</returns>
-    Task<Workflow> DigestAsync(Guid workflowId, CancellationToken ct = default);
+    Task DeleteAsync(Guid workflowId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Analyzes the workflow requirements using the issue-digester agent.
+    /// </summary>
+    /// <param name="workflowId">The workflow ID.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>The updated workflow with analyzed context.</returns>
+    Task<Workflow> AnalyzeAsync(Guid workflowId, CancellationToken ct = default);
 
     /// <summary>
     /// Creates an execution plan using the business-analyst agent.

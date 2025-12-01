@@ -7,6 +7,7 @@ var builder = DistributedApplication.CreateBuilder(args);
 // Using pgvector/pgvector image which has the extension pre-installed
 var postgres = builder.AddPostgres("postgres")
     .WithImage("pgvector/pgvector", "pg17")
+    .WithContainerName("aura-postgres")
     .WithDataVolume("aura-postgres-data")
     .WithPgAdmin();
 

@@ -41,7 +41,6 @@ public sealed class DeveloperModule : IAuraModule
             options.UseNpgsql(connectionString, o => o.UseVector()));
 
         // Register Developer Module services
-        services.AddScoped<IIssueService, IssueService>();
         services.AddScoped<IWorkflowService, WorkflowService>();
     }
 

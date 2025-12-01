@@ -35,7 +35,7 @@ public static class Extensions
                 options.TotalRequestTimeout.Timeout = TimeSpan.FromMinutes(10);
                 options.AttemptTimeout.Timeout = TimeSpan.FromMinutes(10);
                 // Disable retries for LLM calls - they're idempotent but slow
-                options.Retry.MaxRetryAttempts = 0;
+                options.Retry.MaxRetryAttempts = 1;
                 // Circuit breaker sampling duration must be at least 2x attempt timeout
                 options.CircuitBreaker.SamplingDuration = TimeSpan.FromMinutes(20);
             });

@@ -143,16 +143,12 @@ export async function activate(context: vscode.ExtensionContext) {
     });
 
     // Workflow commands
-    const createIssueCommand = vscode.commands.registerCommand('aura.createIssue', async () => {
-        await createIssue();
+    const createWorkflowCommand = vscode.commands.registerCommand('aura.createWorkflow', async () => {
+        await createWorkflow();
     });
 
     const openWorkflowCommand = vscode.commands.registerCommand('aura.openWorkflow', async (workflowId: string) => {
         await workflowPanelProvider.openWorkflowPanel(workflowId);
-    });
-
-    const startWorkflowCommand = vscode.commands.registerCommand('aura.startWorkflow', async (item?: any) => {
-        await startWorkflow(item);
     });
 
     const executeStepCommand = vscode.commands.registerCommand('aura.executeStep', async (workflowId: string, stepId: string) => {
@@ -161,6 +157,10 @@ export async function activate(context: vscode.ExtensionContext) {
 
     const refreshWorkflowsCommand = vscode.commands.registerCommand('aura.refreshWorkflows', async () => {
         workflowTreeProvider.refresh();
+    });
+
+    const deleteWorkflowCommand = vscode.commands.registerCommand('aura.deleteWorkflow', async (item?: any) => {
+        await deleteWorkflow(item);
     });
 
     // Subscribe to configuration changes
@@ -186,11 +186,11 @@ export async function activate(context: vscode.ExtensionContext) {
         indexWorkspaceCommand,
         showRagStatsCommand,
         clearRagIndexCommand,
-        createIssueCommand,
+        createWorkflowCommand,
         openWorkflowCommand,
-        startWorkflowCommand,
         executeStepCommand,
         refreshWorkflowsCommand,
+        deleteWorkflowCommand,
         configWatcher
     );
 
@@ -488,9 +488,9 @@ async function executeAgent(item?: AgentItem): Promise<void> {
 // Workflow Functions
 // =====================
 
-async function createIssue(): Promise<void> {
+async function createWorkflow(): Promise<void> {
     const title = await vscode.window.showInputBox({
-        prompt: 'Issue Title',
+        prompt: 'Workflow Title',
         placeHolder: 'What do you want to build?'
     });
 
@@ -504,62 +504,6 @@ async function createIssue(): Promise<void> {
     const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
 
     try {
-        const issue = await auraApiService.createIssue(title, description || undefined, workspacePath);
-        vscode.window.showInformationMessage(`Created issue: ${issue.title}`);
-        workflowTreeProvider.refresh();
-
-        // Ask if they want to start a workflow
-        const action = await vscode.window.showInformationMessage(
-            'Start a workflow for this issue?',
-            'Start Workflow',
-            'Later'
-        );
-
-        if (action === 'Start Workflow') {
-            await startWorkflowFromIssue(issue.id);
-        }
-    } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unknown error';
-        vscode.window.showErrorMessage(`Failed to create issue: ${message}`);
-    }
-}
-
-async function startWorkflow(item?: any): Promise<void> {
-    let issueId: string;
-
-    if (item?.issue?.id) {
-        issueId = item.issue.id;
-    } else {
-        // Pick from available issues
-        try {
-            const issues = await auraApiService.getIssues('Open');
-            if (issues.length === 0) {
-                vscode.window.showWarningMessage('No open issues. Create one first with "Aura: Create Issue"');
-                return;
-            }
-
-            const picked = await vscode.window.showQuickPick(
-                issues.map(i => ({
-                    label: i.title,
-                    description: i.status,
-                    id: i.id
-                })),
-                { placeHolder: 'Select an issue to start a workflow' }
-            );
-
-            if (!picked) return;
-            issueId = picked.id;
-        } catch (error) {
-            vscode.window.showErrorMessage('Failed to load issues');
-            return;
-        }
-    }
-
-    await startWorkflowFromIssue(issueId);
-}
-
-async function startWorkflowFromIssue(issueId: string): Promise<void> {
-    try {
         await vscode.window.withProgress(
             {
                 location: vscode.ProgressLocation.Notification,
@@ -567,7 +511,7 @@ async function startWorkflowFromIssue(issueId: string): Promise<void> {
                 cancellable: false
             },
             async () => {
-                const workflow = await auraApiService.createWorkflowFromIssue(issueId);
+                const workflow = await auraApiService.createWorkflow(title, description || undefined, workspacePath);
                 workflowTreeProvider.refresh();
 
                 // Open the workflow panel
@@ -607,6 +551,45 @@ async function executeStep(workflowId: string, stepId: string): Promise<void> {
         const message = error instanceof Error ? error.message : 'Unknown error';
         vscode.window.showErrorMessage(`Failed to execute step: ${message}`);
         workflowTreeProvider.refresh();
+    }
+}
+
+async function deleteWorkflow(item?: any): Promise<void> {
+    // Get workflow ID from tree item
+    let workflowId: string | undefined;
+    let workflowTitle: string = 'this workflow';
+
+    if (item?.workflow) {
+        workflowId = item.workflow.id;
+        workflowTitle = item.workflow.title;
+    } else if (item?.workflowId) {
+        workflowId = item.workflowId;
+        workflowTitle = item.label || 'this workflow';
+    }
+
+    if (!workflowId) {
+        vscode.window.showErrorMessage('No workflow selected');
+        return;
+    }
+
+    // Confirm deletion
+    const confirm = await vscode.window.showWarningMessage(
+        `Delete "${workflowTitle}"?`,
+        { modal: true },
+        'Delete'
+    );
+
+    if (confirm !== 'Delete') {
+        return;
+    }
+
+    try {
+        await auraApiService.deleteWorkflow(workflowId);
+        workflowTreeProvider.refresh();
+        vscode.window.showInformationMessage(`Deleted: ${workflowTitle}`);
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        vscode.window.showErrorMessage(`Failed to delete workflow: ${message}`);
     }
 }
 

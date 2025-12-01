@@ -96,19 +96,14 @@
         "icon": "$(trash)"
       },
       {
-        "command": "aura.createIssue",
-        "title": "Aura: Create Issue",
+        "command": "aura.createWorkflow",
+        "title": "Aura: Create Workflow",
         "icon": "$(add)"
       },
       {
         "command": "aura.openWorkflow",
         "title": "Open Workflow",
         "icon": "$(window)"
-      },
-      {
-        "command": "aura.startWorkflow",
-        "title": "Start Workflow",
-        "icon": "$(play)"
       },
       {
         "command": "aura.executeStep",
@@ -119,6 +114,11 @@
         "command": "aura.refreshWorkflows",
         "title": "Refresh Workflows",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "aura.deleteWorkflow",
+        "title": "Delete Workflow",
+        "icon": "$(trash)"
       }
     ],
     "menus": {
@@ -134,7 +134,7 @@
           "group": "navigation"
         },
         {
-          "command": "aura.createIssue",
+          "command": "aura.createWorkflow",
           "when": "view == aura.workflows",
           "group": "navigation"
         },
@@ -151,13 +151,13 @@
           "group": "inline"
         },
         {
-          "command": "aura.startWorkflow",
-          "when": "view == aura.workflows && viewItem == issue",
+          "command": "aura.executeStep",
+          "when": "view == aura.workflows && viewItem == step",
           "group": "inline"
         },
         {
-          "command": "aura.executeStep",
-          "when": "view == aura.workflows && viewItem == step",
+          "command": "aura.deleteWorkflow",
+          "when": "view == aura.workflows && viewItem == workflow",
           "group": "inline"
         }
       ]

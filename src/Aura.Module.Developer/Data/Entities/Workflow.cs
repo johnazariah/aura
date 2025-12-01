@@ -5,46 +5,34 @@
 namespace Aura.Module.Developer.Data.Entities;
 
 /// <summary>
-/// The root entity representing a unit of work from a GitHub issue, ADO work item, or manual input.
-/// This is a Developer module entity for workflow automation.
+/// The root entity representing a unit of work.
+/// This is the single entity for the Developer module's workflow automation.
 /// </summary>
 public sealed class Workflow
 {
     /// <summary>Gets or sets the unique identifier.</summary>
     public Guid Id { get; set; }
 
-    /// <summary>Gets or sets the linked issue ID (nullable for backward compatibility).</summary>
-    public Guid? IssueId { get; set; }
+    /// <summary>Gets or sets the workflow title.</summary>
+    public required string Title { get; set; }
 
-    /// <summary>Gets or sets the linked issue.</summary>
-    public Issue? Issue { get; set; }
+    /// <summary>Gets or sets the workflow description.</summary>
+    public string? Description { get; set; }
 
-    /// <summary>Gets or sets the repository path (original repo, before worktree).</summary>
+    /// <summary>Gets or sets the repository path.</summary>
     public string? RepositoryPath { get; set; }
-
-    /// <summary>Gets or sets the work item identifier (e.g., "local:{issueId}" or "github:owner/repo#123").</summary>
-    public required string WorkItemId { get; set; }
-
-    /// <summary>Gets or sets the work item title.</summary>
-    public required string WorkItemTitle { get; set; }
-
-    /// <summary>Gets or sets the work item description.</summary>
-    public string? WorkItemDescription { get; set; }
-
-    /// <summary>Gets or sets the work item URL.</summary>
-    public string? WorkItemUrl { get; set; }
 
     /// <summary>Gets or sets the workflow status.</summary>
     public WorkflowStatus Status { get; set; } = WorkflowStatus.Created;
 
-    /// <summary>Gets or sets the workspace path (e.g., "/workspaces/repo-wt-123").</summary>
+    /// <summary>Gets or sets the workspace path (e.g., git worktree path).</summary>
     public string? WorkspacePath { get; set; }
 
-    /// <summary>Gets or sets the git branch (e.g., "feature/issue-123").</summary>
+    /// <summary>Gets or sets the git branch (e.g., "feature/workflow-123").</summary>
     public string? GitBranch { get; set; }
 
-    /// <summary>Gets or sets the digested context as JSON (RAG output).</summary>
-    public string? DigestedContext { get; set; }
+    /// <summary>Gets or sets the analyzed context as JSON (from analysis agent).</summary>
+    public string? AnalyzedContext { get; set; }
 
     /// <summary>Gets or sets the execution plan as JSON (from planning agent).</summary>
     public string? ExecutionPlan { get; set; }
@@ -67,25 +55,25 @@ public sealed class Workflow
 /// </summary>
 public enum WorkflowStatus
 {
-    /// <summary>Just created.</summary>
+    /// <summary>Just created, not yet analyzed.</summary>
     Created,
 
-    /// <summary>RAG ingestion in progress.</summary>
-    Digesting,
+    /// <summary>Analyzing the requirements.</summary>
+    Analyzing,
 
-    /// <summary>Context ready.</summary>
-    Digested,
+    /// <summary>Analysis complete, ready for planning.</summary>
+    Analyzed,
 
     /// <summary>Creating execution plan.</summary>
     Planning,
 
-    /// <summary>Steps defined.</summary>
+    /// <summary>Plan created, ready for execution.</summary>
     Planned,
 
     /// <summary>Steps being executed.</summary>
     Executing,
 
-    /// <summary>All steps done.</summary>
+    /// <summary>All steps completed successfully.</summary>
     Completed,
 
     /// <summary>Unrecoverable error.</summary>

@@ -8,6 +8,7 @@ using Aura.Foundation.Data.Entities;
 using Aura.Foundation.Llm;
 using Aura.Foundation.Rag;
 using Aura.Module.Developer;
+using Aura.Module.Developer.Data;
 using Aura.Module.Developer.Data.Entities;
 using Aura.Module.Developer.Services;
 using Microsoft.EntityFrameworkCore;
@@ -84,6 +85,11 @@ using (var scope = app.Services.CreateScope())
         logger.LogInformation("Applying database migrations...");
         db.Database.Migrate();
         logger.LogInformation("Database migrations applied successfully");
+        
+        // Ensure Developer module tables exist (they're defined in DeveloperDbContext)
+        var developerDb = scope.ServiceProvider.GetRequiredService<DeveloperDbContext>();
+        developerDb.Database.EnsureCreated();
+        logger.LogInformation("Developer module tables ensured");
     }
     catch (Exception ex)
     {
@@ -1009,142 +1015,29 @@ app.MapDelete("/api/git/worktrees", async (
 // Developer Module Endpoints
 // =============================================================================
 
-// Issue endpoints
-app.MapPost("/api/developer/issues", async (
-    CreateIssueRequest request,
-    IIssueService issueService,
-    CancellationToken ct) =>
-{
-    var issue = await issueService.CreateAsync(
-        request.Title,
-        request.Description,
-        request.RepositoryPath,
-        ct);
-
-    return Results.Created($"/api/developer/issues/{issue.Id}", new
-    {
-        id = issue.Id,
-        title = issue.Title,
-        description = issue.Description,
-        status = issue.Status.ToString(),
-        repositoryPath = issue.RepositoryPath,
-        createdAt = issue.CreatedAt
-    });
-});
-
-app.MapGet("/api/developer/issues", async (
-    IIssueService issueService,
-    string? status,
-    CancellationToken ct) =>
-{
-    IssueStatus? statusFilter = null;
-    if (!string.IsNullOrEmpty(status) && Enum.TryParse<IssueStatus>(status, true, out var s))
-    {
-        statusFilter = s;
-    }
-
-    var issues = await issueService.ListAsync(statusFilter, ct);
-
-    return Results.Ok(new
-    {
-        count = issues.Count,
-        issues = issues.Select(i => new
-        {
-            id = i.Id,
-            title = i.Title,
-            description = i.Description,
-            status = i.Status.ToString(),
-            repositoryPath = i.RepositoryPath,
-            hasWorkflow = i.Workflow is not null,
-            workflowId = i.Workflow?.Id,
-            workflowStatus = i.Workflow?.Status.ToString(),
-            createdAt = i.CreatedAt,
-            updatedAt = i.UpdatedAt
-        })
-    });
-});
-
-app.MapGet("/api/developer/issues/{id:guid}", async (
-    Guid id,
-    IIssueService issueService,
-    CancellationToken ct) =>
-{
-    var issue = await issueService.GetByIdWithWorkflowAsync(id, ct);
-    if (issue is null)
-    {
-        return Results.NotFound(new { error = $"Issue {id} not found" });
-    }
-
-    return Results.Ok(new
-    {
-        id = issue.Id,
-        title = issue.Title,
-        description = issue.Description,
-        status = issue.Status.ToString(),
-        repositoryPath = issue.RepositoryPath,
-        workflow = issue.Workflow is null ? null : new
-        {
-            id = issue.Workflow.Id,
-            status = issue.Workflow.Status.ToString(),
-            gitBranch = issue.Workflow.GitBranch,
-            workspacePath = issue.Workflow.WorkspacePath,
-            stepCount = issue.Workflow.Steps.Count,
-            createdAt = issue.Workflow.CreatedAt
-        },
-        createdAt = issue.CreatedAt,
-        updatedAt = issue.UpdatedAt
-    });
-});
-
-app.MapPut("/api/developer/issues/{id:guid}", async (
-    Guid id,
-    UpdateIssueRequest request,
-    IIssueService issueService,
-    CancellationToken ct) =>
-{
-    try
-    {
-        var issue = await issueService.UpdateAsync(id, request.Title, request.Description, ct);
-        return Results.Ok(new
-        {
-            id = issue.Id,
-            title = issue.Title,
-            description = issue.Description,
-            status = issue.Status.ToString(),
-            updatedAt = issue.UpdatedAt
-        });
-    }
-    catch (InvalidOperationException ex)
-    {
-        return Results.NotFound(new { error = ex.Message });
-    }
-});
-
-app.MapDelete("/api/developer/issues/{id:guid}", async (
-    Guid id,
-    IIssueService issueService,
-    CancellationToken ct) =>
-{
-    await issueService.DeleteAsync(id, ct);
-    return Results.NoContent();
-});
-
 // Workflow endpoints
-app.MapPost("/api/developer/issues/{issueId:guid}/workflow", async (
-    Guid issueId,
+app.MapPost("/api/developer/workflows", async (
+    CreateWorkflowRequest request,
     IWorkflowService workflowService,
     CancellationToken ct) =>
 {
     try
     {
-        var workflow = await workflowService.CreateFromIssueAsync(issueId, ct);
+        var workflow = await workflowService.CreateAsync(
+            request.Title,
+            request.Description,
+            request.RepositoryPath,
+            ct);
+
         return Results.Created($"/api/developer/workflows/{workflow.Id}", new
         {
             id = workflow.Id,
-            issueId = workflow.IssueId,
+            title = workflow.Title,
+            description = workflow.Description,
             status = workflow.Status.ToString(),
             gitBranch = workflow.GitBranch,
             workspacePath = workflow.WorkspacePath,
+            repositoryPath = workflow.RepositoryPath,
             createdAt = workflow.CreatedAt
         });
     }
@@ -1173,8 +1066,8 @@ app.MapGet("/api/developer/workflows", async (
         workflows = workflows.Select(w => new
         {
             id = w.Id,
-            issueId = w.IssueId,
-            issueTitle = w.Issue?.Title ?? w.WorkItemTitle,
+            title = w.Title,
+            description = w.Description,
             status = w.Status.ToString(),
             gitBranch = w.GitBranch,
             workspacePath = w.WorkspacePath,
@@ -1200,14 +1093,13 @@ app.MapGet("/api/developer/workflows/{id:guid}", async (
     return Results.Ok(new
     {
         id = workflow.Id,
-        issueId = workflow.IssueId,
-        issueTitle = workflow.Issue?.Title ?? workflow.WorkItemTitle,
-        issueDescription = workflow.Issue?.Description ?? workflow.WorkItemDescription,
+        title = workflow.Title,
+        description = workflow.Description,
         status = workflow.Status.ToString(),
         gitBranch = workflow.GitBranch,
         workspacePath = workflow.WorkspacePath,
         repositoryPath = workflow.RepositoryPath,
-        digestedContext = workflow.DigestedContext,
+        analyzedContext = workflow.AnalyzedContext,
         executionPlan = workflow.ExecutionPlan,
         steps = workflow.Steps.OrderBy(s => s.Order).Select(s => new
         {
@@ -1230,20 +1122,29 @@ app.MapGet("/api/developer/workflows/{id:guid}", async (
     });
 });
 
-app.MapPost("/api/developer/workflows/{id:guid}/digest", async (
+app.MapDelete("/api/developer/workflows/{id:guid}", async (
+    Guid id,
+    IWorkflowService workflowService,
+    CancellationToken ct) =>
+{
+    await workflowService.DeleteAsync(id, ct);
+    return Results.NoContent();
+});
+
+app.MapPost("/api/developer/workflows/{id:guid}/analyze", async (
     Guid id,
     IWorkflowService workflowService,
     CancellationToken ct) =>
 {
     try
     {
-        var workflow = await workflowService.DigestAsync(id, ct);
+        var workflow = await workflowService.AnalyzeAsync(id, ct);
         return Results.Ok(new
         {
             id = workflow.Id,
             status = workflow.Status.ToString(),
-            digestedContext = workflow.DigestedContext,
-            message = "Workflow digested successfully"
+            analyzedContext = workflow.AnalyzedContext,
+            message = "Workflow analyzed successfully"
         });
     }
     catch (InvalidOperationException ex)
@@ -1480,14 +1381,10 @@ record CreateWorktreeRequest(
     string? BaseBranch = null);
 
 // Developer Module request models
-record CreateIssueRequest(
+record CreateWorkflowRequest(
     string Title,
     string? Description = null,
     string? RepositoryPath = null);
-
-record UpdateIssueRequest(
-    string? Title = null,
-    string? Description = null);
 
 record ExecuteStepRequest(
     string? AgentId = null);

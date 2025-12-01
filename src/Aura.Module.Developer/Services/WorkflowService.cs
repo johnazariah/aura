@@ -47,30 +47,27 @@ public sealed class WorkflowService : IWorkflowService
     }
 
     /// <inheritdoc/>
-    public async Task<Workflow> CreateFromIssueAsync(Guid issueId, CancellationToken ct = default)
+    public async Task<Workflow> CreateAsync(
+        string title,
+        string? description = null,
+        string? repositoryPath = null,
+        CancellationToken ct = default)
     {
-        var issue = await _db.Issues
-            .Include(i => i.Workflow)
-            .FirstOrDefaultAsync(i => i.Id == issueId, ct)
-            ?? throw new InvalidOperationException($"Issue {issueId} not found");
-
-        if (issue.Workflow is not null)
-        {
-            throw new InvalidOperationException($"Issue {issueId} already has a workflow");
-        }
-
-        // Create a branch name from the issue
-        var branchName = $"feature/issue-{issue.Id:N}";
+        // Create a branch name from the title
+        var sanitizedTitle = new string(title
+            .ToLowerInvariant()
+            .Replace(' ', '-')
+            .Where(c => char.IsLetterOrDigit(c) || c == '-')
+            .ToArray());
+        var branchName = $"feature/{sanitizedTitle}-{Guid.NewGuid():N}".Substring(0, Math.Min(63, 8 + sanitizedTitle.Length + 33));
 
         // Create the workflow
         var workflow = new Workflow
         {
             Id = Guid.NewGuid(),
-            IssueId = issueId,
-            RepositoryPath = issue.RepositoryPath,
-            WorkItemId = $"local:{issue.Id}",
-            WorkItemTitle = issue.Title,
-            WorkItemDescription = issue.Description,
+            RepositoryPath = repositoryPath,
+            Title = title,
+            Description = description,
             GitBranch = branchName,
             Status = WorkflowStatus.Created,
             CreatedAt = DateTimeOffset.UtcNow,
@@ -78,10 +75,10 @@ public sealed class WorkflowService : IWorkflowService
         };
 
         // Try to create a worktree if repository path is set
-        if (!string.IsNullOrEmpty(issue.RepositoryPath))
+        if (!string.IsNullOrEmpty(repositoryPath))
         {
             var worktreeResult = await _worktreeService.CreateAsync(
-                issue.RepositoryPath,
+                repositoryPath,
                 branchName,
                 worktreePath: null, // Let it choose default
                 baseBranch: null,   // Use current HEAD
@@ -97,18 +94,14 @@ public sealed class WorkflowService : IWorkflowService
             {
                 _logger.LogWarning("Failed to create worktree: {Error}. Using repository path instead.",
                     worktreeResult.Error);
-                workflow.WorkspacePath = issue.RepositoryPath;
+                workflow.WorkspacePath = repositoryPath;
             }
         }
-
-        // Update issue status
-        issue.Status = IssueStatus.InProgress;
-        issue.UpdatedAt = DateTimeOffset.UtcNow;
 
         _db.Workflows.Add(workflow);
         await _db.SaveChangesAsync(ct);
 
-        _logger.LogInformation("Created workflow {WorkflowId} from issue {IssueId}", workflow.Id, issueId);
+        _logger.LogInformation("Created workflow {WorkflowId}: {Title}", workflow.Id, title);
         return workflow;
     }
 
@@ -123,7 +116,6 @@ public sealed class WorkflowService : IWorkflowService
     {
         return await _db.Workflows
             .Include(w => w.Steps.OrderBy(s => s.Order))
-            .Include(w => w.Issue)
             .FirstOrDefaultAsync(w => w.Id == id, ct);
     }
 
@@ -140,40 +132,60 @@ public sealed class WorkflowService : IWorkflowService
         return await query
             .OrderByDescending(w => w.CreatedAt)
             .Include(w => w.Steps.OrderBy(s => s.Order))
-            .Include(w => w.Issue)
             .ToListAsync(ct);
     }
 
     /// <inheritdoc/>
-    public async Task<Workflow> DigestAsync(Guid workflowId, CancellationToken ct = default)
+    public async Task DeleteAsync(Guid id, CancellationToken ct = default)
     {
         var workflow = await _db.Workflows
-            .Include(w => w.Issue)
+            .Include(w => w.Steps)
+            .FirstOrDefaultAsync(w => w.Id == id, ct);
+
+        if (workflow is null)
+        {
+            return;
+        }
+
+        // Clean up worktree if it exists
+        if (!string.IsNullOrEmpty(workflow.WorkspacePath) &&
+            !string.IsNullOrEmpty(workflow.RepositoryPath) &&
+            workflow.WorkspacePath != workflow.RepositoryPath)
+        {
+            var removeResult = await _worktreeService.RemoveAsync(
+                workflow.WorkspacePath,
+                force: true,
+                ct);
+
+            if (!removeResult.Success)
+            {
+                _logger.LogWarning("Failed to remove worktree {Path}: {Error}",
+                    workflow.WorkspacePath, removeResult.Error);
+            }
+        }
+
+        _db.Workflows.Remove(workflow);
+        await _db.SaveChangesAsync(ct);
+
+        _logger.LogInformation("Deleted workflow {WorkflowId}: {Title}", id, workflow.Title);
+    }
+
+    /// <inheritdoc/>
+    public async Task<Workflow> AnalyzeAsync(Guid workflowId, CancellationToken ct = default)
+    {
+        var workflow = await _db.Workflows
             .FirstOrDefaultAsync(w => w.Id == workflowId, ct)
             ?? throw new InvalidOperationException($"Workflow {workflowId} not found");
 
-        workflow.Status = WorkflowStatus.Digesting;
+        workflow.Status = WorkflowStatus.Analyzing;
         workflow.UpdatedAt = DateTimeOffset.UtcNow;
         await _db.SaveChangesAsync(ct);
 
         try
         {
-            // TODO: RAG indexing is slow - move to background job for production
-            // For now, skip RAG indexing to keep the silver thread responsive
-            // if (!string.IsNullOrEmpty(workflow.WorkspacePath))
-            // {
-            //     var indexOptions = new RagIndexOptions
-            //     {
-            //         IncludePatterns = ["*.cs", "*.md", "*.json", "*.csproj"],
-            //         ExcludePatterns = ["**/bin/**", "**/obj/**", "**/node_modules/**"],
-            //         Recursive = true,
-            //     };
-            //     await _ragService.IndexDirectoryAsync(workflow.WorkspacePath, indexOptions, ct);
-            // }
-
-            // Get the issue-digester agent
-            var digester = _agentRegistry.GetBestForCapability("digestion");
-            if (digester is null)
+            // Get the issue-digester agent (still uses digestion capability internally)
+            var analyzer = _agentRegistry.GetBestForCapability("digestion");
+            if (analyzer is null)
             {
                 throw new InvalidOperationException("No agent with 'digestion' capability found");
             }
@@ -181,27 +193,27 @@ public sealed class WorkflowService : IWorkflowService
             // Build the prompt from template
             var prompt = _promptRegistry.Render("workflow-digest", new
             {
-                title = workflow.WorkItemTitle,
-                description = workflow.WorkItemDescription ?? "No description provided.",
+                title = workflow.Title,
+                description = workflow.Description ?? "No description provided.",
                 workspacePath = workflow.WorkspacePath ?? workflow.RepositoryPath ?? "Not specified",
             });
 
             var context = new AgentContext(prompt, WorkspacePath: workflow.WorkspacePath);
-            var output = await digester.ExecuteAsync(context, ct);
+            var output = await analyzer.ExecuteAsync(context, ct);
 
-            workflow.DigestedContext = JsonSerializer.Serialize(new
+            workflow.AnalyzedContext = JsonSerializer.Serialize(new
             {
-                agentId = digester.AgentId,
+                agentId = analyzer.AgentId,
                 analysis = output.Content,
                 tokensUsed = output.TokensUsed,
                 timestamp = DateTimeOffset.UtcNow,
             });
 
-            workflow.Status = WorkflowStatus.Digested;
+            workflow.Status = WorkflowStatus.Analyzed;
             workflow.UpdatedAt = DateTimeOffset.UtcNow;
             await _db.SaveChangesAsync(ct);
 
-            _logger.LogInformation("Digested workflow {WorkflowId}", workflowId);
+            _logger.LogInformation("Analyzed workflow {WorkflowId}", workflowId);
             return workflow;
         }
         catch (Exception ex)
@@ -209,7 +221,7 @@ public sealed class WorkflowService : IWorkflowService
             workflow.Status = WorkflowStatus.Failed;
             workflow.UpdatedAt = DateTimeOffset.UtcNow;
             await _db.SaveChangesAsync(ct);
-            _logger.LogError(ex, "Failed to digest workflow {WorkflowId}", workflowId);
+            _logger.LogError(ex, "Failed to analyze workflow {WorkflowId}", workflowId);
             throw;
         }
     }
@@ -218,13 +230,12 @@ public sealed class WorkflowService : IWorkflowService
     public async Task<Workflow> PlanAsync(Guid workflowId, CancellationToken ct = default)
     {
         var workflow = await _db.Workflows
-            .Include(w => w.Issue)
             .FirstOrDefaultAsync(w => w.Id == workflowId, ct)
             ?? throw new InvalidOperationException($"Workflow {workflowId} not found");
 
-        if (workflow.Status != WorkflowStatus.Digested)
+        if (workflow.Status != WorkflowStatus.Analyzed)
         {
-            throw new InvalidOperationException($"Workflow must be digested before planning. Current status: {workflow.Status}");
+            throw new InvalidOperationException($"Workflow must be analyzed before planning. Current status: {workflow.Status}");
         }
 
         workflow.Status = WorkflowStatus.Planning;
@@ -243,9 +254,9 @@ public sealed class WorkflowService : IWorkflowService
             // Build the planning prompt from template
             var prompt = _promptRegistry.Render("workflow-plan", new
             {
-                title = workflow.WorkItemTitle,
-                description = workflow.WorkItemDescription ?? "No description provided.",
-                digestedContext = workflow.DigestedContext ?? "No analysis available.",
+                title = workflow.Title,
+                description = workflow.Description ?? "No description provided.",
+                digestedContext = workflow.AnalyzedContext ?? "No analysis available.",
             });
 
             var context = new AgentContext(prompt, WorkspacePath: workflow.WorkspacePath);
@@ -394,19 +405,19 @@ public sealed class WorkflowService : IWorkflowService
                 {
                     stepName = step.Name,
                     stepDescription = step.Description ?? "No additional description.",
-                    issueTitle = workflow.WorkItemTitle,
+                    issueTitle = workflow.Title,
                     codeToReview = codeToReview.ToString(),
                 });
             }
             else
             {
-                // For non-review steps, include the digested analysis
+                // For non-review steps, include the analyzed context
                 var analysis = string.Empty;
-                if (workflow.DigestedContext is not null)
+                if (workflow.AnalyzedContext is not null)
                 {
                     try
                     {
-                        var digest = JsonSerializer.Deserialize<JsonElement>(workflow.DigestedContext);
+                        var digest = JsonSerializer.Deserialize<JsonElement>(workflow.AnalyzedContext);
                         if (digest.TryGetProperty("analysis", out var analysisElement))
                         {
                             analysis = $"Analysis: {analysisElement.GetString()}";
@@ -414,7 +425,7 @@ public sealed class WorkflowService : IWorkflowService
                     }
                     catch
                     {
-                        analysis = $"Analysis: {workflow.DigestedContext}";
+                        analysis = $"Analysis: {workflow.AnalyzedContext}";
                     }
                 }
 
@@ -422,7 +433,7 @@ public sealed class WorkflowService : IWorkflowService
                 {
                     stepName = step.Name,
                     stepDescription = step.Description ?? "No additional description.",
-                    issueTitle = workflow.WorkItemTitle,
+                    issueTitle = workflow.Title,
                     analysis,
                 });
             }
@@ -560,7 +571,6 @@ public sealed class WorkflowService : IWorkflowService
     public async Task<Workflow> CompleteAsync(Guid workflowId, CancellationToken ct = default)
     {
         var workflow = await _db.Workflows
-            .Include(w => w.Issue)
             .Include(w => w.Steps)
             .FirstOrDefaultAsync(w => w.Id == workflowId, ct)
             ?? throw new InvalidOperationException($"Workflow {workflowId} not found");
@@ -583,12 +593,6 @@ public sealed class WorkflowService : IWorkflowService
         workflow.Status = WorkflowStatus.Completed;
         workflow.CompletedAt = DateTimeOffset.UtcNow;
         workflow.UpdatedAt = DateTimeOffset.UtcNow;
-
-        if (workflow.Issue is not null)
-        {
-            workflow.Issue.Status = IssueStatus.Completed;
-            workflow.Issue.UpdatedAt = DateTimeOffset.UtcNow;
-        }
 
         await _db.SaveChangesAsync(ct);
 
@@ -632,7 +636,7 @@ public sealed class WorkflowService : IWorkflowService
             You are helping with a development workflow. The user wants to modify or discuss the plan.
 
             ## Current Workflow
-            Issue: {workflow.WorkItemTitle}
+            Title: {workflow.Title}
             Status: {workflow.Status}
 
             ## Current Steps

@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { AuraApiService, Issue, Workflow } from '../services/auraApiService';
+import { AuraApiService, Workflow } from '../services/auraApiService';
 
 export class WorkflowTreeProvider implements vscode.TreeDataProvider<WorkflowTreeItem> {
     private _onDidChangeTreeData: vscode.EventEmitter<WorkflowTreeItem | undefined | null | void> = new vscode.EventEmitter<WorkflowTreeItem | undefined | null | void>();
@@ -18,13 +18,8 @@ export class WorkflowTreeProvider implements vscode.TreeDataProvider<WorkflowTre
     async getChildren(element?: WorkflowTreeItem): Promise<WorkflowTreeItem[]> {
         try {
             if (!element) {
-                // Root level: show issues and workflows
+                // Root level: show workflows
                 return this.getRootItems();
-            }
-
-            if (element.contextValue === 'issue' && element.issue) {
-                // Show workflow info under issue
-                return this.getIssueChildren(element.issue);
             }
 
             if (element.contextValue === 'workflow' && element.workflow) {
@@ -43,19 +38,19 @@ export class WorkflowTreeProvider implements vscode.TreeDataProvider<WorkflowTre
         const items: WorkflowTreeItem[] = [];
 
         try {
-            // Get all issues
-            const issues = await this.apiService.getIssues();
+            // Get all workflows
+            const workflows = await this.apiService.getWorkflows();
 
-            if (issues.length === 0) {
+            if (workflows.length === 0) {
                 items.push(new WorkflowTreeItem(
-                    'No issues yet',
+                    'No workflows yet',
                     vscode.TreeItemCollapsibleState.None,
                     'empty'
                 ));
-                items[0].description = 'Create one with Aura: Create Issue';
+                items[0].description = 'Create one with Aura: Create Workflow';
             } else {
-                for (const issue of issues) {
-                    const item = this.createIssueItem(issue);
+                for (const workflow of workflows) {
+                    const item = this.createWorkflowItem(workflow);
                     items.push(item);
                 }
             }
@@ -70,59 +65,36 @@ export class WorkflowTreeProvider implements vscode.TreeDataProvider<WorkflowTre
         return items;
     }
 
-    private createIssueItem(issue: Issue): WorkflowTreeItem {
-        const hasWorkflow = issue.hasWorkflow;
-        const collapsible = hasWorkflow
+    private createWorkflowItem(workflow: Workflow): WorkflowTreeItem {
+        const hasSteps = workflow.steps && workflow.steps.length > 0;
+        const collapsible = hasSteps
             ? vscode.TreeItemCollapsibleState.Expanded
-            : vscode.TreeItemCollapsibleState.None;
+            : vscode.TreeItemCollapsibleState.Collapsed;
 
         const item = new WorkflowTreeItem(
-            issue.title,
+            workflow.title,
             collapsible,
-            'issue'
+            'workflow'
         );
 
-        item.issue = issue;
-        item.description = this.getStatusDescription(issue.status, issue.workflowStatus);
-        item.iconPath = this.getStatusIcon(issue.status, issue.workflowStatus);
-        item.tooltip = this.getIssueTooltip(issue);
+        item.workflow = workflow;
+        item.workflowId = workflow.id;
+        item.description = workflow.status;
+        item.iconPath = this.getStatusIcon(workflow.status);
+        item.tooltip = this.getWorkflowTooltip(workflow);
 
         // Command to open workflow panel when clicked
-        if (hasWorkflow && issue.workflowId) {
-            item.command = {
-                command: 'aura.openWorkflow',
-                title: 'Open Workflow',
-                arguments: [issue.workflowId]
-            };
-        }
+        item.command = {
+            command: 'aura.openWorkflow',
+            title: 'Open Workflow',
+            arguments: [workflow.id]
+        };
 
         return item;
     }
 
-    private async getIssueChildren(issue: Issue): Promise<WorkflowTreeItem[]> {
-        if (!issue.workflowId) {
-            return [];
-        }
-
-        try {
-            const workflow = await this.apiService.getWorkflow(issue.workflowId);
-            return this.getWorkflowChildren(workflow);
-        } catch {
-            return [];
-        }
-    }
-
     private getWorkflowChildren(workflow: Workflow): WorkflowTreeItem[] {
         const items: WorkflowTreeItem[] = [];
-
-        // Add workflow status
-        const statusItem = new WorkflowTreeItem(
-            `Status: ${workflow.status}`,
-            vscode.TreeItemCollapsibleState.None,
-            'info'
-        );
-        statusItem.iconPath = new vscode.ThemeIcon('info');
-        items.push(statusItem);
 
         // Add branch if exists
         if (workflow.gitBranch) {
@@ -165,25 +137,14 @@ export class WorkflowTreeProvider implements vscode.TreeDataProvider<WorkflowTre
         return items;
     }
 
-    private getStatusDescription(issueStatus: string, workflowStatus?: string): string {
-        if (workflowStatus) {
-            return workflowStatus;
-        }
-        return issueStatus;
-    }
-
-    private getStatusIcon(issueStatus: string, workflowStatus?: string): vscode.ThemeIcon {
-        const status = workflowStatus || issueStatus;
-
+    private getStatusIcon(status: string): vscode.ThemeIcon {
         switch (status) {
-            case 'Open':
-                return new vscode.ThemeIcon('circle-outline');
-            case 'InProgress':
             case 'Created':
-            case 'Digesting':
+                return new vscode.ThemeIcon('circle-outline');
+            case 'Analyzing':
             case 'Planning':
                 return new vscode.ThemeIcon('sync~spin');
-            case 'Digested':
+            case 'Analyzed':
             case 'Planned':
                 return new vscode.ThemeIcon('checklist');
             case 'Executing':
@@ -193,7 +154,6 @@ export class WorkflowTreeProvider implements vscode.TreeDataProvider<WorkflowTre
             case 'Failed':
                 return new vscode.ThemeIcon('error', new vscode.ThemeColor('charts.red'));
             case 'Cancelled':
-            case 'Closed':
                 return new vscode.ThemeIcon('circle-slash');
             default:
                 return new vscode.ThemeIcon('circle-outline');
@@ -217,24 +177,23 @@ export class WorkflowTreeProvider implements vscode.TreeDataProvider<WorkflowTre
         }
     }
 
-    private getIssueTooltip(issue: Issue): string {
-        let tooltip = `${issue.title}\n`;
-        if (issue.description) {
-            tooltip += `\n${issue.description}\n`;
+    private getWorkflowTooltip(workflow: Workflow): string {
+        let tooltip = `${workflow.title}\n`;
+        if (workflow.description) {
+            tooltip += `\n${workflow.description}\n`;
         }
-        tooltip += `\nStatus: ${issue.status}`;
-        if (issue.workflowStatus) {
-            tooltip += `\nWorkflow: ${issue.workflowStatus}`;
+        tooltip += `\nStatus: ${workflow.status}`;
+        if (workflow.repositoryPath) {
+            tooltip += `\nRepository: ${workflow.repositoryPath}`;
         }
-        if (issue.repositoryPath) {
-            tooltip += `\nRepository: ${issue.repositoryPath}`;
+        if (workflow.gitBranch) {
+            tooltip += `\nBranch: ${workflow.gitBranch}`;
         }
         return tooltip;
     }
 }
 
 export class WorkflowTreeItem extends vscode.TreeItem {
-    issue?: Issue;
     workflow?: Workflow;
     step?: { id: string; order: number; name: string; capability: string; status: string };
     workflowId?: string;

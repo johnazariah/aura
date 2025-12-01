@@ -53,19 +53,6 @@ export interface RagExecuteResult {
 // Developer Module Types
 // =====================
 
-export interface Issue {
-    id: string;
-    title: string;
-    description?: string;
-    status: string;
-    repositoryPath?: string;
-    hasWorkflow: boolean;
-    workflowId?: string;
-    workflowStatus?: string;
-    createdAt: string;
-    updatedAt: string;
-}
-
 export interface WorkflowStep {
     id: string;
     order: number;
@@ -83,14 +70,13 @@ export interface WorkflowStep {
 
 export interface Workflow {
     id: string;
-    issueId?: string;
-    issueTitle: string;
-    issueDescription?: string;
+    title: string;
+    description?: string;
     status: string;
     gitBranch?: string;
     workspacePath?: string;
     repositoryPath?: string;
-    digestedContext?: string;
+    analyzedContext?: string;
     executionPlan?: string;
     steps: WorkflowStep[];
     createdAt: string;
@@ -233,35 +219,10 @@ export class AuraApiService {
     // Developer Module Methods
     // =====================
 
-    async createIssue(title: string, description?: string, repositoryPath?: string): Promise<Issue> {
+    async createWorkflow(title: string, description?: string, repositoryPath?: string): Promise<Workflow> {
         const response = await this.httpClient.post(
-            `${this.getBaseUrl()}/api/developer/issues`,
+            `${this.getBaseUrl()}/api/developer/workflows`,
             { title, description, repositoryPath }
-        );
-        return response.data;
-    }
-
-    async getIssues(status?: string): Promise<Issue[]> {
-        let url = `${this.getBaseUrl()}/api/developer/issues`;
-        if (status) {
-            url += `?status=${encodeURIComponent(status)}`;
-        }
-        const response = await this.httpClient.get(url);
-        return response.data.issues;
-    }
-
-    async getIssue(id: string): Promise<Issue> {
-        const response = await this.httpClient.get(`${this.getBaseUrl()}/api/developer/issues/${id}`);
-        return response.data;
-    }
-
-    async deleteIssue(id: string): Promise<void> {
-        await this.httpClient.delete(`${this.getBaseUrl()}/api/developer/issues/${id}`);
-    }
-
-    async createWorkflowFromIssue(issueId: string): Promise<Workflow> {
-        const response = await this.httpClient.post(
-            `${this.getBaseUrl()}/api/developer/issues/${issueId}/workflow`
         );
         return response.data;
     }
@@ -280,9 +241,13 @@ export class AuraApiService {
         return response.data;
     }
 
-    async digestWorkflow(workflowId: string): Promise<Workflow> {
+    async deleteWorkflow(id: string): Promise<void> {
+        await this.httpClient.delete(`${this.getBaseUrl()}/api/developer/workflows/${id}`);
+    }
+
+    async analyzeWorkflow(workflowId: string): Promise<Workflow> {
         const response = await this.httpClient.post(
-            `${this.getBaseUrl()}/api/developer/workflows/${workflowId}/digest`,
+            `${this.getBaseUrl()}/api/developer/workflows/${workflowId}/analyze`,
             {},
             { timeout: this.getExecutionTimeout() }
         );

@@ -30,7 +30,7 @@ export class WorkflowPanelProvider {
         // Create new panel
         const panel = vscode.window.createWebviewPanel(
             'auraWorkflow',
-            `📋 ${workflow.issueTitle}`,
+            `📋 ${workflow.title}`,
             vscode.ViewColumn.One,
             {
                 enableScripts: true,
@@ -69,8 +69,8 @@ export class WorkflowPanelProvider {
 
     private async handleMessage(workflowId: string, message: any, panel: vscode.WebviewPanel): Promise<void> {
         switch (message.type) {
-            case 'digest':
-                await this.handleDigest(workflowId, panel);
+            case 'analyze':
+                await this.handleAnalyze(workflowId, panel);
                 break;
             case 'plan':
                 await this.handlePlan(workflowId, panel);
@@ -93,14 +93,14 @@ export class WorkflowPanelProvider {
         }
     }
 
-    private async handleDigest(workflowId: string, panel: vscode.WebviewPanel): Promise<void> {
-        panel.webview.postMessage({ type: 'loading', action: 'digest' });
+    private async handleAnalyze(workflowId: string, panel: vscode.WebviewPanel): Promise<void> {
+        panel.webview.postMessage({ type: 'loading', action: 'analyze' });
         try {
-            await this.apiService.digestWorkflow(workflowId);
+            await this.apiService.analyzeWorkflow(workflowId);
             await this.refreshPanel(workflowId);
-            panel.webview.postMessage({ type: 'success', message: 'Issue digested successfully' });
+            panel.webview.postMessage({ type: 'success', message: 'Workflow analyzed successfully' });
         } catch (error) {
-            panel.webview.postMessage({ type: 'error', message: 'Failed to digest issue' });
+            panel.webview.postMessage({ type: 'error', message: 'Failed to analyze workflow' });
         }
     }
 
@@ -179,7 +179,7 @@ export class WorkflowPanelProvider {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>${workflow.issueTitle}</title>
+    <title>${workflow.title}</title>
     <style>
         :root {
             --vscode-font-family: var(--vscode-editor-font-family, 'Segoe UI', sans-serif);
@@ -211,8 +211,8 @@ export class WorkflowPanelProvider {
             font-weight: 500;
         }
         .status.created, .status.open { background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); }
-        .status.digesting, .status.planning, .status.executing { background: #0078d4; color: white; }
-        .status.digested, .status.planned { background: #107c10; color: white; }
+        .status.analyzing, .status.planning, .status.executing { background: #0078d4; color: white; }
+        .status.analyzed, .status.planned { background: #107c10; color: white; }
         .status.completed { background: #107c10; color: white; }
         .status.failed { background: #d13438; color: white; }
         .status.cancelled { background: #666; color: white; }
@@ -327,6 +327,37 @@ export class WorkflowPanelProvider {
             gap: 8px;
         }
 
+        .step-output {
+            margin-top: 12px;
+            border: 1px solid var(--vscode-panel-border);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .output-header {
+            padding: 8px 12px;
+            background: var(--vscode-editor-inactiveSelectionBackground);
+            cursor: pointer;
+            font-size: 0.85em;
+            color: var(--vscode-descriptionForeground);
+        }
+        .output-header:hover {
+            background: var(--vscode-list-hoverBackground);
+        }
+        .output-content {
+            padding: 12px;
+            background: var(--vscode-textCodeBlock-background);
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .output-content pre {
+            margin: 0;
+            white-space: pre-wrap;
+            word-break: break-word;
+            font-family: var(--vscode-editor-font-family);
+            font-size: 12px;
+            line-height: 1.4;
+        }
+
         .btn {
             padding: 6px 14px;
             border: none;
@@ -417,7 +448,7 @@ export class WorkflowPanelProvider {
 </head>
 <body>
     <div class="header">
-        <h1 class="title">📋 ${this.escapeHtml(workflow.issueTitle)}</h1>
+        <h1 class="title">📋 ${this.escapeHtml(workflow.title)}</h1>
         <span class="status ${statusClass}" id="status">${workflow.status}</span>
     </div>
 
@@ -452,9 +483,9 @@ export class WorkflowPanelProvider {
         ${stepsHtml}
     </div>
 
-    ${workflow.digestedContext ? `
+    ${workflow.analyzedContext ? `
     <div class="phase-section completed">
-        <div class="phase-title">✓ Digested</div>
+        <div class="phase-title">✓ Analyzed</div>
         <div style="font-size: 0.9em; color: var(--vscode-descriptionForeground);">
             Context extracted and indexed
         </div>
@@ -463,7 +494,7 @@ export class WorkflowPanelProvider {
 
     <div class="original-request">
         <h4>Original Request</h4>
-        <div>${this.escapeHtml(workflow.issueDescription || 'No description provided')}</div>
+        <div>${this.escapeHtml(workflow.description || 'No description provided')}</div>
     </div>
 
     <script>
@@ -488,8 +519,8 @@ export class WorkflowPanelProvider {
             vscode.postMessage({ type: 'executeStep', stepId });
         }
 
-        function digest() {
-            vscode.postMessage({ type: 'digest' });
+        function analyze() {
+            vscode.postMessage({ type: 'analyze' });
         }
 
         function plan() {
@@ -506,6 +537,13 @@ export class WorkflowPanelProvider {
 
         function refresh() {
             vscode.postMessage({ type: 'refresh' });
+        }
+
+        function toggleOutput(stepId) {
+            const el = document.getElementById('output-' + stepId);
+            if (el) {
+                el.style.display = el.style.display === 'none' ? 'block' : 'none';
+            }
         }
 
         window.addEventListener('message', (event) => {
@@ -553,12 +591,38 @@ export class WorkflowPanelProvider {
             return '<div class="timeline-item pending"><em>No steps yet. Run Plan to create steps.</em></div>';
         }
 
-        // Reverse order - newest first
-        const reversedSteps = [...steps].reverse();
-
-        return reversedSteps.map(step => {
+        // Show in order (oldest first for timeline)
+        return steps.map(step => {
             const statusClass = step.status.toLowerCase();
             const canExecute = step.status === 'Pending';
+            
+            // Parse output if it's JSON
+            let outputContent = '';
+            if (step.output) {
+                try {
+                    const parsed = JSON.parse(step.output);
+                    if (parsed.content) {
+                        // Truncate long content for display
+                        const content = parsed.content.length > 500 
+                            ? parsed.content.substring(0, 500) + '...' 
+                            : parsed.content;
+                        outputContent = `
+                        <div class="step-output">
+                            <div class="output-header" onclick="toggleOutput('${step.id}')">
+                                📄 Output (click to expand)
+                                ${parsed.tokensUsed ? ` • ${parsed.tokensUsed} tokens` : ''}
+                                ${parsed.durationMs ? ` • ${(parsed.durationMs / 1000).toFixed(1)}s` : ''}
+                            </div>
+                            <div class="output-content" id="output-${step.id}" style="display: none;">
+                                <pre>${this.escapeHtml(parsed.content)}</pre>
+                            </div>
+                        </div>`;
+                    }
+                } catch {
+                    // Not JSON, show raw
+                    outputContent = `<div class="step-output"><pre>${this.escapeHtml(step.output)}</pre></div>`;
+                }
+            }
 
             return `
             <div class="timeline-item ${statusClass}">
@@ -571,8 +635,11 @@ export class WorkflowPanelProvider {
                     Status: <strong>${step.status}</strong>
                     ${step.assignedAgentId ? ` • Agent: ${step.assignedAgentId}` : ''}
                     ${step.attempts > 0 ? ` • Attempts: ${step.attempts}` : ''}
+                    ${step.startedAt ? ` • Started: ${new Date(step.startedAt).toLocaleTimeString()}` : ''}
+                    ${step.completedAt ? ` • Completed: ${new Date(step.completedAt).toLocaleTimeString()}` : ''}
                 </div>
                 ${step.error ? `<div style="color: #d13438; margin-top: 8px;">Error: ${this.escapeHtml(step.error)}</div>` : ''}
+                ${outputContent}
                 ${canExecute ? `
                 <div class="step-actions">
                     <button class="btn btn-primary" onclick="executeStep('${step.id}')">▶ Execute</button>
@@ -588,10 +655,10 @@ export class WorkflowPanelProvider {
 
         switch (workflow.status) {
             case 'Created':
-                buttons.push('<button class="btn btn-primary" onclick="digest()">📖 Digest Issue</button>');
+                buttons.push('<button class="btn btn-primary" onclick="analyze()">🔍 Analyze</button>');
                 buttons.push('<button class="btn btn-danger" onclick="cancel()">Cancel</button>');
                 break;
-            case 'Digested':
+            case 'Analyzed':
                 buttons.push('<button class="btn btn-primary" onclick="plan()">📋 Create Plan</button>');
                 buttons.push('<button class="btn btn-danger" onclick="cancel()">Cancel</button>');
                 break;
