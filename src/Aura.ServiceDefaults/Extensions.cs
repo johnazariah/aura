@@ -31,11 +31,13 @@ public static class Extensions
             // Turn on resilience by default with extended timeouts for LLM operations
             http.AddStandardResilienceHandler(options =>
             {
-                // Extend timeout to 5 minutes for LLM requests
-                options.TotalRequestTimeout.Timeout = TimeSpan.FromMinutes(5);
-                options.AttemptTimeout.Timeout = TimeSpan.FromMinutes(5);
+                // Extend timeout to 10 minutes for LLM requests
+                options.TotalRequestTimeout.Timeout = TimeSpan.FromMinutes(10);
+                options.AttemptTimeout.Timeout = TimeSpan.FromMinutes(10);
+                // Disable retries for LLM calls - they're idempotent but slow
+                options.Retry.MaxRetryAttempts = 0;
                 // Circuit breaker sampling duration must be at least 2x attempt timeout
-                options.CircuitBreaker.SamplingDuration = TimeSpan.FromMinutes(10);
+                options.CircuitBreaker.SamplingDuration = TimeSpan.FromMinutes(20);
             });
 
             // Turn on service discovery by default
