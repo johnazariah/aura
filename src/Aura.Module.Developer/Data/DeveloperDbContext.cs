@@ -101,6 +101,7 @@ public sealed class DeveloperDbContext : AuraDbContext
             entity.Property(e => e.Order).HasColumnName("order");
             entity.Property(e => e.Name).HasColumnName("name").HasMaxLength(500);
             entity.Property(e => e.Capability).HasColumnName("capability").HasMaxLength(100);
+            entity.Property(e => e.Language).HasColumnName("language").HasMaxLength(50);
             entity.Property(e => e.Description).HasColumnName("description");
             entity.Property(e => e.Status).HasColumnName("status").HasConversion<string>().HasMaxLength(20);
             entity.Property(e => e.AssignedAgentId).HasColumnName("assigned_agent_id").HasMaxLength(100);
