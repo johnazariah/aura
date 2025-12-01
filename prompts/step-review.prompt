@@ -1,0 +1,20 @@
+---
+description: Executes a code review step with previous outputs
+---
+Execute this code review step:
+
+## Step
+Name: {{stepName}}
+Description: {{stepDescription}}
+
+## Workflow Context
+Issue: {{issueTitle}}
+
+## Code to Review
+{{codeToReview}}
+
+## Instructions
+Review the code and provide:
+- Summary (approve/request changes)
+- Specific issues with explanations
+- Suggestions for improvement

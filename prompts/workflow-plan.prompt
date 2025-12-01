@@ -1,0 +1,31 @@
+---
+description: Creates an execution plan with discrete steps
+---
+Create an implementation plan for this development task. Break it down into discrete, executable steps.
+
+## Issue Title
+{{title}}
+
+## Issue Description
+{{description}}
+
+## Analysis Context
+{{digestedContext}}
+
+## Available Capabilities
+- coding: Code generation and implementation
+- testing: Unit and integration test creation
+- review: Code review and quality checks
+- documentation: README, API docs, comments
+- fixing: Build error and test failure fixing
+
+## Languages (optional, specify when relevant)
+- csharp, python, typescript, javascript, go, rust, java, etc.
+
+Create a JSON array of steps. Each step must have:
+- name: Short descriptive name (string, required)
+- capability: One of: coding, testing, review, documentation, fixing (string, required)
+- language: Programming language if relevant, e.g. "csharp" (string, optional)
+- description: What this step should accomplish (string, optional)
+
+Return ONLY a valid JSON array, no markdown code blocks or other text.

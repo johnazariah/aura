@@ -54,6 +54,9 @@ public static class ServiceCollectionExtensions
         // Agent services
         services.AddAgentServices(configuration);
 
+        // Prompt services
+        services.AddPromptServices(configuration);
+
         return services;
     }
 
@@ -204,6 +207,28 @@ public static class ServiceCollectionExtensions
 
         // Initialize registry on startup
         services.AddHostedService<AgentRegistryInitializer>();
+
+        return services;
+    }
+
+    /// <summary>
+    /// Adds prompt registry services.
+    /// </summary>
+    /// <param name="services">The service collection.</param>
+    /// <param name="configuration">Configuration instance.</param>
+    /// <returns>The service collection for chaining.</returns>
+    public static IServiceCollection AddPromptServices(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        // Configure options
+        services.Configure<Prompts.PromptOptions>(configuration.GetSection(Prompts.PromptOptions.SectionName));
+
+        // Prompt registry
+        services.AddSingleton<Prompts.IPromptRegistry, Prompts.PromptRegistry>();
+
+        // Initialize registry on startup
+        services.AddHostedService<Prompts.PromptRegistryInitializer>();
 
         return services;
     }

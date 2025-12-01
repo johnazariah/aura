@@ -1,0 +1,19 @@
+---
+description: Analyzes a development issue and extracts requirements
+---
+Analyze this development task and extract key requirements, constraints, and implementation notes.
+
+## Issue Title
+{{title}}
+
+## Issue Description
+{{description}}
+
+## Repository
+{{workspacePath}}
+
+Provide a structured analysis including:
+1. Core requirements (what needs to be built)
+2. Technical constraints (languages, frameworks, patterns)
+3. Files likely to be affected
+4. Key considerations for implementation

@@ -8,6 +8,7 @@ using System.Diagnostics;
 using System.Text.Json;
 using Aura.Foundation.Agents;
 using Aura.Foundation.Git;
+using Aura.Foundation.Prompts;
 using Aura.Foundation.Rag;
 using Aura.Module.Developer.Data;
 using Aura.Module.Developer.Data.Entities;
@@ -21,6 +22,7 @@ public sealed class WorkflowService : IWorkflowService
 {
     private readonly DeveloperDbContext _db;
     private readonly IAgentRegistry _agentRegistry;
+    private readonly IPromptRegistry _promptRegistry;
     private readonly IGitWorktreeService _worktreeService;
     private readonly IRagService _ragService;
     private readonly ILogger<WorkflowService> _logger;
@@ -31,12 +33,14 @@ public sealed class WorkflowService : IWorkflowService
     public WorkflowService(
         DeveloperDbContext db,
         IAgentRegistry agentRegistry,
+        IPromptRegistry promptRegistry,
         IGitWorktreeService worktreeService,
         IRagService ragService,
         ILogger<WorkflowService> logger)
     {
         _db = db;
         _agentRegistry = agentRegistry;
+        _promptRegistry = promptRegistry;
         _worktreeService = worktreeService;
         _ragService = ragService;
         _logger = logger;
@@ -174,25 +178,13 @@ public sealed class WorkflowService : IWorkflowService
                 throw new InvalidOperationException("No agent with 'digestion' capability found");
             }
 
-            // Build the prompt with issue context
-            var prompt = $"""
-                Analyze this development task and extract key requirements, constraints, and implementation notes.
-
-                ## Issue Title
-                {workflow.WorkItemTitle}
-
-                ## Issue Description
-                {workflow.WorkItemDescription ?? "No description provided."}
-
-                ## Repository
-                {workflow.WorkspacePath ?? workflow.RepositoryPath ?? "Not specified"}
-
-                Provide a structured analysis including:
-                1. Core requirements (what needs to be built)
-                2. Technical constraints (languages, frameworks, patterns)
-                3. Files likely to be affected
-                4. Key considerations for implementation
-                """;
+            // Build the prompt from template
+            var prompt = _promptRegistry.Render("workflow-digest", new
+            {
+                title = workflow.WorkItemTitle,
+                description = workflow.WorkItemDescription ?? "No description provided.",
+                workspacePath = workflow.WorkspacePath ?? workflow.RepositoryPath ?? "Not specified",
+            });
 
             var context = new AgentContext(prompt, WorkspacePath: workflow.WorkspacePath);
             var output = await digester.ExecuteAsync(context, ct);
@@ -248,35 +240,13 @@ public sealed class WorkflowService : IWorkflowService
                 throw new InvalidOperationException("No agent with 'analysis' capability found");
             }
 
-            // Build the planning prompt
-            var prompt = $"""
-                Create an implementation plan for this development task. Break it down into discrete, executable steps.
-
-                ## Issue Title
-                {workflow.WorkItemTitle}
-
-                ## Issue Description
-                {workflow.WorkItemDescription ?? "No description provided."}
-
-                ## Analysis Context
-                {workflow.DigestedContext}
-
-                ## Available Capabilities
-                The following capabilities are available for steps:
-                - coding: General code generation
-                - csharp-coding: C# specific code generation
-                - testing: Unit test creation
-                - review: Code review
-                - documentation: Documentation generation
-                - fixing: Build error fixing
-
-                Create a JSON array of steps. Each step must have these properties:
-                - name: Short descriptive name (string)
-                - capability: One of the capabilities listed above (string)
-                - description: What this step should accomplish (string)
-
-                Return ONLY the JSON array, no markdown formatting or other text.
-                """;
+            // Build the planning prompt from template
+            var prompt = _promptRegistry.Render("workflow-plan", new
+            {
+                title = workflow.WorkItemTitle,
+                description = workflow.WorkItemDescription ?? "No description provided.",
+                digestedContext = workflow.DigestedContext ?? "No analysis available.",
+            });
 
             var context = new AgentContext(prompt, WorkspacePath: workflow.WorkspacePath);
             var output = await planner.ExecuteAsync(context, ct);
@@ -300,6 +270,7 @@ public sealed class WorkflowService : IWorkflowService
                     Order = order++,
                     Name = step.Name,
                     Capability = step.Capability,
+                    Language = step.Language,
                     Description = step.Description,
                     Status = StepStatus.Pending,
                 };
@@ -367,10 +338,12 @@ public sealed class WorkflowService : IWorkflowService
         }
         else
         {
-            agent = _agentRegistry.GetBestForCapability(step.Capability);
+            // Pass language to get best matching agent
+            agent = _agentRegistry.GetBestForCapability(step.Capability, step.Language);
             if (agent is null)
             {
-                throw new InvalidOperationException($"No agent found for capability '{step.Capability}'");
+                throw new InvalidOperationException($"No agent found for capability '{step.Capability}'" +
+                    (step.Language is not null ? $" with language '{step.Language}'" : ""));
             }
         }
 
@@ -387,71 +360,72 @@ public sealed class WorkflowService : IWorkflowService
 
         try
         {
-            // Build the step execution prompt
-            var promptBuilder = new System.Text.StringBuilder();
-            promptBuilder.AppendLine("Execute this development step:");
-            promptBuilder.AppendLine();
-            promptBuilder.AppendLine("## Step");
-            promptBuilder.AppendLine($"Name: {step.Name}");
-            promptBuilder.AppendLine($"Description: {step.Description ?? "No additional description."}");
-            promptBuilder.AppendLine();
-            promptBuilder.AppendLine("## Workflow Context");
-            promptBuilder.AppendLine($"Issue: {workflow.WorkItemTitle}");
+            // Build the step execution prompt from template
+            string prompt;
 
-            // For review capability, include outputs from previous coding steps
             if (step.Capability == "review")
             {
+                // For review capability, gather outputs from previous coding steps
+                var codeToReview = new System.Text.StringBuilder();
                 var codingSteps = workflow.Steps
                     .Where(s => s.Capability == "coding" && s.Status == StepStatus.Completed && s.Output is not null)
                     .OrderBy(s => s.Order)
                     .ToList();
 
-                if (codingSteps.Count > 0)
+                foreach (var codingStep in codingSteps)
                 {
-                    promptBuilder.AppendLine();
-                    promptBuilder.AppendLine("## Code to Review");
-                    foreach (var codingStep in codingSteps)
+                    try
                     {
-                        try
+                        var stepOutput = JsonSerializer.Deserialize<JsonElement>(codingStep.Output!);
+                        if (stepOutput.TryGetProperty("content", out var content))
                         {
-                            var stepOutput = JsonSerializer.Deserialize<JsonElement>(codingStep.Output!);
-                            if (stepOutput.TryGetProperty("content", out var content))
-                            {
-                                promptBuilder.AppendLine($"### {codingStep.Name}");
-                                promptBuilder.AppendLine(content.GetString());
-                                promptBuilder.AppendLine();
-                            }
-                        }
-                        catch
-                        {
-                            // Skip malformed output
+                            codeToReview.AppendLine($"### {codingStep.Name}");
+                            codeToReview.AppendLine(content.GetString());
+                            codeToReview.AppendLine();
                         }
                     }
+                    catch
+                    {
+                        // Skip malformed output
+                    }
                 }
+
+                prompt = _promptRegistry.Render("step-review", new
+                {
+                    stepName = step.Name,
+                    stepDescription = step.Description ?? "No additional description.",
+                    issueTitle = workflow.WorkItemTitle,
+                    codeToReview = codeToReview.ToString(),
+                });
             }
-            else if (workflow.DigestedContext is not null)
+            else
             {
                 // For non-review steps, include the digested analysis
-                try
+                var analysis = string.Empty;
+                if (workflow.DigestedContext is not null)
                 {
-                    var digest = JsonSerializer.Deserialize<JsonElement>(workflow.DigestedContext);
-                    if (digest.TryGetProperty("analysis", out var analysis))
+                    try
                     {
-                        promptBuilder.AppendLine($"Analysis: {analysis.GetString()}");
+                        var digest = JsonSerializer.Deserialize<JsonElement>(workflow.DigestedContext);
+                        if (digest.TryGetProperty("analysis", out var analysisElement))
+                        {
+                            analysis = $"Analysis: {analysisElement.GetString()}";
+                        }
+                    }
+                    catch
+                    {
+                        analysis = $"Analysis: {workflow.DigestedContext}";
                     }
                 }
-                catch
+
+                prompt = _promptRegistry.Render("step-execute", new
                 {
-                    promptBuilder.AppendLine($"Analysis: {workflow.DigestedContext}");
-                }
+                    stepName = step.Name,
+                    stepDescription = step.Description ?? "No additional description.",
+                    issueTitle = workflow.WorkItemTitle,
+                    analysis,
+                });
             }
-
-            promptBuilder.AppendLine();
-            promptBuilder.AppendLine("## Instructions");
-            promptBuilder.AppendLine("Complete this step. If generating code, output the complete file contents.");
-            promptBuilder.AppendLine("If modifying existing files, show the complete updated file.");
-
-            var prompt = promptBuilder.ToString();
             var context = new AgentContext(prompt, WorkspacePath: workflow.WorkspacePath);
             var output = await agent.ExecuteAsync(context, ct);
 
@@ -825,6 +799,7 @@ public sealed class WorkflowService : IWorkflowService
     {
         public required string Name { get; init; }
         public required string Capability { get; init; }
+        public string? Language { get; init; }
         public string? Description { get; init; }
     }
 }

@@ -1,0 +1,16 @@
+---
+description: Executes a single workflow step
+---
+Execute this development step:
+
+## Step
+Name: {{stepName}}
+Description: {{stepDescription}}
+
+## Workflow Context
+Issue: {{issueTitle}}
+{{analysis}}
+
+## Instructions
+Complete this step. If generating code, output the complete file contents.
+If modifying existing files, show the complete updated file.

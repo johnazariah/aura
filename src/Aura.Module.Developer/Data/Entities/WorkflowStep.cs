@@ -25,8 +25,11 @@ public sealed class WorkflowStep
     /// <summary>Gets or sets the step name (e.g., "Implement UserService").</summary>
     public required string Name { get; set; }
 
-    /// <summary>Gets or sets the required capability (e.g., "csharp-coding").</summary>
+    /// <summary>Gets or sets the required capability (e.g., "coding", "testing", "review").</summary>
     public required string Capability { get; set; }
+
+    /// <summary>Gets or sets the preferred language (e.g., "csharp", "python"). Null means any language.</summary>
+    public string? Language { get; set; }
 
     /// <summary>Gets or sets the step description.</summary>
     public string? Description { get; set; }
