@@ -35,6 +35,10 @@
           "name": "System Status"
         },
         {
+          "id": "aura.workflows",
+          "name": "Workflows"
+        },
+        {
           "id": "aura.agents",
           "name": "Agents"
         }
@@ -90,6 +94,31 @@
         "command": "aura.clearRagIndex",
         "title": "Aura: Clear RAG Index",
         "icon": "$(trash)"
+      },
+      {
+        "command": "aura.createIssue",
+        "title": "Aura: Create Issue",
+        "icon": "$(add)"
+      },
+      {
+        "command": "aura.openWorkflow",
+        "title": "Open Workflow",
+        "icon": "$(window)"
+      },
+      {
+        "command": "aura.startWorkflow",
+        "title": "Start Workflow",
+        "icon": "$(play)"
+      },
+      {
+        "command": "aura.executeStep",
+        "title": "Execute Step",
+        "icon": "$(run)"
+      },
+      {
+        "command": "aura.refreshWorkflows",
+        "title": "Refresh Workflows",
+        "icon": "$(refresh)"
       }
     ],
     "menus": {
@@ -97,6 +126,16 @@
         {
           "command": "aura.refreshStatus",
           "when": "view == aura.status",
+          "group": "navigation"
+        },
+        {
+          "command": "aura.refreshWorkflows",
+          "when": "view == aura.workflows",
+          "group": "navigation"
+        },
+        {
+          "command": "aura.createIssue",
+          "when": "view == aura.workflows",
           "group": "navigation"
         },
         {
@@ -109,6 +148,16 @@
         {
           "command": "aura.executeAgent",
           "when": "view == aura.agents && viewItem == agent",
+          "group": "inline"
+        },
+        {
+          "command": "aura.startWorkflow",
+          "when": "view == aura.workflows && viewItem == issue",
+          "group": "inline"
+        },
+        {
+          "command": "aura.executeStep",
+          "when": "view == aura.workflows && viewItem == step",
           "group": "inline"
         }
       ]

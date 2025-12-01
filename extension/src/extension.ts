@@ -2,6 +2,8 @@ import * as vscode from 'vscode';
 import { StatusTreeProvider } from './providers/statusTreeProvider';
 import { AgentTreeProvider, AgentItem } from './providers/agentTreeProvider';
 import { ChatWindowProvider } from './providers/chatWindowProvider';
+import { WorkflowTreeProvider } from './providers/workflowTreeProvider';
+import { WorkflowPanelProvider } from './providers/workflowPanelProvider';
 import { HealthCheckService } from './services/healthCheckService';
 import { AuraApiService, AgentInfo } from './services/auraApiService';
 
@@ -9,7 +11,9 @@ let auraApiService: AuraApiService;
 let healthCheckService: HealthCheckService;
 let statusTreeProvider: StatusTreeProvider;
 let agentTreeProvider: AgentTreeProvider;
+let workflowTreeProvider: WorkflowTreeProvider;
 let chatWindowProvider: ChatWindowProvider;
+let workflowPanelProvider: WorkflowPanelProvider;
 let statusBarItem: vscode.StatusBarItem;
 let refreshInterval: NodeJS.Timeout | undefined;
 
@@ -23,12 +27,19 @@ export async function activate(context: vscode.ExtensionContext) {
     // Initialize tree providers
     statusTreeProvider = new StatusTreeProvider(healthCheckService);
     agentTreeProvider = new AgentTreeProvider(auraApiService);
+    workflowTreeProvider = new WorkflowTreeProvider(auraApiService);
     chatWindowProvider = new ChatWindowProvider(context.extensionUri, auraApiService);
+    workflowPanelProvider = new WorkflowPanelProvider(context.extensionUri, auraApiService);
 
     // Register tree views
     const statusView = vscode.window.createTreeView('aura.status', {
         treeDataProvider: statusTreeProvider,
         showCollapseAll: false
+    });
+
+    const workflowView = vscode.window.createTreeView('aura.workflows', {
+        treeDataProvider: workflowTreeProvider,
+        showCollapseAll: true
     });
 
     const agentView = vscode.window.createTreeView('aura.agents', {
@@ -131,6 +142,27 @@ export async function activate(context: vscode.ExtensionContext) {
         await clearRagIndex();
     });
 
+    // Workflow commands
+    const createIssueCommand = vscode.commands.registerCommand('aura.createIssue', async () => {
+        await createIssue();
+    });
+
+    const openWorkflowCommand = vscode.commands.registerCommand('aura.openWorkflow', async (workflowId: string) => {
+        await workflowPanelProvider.openWorkflowPanel(workflowId);
+    });
+
+    const startWorkflowCommand = vscode.commands.registerCommand('aura.startWorkflow', async (item?: any) => {
+        await startWorkflow(item);
+    });
+
+    const executeStepCommand = vscode.commands.registerCommand('aura.executeStep', async (workflowId: string, stepId: string) => {
+        await executeStep(workflowId, stepId);
+    });
+
+    const refreshWorkflowsCommand = vscode.commands.registerCommand('aura.refreshWorkflows', async () => {
+        workflowTreeProvider.refresh();
+    });
+
     // Subscribe to configuration changes
     const configWatcher = vscode.workspace.onDidChangeConfiguration(e => {
         if (e.affectsConfiguration('aura')) {
@@ -141,6 +173,7 @@ export async function activate(context: vscode.ExtensionContext) {
     // Add disposables
     context.subscriptions.push(
         statusView,
+        workflowView,
         agentView,
         statusBarItem,
         refreshCommand,
@@ -153,6 +186,11 @@ export async function activate(context: vscode.ExtensionContext) {
         indexWorkspaceCommand,
         showRagStatsCommand,
         clearRagIndexCommand,
+        createIssueCommand,
+        openWorkflowCommand,
+        startWorkflowCommand,
+        executeStepCommand,
+        refreshWorkflowsCommand,
         configWatcher
     );
 
@@ -443,6 +481,132 @@ async function executeAgent(item?: AgentItem): Promise<void> {
     } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error';
         vscode.window.showErrorMessage(`Failed to execute agent: ${message}`);
+    }
+}
+
+// =====================
+// Workflow Functions
+// =====================
+
+async function createIssue(): Promise<void> {
+    const title = await vscode.window.showInputBox({
+        prompt: 'Issue Title',
+        placeHolder: 'What do you want to build?'
+    });
+
+    if (!title) return;
+
+    const description = await vscode.window.showInputBox({
+        prompt: 'Description (optional)',
+        placeHolder: 'Describe the feature or bug in detail...'
+    });
+
+    const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+
+    try {
+        const issue = await auraApiService.createIssue(title, description || undefined, workspacePath);
+        vscode.window.showInformationMessage(`Created issue: ${issue.title}`);
+        workflowTreeProvider.refresh();
+
+        // Ask if they want to start a workflow
+        const action = await vscode.window.showInformationMessage(
+            'Start a workflow for this issue?',
+            'Start Workflow',
+            'Later'
+        );
+
+        if (action === 'Start Workflow') {
+            await startWorkflowFromIssue(issue.id);
+        }
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        vscode.window.showErrorMessage(`Failed to create issue: ${message}`);
+    }
+}
+
+async function startWorkflow(item?: any): Promise<void> {
+    let issueId: string;
+
+    if (item?.issue?.id) {
+        issueId = item.issue.id;
+    } else {
+        // Pick from available issues
+        try {
+            const issues = await auraApiService.getIssues('Open');
+            if (issues.length === 0) {
+                vscode.window.showWarningMessage('No open issues. Create one first with "Aura: Create Issue"');
+                return;
+            }
+
+            const picked = await vscode.window.showQuickPick(
+                issues.map(i => ({
+                    label: i.title,
+                    description: i.status,
+                    id: i.id
+                })),
+                { placeHolder: 'Select an issue to start a workflow' }
+            );
+
+            if (!picked) return;
+            issueId = picked.id;
+        } catch (error) {
+            vscode.window.showErrorMessage('Failed to load issues');
+            return;
+        }
+    }
+
+    await startWorkflowFromIssue(issueId);
+}
+
+async function startWorkflowFromIssue(issueId: string): Promise<void> {
+    try {
+        await vscode.window.withProgress(
+            {
+                location: vscode.ProgressLocation.Notification,
+                title: 'Creating workflow...',
+                cancellable: false
+            },
+            async () => {
+                const workflow = await auraApiService.createWorkflowFromIssue(issueId);
+                workflowTreeProvider.refresh();
+
+                // Open the workflow panel
+                await workflowPanelProvider.openWorkflowPanel(workflow.id);
+
+                vscode.window.showInformationMessage(
+                    `Workflow created! Branch: ${workflow.gitBranch || 'N/A'}`
+                );
+            }
+        );
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        vscode.window.showErrorMessage(`Failed to create workflow: ${message}`);
+    }
+}
+
+async function executeStep(workflowId: string, stepId: string): Promise<void> {
+    try {
+        await vscode.window.withProgress(
+            {
+                location: vscode.ProgressLocation.Notification,
+                title: 'Executing step...',
+                cancellable: false
+            },
+            async () => {
+                const step = await auraApiService.executeWorkflowStep(workflowId, stepId);
+                workflowTreeProvider.refresh();
+
+                if (step.status === 'Completed') {
+                    vscode.window.showInformationMessage(`Step completed: ${step.name}`);
+                } else if (step.status === 'Failed') {
+                    vscode.window.showErrorMessage(`Step failed: ${step.error || 'Unknown error'}`);
+                }
+            }
+        );
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        vscode.window.showErrorMessage(`Failed to execute step: ${message}`);
+        workflowTreeProvider.refresh();
     }
 }
 

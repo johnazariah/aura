@@ -49,6 +49,62 @@ export interface RagExecuteResult {
     durationMs: number;
 }
 
+// =====================
+// Developer Module Types
+// =====================
+
+export interface Issue {
+    id: string;
+    title: string;
+    description?: string;
+    status: string;
+    repositoryPath?: string;
+    hasWorkflow: boolean;
+    workflowId?: string;
+    workflowStatus?: string;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface WorkflowStep {
+    id: string;
+    order: number;
+    name: string;
+    capability: string;
+    description?: string;
+    status: string;
+    assignedAgentId?: string;
+    attempts: number;
+    output?: string;
+    error?: string;
+    startedAt?: string;
+    completedAt?: string;
+}
+
+export interface Workflow {
+    id: string;
+    issueId?: string;
+    issueTitle: string;
+    issueDescription?: string;
+    status: string;
+    gitBranch?: string;
+    workspacePath?: string;
+    repositoryPath?: string;
+    digestedContext?: string;
+    executionPlan?: string;
+    steps: WorkflowStep[];
+    createdAt: string;
+    updatedAt: string;
+    completedAt?: string;
+}
+
+export interface WorkflowChatResponse {
+    response: string;
+    planModified: boolean;
+    stepsAdded: { id: string; order: number; name: string; capability: string }[];
+    stepsRemoved: string[];
+}
+
 export class AuraApiService {
     private httpClient: AxiosInstance;
 
@@ -171,5 +227,120 @@ export class AuraApiService {
 
     async clearRagIndex(): Promise<void> {
         await this.httpClient.delete(`${this.getBaseUrl()}/api/rag`);
+    }
+
+    // =====================
+    // Developer Module Methods
+    // =====================
+
+    async createIssue(title: string, description?: string, repositoryPath?: string): Promise<Issue> {
+        const response = await this.httpClient.post(
+            `${this.getBaseUrl()}/api/developer/issues`,
+            { title, description, repositoryPath }
+        );
+        return response.data;
+    }
+
+    async getIssues(status?: string): Promise<Issue[]> {
+        let url = `${this.getBaseUrl()}/api/developer/issues`;
+        if (status) {
+            url += `?status=${encodeURIComponent(status)}`;
+        }
+        const response = await this.httpClient.get(url);
+        return response.data.issues;
+    }
+
+    async getIssue(id: string): Promise<Issue> {
+        const response = await this.httpClient.get(`${this.getBaseUrl()}/api/developer/issues/${id}`);
+        return response.data;
+    }
+
+    async deleteIssue(id: string): Promise<void> {
+        await this.httpClient.delete(`${this.getBaseUrl()}/api/developer/issues/${id}`);
+    }
+
+    async createWorkflowFromIssue(issueId: string): Promise<Workflow> {
+        const response = await this.httpClient.post(
+            `${this.getBaseUrl()}/api/developer/issues/${issueId}/workflow`
+        );
+        return response.data;
+    }
+
+    async getWorkflows(status?: string): Promise<Workflow[]> {
+        let url = `${this.getBaseUrl()}/api/developer/workflows`;
+        if (status) {
+            url += `?status=${encodeURIComponent(status)}`;
+        }
+        const response = await this.httpClient.get(url);
+        return response.data.workflows;
+    }
+
+    async getWorkflow(id: string): Promise<Workflow> {
+        const response = await this.httpClient.get(`${this.getBaseUrl()}/api/developer/workflows/${id}`);
+        return response.data;
+    }
+
+    async digestWorkflow(workflowId: string): Promise<Workflow> {
+        const response = await this.httpClient.post(
+            `${this.getBaseUrl()}/api/developer/workflows/${workflowId}/digest`,
+            {},
+            { timeout: this.getExecutionTimeout() }
+        );
+        return response.data;
+    }
+
+    async planWorkflow(workflowId: string): Promise<Workflow> {
+        const response = await this.httpClient.post(
+            `${this.getBaseUrl()}/api/developer/workflows/${workflowId}/plan`,
+            {},
+            { timeout: this.getExecutionTimeout() }
+        );
+        return response.data;
+    }
+
+    async executeWorkflowStep(workflowId: string, stepId: string, agentId?: string): Promise<WorkflowStep> {
+        const response = await this.httpClient.post(
+            `${this.getBaseUrl()}/api/developer/workflows/${workflowId}/steps/${stepId}/execute`,
+            agentId ? { agentId } : {},
+            { timeout: this.getExecutionTimeout() }
+        );
+        return response.data;
+    }
+
+    async addWorkflowStep(workflowId: string, name: string, capability: string, description?: string): Promise<WorkflowStep> {
+        const response = await this.httpClient.post(
+            `${this.getBaseUrl()}/api/developer/workflows/${workflowId}/steps`,
+            { name, capability, description }
+        );
+        return response.data;
+    }
+
+    async removeWorkflowStep(workflowId: string, stepId: string): Promise<void> {
+        await this.httpClient.delete(
+            `${this.getBaseUrl()}/api/developer/workflows/${workflowId}/steps/${stepId}`
+        );
+    }
+
+    async completeWorkflow(workflowId: string): Promise<Workflow> {
+        const response = await this.httpClient.post(
+            `${this.getBaseUrl()}/api/developer/workflows/${workflowId}/complete`
+        );
+        return response.data;
+    }
+
+    async cancelWorkflow(workflowId: string): Promise<Workflow> {
+        const response = await this.httpClient.post(
+            `${this.getBaseUrl()}/api/developer/workflows/${workflowId}/cancel`
+        );
+        return response.data;
+    }
+
+    async sendWorkflowChat(workflowId: string, message: string): Promise<WorkflowChatResponse> {
+        const response = await this.httpClient.post(
+            `${this.getBaseUrl()}/api/developer/workflows/${workflowId}/chat`,
+            { message },
+            { timeout: this.getExecutionTimeout() }
+        );
+        return response.data;
     }
 }

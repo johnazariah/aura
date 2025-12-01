@@ -154,17 +154,18 @@ public sealed class WorkflowService : IWorkflowService
 
         try
         {
-            // Index the workspace for RAG context
-            if (!string.IsNullOrEmpty(workflow.WorkspacePath))
-            {
-                var indexOptions = new RagIndexOptions
-                {
-                    IncludePatterns = ["*.cs", "*.md", "*.json", "*.csproj"],
-                    ExcludePatterns = ["**/bin/**", "**/obj/**", "**/node_modules/**"],
-                    Recursive = true,
-                };
-                await _ragService.IndexDirectoryAsync(workflow.WorkspacePath, indexOptions, ct);
-            }
+            // TODO: RAG indexing is slow - move to background job for production
+            // For now, skip RAG indexing to keep the silver thread responsive
+            // if (!string.IsNullOrEmpty(workflow.WorkspacePath))
+            // {
+            //     var indexOptions = new RagIndexOptions
+            //     {
+            //         IncludePatterns = ["*.cs", "*.md", "*.json", "*.csproj"],
+            //         ExcludePatterns = ["**/bin/**", "**/obj/**", "**/node_modules/**"],
+            //         Recursive = true,
+            //     };
+            //     await _ragService.IndexDirectoryAsync(workflow.WorkspacePath, indexOptions, ct);
+            // }
 
             // Get the issue-digester agent
             var digester = _agentRegistry.GetBestForCapability("digestion");

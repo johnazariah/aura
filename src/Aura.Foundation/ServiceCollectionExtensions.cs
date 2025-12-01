@@ -118,7 +118,7 @@ public static class ServiceCollectionExtensions
             var ollamaSection = configuration.GetSection(OllamaOptions.SectionName);
             var baseUrl = ollamaSection["BaseUrl"] ?? "http://localhost:11434";
             client.BaseAddress = new Uri(baseUrl);
-            client.Timeout = TimeSpan.FromSeconds(300);
+            client.Timeout = Timeout.InfiniteTimeSpan; // No timeout on HttpClient, let resilience handle it
         });
 
         // Stub provider for testing/fallback
