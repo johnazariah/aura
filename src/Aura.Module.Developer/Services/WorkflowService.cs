@@ -388,22 +388,70 @@ public sealed class WorkflowService : IWorkflowService
         try
         {
             // Build the step execution prompt
-            var prompt = $"""
-                Execute this development step:
+            var promptBuilder = new System.Text.StringBuilder();
+            promptBuilder.AppendLine("Execute this development step:");
+            promptBuilder.AppendLine();
+            promptBuilder.AppendLine("## Step");
+            promptBuilder.AppendLine($"Name: {step.Name}");
+            promptBuilder.AppendLine($"Description: {step.Description ?? "No additional description."}");
+            promptBuilder.AppendLine();
+            promptBuilder.AppendLine("## Workflow Context");
+            promptBuilder.AppendLine($"Issue: {workflow.WorkItemTitle}");
 
-                ## Step
-                Name: {step.Name}
-                Description: {step.Description ?? "No additional description."}
+            // For review capability, include outputs from previous coding steps
+            if (step.Capability == "review")
+            {
+                var codingSteps = workflow.Steps
+                    .Where(s => s.Capability == "coding" && s.Status == StepStatus.Completed && s.Output is not null)
+                    .OrderBy(s => s.Order)
+                    .ToList();
 
-                ## Workflow Context
-                Issue: {workflow.WorkItemTitle}
-                {(workflow.DigestedContext is not null ? $"Analysis: {workflow.DigestedContext}" : "")}
+                if (codingSteps.Count > 0)
+                {
+                    promptBuilder.AppendLine();
+                    promptBuilder.AppendLine("## Code to Review");
+                    foreach (var codingStep in codingSteps)
+                    {
+                        try
+                        {
+                            var stepOutput = JsonSerializer.Deserialize<JsonElement>(codingStep.Output!);
+                            if (stepOutput.TryGetProperty("content", out var content))
+                            {
+                                promptBuilder.AppendLine($"### {codingStep.Name}");
+                                promptBuilder.AppendLine(content.GetString());
+                                promptBuilder.AppendLine();
+                            }
+                        }
+                        catch
+                        {
+                            // Skip malformed output
+                        }
+                    }
+                }
+            }
+            else if (workflow.DigestedContext is not null)
+            {
+                // For non-review steps, include the digested analysis
+                try
+                {
+                    var digest = JsonSerializer.Deserialize<JsonElement>(workflow.DigestedContext);
+                    if (digest.TryGetProperty("analysis", out var analysis))
+                    {
+                        promptBuilder.AppendLine($"Analysis: {analysis.GetString()}");
+                    }
+                }
+                catch
+                {
+                    promptBuilder.AppendLine($"Analysis: {workflow.DigestedContext}");
+                }
+            }
 
-                ## Instructions
-                Complete this step. If generating code, output the complete file contents.
-                If modifying existing files, show the complete updated file.
-                """;
+            promptBuilder.AppendLine();
+            promptBuilder.AppendLine("## Instructions");
+            promptBuilder.AppendLine("Complete this step. If generating code, output the complete file contents.");
+            promptBuilder.AppendLine("If modifying existing files, show the complete updated file.");
 
+            var prompt = promptBuilder.ToString();
             var context = new AgentContext(prompt, WorkspacePath: workflow.WorkspacePath);
             var output = await agent.ExecuteAsync(context, ct);
 
@@ -539,8 +587,24 @@ public sealed class WorkflowService : IWorkflowService
     {
         var workflow = await _db.Workflows
             .Include(w => w.Issue)
+            .Include(w => w.Steps)
             .FirstOrDefaultAsync(w => w.Id == workflowId, ct)
             ?? throw new InvalidOperationException($"Workflow {workflowId} not found");
+
+        // Validate all steps are in a terminal state
+        var runningSteps = workflow.Steps.Where(s => s.Status == StepStatus.Running).ToList();
+        if (runningSteps.Count > 0)
+        {
+            var stepNames = string.Join(", ", runningSteps.Select(s => s.Name));
+            throw new InvalidOperationException($"Cannot complete workflow: {runningSteps.Count} step(s) still running: {stepNames}");
+        }
+
+        var pendingSteps = workflow.Steps.Where(s => s.Status == StepStatus.Pending).ToList();
+        if (pendingSteps.Count > 0)
+        {
+            var stepNames = string.Join(", ", pendingSteps.Select(s => s.Name));
+            throw new InvalidOperationException($"Cannot complete workflow: {pendingSteps.Count} step(s) still pending: {stepNames}");
+        }
 
         workflow.Status = WorkflowStatus.Completed;
         workflow.CompletedAt = DateTimeOffset.UtcNow;
