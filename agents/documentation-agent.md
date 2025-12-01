@@ -6,7 +6,7 @@ Writes and updates READMEs, CHANGELOGs, and API documentation.
 
 - **Priority**: 50
 - **Provider**: ollama
-- **Model**: llama3.2:3b
+- **Model**: llama3:8b
 
 ## Capabilities
 
