@@ -5,9 +5,14 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <RootNamespace>Aura.Module.Developer</RootNamespace>
+    <!-- Allow vulnerable transitive dependencies for now - MSBuild tooling issue -->
+    <NoWarn>$(NoWarn);NU1903</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.Build.Locator" Version="1.9.*" />
+    <PackageReference Include="Microsoft.CodeAnalysis.Workspaces.MSBuild" Version="4.14.*" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.14.*" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.0-*" />
   </ItemGroup>
 
