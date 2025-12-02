@@ -48,6 +48,9 @@ public sealed class DeveloperModule : IAuraModule
         // Register Roslyn workspace service (singleton for caching)
         services.AddSingleton<IRoslynWorkspaceService, RoslynWorkspaceService>();
 
+        // Register Code Graph indexer (for Graph RAG)
+        services.AddScoped<ICodeGraphIndexer, CodeGraphIndexer>();
+
         // Register Roslyn tools
         services.AddSingleton<ListProjectsTool>();
         services.AddSingleton<ListClassesTool>();
@@ -63,6 +66,12 @@ public sealed class DeveloperModule : IAuraModule
 
         // Register dotnet tools
         services.AddSingleton<RunTestsTool>();
+
+        // Register Graph RAG tools (need scoped due to DbContext dependency)
+        services.AddScoped<IndexCodeGraphTool>();
+        services.AddScoped<FindImplementationsTool>();
+        services.AddScoped<FindCallersTool>();
+        services.AddScoped<GetTypeMembersTool>();
     }
 
     /// <inheritdoc/>
@@ -114,5 +123,18 @@ public sealed class DeveloperModule : IAuraModule
         // Dotnet tools
         var runTests = services.GetRequiredService<RunTestsTool>();
         toolRegistry.RegisterTool<RunTestsInput, RunTestsOutput>(runTests);
+
+        // Graph RAG tools (code graph queries)
+        var indexCodeGraph = services.GetRequiredService<IndexCodeGraphTool>();
+        toolRegistry.RegisterTool<IndexCodeGraphInput, IndexCodeGraphOutput>(indexCodeGraph);
+
+        var findImplementations = services.GetRequiredService<FindImplementationsTool>();
+        toolRegistry.RegisterTool<FindImplementationsInput, FindImplementationsOutput>(findImplementations);
+
+        var findCallers = services.GetRequiredService<FindCallersTool>();
+        toolRegistry.RegisterTool<FindCallersInput, FindCallersOutput>(findCallers);
+
+        var getTypeMembers = services.GetRequiredService<GetTypeMembersTool>();
+        toolRegistry.RegisterTool<GetTypeMembersInput, GetTypeMembersOutput>(getTypeMembers);
     }
 }

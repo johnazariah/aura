@@ -158,8 +158,11 @@ public static class ServiceCollectionExtensions
         // Content ingestors for smart file processing
         services.AddSingleton<Rag.Ingestors.IIngestorRegistry, Rag.Ingestors.IngestorRegistry>();
 
-        // RAG service
+        // RAG service (vector-based)
         services.AddScoped<IRagService, RagService>();
+
+        // Code Graph service (graph-based RAG for structural queries)
+        services.AddScoped<ICodeGraphService, CodeGraphService>();
 
         // RAG-enriched executor
         services.AddScoped<IRagEnrichedExecutor, RagEnrichedExecutor>();

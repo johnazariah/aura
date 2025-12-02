@@ -820,6 +820,270 @@ app.MapDelete("/api/rag", async (IRagService ragService, CancellationToken cance
 });
 
 
+// ==== Graph RAG Endpoints ====
+
+// Index a solution/project into the code graph
+app.MapPost("/api/graph/index", async (
+    IndexCodeGraphRequest request,
+    IServiceScopeFactory scopeFactory,
+    CancellationToken ct) =>
+{
+    try
+    {
+        using var scope = scopeFactory.CreateScope();
+        var indexer = scope.ServiceProvider.GetRequiredService<Aura.Module.Developer.Services.ICodeGraphIndexer>();
+
+        Aura.Module.Developer.Services.CodeGraphIndexResult result;
+        if (request.Reindex)
+        {
+            result = await indexer.ReindexAsync(request.SolutionPath, request.WorkspacePath, ct);
+        }
+        else
+        {
+            result = await indexer.IndexAsync(request.SolutionPath, request.WorkspacePath, ct);
+        }
+
+        if (!result.Success)
+        {
+            return Results.BadRequest(new
+            {
+                success = false,
+                error = result.ErrorMessage
+            });
+        }
+
+        return Results.Ok(new
+        {
+            success = true,
+            nodesCreated = result.NodesCreated,
+            edgesCreated = result.EdgesCreated,
+            projectsIndexed = result.ProjectsIndexed,
+            filesIndexed = result.FilesIndexed,
+            typesIndexed = result.TypesIndexed,
+            durationMs = (int)result.Duration.TotalMilliseconds,
+            warnings = result.Warnings
+        });
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new
+        {
+            success = false,
+            error = ex.Message
+        });
+    }
+});
+
+// Find implementations of an interface
+app.MapGet("/api/graph/implementations/{interfaceName}", async (
+    string interfaceName,
+    string? workspacePath,
+    Aura.Foundation.Rag.ICodeGraphService graphService,
+    CancellationToken ct) =>
+{
+    try
+    {
+        var implementations = await graphService.FindImplementationsAsync(
+            Uri.UnescapeDataString(interfaceName),
+            workspacePath,
+            ct);
+
+        return Results.Ok(new
+        {
+            interfaceName = interfaceName,
+            count = implementations.Count,
+            implementations = implementations.Select(n => new
+            {
+                name = n.Name,
+                fullName = n.FullName,
+                filePath = n.FilePath,
+                lineNumber = n.LineNumber
+            })
+        });
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+});
+
+// Find callers of a method
+app.MapGet("/api/graph/callers/{methodName}", async (
+    string methodName,
+    string? containingType,
+    string? workspacePath,
+    Aura.Foundation.Rag.ICodeGraphService graphService,
+    CancellationToken ct) =>
+{
+    try
+    {
+        var callers = await graphService.FindCallersAsync(
+            Uri.UnescapeDataString(methodName),
+            containingType,
+            workspacePath,
+            ct);
+
+        return Results.Ok(new
+        {
+            methodName = methodName,
+            containingType = containingType,
+            count = callers.Count,
+            callers = callers.Select(n => new
+            {
+                name = n.Name,
+                fullName = n.FullName,
+                signature = n.Signature,
+                filePath = n.FilePath,
+                lineNumber = n.LineNumber
+            })
+        });
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+});
+
+// Get members of a type
+app.MapGet("/api/graph/members/{typeName}", async (
+    string typeName,
+    string? workspacePath,
+    Aura.Foundation.Rag.ICodeGraphService graphService,
+    CancellationToken ct) =>
+{
+    try
+    {
+        var members = await graphService.GetTypeMembersAsync(
+            Uri.UnescapeDataString(typeName),
+            workspacePath,
+            ct);
+
+        return Results.Ok(new
+        {
+            typeName = typeName,
+            count = members.Count,
+            members = members.Select(n => new
+            {
+                name = n.Name,
+                fullName = n.FullName,
+                nodeType = n.NodeType.ToString(),
+                signature = n.Signature,
+                modifiers = n.Modifiers,
+                filePath = n.FilePath,
+                lineNumber = n.LineNumber
+            })
+        });
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+});
+
+// Find types in a namespace
+app.MapGet("/api/graph/namespace/{namespaceName}", async (
+    string namespaceName,
+    string? workspacePath,
+    Aura.Foundation.Rag.ICodeGraphService graphService,
+    CancellationToken ct) =>
+{
+    try
+    {
+        var types = await graphService.GetTypesInNamespaceAsync(
+            Uri.UnescapeDataString(namespaceName),
+            workspacePath,
+            ct);
+
+        return Results.Ok(new
+        {
+            namespaceName = namespaceName,
+            count = types.Count,
+            types = types.Select(n => new
+            {
+                name = n.Name,
+                fullName = n.FullName,
+                nodeType = n.NodeType.ToString(),
+                filePath = n.FilePath,
+                lineNumber = n.LineNumber
+            })
+        });
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+});
+
+// Find nodes by name
+app.MapGet("/api/graph/find/{name}", async (
+    string name,
+    string? nodeType,
+    string? workspacePath,
+    Aura.Foundation.Rag.ICodeGraphService graphService,
+    CancellationToken ct) =>
+{
+    try
+    {
+        Aura.Foundation.Data.Entities.CodeNodeType? parsedNodeType = null;
+        if (!string.IsNullOrEmpty(nodeType) &&
+            Enum.TryParse<Aura.Foundation.Data.Entities.CodeNodeType>(nodeType, true, out var parsed))
+        {
+            parsedNodeType = parsed;
+        }
+
+        var nodes = await graphService.FindNodesAsync(
+            Uri.UnescapeDataString(name),
+            parsedNodeType,
+            workspacePath,
+            ct);
+
+        return Results.Ok(new
+        {
+            name = name,
+            nodeType = nodeType,
+            count = nodes.Count,
+            nodes = nodes.Select(n => new
+            {
+                id = n.Id,
+                name = n.Name,
+                fullName = n.FullName,
+                nodeType = n.NodeType.ToString(),
+                filePath = n.FilePath,
+                lineNumber = n.LineNumber,
+                signature = n.Signature,
+                modifiers = n.Modifiers
+            })
+        });
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+});
+
+// Clear graph for a workspace
+app.MapDelete("/api/graph/{workspacePath}", async (
+    string workspacePath,
+    Aura.Foundation.Rag.ICodeGraphService graphService,
+    CancellationToken ct) =>
+{
+    try
+    {
+        await graphService.ClearWorkspaceGraphAsync(Uri.UnescapeDataString(workspacePath), ct);
+
+        return Results.Ok(new
+        {
+            success = true,
+            message = $"Graph cleared for workspace: {workspacePath}"
+        });
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+});
+
+
 // ==== Tool Endpoints ====
 
 // List all tools
@@ -1453,6 +1717,12 @@ record RagQueryRequest(
     int? TopK = null,
     double? MinScore = null,
     string? SourcePathPrefix = null);
+
+// Graph RAG request models
+record IndexCodeGraphRequest(
+    string SolutionPath,
+    string WorkspacePath,
+    bool Reindex = false);
 
 // Make Program accessible for WebApplicationFactory
 

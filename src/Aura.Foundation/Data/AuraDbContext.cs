@@ -48,6 +48,12 @@ public class AuraDbContext : DbContext
     /// <summary>Gets the RAG chunks for vector search.</summary>
     public DbSet<RagChunk> RagChunks => Set<RagChunk>();
 
+    /// <summary>Gets the code nodes for graph RAG.</summary>
+    public DbSet<CodeNode> CodeNodes => Set<CodeNode>();
+
+    /// <summary>Gets the code edges for graph RAG.</summary>
+    public DbSet<CodeEdge> CodeEdges => Set<CodeEdge>();
+
     /// <inheritdoc/>
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -171,6 +177,59 @@ public class AuraDbContext : DbContext
 
             entity.HasIndex(e => e.ContentId);
             entity.HasIndex(e => new { e.ContentId, e.ChunkIndex }).IsUnique();
+        });
+
+        // CodeNode configuration for graph RAG
+        modelBuilder.Entity<CodeNode>(entity =>
+        {
+            entity.ToTable("code_nodes");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id").HasDefaultValueSql("gen_random_uuid()");
+            entity.Property(e => e.NodeType).HasColumnName("node_type").HasConversion<string>().HasMaxLength(50).IsRequired();
+            entity.Property(e => e.Name).HasColumnName("name").HasMaxLength(500).IsRequired();
+            entity.Property(e => e.FullName).HasColumnName("full_name").HasMaxLength(2000);
+            entity.Property(e => e.FilePath).HasColumnName("file_path").HasMaxLength(1000);
+            entity.Property(e => e.LineNumber).HasColumnName("line_number");
+            entity.Property(e => e.Signature).HasColumnName("signature").HasMaxLength(2000);
+            entity.Property(e => e.Modifiers).HasColumnName("modifiers").HasMaxLength(200);
+            entity.Property(e => e.WorkspacePath).HasColumnName("workspace_path").HasMaxLength(1000);
+            entity.Property(e => e.PropertiesJson).HasColumnName("properties").HasColumnType("jsonb");
+            entity.Property(e => e.Embedding).HasColumnName("embedding").HasColumnType("vector(768)");
+            entity.Property(e => e.IndexedAt).HasColumnName("indexed_at");
+
+            entity.HasIndex(e => e.NodeType);
+            entity.HasIndex(e => e.Name);
+            entity.HasIndex(e => e.FullName);
+            entity.HasIndex(e => e.WorkspacePath);
+            entity.HasIndex(e => new { e.WorkspacePath, e.NodeType });
+        });
+
+        // CodeEdge configuration for graph RAG
+        modelBuilder.Entity<CodeEdge>(entity =>
+        {
+            entity.ToTable("code_edges");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id").HasDefaultValueSql("gen_random_uuid()");
+            entity.Property(e => e.EdgeType).HasColumnName("edge_type").HasConversion<string>().HasMaxLength(50).IsRequired();
+            entity.Property(e => e.SourceId).HasColumnName("source_id");
+            entity.Property(e => e.TargetId).HasColumnName("target_id");
+            entity.Property(e => e.PropertiesJson).HasColumnName("properties").HasColumnType("jsonb");
+
+            entity.HasOne(e => e.Source)
+                .WithMany(n => n.OutgoingEdges)
+                .HasForeignKey(e => e.SourceId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.Target)
+                .WithMany(n => n.IncomingEdges)
+                .HasForeignKey(e => e.TargetId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(e => e.SourceId);
+            entity.HasIndex(e => e.TargetId);
+            entity.HasIndex(e => e.EdgeType);
+            entity.HasIndex(e => new { e.SourceId, e.EdgeType });
+            entity.HasIndex(e => new { e.TargetId, e.EdgeType });
         });
     }
 }
