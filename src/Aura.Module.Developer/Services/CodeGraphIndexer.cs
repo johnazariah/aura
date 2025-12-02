@@ -104,8 +104,17 @@ public class CodeGraphIndexer : ICodeGraphIndexer
             // Create cross-project edges (project references)
             edgeCount += await CreateProjectReferenceEdgesAsync(solution, nodesBySymbol, cancellationToken);
 
-            // Save all changes
-            await _graphService.SaveChangesAsync(cancellationToken);
+            // Save all changes - nodes first, then edges for FK constraints
+            _logger.LogInformation("Saving {NodeCount} nodes and {EdgeCount} edges to database", nodeCount, edgeCount);
+            try
+            {
+                await _graphService.SaveChangesAsync(cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to save graph changes: {Message}", ex.InnerException?.Message ?? ex.Message);
+                throw;
+            }
 
             stopwatch.Stop();
             _logger.LogInformation(
