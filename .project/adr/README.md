@@ -15,6 +15,12 @@ This directory contains the architecture decision records for the Aura project.
 | [ADR-007](007-provider-registry-pattern.md) | LLM Provider Registry Pattern | Accepted | 2025-11-26 |
 | [ADR-008](008-local-rag-foundation.md) | Local RAG as Foundation Component | Accepted | 2025-11-27 |
 | [ADR-009](009-lessons-from-previous-attempts.md) | Lessons Learned from Previous Attempts | Accepted | 2025-11-27 |
+| [ADR-010](010-no-external-agent-registration.md) | No External Agent Registration | Accepted | 2025-11-27 |
+| [ADR-011](011-two-tier-capability-model.md) | Two-Tier Capability Model | Accepted | 2025-11-27 |
+| [ADR-012](012-tool-using-agents.md) | Tool-Using Agents with ReAct Loop | Accepted | 2025-12-02 |
+| [ADR-013](013-strongly-typed-agent-contracts.md) | Strongly-Typed Agent Contracts | Accepted | 2025-12-02 |
+| [ADR-014](014-developer-module-roslyn-tools.md) | Developer Module Roslyn Tools | Accepted | 2025-12-02 |
+| [ADR-015](015-graph-rag-for-code.md) | Graph RAG for Code Understanding | Accepted | 2025-12-02 |
 
 ## ADR Template
 
