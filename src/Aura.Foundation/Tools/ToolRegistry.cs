@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Text;
 using Microsoft.Extensions.Logging;
 
 namespace Aura.Foundation.Tools;
@@ -37,16 +38,16 @@ public class ToolRegistry : IToolRegistry
         }
 
         var stopwatch = Stopwatch.StartNew();
-        
+
         try
         {
             _logger.LogDebug("Executing tool {ToolId}", input.ToolId);
             var result = await tool.Handler(input, ct);
             stopwatch.Stop();
-            
-            _logger.LogDebug("Tool {ToolId} completed in {Duration}ms, success={Success}", 
+
+            _logger.LogDebug("Tool {ToolId} completed in {Duration}ms, success={Success}",
                 input.ToolId, stopwatch.ElapsedMilliseconds, result.Success);
-            
+
             return result with { Duration = stopwatch.Elapsed };
         }
         catch (OperationCanceledException)
@@ -76,6 +77,46 @@ public class ToolRegistry : IToolRegistry
         }
     }
 
+    public void RegisterTool<TInput, TOutput>(ITool<TInput, TOutput> tool)
+        where TInput : class
+        where TOutput : class
+    {
+        // Convert typed tool to ToolDefinition
+        if (tool is TypedToolBase<TInput, TOutput> typedTool)
+        {
+            RegisterTool(typedTool.ToToolDefinition());
+        }
+        else
+        {
+            // Manual conversion for non-base implementations
+            var definition = new ToolDefinition
+            {
+                ToolId = tool.ToolId,
+                Name = tool.Name,
+                Description = tool.Description,
+                Categories = tool.Categories,
+                RequiresConfirmation = tool.RequiresConfirmation,
+                Handler = async (input, ct) =>
+                {
+                    // Deserialize to typed input
+                    var json = System.Text.Json.JsonSerializer.Serialize(input.Parameters);
+                    var typedInput = System.Text.Json.JsonSerializer.Deserialize<TInput>(json,
+                        new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+                    if (typedInput is null)
+                    {
+                        return ToolResult.Fail($"Failed to deserialize input to {typeof(TInput).Name}");
+                    }
+
+                    var result = await tool.ExecuteAsync(typedInput, ct);
+                    return result.ToUntyped();
+                }
+            };
+
+            RegisterTool(definition);
+        }
+    }
+
     public bool UnregisterTool(string toolId)
     {
         var removed = _tools.TryRemove(toolId, out _);
@@ -87,4 +128,28 @@ public class ToolRegistry : IToolRegistry
     }
 
     public bool HasTool(string toolId) => _tools.ContainsKey(toolId);
+
+    public string GetToolDescriptionsForPrompt()
+    {
+        var sb = new StringBuilder();
+
+        foreach (var tool in _tools.Values.OrderBy(t => t.ToolId))
+        {
+            sb.AppendLine($"- **{tool.ToolId}**: {tool.Description}");
+
+            if (tool.InputSchema is not null)
+            {
+                sb.AppendLine($"  Input schema: {tool.InputSchema}");
+            }
+
+            if (tool.Categories.Count > 0)
+            {
+                sb.AppendLine($"  Categories: {string.Join(", ", tool.Categories)}");
+            }
+
+            sb.AppendLine();
+        }
+
+        return sb.ToString();
+    }
 }

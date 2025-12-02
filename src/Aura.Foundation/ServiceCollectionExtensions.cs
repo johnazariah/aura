@@ -92,13 +92,14 @@ public static class ServiceCollectionExtensions
     {
         services.AddSingleton<IToolRegistry, ToolRegistry>();
 
+        // ReAct executor for tool-using agents
+        services.AddSingleton<IReActExecutor, ReActExecutor>();
+
         // Register built-in tools after all services are built
         services.AddHostedService<ToolRegistryInitializer>();
-        
-        return services;
-    }
 
-    /// <summary>
+        return services;
+    }    /// <summary>
     /// Adds LLM provider services.
     /// </summary>
     /// <param name="services">The service collection.</param>
