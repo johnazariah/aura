@@ -146,7 +146,7 @@ namespace Aura.Foundation.Data.Migrations
                         .HasDefaultValueSql("gen_random_uuid()")
                         .HasColumnName("id");
 
-                    b.Property<float[]>("Embedding")
+                    b.Property<Pgvector.Vector>("Embedding")
                         .HasColumnType("vector(768)")
                         .HasColumnName("embedding");
 

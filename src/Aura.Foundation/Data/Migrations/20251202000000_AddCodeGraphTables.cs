@@ -25,7 +25,7 @@ namespace Aura.Foundation.Data.Migrations
                     modifiers = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true),
                     workspace_path = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true),
                     properties = table.Column<string>(type: "jsonb", nullable: true),
-                    embedding = table.Column<float[]>(type: "vector(768)", nullable: true),
+                    embedding = table.Column<Pgvector.Vector>(type: "vector(768)", nullable: true),
                     indexed_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
