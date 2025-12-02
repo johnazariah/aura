@@ -17,6 +17,11 @@ using Microsoft.Extensions.Logging;
 /// </summary>
 public class CodeGraphIndexer : ICodeGraphIndexer
 {
+    private const int MaxNameLength = 500;
+    private const int MaxFullNameLength = 2000;
+    private const int MaxSignatureLength = 2000;
+    private const int MaxFilePathLength = 1000;
+
     private readonly IRoslynWorkspaceService _roslynWorkspace;
     private readonly ICodeGraphService _graphService;
     private readonly ILogger<CodeGraphIndexer> _logger;
@@ -327,7 +332,7 @@ public class CodeGraphIndexer : ICodeGraphIndexer
                 Id = Guid.NewGuid(),
                 NodeType = CodeNodeType.Enum,
                 Name = symbol.Name,
-                FullName = symbol.ToDisplayString(),
+                FullName = Truncate(symbol.ToDisplayString(), MaxFullNameLength),
                 FilePath = document.FilePath,
                 LineNumber = enumDecl.GetLocation().GetLineSpan().StartLinePosition.Line + 1,
                 Modifiers = GetModifiers(enumDecl.Modifiers),
@@ -383,7 +388,7 @@ public class CodeGraphIndexer : ICodeGraphIndexer
             Id = Guid.NewGuid(),
             NodeType = nodeType,
             Name = symbol.Name,
-            FullName = symbol.ToDisplayString(),
+            FullName = Truncate(symbol.ToDisplayString(), MaxFullNameLength),
             FilePath = typeDecl.SyntaxTree.FilePath,
             LineNumber = typeDecl.GetLocation().GetLineSpan().StartLinePosition.Line + 1,
             Modifiers = GetModifiers(typeDecl.Modifiers),
@@ -414,7 +419,7 @@ public class CodeGraphIndexer : ICodeGraphIndexer
                     Id = Guid.NewGuid(),
                     NodeType = CodeNodeType.Namespace,
                     Name = symbol.ContainingNamespace.Name,
-                    FullName = symbol.ContainingNamespace.ToDisplayString(),
+                    FullName = Truncate(symbol.ContainingNamespace.ToDisplayString(), MaxFullNameLength),
                     WorkspacePath = workspacePath,
                 }, cancellationToken);
                 nodeCount++;
@@ -524,10 +529,10 @@ public class CodeGraphIndexer : ICodeGraphIndexer
             Id = Guid.NewGuid(),
             NodeType = nodeType,
             Name = member.Name,
-            FullName = member.ToDisplayString(),
+            FullName = Truncate(member.ToDisplayString(), MaxFullNameLength),
             FilePath = filePath,
             LineNumber = lineNumber,
-            Signature = signature,
+            Signature = Truncate(signature, MaxSignatureLength),
             Modifiers = string.Join(" ", modifiers),
             WorkspacePath = workspacePath,
         }, cancellationToken);
@@ -614,8 +619,8 @@ public class CodeGraphIndexer : ICodeGraphIndexer
                         Id = Guid.NewGuid(),
                         NodeType = CodeNodeType.Method,
                         Name = calledMethod.Name,
-                        FullName = calledMethod.ToDisplayString(),
-                        Signature = calledMethod.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat),
+                        FullName = Truncate(calledMethod.ToDisplayString(), MaxFullNameLength),
+                        Signature = Truncate(calledMethod.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat), MaxSignatureLength),
                         WorkspacePath = workspacePath,
                     }, cancellationToken);
                     nodesBySymbol[calleeKey] = calleeNode;
@@ -692,7 +697,7 @@ public class CodeGraphIndexer : ICodeGraphIndexer
                 Id = Guid.NewGuid(),
                 NodeType = CodeNodeType.Class,
                 Name = baseType.Name,
-                FullName = baseType.ToDisplayString(),
+                FullName = Truncate(baseType.ToDisplayString(), MaxFullNameLength),
                 WorkspacePath = workspacePath,
             }, cancellationToken);
             nodesBySymbol[baseKey] = baseNode;
@@ -726,7 +731,7 @@ public class CodeGraphIndexer : ICodeGraphIndexer
                 Id = Guid.NewGuid(),
                 NodeType = CodeNodeType.Interface,
                 Name = interfaceType.Name,
-                FullName = interfaceType.ToDisplayString(),
+                FullName = Truncate(interfaceType.ToDisplayString(), MaxFullNameLength),
                 WorkspacePath = workspacePath,
             }, cancellationToken);
             nodesBySymbol[ifaceKey] = ifaceNode;
@@ -788,4 +793,15 @@ public class CodeGraphIndexer : ICodeGraphIndexer
     {
         return string.Join(" ", modifiers.Select(m => m.Text));
     }
+
+    private static string? Truncate(string? value, int maxLength)
+    {
+        if (value == null || value.Length <= maxLength)
+        {
+            return value;
+        }
+
+        return value[..(maxLength - 3)] + "...";
+    }
 }
+
