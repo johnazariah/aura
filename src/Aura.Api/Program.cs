@@ -96,6 +96,11 @@ using (var scope = app.Services.CreateScope())
         logger.LogError(ex, "Failed to apply database migrations");
         throw;
     }
+
+    // Register Developer Module tools with the tool registry
+    var toolRegistry = scope.ServiceProvider.GetRequiredService<Aura.Foundation.Tools.IToolRegistry>();
+    developerModule.RegisterTools(toolRegistry, scope.ServiceProvider);
+    logger.LogInformation("Registered {Count} Developer Module tools", toolRegistry.GetAllTools().Count);
 }
 
 // Map Aspire default endpoints (health, alive)
@@ -870,6 +875,97 @@ app.MapPost("/api/tools/{toolId}/execute", async (
     });
 });
 
+// Execute a ReAct-based task with tools
+app.MapPost("/api/tools/react", async (
+    ReActExecuteRequest request,
+    Aura.Foundation.Tools.IToolRegistry toolRegistry,
+    Aura.Foundation.Tools.IReActExecutor reactExecutor,
+    Aura.Foundation.Llm.ILlmProviderRegistry llmRegistry,
+    ILogger<Program> logger,
+    CancellationToken ct) =>
+{
+    logger.LogInformation("ReAct execution starting: {Task}", request.Task);
+
+    // Get the LLM provider
+    var llm = llmRegistry.GetProvider(request.Provider ?? "ollama");
+    if (llm is null)
+    {
+        return Results.BadRequest(new
+        {
+            success = false,
+            error = $"LLM provider '{request.Provider ?? "ollama"}' not found"
+        });
+    }
+
+    // Get available tools
+    var tools = request.ToolIds is not null && request.ToolIds.Count > 0
+        ? toolRegistry.GetAllTools().Where(t => request.ToolIds.Contains(t.ToolId)).ToList()
+        : toolRegistry.GetAllTools();
+
+    if (tools.Count == 0)
+    {
+        return Results.BadRequest(new
+        {
+            success = false,
+            error = "No tools available for execution"
+        });
+    }
+
+    var options = new Aura.Foundation.Tools.ReActOptions
+    {
+        MaxSteps = request.MaxSteps ?? 10,
+        Model = request.Model ?? "qwen2.5-coder:7b",
+        Temperature = request.Temperature ?? 0.2,
+        WorkingDirectory = request.WorkingDirectory,
+        AdditionalContext = request.Context,
+        RequireConfirmation = false, // API mode doesn't support confirmation
+    };
+
+    try
+    {
+        var result = await reactExecutor.ExecuteAsync(
+            request.Task,
+            tools,
+            llm,
+            options,
+            ct);
+
+        return Results.Ok(new
+        {
+            success = result.Success,
+            finalAnswer = result.FinalAnswer,
+            error = result.Error,
+            totalSteps = result.Steps.Count,
+            totalTokensUsed = result.TotalTokensUsed,
+            durationMs = result.TotalDuration.TotalMilliseconds,
+            steps = result.Steps.Select(s => new
+            {
+                stepNumber = s.StepNumber,
+                thought = s.Thought,
+                action = s.Action,
+                actionInput = s.ActionInput,
+                observation = s.Observation.Length > 2000 
+                    ? s.Observation[..2000] + "... (truncated)"
+                    : s.Observation,
+                durationMs = s.Duration.TotalMilliseconds
+            })
+        });
+    }
+    catch (OperationCanceledException)
+    {
+        return Results.StatusCode(499); // Client Closed Request
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "ReAct execution failed for task: {Task}", request.Task);
+        return Results.BadRequest(new
+        {
+            success = false,
+            error = ex.Message
+        });
+    }
+});
+
 // ==== Git Endpoints ====
 
 // Get git status
@@ -1364,6 +1460,16 @@ record RagQueryRequest(
 record ExecuteToolRequest(
     string? WorkingDirectory = null,
     Dictionary<string, object?>? Parameters = null);
+
+record ReActExecuteRequest(
+    string Task,
+    string? WorkingDirectory = null,
+    string? Provider = null,
+    string? Model = null,
+    double? Temperature = null,
+    int? MaxSteps = null,
+    string? Context = null,
+    IReadOnlyList<string>? ToolIds = null);
 
 // Git request models
 record CreateBranchRequest(

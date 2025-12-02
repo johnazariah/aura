@@ -53,6 +53,8 @@ public sealed class DeveloperModule : IAuraModule
         services.AddSingleton<ListClassesTool>();
         services.AddSingleton<GetClassInfoTool>();
         services.AddSingleton<ValidateCompilationTool>();
+        services.AddSingleton<FindUsagesTool>();
+        services.AddSingleton<GetProjectReferencesTool>();
 
         // Register file tools
         services.AddSingleton<ReadFileTool>();
@@ -92,6 +94,12 @@ public sealed class DeveloperModule : IAuraModule
 
         var validateCompilation = services.GetRequiredService<ValidateCompilationTool>();
         toolRegistry.RegisterTool<ValidateCompilationInput, ValidateCompilationOutput>(validateCompilation);
+
+        var findUsages = services.GetRequiredService<FindUsagesTool>();
+        toolRegistry.RegisterTool<FindUsagesInput, FindUsagesOutput>(findUsages);
+
+        var getProjectReferences = services.GetRequiredService<GetProjectReferencesTool>();
+        toolRegistry.RegisterTool<GetProjectReferencesInput, GetProjectReferencesOutput>(getProjectReferences);
 
         // File tools
         var readFile = services.GetRequiredService<ReadFileTool>();
