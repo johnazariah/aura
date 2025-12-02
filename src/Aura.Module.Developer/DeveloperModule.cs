@@ -6,8 +6,10 @@ namespace Aura.Module.Developer;
 
 using Aura.Foundation.Agents;
 using Aura.Foundation.Modules;
+using Aura.Foundation.Tools;
 using Aura.Module.Developer.Data;
 using Aura.Module.Developer.Services;
+using Aura.Module.Developer.Tools;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -42,6 +44,23 @@ public sealed class DeveloperModule : IAuraModule
 
         // Register Developer Module services
         services.AddScoped<IWorkflowService, WorkflowService>();
+
+        // Register Roslyn workspace service (singleton for caching)
+        services.AddSingleton<IRoslynWorkspaceService, RoslynWorkspaceService>();
+
+        // Register Roslyn tools
+        services.AddSingleton<ListProjectsTool>();
+        services.AddSingleton<ListClassesTool>();
+        services.AddSingleton<GetClassInfoTool>();
+        services.AddSingleton<ValidateCompilationTool>();
+
+        // Register file tools
+        services.AddSingleton<ReadFileTool>();
+        services.AddSingleton<WriteFileTool>();
+        services.AddSingleton<ModifyFileTool>();
+
+        // Register dotnet tools
+        services.AddSingleton<RunTestsTool>();
     }
 
     /// <inheritdoc/>
@@ -53,5 +72,39 @@ public sealed class DeveloperModule : IAuraModule
 
         // TODO: Load agents from directory when file-based agent loading is implemented
         // registry.LoadAgentsFromDirectory(agentsPath);
+    }
+
+    /// <summary>
+    /// Registers Developer Module tools with the tool registry.
+    /// Called by the API when the module is loaded.
+    /// </summary>
+    public void RegisterTools(IToolRegistry toolRegistry, IServiceProvider services)
+    {
+        // Roslyn tools (code analysis)
+        var listProjects = services.GetRequiredService<ListProjectsTool>();
+        toolRegistry.RegisterTool<ListProjectsInput, ListProjectsOutput>(listProjects);
+
+        var listClasses = services.GetRequiredService<ListClassesTool>();
+        toolRegistry.RegisterTool<ListClassesInput, ListClassesOutput>(listClasses);
+
+        var getClassInfo = services.GetRequiredService<GetClassInfoTool>();
+        toolRegistry.RegisterTool<GetClassInfoInput, GetClassInfoOutput>(getClassInfo);
+
+        var validateCompilation = services.GetRequiredService<ValidateCompilationTool>();
+        toolRegistry.RegisterTool<ValidateCompilationInput, ValidateCompilationOutput>(validateCompilation);
+
+        // File tools
+        var readFile = services.GetRequiredService<ReadFileTool>();
+        toolRegistry.RegisterTool<ReadFileInput, ReadFileOutput>(readFile);
+
+        var writeFile = services.GetRequiredService<WriteFileTool>();
+        toolRegistry.RegisterTool<WriteFileInput, WriteFileOutput>(writeFile);
+
+        var modifyFile = services.GetRequiredService<ModifyFileTool>();
+        toolRegistry.RegisterTool<ModifyFileInput, ModifyFileOutput>(modifyFile);
+
+        // Dotnet tools
+        var runTests = services.GetRequiredService<RunTestsTool>();
+        toolRegistry.RegisterTool<RunTestsInput, RunTestsOutput>(runTests);
     }
 }
