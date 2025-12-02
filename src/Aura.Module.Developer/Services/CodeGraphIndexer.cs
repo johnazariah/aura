@@ -580,9 +580,14 @@ public class CodeGraphIndexer : ICodeGraphIndexer
         var invocations = syntax.DescendantNodes().OfType<InvocationExpressionSyntax>();
         foreach (var invocation in invocations)
         {
-            var symbolInfo = semanticModel.GetSymbolInfo(invocation);
-            if (symbolInfo.Symbol is IMethodSymbol calledMethod)
+            try
             {
+                var symbolInfo = semanticModel.GetSymbolInfo(invocation);
+                if (symbolInfo.Symbol is not IMethodSymbol calledMethod)
+                {
+                    continue;
+                }
+
                 var calleeKey = $"member:{calledMethod.ToDisplayString()}";
 
                 // Only create edge once per unique call target
@@ -616,6 +621,10 @@ public class CodeGraphIndexer : ICodeGraphIndexer
                 }, cancellationToken);
                 edgeCount++;
             }
+            catch (ArgumentException)
+            {
+                // Syntax node not in current tree - skip this invocation
+            }
         }
 
         // Find type usages (object creations, type references)
@@ -624,26 +633,33 @@ public class CodeGraphIndexer : ICodeGraphIndexer
 
         foreach (var creation in objectCreations)
         {
-            var typeInfo = semanticModel.GetTypeInfo(creation);
-            if (typeInfo.Type is INamedTypeSymbol createdType)
+            try
             {
-                var typeKey = $"type:{createdType.ToDisplayString()}";
-                if (!processedTypes.Add(typeKey))
+                var typeInfo = semanticModel.GetTypeInfo(creation);
+                if (typeInfo.Type is INamedTypeSymbol createdType)
                 {
-                    continue;
-                }
-
-                if (nodesBySymbol.TryGetValue(typeKey, out var typeNode))
-                {
-                    await _graphService.AddEdgeAsync(new CodeEdge
+                    var typeKey = $"type:{createdType.ToDisplayString()}";
+                    if (!processedTypes.Add(typeKey))
                     {
-                        Id = Guid.NewGuid(),
-                        EdgeType = CodeEdgeType.Uses,
-                        SourceId = memberNode.Id,
-                        TargetId = typeNode.Id,
-                    }, cancellationToken);
-                    edgeCount++;
+                        continue;
+                    }
+
+                    if (nodesBySymbol.TryGetValue(typeKey, out var typeNode))
+                    {
+                        await _graphService.AddEdgeAsync(new CodeEdge
+                        {
+                            Id = Guid.NewGuid(),
+                            EdgeType = CodeEdgeType.Uses,
+                            SourceId = memberNode.Id,
+                            TargetId = typeNode.Id,
+                        }, cancellationToken);
+                        edgeCount++;
+                    }
                 }
+            }
+            catch (ArgumentException)
+            {
+                // Syntax node not in current tree - skip
             }
         }
 
