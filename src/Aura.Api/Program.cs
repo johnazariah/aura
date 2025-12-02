@@ -1316,7 +1316,8 @@ app.MapPost("/api/developer/workflows/{id:guid}/chat", async (
                 name = s.Name,
                 capability = s.Capability
             }),
-            stepsRemoved = response.StepsRemoved
+            stepsRemoved = response.StepsRemoved,
+            analysisUpdated = response.AnalysisUpdated
         });
     }
     catch (InvalidOperationException ex)

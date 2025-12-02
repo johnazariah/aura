@@ -89,6 +89,9 @@ public sealed class WorkflowService : IWorkflowService
                 workflow.WorkspacePath = worktreeResult.Value.Path;
                 _logger.LogInformation("Created worktree at {Path} for workflow {WorkflowId}",
                     workflow.WorkspacePath, workflow.Id);
+                
+                // Index the worktree for RAG
+                await IndexWorktreeForRagAsync(workflow.WorkspacePath, ct);
             }
             else
             {
@@ -198,7 +201,16 @@ public sealed class WorkflowService : IWorkflowService
                 workspacePath = workflow.WorkspacePath ?? workflow.RepositoryPath ?? "Not specified",
             });
 
-            var context = new AgentContext(prompt, WorkspacePath: workflow.WorkspacePath);
+            // Query RAG for relevant code context
+            var ragContext = await GetRagContextAsync(
+                $"{workflow.Title} {workflow.Description}",
+                workflow.WorkspacePath ?? workflow.RepositoryPath,
+                ct);
+
+            var context = new AgentContext(prompt, WorkspacePath: workflow.WorkspacePath)
+            {
+                RagContext = ragContext,
+            };
             var output = await analyzer.ExecuteAsync(context, ct);
 
             workflow.AnalyzedContext = JsonSerializer.Serialize(new
@@ -632,32 +644,10 @@ public sealed class WorkflowService : IWorkflowService
             ? string.Join("\n", workflow.Steps.Select(s => $"- Step {s.Order}: {s.Name} ({s.Capability}) - {s.Status}"))
             : "No steps defined yet.";
 
-        var prompt = $"""
-            You are helping with a development workflow. The user wants to modify or discuss the plan.
-
-            ## Current Workflow
-            Title: {workflow.Title}
-            Status: {workflow.Status}
-
-            ## Current Steps
-            {stepsDescription}
-
-            ## User Message
-            {message}
-
-            ## Instructions
-            If the user wants to add a step, respond with:
-            ACTION: ADD_STEP
-            NAME: [step name]
-            CAPABILITY: [coding|testing|review|documentation|fixing]
-            DESCRIPTION: [what the step should do]
-
-            If the user wants to remove a step, respond with:
-            ACTION: REMOVE_STEP
-            STEP_NUMBER: [number]
-
-            Otherwise, just respond naturally to their question.
-            """;
+        // Different prompts based on workflow status
+        var prompt = workflow.Status == WorkflowStatus.Analyzed
+            ? BuildAnalyzedStatePrompt(workflow, message, stepsDescription)
+            : BuildPlanningStatePrompt(workflow, message, stepsDescription);
 
         var context = new AgentContext(prompt, WorkspacePath: workflow.WorkspacePath);
         var output = await chatAgent.ExecuteAsync(context, ct);
@@ -665,12 +655,32 @@ public sealed class WorkflowService : IWorkflowService
         var response = new WorkflowChatResponse { Response = output.Content };
         var stepsAdded = new List<WorkflowStep>();
         var stepsRemoved = new List<Guid>();
+        var analysisUpdated = false;
 
         // Parse any actions from the response
-        if (output.Content.Contains("ACTION: ADD_STEP"))
+        if (output.Content.Contains("ACTION: REANALYZE"))
+        {
+            // User wants to re-analyze with additional context
+            var additionalContext = ParseReanalyzeAction(output.Content);
+            if (!string.IsNullOrEmpty(additionalContext))
+            {
+                // Append the additional context to the workflow description
+                workflow.Description = $"{workflow.Description}\n\nAdditional context: {additionalContext}";
+                await _db.SaveChangesAsync(ct);
+                
+                // Re-run analysis
+                await AnalyzeAsync(workflowId, ct);
+                analysisUpdated = true;
+            }
+        }
+        else if (output.Content.Contains("ACTION: ADD_STEP"))
         {
             var parsed = ParseAddStepAction(output.Content);
-            if (parsed is not null)
+            // Validate that we got real values, not placeholder text
+            if (parsed is not null && 
+                !parsed.Value.Name.Contains("[") && 
+                !parsed.Value.Capability.Contains("[") &&
+                IsValidCapability(parsed.Value.Capability))
             {
                 var newStep = await AddStepAsync(workflowId, parsed.Value.Name, parsed.Value.Capability, parsed.Value.Description, ct: ct);
                 stepsAdded.Add(newStep);
@@ -695,6 +705,7 @@ public sealed class WorkflowService : IWorkflowService
             PlanModified = stepsAdded.Count > 0 || stepsRemoved.Count > 0,
             StepsAdded = stepsAdded,
             StepsRemoved = stepsRemoved,
+            AnalysisUpdated = analysisUpdated,
         };
     }
 
@@ -788,6 +799,197 @@ public sealed class WorkflowService : IWorkflowService
                     {
                         return number;
                     }
+                }
+            }
+        }
+        catch
+        {
+            // Ignore parsing errors
+        }
+
+        return null;
+    }
+
+    private static string BuildAnalyzedStatePrompt(Workflow workflow, string message, string stepsDescription)
+    {
+        return $"""
+            You are helping refine the analysis of a development workflow. The workflow has been analyzed but the user wants to provide more context or clarification before creating the plan.
+
+            ## Current Workflow
+            Title: {workflow.Title}
+            Description: {workflow.Description}
+            Status: {workflow.Status}
+            
+            ## Current Analysis Summary
+            {ExtractAnalysisSummary(workflow.AnalyzedContext)}
+
+            ## User Message
+            {message}
+
+            ## Your Task
+            The user is providing ADDITIONAL CONTEXT to improve the analysis. You must respond with:
+
+            ACTION: REANALYZE
+            CONTEXT: [Write a 1-2 sentence summary of the new context/requirements the user provided]
+
+            Example response:
+            ACTION: REANALYZE
+            CONTEXT: User clarified that JWT tokens should include refresh tokens and the implementation should focus on API endpoints only, not UI.
+
+            IMPORTANT: 
+            - Do NOT suggest adding steps or use ACTION: ADD_STEP - that comes later after "Create Plan"
+            - Do NOT include placeholder text like [step name] 
+            - Always respond with ACTION: REANALYZE when the user provides clarification
+            - The CONTEXT should summarize what the user said, not repeat instructions
+            """;
+    }
+
+    private static string BuildPlanningStatePrompt(Workflow workflow, string message, string stepsDescription)
+    {
+        return $"""
+            You are helping with a development workflow. The user wants to modify or discuss the plan.
+
+            ## Current Workflow
+            Title: {workflow.Title}
+            Status: {workflow.Status}
+
+            ## Current Steps
+            {stepsDescription}
+
+            ## User Message
+            {message}
+
+            ## Instructions
+            If the user wants to add a step, respond with:
+            ACTION: ADD_STEP
+            NAME: [step name]
+            CAPABILITY: [coding|testing|review|documentation|fixing]
+            DESCRIPTION: [what the step should do]
+
+            If the user wants to remove a step, respond with:
+            ACTION: REMOVE_STEP
+            STEP_NUMBER: [number]
+
+            Otherwise, just respond naturally to their question.
+            """;
+    }
+
+    private async Task IndexWorktreeForRagAsync(string workspacePath, CancellationToken ct)
+    {
+        try
+        {
+            _logger.LogInformation("Indexing worktree {Path} for RAG...", workspacePath);
+            
+            var options = new RagIndexOptions
+            {
+                IncludePatterns = new[] { "*.cs", "*.md", "*.json", "*.yaml", "*.yml", "*.ts", "*.tsx", "*.js", "*.jsx" },
+                ExcludePatterns = new[] { "**/bin/**", "**/obj/**", "**/node_modules/**", "**/.git/**" },
+                Recursive = true,
+            };
+
+            var indexedCount = await _ragService.IndexDirectoryAsync(workspacePath, options, ct);
+            
+            _logger.LogInformation(
+                "Indexed {Count} files from {Path} for RAG",
+                indexedCount,
+                workspacePath);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to index worktree for RAG, continuing without indexing");
+        }
+    }
+
+    private async Task<string?> GetRagContextAsync(
+        string query,
+        string? workspacePath,
+        CancellationToken ct)
+    {
+        try
+        {
+            var options = new RagQueryOptions
+            {
+                TopK = 5,
+                MinScore = 0.3,
+                SourcePathPrefix = workspacePath,
+            };
+
+            var results = await _ragService.QueryAsync(query, options, ct);
+            
+            if (results.Count == 0)
+            {
+                _logger.LogDebug("No RAG results found for query: {Query}", query);
+                return null;
+            }
+
+            _logger.LogInformation(
+                "Found {Count} RAG results for query, scores: {Scores}",
+                results.Count,
+                string.Join(", ", results.Select(r => r.Score.ToString("F2"))));
+
+            var sb = new System.Text.StringBuilder();
+            foreach (var result in results)
+            {
+                sb.AppendLine("---");
+                if (!string.IsNullOrEmpty(result.SourcePath))
+                {
+                    sb.AppendLine($"Source: {result.SourcePath}");
+                }
+                sb.AppendLine($"Relevance: {result.Score:P0}");
+                sb.AppendLine();
+                sb.AppendLine(result.Text);
+                sb.AppendLine();
+            }
+
+            return sb.ToString();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "RAG query failed, proceeding without context");
+            return null;
+        }
+    }
+
+    private static bool IsValidCapability(string capability)
+    {
+        var validCapabilities = new[] { "coding", "testing", "review", "documentation", "fixing" };
+        return validCapabilities.Contains(capability.ToLowerInvariant().Trim());
+    }
+
+    private static string ExtractAnalysisSummary(string? analyzedContext)
+    {
+        if (string.IsNullOrEmpty(analyzedContext))
+            return "No analysis available yet.";
+
+        try
+        {
+            // Try to parse as JSON and extract the analysis field
+            using var doc = System.Text.Json.JsonDocument.Parse(analyzedContext);
+            if (doc.RootElement.TryGetProperty("analysis", out var analysis))
+            {
+                var text = analysis.GetString() ?? "";
+                // Return first 500 chars to keep prompt reasonable
+                return text.Length > 500 ? text[..500] + "..." : text;
+            }
+        }
+        catch
+        {
+            // Not JSON, return as-is but truncated
+        }
+
+        return analyzedContext.Length > 500 ? analyzedContext[..500] + "..." : analyzedContext;
+    }
+
+    private static string? ParseReanalyzeAction(string response)
+    {
+        try
+        {
+            var lines = response.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+            foreach (var line in lines)
+            {
+                if (line.StartsWith("CONTEXT:", StringComparison.OrdinalIgnoreCase))
+                {
+                    return line["CONTEXT:".Length..].Trim();
                 }
             }
         }

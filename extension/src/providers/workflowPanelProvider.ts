@@ -61,7 +61,8 @@ export class WorkflowPanelProvider {
 
         try {
             const workflow = await this.apiService.getWorkflow(workflowId);
-            panel.webview.postMessage({ type: 'refresh', workflow });
+            // Re-render the entire HTML to update the panel
+            panel.webview.html = this.getHtml(workflow, panel.webview);
         } catch (error) {
             console.error('Failed to refresh workflow panel:', error);
         }
@@ -89,6 +90,9 @@ export class WorkflowPanelProvider {
                 break;
             case 'refresh':
                 await this.refreshPanel(workflowId);
+                break;
+            case 'openWorkspace':
+                await this.handleOpenWorkspace(message.workspacePath, message.gitBranch);
                 break;
         }
     }
@@ -134,9 +138,10 @@ export class WorkflowPanelProvider {
             panel.webview.postMessage({
                 type: 'chatResponse',
                 response: response.response,
-                planModified: response.planModified
+                planModified: response.planModified,
+                analysisUpdated: response.analysisUpdated
             });
-            if (response.planModified) {
+            if (response.planModified || response.analysisUpdated) {
                 await this.refreshPanel(workflowId);
             }
         } catch (error) {
@@ -167,6 +172,44 @@ export class WorkflowPanelProvider {
             } catch (error) {
                 vscode.window.showErrorMessage('Failed to cancel workflow');
             }
+        }
+    }
+
+    private async handleOpenWorkspace(workspacePath: string, gitBranch: string): Promise<void> {
+        if (!workspacePath) {
+            vscode.window.showErrorMessage('No workspace path available for this workflow');
+            return;
+        }
+
+        const uri = vscode.Uri.file(workspacePath);
+        
+        // Check if the folder exists
+        try {
+            await vscode.workspace.fs.stat(uri);
+        } catch {
+            vscode.window.showErrorMessage(`Workspace folder not found: ${workspacePath}`);
+            return;
+        }
+
+        // Open the folder - this adds it to the workspace
+        const choice = await vscode.window.showInformationMessage(
+            `Open workspace for branch "${gitBranch}"?`,
+            { modal: false },
+            'Add to Workspace',
+            'Open in New Window'
+        );
+
+        if (choice === 'Add to Workspace') {
+            // Add folder to current workspace
+            vscode.workspace.updateWorkspaceFolders(
+                vscode.workspace.workspaceFolders?.length || 0,
+                0,
+                { uri, name: `🔧 ${gitBranch}` }
+            );
+            vscode.window.showInformationMessage(`Added ${gitBranch} to workspace`);
+        } else if (choice === 'Open in New Window') {
+            // Open in a new VS Code window
+            await vscode.commands.executeCommand('vscode.openFolder', uri, true);
         }
     }
 
@@ -403,6 +446,32 @@ export class WorkflowPanelProvider {
             font-weight: 600;
             margin-bottom: 8px;
         }
+        .analysis-content {
+            font-size: 0.9em;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .analysis-text {
+            color: var(--vscode-foreground);
+            line-height: 1.6;
+        }
+        .analysis-text h4 {
+            margin: 16px 0 8px 0;
+            color: var(--vscode-foreground);
+            font-size: 1em;
+            border-bottom: 1px solid var(--vscode-panel-border);
+            padding-bottom: 4px;
+        }
+        .analysis-text ul {
+            margin: 8px 0;
+            padding-left: 20px;
+        }
+        .analysis-text li {
+            margin: 4px 0;
+        }
+        .analysis-text p {
+            margin: 8px 0;
+        }
 
         .original-request {
             margin-top: 24px;
@@ -435,6 +504,31 @@ export class WorkflowPanelProvider {
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
+        .loading-overlay {
+            display: none;
+            padding: 16px;
+            background: var(--vscode-editor-background);
+            border: 1px solid var(--vscode-badge-background);
+            border-radius: 4px;
+            margin-top: 8px;
+        }
+        .loading-overlay.active {
+            display: block;
+        }
+        .loading-content {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            color: var(--vscode-foreground);
+        }
+        .loading-content .spinner {
+            width: 20px;
+            height: 20px;
+        }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
 
         .action-bar {
             display: flex;
@@ -460,11 +554,17 @@ export class WorkflowPanelProvider {
     <div class="action-bar" id="actionBar">
         ${this.getActionButtons(workflow)}
     </div>
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="loading-content">
+            <div class="spinner"></div>
+            <span id="loadingText">Processing...</span>
+        </div>
+    </div>
 
     <div class="chat-section">
         <div class="chat-input-container">
-            <input type="text" class="chat-input" id="chatInput" 
-                   placeholder="Chat to modify the plan... (e.g., 'Add a step for logging')"
+            <input type="text" class="chat-input" id="chatInput"
+                   placeholder="${this.getChatPlaceholder(workflow)}"
                    ${workflow.status === 'Completed' || workflow.status === 'Cancelled' ? 'disabled' : ''}>
             <button class="btn btn-primary" id="chatSend" onclick="sendChat()"
                     ${workflow.status === 'Completed' || workflow.status === 'Cancelled' ? 'disabled' : ''}>
@@ -486,8 +586,8 @@ export class WorkflowPanelProvider {
     ${workflow.analyzedContext ? `
     <div class="phase-section completed">
         <div class="phase-title">✓ Analyzed</div>
-        <div style="font-size: 0.9em; color: var(--vscode-descriptionForeground);">
-            Context extracted and indexed
+        <div class="analysis-content">
+            ${this.formatAnalyzedContext(workflow.analyzedContext)}
         </div>
     </div>
     ` : ''}
@@ -515,28 +615,66 @@ export class WorkflowPanelProvider {
             if (e.key === 'Enter') sendChat();
         });
 
+        function setLoading(action, isLoading, stepId = null) {
+            const actionBar = document.getElementById('actionBar');
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            const loadingText = document.getElementById('loadingText');
+            
+            if (isLoading) {
+                // Disable all buttons
+                actionBar.querySelectorAll('button').forEach(btn => btn.disabled = true);
+                // Show loading overlay with appropriate message
+                const messages = {
+                    'analyze': '🔍 Analyzing workflow...',
+                    'plan': '📋 Creating plan...',
+                    'execute': '▶ Executing step...',
+                    'complete': '✓ Completing workflow...',
+                    'cancel': '🛑 Cancelling...'
+                };
+                loadingText.textContent = messages[action] || 'Processing...';
+                loadingOverlay.classList.add('active');
+            } else {
+                loadingOverlay.classList.remove('active');
+                // Re-enable buttons (they'll be refreshed anyway)
+                actionBar.querySelectorAll('button').forEach(btn => btn.disabled = false);
+            }
+        }
+
         function executeStep(stepId) {
+            setLoading('execute', true, stepId);
             vscode.postMessage({ type: 'executeStep', stepId });
         }
 
         function analyze() {
+            setLoading('analyze', true);
             vscode.postMessage({ type: 'analyze' });
         }
 
         function plan() {
+            setLoading('plan', true);
             vscode.postMessage({ type: 'plan' });
         }
 
         function complete() {
+            setLoading('complete', true);
             vscode.postMessage({ type: 'complete' });
         }
 
         function cancel() {
+            setLoading('cancel', true);
             vscode.postMessage({ type: 'cancel' });
         }
 
         function refresh() {
             vscode.postMessage({ type: 'refresh' });
+        }
+
+        function openWorkspace() {
+            vscode.postMessage({ 
+                type: 'openWorkspace', 
+                workspacePath: workflow.workspacePath,
+                gitBranch: workflow.gitBranch
+            });
         }
 
         function toggleOutput(stepId) {
@@ -563,7 +701,9 @@ export class WorkflowPanelProvider {
                     const responseDiv = document.getElementById('chatResponse');
                     responseDiv.textContent = message.response;
                     responseDiv.style.display = 'block';
-                    if (message.planModified) {
+                    if (message.analysisUpdated) {
+                        responseDiv.innerHTML += '<br><br><em>✨ Analysis updated with new context. Refreshing...</em>';
+                    } else if (message.planModified) {
                         responseDiv.innerHTML += '<br><br><em>Plan was modified. Refreshing...</em>';
                     }
                     break;
@@ -573,11 +713,19 @@ export class WorkflowPanelProvider {
                     document.getElementById('chatResponse').style.display = 'block';
                     break;
                 case 'loading':
-                    // Show loading state for buttons
+                    setLoading(message.action, true, message.stepId);
+                    break;
+                case 'loadingDone':
+                    setLoading(null, false);
                     break;
                 case 'success':
+                    setLoading(null, false);
+                    // Show brief success then refresh
+                    setTimeout(() => vscode.postMessage({ type: 'refresh' }), 500);
+                    break;
                 case 'error':
-                    // Handle success/error
+                    setLoading(null, false);
+                    alert('Error: ' + message.message);
                     break;
             }
         });
@@ -650,6 +798,20 @@ export class WorkflowPanelProvider {
         }).join('');
     }
 
+    private getChatPlaceholder(workflow: Workflow): string {
+        switch (workflow.status) {
+            case 'Created':
+                return 'Chat about the workflow before analysis...';
+            case 'Analyzed':
+                return 'Add context to refine analysis, or proceed to Create Plan...';
+            case 'Planned':
+            case 'Executing':
+                return 'Modify the plan... (e.g., "Add a step for logging")';
+            default:
+                return 'Workflow is complete';
+        }
+    }
+
     private getActionButtons(workflow: Workflow): string {
         const buttons: string[] = [];
 
@@ -676,6 +838,9 @@ export class WorkflowPanelProvider {
                 break;
         }
 
+        if (workflow.workspacePath) {
+            buttons.push('<button class="btn btn-secondary" onclick="openWorkspace()">📂 Open Workspace</button>');
+        }
         buttons.push('<button class="btn btn-secondary" onclick="refresh()">🔄 Refresh</button>');
 
         return buttons.join('');
@@ -688,5 +853,28 @@ export class WorkflowPanelProvider {
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#039;');
+    }
+
+    private formatAnalyzedContext(analyzedContext: string): string {
+        try {
+            const parsed = JSON.parse(analyzedContext);
+            if (parsed.analysis) {
+                // Convert markdown-style headers and lists to HTML
+                let html = this.escapeHtml(parsed.analysis)
+                    .replace(/\r\n/g, '\n')
+                    .replace(/## (.+)/g, '<h4>$1</h4>')
+                    .replace(/- (.+)/g, '<li>$1</li>')
+                    .replace(/\n\n/g, '</p><p>')
+                    .replace(/\n/g, '<br>');
+                
+                // Wrap lists
+                html = html.replace(/(<li>.*<\/li>)+/g, '<ul>$&</ul>');
+                
+                return `<div class="analysis-text"><p>${html}</p></div>`;
+            }
+            return '<div class="analysis-text">Context extracted and indexed</div>';
+        } catch {
+            return '<div class="analysis-text">Context extracted and indexed</div>';
+        }
     }
 }

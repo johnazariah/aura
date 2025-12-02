@@ -1,0 +1,5 @@
+{
+    "aura.apiUrl": "http://localhost:5300",
+    "aura.ollamaUrl": "http://localhost:11434",
+    "aura.autoRefresh": false
+}

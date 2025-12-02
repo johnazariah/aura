@@ -87,6 +87,7 @@ export interface Workflow {
 export interface WorkflowChatResponse {
     response: string;
     planModified: boolean;
+    analysisUpdated: boolean;
     stepsAdded: { id: string; order: number; name: string; capability: string }[];
     stepsRemoved: string[];
 }

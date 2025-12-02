@@ -39,6 +39,9 @@ export class WorkflowTreeProvider implements vscode.TreeDataProvider<WorkflowTre
 
         try {
             // Get all workflows
+            const baseUrl = this.apiService.getBaseUrl();
+            console.log(`[Aura] Fetching workflows from ${baseUrl}`);
+            
             const workflows = await this.apiService.getWorkflows();
 
             if (workflows.length === 0) {
@@ -54,12 +57,18 @@ export class WorkflowTreeProvider implements vscode.TreeDataProvider<WorkflowTre
                     items.push(item);
                 }
             }
-        } catch {
-            items.push(new WorkflowTreeItem(
+        } catch (error) {
+            const baseUrl = this.apiService.getBaseUrl();
+            console.error(`[Aura] Failed to fetch workflows from ${baseUrl}:`, error);
+            
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            const item = new WorkflowTreeItem(
                 'Unable to connect to Aura API',
                 vscode.TreeItemCollapsibleState.None,
                 'offline'
-            ));
+            );
+            item.tooltip = `Failed to connect to ${baseUrl}\n\nError: ${errorMessage}\n\nCheck that Aura is running and the aura.apiUrl setting is correct.`;
+            items.push(item);
         }
 
         return items;

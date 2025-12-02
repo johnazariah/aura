@@ -1,0 +1,31 @@
+# Source files (we only need compiled output)
+src/**
+*.ts
+!*.d.ts
+
+# Test files
+test/**
+**/*.test.js
+**/ui-test/**
+screenshots/**
+test-settings.json
+tsconfig.test.json
+
+# Development files
+.vscode/**
+.vscode-test/**
+webpack.config.js
+tsconfig.json
+
+# Build artifacts we don't need
+out/**
+*.map
+
+# Node modules we don't need (webpack bundles everything)
+node_modules/**
+
+# Other
+.gitignore
+*.vsix
+.git/**
+**/*.md
