@@ -4,6 +4,8 @@
 
 namespace Aura.Foundation.Data.Entities;
 
+using Pgvector;
+
 /// <summary>
 /// Represents a node in the code graph (solution, project, type, member, etc.).
 /// </summary>
@@ -40,7 +42,7 @@ public class CodeNode
     public string? PropertiesJson { get; init; }
 
     /// <summary>Gets the embedding vector for semantic search.</summary>
-    public float[]? Embedding { get; init; }
+    public Vector? Embedding { get; init; }
 
     /// <summary>Gets when this node was indexed.</summary>
     public DateTimeOffset IndexedAt { get; init; } = DateTimeOffset.UtcNow;
