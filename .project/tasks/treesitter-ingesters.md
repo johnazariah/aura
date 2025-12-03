@@ -1,114 +1,232 @@
 # TreeSitter Ingesters
 
-## Status: Future Work
+## Status: ✅ Phase 1 Complete, 🔄 Phase 2a In Progress
 
 ## Overview
 
-Add TreeSitter-based ingester agents for Python and TypeScript to provide fast, deterministic parsing without LLM overhead.
+TreeSitter-based ingester for 30+ languages is implemented using `TreeSitter.DotNet v1.1.1`. Phase 2a adds semantic enrichment (signatures, parameters, types, decorators).
 
-## Motivation
+## What's Implemented
 
-Currently, Python and TypeScript files use the LLM-based `generic-code-ingester.md` (priority 20). This works but:
-- Slow (~1 file/sec vs ~1000 files/sec for native parsing)
-- Uses inference compute
-- May have occasional parsing errors
+### Phase 1 (Complete)
+- **Package**: `TreeSitter.DotNet v1.1.1` (correct package - `TreeSitter.Bindings` doesn't work)
+- **Agent**: `TreeSitterIngesterAgent.cs` in `Aura.Module.Developer`
+- **Languages**: Python, TypeScript, JavaScript, Go, Rust, Java, C/C++, Ruby, PHP, Swift, Scala, Haskell, OCaml, Julia, Bash, HTML, CSS, JSON, TOML
+- **Not Supported**: F# (no grammar available - falls back to LLM at priority 40)
 
-TreeSitter provides:
-- Fast native parsing
-- Perfect AST accuracy
-- No LLM cost
-- Offline capability
+### Phase 2a (In Progress - Semantic Enrichment)
+- **Extended SemanticChunk** with new fields:
+  - `Signature` - function/method signature line
+  - `Docstring` - full docstring/doc comment
+  - `Summary` - first sentence of docstring
+  - `ReturnType` - return type annotation
+  - `Parameters` - list of `ParameterInfo` (name, type, default, description)
+  - `Decorators` - decorators/attributes
+  - `TypeReferences` - types used in signature
 
-## Scope
+- **Language-specific extractors implemented**:
+  - ✅ Python (signatures, type hints, decorators, docstrings)
+  - ✅ TypeScript (signatures, type annotations, JSDoc)
+  - ✅ JavaScript (signatures, JSDoc)
+  - ✅ Go (signatures, doc comments, parameters)
+  - ✅ Rust (signatures, doc comments, attributes)
+  - ✅ Java (signatures, Javadoc, annotations)
 
-Add to `Aura.Module.Developer`:
-- `PythonIngesterAgent` (priority 10)
-- `TypeScriptIngesterAgent` (priority 10)
+## Current Priority Scheme
 
-## Dependencies
+| Priority | Agent | Parser |
+|----------|-------|--------|
+| 10 | CSharpIngesterAgent | Roslyn (full semantic) |
+| 20 | TreeSitterIngesterAgent | TreeSitter (AST) |
+| 40 | generic-code-ingester | LLM |
+| 70 | TextIngesterAgent | Line-based |
+| 99 | FallbackIngesterAgent | None |
 
-Need to evaluate .NET TreeSitter bindings:
-- [tree-sitter-dotnet](https://github.com/AzureMarker/tree-sitter-dotnet) - Unofficial bindings
-- Native interop via P/Invoke
-- WASM-based TreeSitter (browser-compatible)
+## Gap: Richer Semantic Extraction
 
-## Implementation Approach
+The competition extracts more than just code chunks. We should extract:
+
+### 1. **Signatures and Docstrings** (High Priority)
+Extract function/method signatures separately from bodies:
+```python
+# Current: Just the whole function as one chunk
+# Desired: Extract signature + docstring as searchable metadata
+
+def calculate_total(items: List[Item], tax_rate: float = 0.08) -> Decimal:
+    """Calculate total price including tax.
+    
+    Args:
+        items: List of items to sum
+        tax_rate: Tax rate as decimal (default 8%)
+    
+    Returns:
+        Total price including tax
+    """
+    ...
+```
+
+**Extract**:
+- Signature: `def calculate_total(items: List[Item], tax_rate: float = 0.08) -> Decimal`
+- Parameters: `items: List[Item]`, `tax_rate: float = 0.08`
+- Return type: `Decimal`
+- Docstring: Full docstring text
+- Summary: First line of docstring ("Calculate total price including tax.")
+
+### 2. **Type References** (Medium Priority)
+Extract types used in signatures for relationship edges:
+```typescript
+// Function uses these types:
+function processOrder(order: Order, customer: Customer): Invoice
+```
+**Extract**: References to `Order`, `Customer`, `Invoice`
+
+### 3. **Decorators/Attributes** (Medium Priority)
+```python
+@router.post("/api/orders")
+@requires_auth
+async def create_order(request: OrderRequest) -> OrderResponse:
+```
+**Extract**: `@router.post("/api/orders")`, `@requires_auth`
+
+### 4. **Imports/Dependencies** (Medium Priority)
+```typescript
+import { useState, useEffect } from 'react';
+import { OrderService } from './services/OrderService';
+```
+**Extract**: Module dependencies for dependency graph
+
+### 5. **Comments Near Code** (Low Priority)
+Comments immediately before a function/class are often important:
+```python
+# DEPRECATED: Use new_calculate_total instead
+# TODO: Remove in v2.0
+def calculate_total(items):
+```
+
+## Implementation Plan
+
+### Phase 2a: Enrich Chunk Metadata
+
+Update `SemanticChunk` to include:
+```csharp
+public record SemanticChunk
+{
+    // Existing
+    public string Text { get; init; }
+    public string? SymbolName { get; init; }
+    public string? ChunkType { get; init; }
+    ...
+    
+    // NEW: Richer extraction
+    public string? Signature { get; init; }           // Just the signature line
+    public string? Docstring { get; init; }           // Full docstring/JSDoc/XML doc
+    public string? Summary { get; init; }             // First line/sentence of doc
+    public string? ReturnType { get; init; }          // Return type if available
+    public IReadOnlyList<ParameterInfo>? Parameters { get; init; }
+    public IReadOnlyList<string>? Decorators { get; init; }
+    public IReadOnlyList<string>? TypeReferences { get; init; }  // Types used
+    public IReadOnlyList<string>? PrecedingComments { get; init; }
+}
+
+public record ParameterInfo(
+    string Name,
+    string? Type,
+    string? DefaultValue,
+    string? Description);
+```
+
+### Phase 2b: Language-Specific Extractors
+
+Create extraction helpers for each language family:
 
 ```csharp
-public class PythonIngesterAgent : IAgent
+public interface ISemanticExtractor
 {
-    public string AgentId => "python-ingester";
-    
-    public AgentMetadata Metadata { get; } = new(
-        Name: "Python TreeSitter Ingester",
-        Capabilities: ["ingest:py", "ingest:pyw"],
-        Priority: 10,
-        Provider: "native",
-        Model: "treesitter",
-        // ...
-    );
+    string Language { get; }
+    ChunkEnrichment Extract(Node node, string sourceText);
+}
 
-    public async Task<AgentOutput> ExecuteAsync(AgentContext context, CancellationToken ct)
+public class PythonSemanticExtractor : ISemanticExtractor
+{
+    public string Language => "python";
+    
+    public ChunkEnrichment Extract(Node node, string sourceText)
     {
-        // Parse with TreeSitter
-        // Extract: classes, functions, methods, decorators
-        // Return SemanticChunks
+        // Extract Python-specific: docstrings, type hints, decorators
     }
+}
+
+public class TypeScriptSemanticExtractor : ISemanticExtractor
+{
+    // Extract: JSDoc, type annotations, decorators
 }
 ```
 
-## Chunk Extraction
+### Phase 2c: Import/Dependency Extraction
 
-### Python
-- `class` definitions
-- `def` functions/methods
-- `async def` async functions
-- Decorated functions (@decorator)
-- Module-level assignments (constants)
-- Type aliases
+Add separate pass for imports:
+```csharp
+public record ImportInfo
+{
+    public string ModulePath { get; init; }     // 'react', './services/OrderService'
+    public bool IsRelative { get; init; }       // ./ or ../ prefix
+    public IReadOnlyList<string> Symbols { get; init; }  // Named imports
+    public string? DefaultImport { get; init; } // Default import name
+}
+```
 
-### TypeScript
-- `class` definitions
-- `interface` definitions
-- `type` aliases
-- `function` declarations
-- `const`/`let` arrow functions
-- `export` statements
+## Updated Acceptance Criteria
 
-## Priority
+### Phase 1: ✅ Complete
+- [x] Evaluate TreeSitter .NET bindings → `TreeSitter.DotNet v1.1.1`
+- [x] Create unified `TreeSitterIngesterAgent` for all languages
+- [x] Register in `DeveloperAgentProvider`
+- [x] Delete regex ingesters (Python, TS, Go, Rust, F#)
+- [x] Update priority scheme
 
-| Agent | Priority | Parser |
-|-------|----------|--------|
-| CSharpIngesterAgent | 10 | Roslyn |
-| PythonIngesterAgent | 10 | TreeSitter |
-| TypeScriptIngesterAgent | 10 | TreeSitter |
-| generic-code-ingester | 20 | LLM |
-| text-ingester | 50 | Rule-based |
-| fallback-ingester | 99 | None |
+### Phase 2: Semantic Enrichment
+- [ ] Add `Signature`, `Docstring`, `Summary` to `SemanticChunk`
+- [ ] Extract Python docstrings and type hints
+- [ ] Extract TypeScript/JavaScript JSDoc comments
+- [ ] Extract Go doc comments
+- [ ] Extract Rust doc comments (`///`)
+- [ ] Extract Java Javadoc
+- [ ] Extract decorators/attributes
+- [ ] Add `Parameters` with types and descriptions
+- [ ] Add `TypeReferences` for used types
 
-## Acceptance Criteria
+### Phase 3: Dependency Graph
+- [ ] Extract import statements for each language
+- [ ] Create `Imports` edges in code graph
+- [ ] Enable "find all files that import X" queries
 
-- [ ] Evaluate TreeSitter .NET bindings
-- [ ] Create `PythonIngesterAgent`
-- [ ] Create `TypeScriptIngesterAgent`
-- [ ] Register in `DeveloperAgentProvider`
-- [ ] Add unit tests
-- [ ] Benchmark: files/sec comparison with LLM ingester
+## Benchmarks
 
-## Risks
+Target: Parse 1000 files/second (vs ~1 file/sec for LLM)
 
-- .NET TreeSitter bindings may be immature
-- Native dependencies complicate cross-platform builds
-- Grammar files need maintenance as languages evolve
+Current: Need to measure after Phase 2 additions
 
-## Alternative
+## Related Tasks
 
-If TreeSitter proves problematic, consider:
-- Language Server Protocol (LSP) integration
-- Dedicated language-specific parsers (e.g., Python's `ast` module via IronPython)
-- Stick with LLM-based ingestion (acceptable for background indexing)
+- `gap-01-smart-content.md` - LLM summaries (complementary to docstrings)
+- `gap-03-enrichment.md` - Cross-file relationships (uses TypeReferences)
 
-## Related
+## Reference: Competition Features
 
-- [Spec 22: Ingester Agents](../spec/22-ingester-agents.md)
-- [Spec 23: Hardcoded Agents](../spec/23-hardcoded-agents.md)
+### Cursor
+- Semantic search by function signature
+- "Find functions that return X type"
+- Docstring-aware search
+
+### Cody (Sourcegraph)
+- SCIP-based indexing with full type information
+- Cross-repository references
+- "Find all callers of this function"
+
+### Continue
+- TreeSitter + LLM hybrid
+- Contextual code retrieval
+
+## Notes
+
+The gap isn't TreeSitter vs Regex - it's shallow extraction vs deep semantic extraction. TreeSitter gives us the AST; we need to extract more meaning from it.

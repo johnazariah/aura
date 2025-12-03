@@ -76,4 +76,29 @@ public interface IRagService
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>True if healthy.</returns>
     Task<bool> IsHealthyAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets statistics about indexed content for a specific directory.
+    /// </summary>
+    /// <param name="directoryPath">The directory path to check.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Statistics for the directory, or null if not indexed.</returns>
+    Task<RagDirectoryStats?> GetDirectoryStatsAsync(string directoryPath, CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// Statistics for a specific directory in the RAG index.
+/// </summary>
+/// <param name="DirectoryPath">The directory path.</param>
+/// <param name="ChunkCount">Number of chunks indexed from this directory.</param>
+/// <param name="FileCount">Number of files indexed from this directory.</param>
+/// <param name="LastIndexedAt">When the directory was last indexed.</param>
+public sealed record RagDirectoryStats(
+    string DirectoryPath,
+    int ChunkCount,
+    int FileCount,
+    DateTimeOffset? LastIndexedAt)
+{
+    /// <summary>Gets whether the directory has been indexed.</summary>
+    public bool IsIndexed => ChunkCount > 0;
 }

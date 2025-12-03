@@ -31,9 +31,9 @@ public class TextIngesterAgentTests
     }
 
     [Fact]
-    public void Metadata_ShouldHavePriority50()
+    public void Metadata_ShouldHavePriority70()
     {
-        Assert.Equal(50, _agent.Metadata.Priority);
+        Assert.Equal(70, _agent.Metadata.Priority);
     }
 
     [Fact]

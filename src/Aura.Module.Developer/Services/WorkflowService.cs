@@ -129,13 +129,21 @@ public sealed class WorkflowService : IWorkflowService
     }
 
     /// <inheritdoc/>
-    public async Task<IReadOnlyList<Workflow>> ListAsync(WorkflowStatus? status = null, CancellationToken ct = default)
+    public async Task<IReadOnlyList<Workflow>> ListAsync(WorkflowStatus? status = null, string? repositoryPath = null, CancellationToken ct = default)
     {
         var query = _db.Workflows.AsQueryable();
 
         if (status.HasValue)
         {
             query = query.Where(w => w.Status == status.Value);
+        }
+
+        if (!string.IsNullOrEmpty(repositoryPath))
+        {
+            // Normalize path for comparison (handle trailing slashes, case sensitivity on Windows)
+            var normalizedPath = repositoryPath.TrimEnd('\\', '/').Replace('/', '\\');
+            query = query.Where(w => w.RepositoryPath != null &&
+                w.RepositoryPath.Replace("/", "\\").TrimEnd('\\') == normalizedPath);
         }
 
         return await query

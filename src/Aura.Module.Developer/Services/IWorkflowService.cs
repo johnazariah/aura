@@ -42,12 +42,13 @@ public interface IWorkflowService
     Task<Workflow?> GetByIdWithStepsAsync(Guid id, CancellationToken ct = default);
 
     /// <summary>
-    /// Lists all workflows, optionally filtered by status.
+    /// Lists all workflows, optionally filtered by status and/or repository path.
     /// </summary>
     /// <param name="status">Filter by status (optional).</param>
+    /// <param name="repositoryPath">Filter by repository path (optional).</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>List of workflows.</returns>
-    Task<IReadOnlyList<Workflow>> ListAsync(WorkflowStatus? status = null, CancellationToken ct = default);
+    Task<IReadOnlyList<Workflow>> ListAsync(WorkflowStatus? status = null, string? repositoryPath = null, CancellationToken ct = default);
 
     /// <summary>
     /// Deletes a workflow and all its steps.

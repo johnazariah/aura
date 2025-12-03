@@ -34,7 +34,7 @@ public sealed partial class TextIngesterAgent : IAgent
         Name: "Text Ingester",
         Description: "Chunks text files by paragraphs or markdown headers. Used for documentation and plain text.",
         Capabilities: ["ingest:txt", "ingest:md", "ingest:rst", "ingest:adoc", "ingest:log"],
-        Priority: 50,  // Mid-priority, user can override with lower number
+        Priority: 70,  // Below LLM fallback (40), above apologetic fallback (99)
         Languages: [],
         Provider: "native",
         Model: "none",

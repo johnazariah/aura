@@ -241,6 +241,20 @@ export class AuraApiService {
         return response.data;
     }
 
+    async getDirectoryIndexStatus(directoryPath: string): Promise<{
+        isIndexed: boolean;
+        directoryPath: string;
+        chunkCount: number;
+        fileCount: number;
+        lastIndexedAt: string | null;
+    }> {
+        const response = await this.httpClient.get(
+            `${this.getBaseUrl()}/api/rag/stats/directory`,
+            { params: { path: directoryPath } }
+        );
+        return response.data;
+    }
+
     async clearRagIndex(): Promise<void> {
         await this.httpClient.delete(`${this.getBaseUrl()}/api/rag`);
     }
@@ -284,11 +298,16 @@ export class AuraApiService {
         return response.data;
     }
 
-    async getWorkflows(status?: string): Promise<Workflow[]> {
-        let url = `${this.getBaseUrl()}/api/developer/workflows`;
+    async getWorkflows(status?: string, repositoryPath?: string): Promise<Workflow[]> {
+        const params = new URLSearchParams();
         if (status) {
-            url += `?status=${encodeURIComponent(status)}`;
+            params.append('status', status);
         }
+        if (repositoryPath) {
+            params.append('repositoryPath', repositoryPath);
+        }
+        const queryString = params.toString();
+        const url = `${this.getBaseUrl()}/api/developer/workflows${queryString ? '?' + queryString : ''}`;
         const response = await this.httpClient.get(url);
         return response.data.workflows;
     }

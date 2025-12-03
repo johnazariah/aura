@@ -1,6 +1,28 @@
 # Task: Smart Content (LLM-Generated Summaries)
 
+## Status: Not Started
+
+## Relationship to TreeSitter Extraction
+
+This task is **complementary** to TreeSitter semantic extraction:
+
+| Source | What it extracts | When |
+|--------|-----------------|------|
+| **TreeSitter** | Docstrings, signatures, type hints | At parse time (fast) |
+| **Smart Content** | LLM-generated summaries | Background job (slower) |
+
+For code with good documentation:
+- TreeSitter extracts the existing docstring → immediate, free
+- Smart Content generates summary → async, costs LLM tokens
+
+For code without documentation:
+- TreeSitter extracts nothing for Summary
+- Smart Content fills the gap with LLM-generated summary
+
+**Priority**: Implement TreeSitter docstring extraction first (fast, free), then Smart Content for undocumented code.
+
 ## Overview
+
 Generate concise LLM summaries for every indexed code element (file, class, method). Store both the summary and its embedding for semantic search by intent, not just code similarity.
 
 ## Parent Spec

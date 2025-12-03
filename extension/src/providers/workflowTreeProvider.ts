@@ -41,10 +41,10 @@ export class WorkflowTreeProvider implements vscode.TreeDataProvider<WorkflowTre
             // Get all workflows
             const baseUrl = this.apiService.getBaseUrl();
             console.log(`[Aura] Fetching workflows from ${baseUrl}`);
-            
-            const workflows = await this.apiService.getWorkflows();
 
-            if (workflows.length === 0) {
+            // Filter workflows by current workspace
+            const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+            const workflows = await this.apiService.getWorkflows(undefined, workspacePath);            if (workflows.length === 0) {
                 items.push(new WorkflowTreeItem(
                     'No workflows yet',
                     vscode.TreeItemCollapsibleState.None,

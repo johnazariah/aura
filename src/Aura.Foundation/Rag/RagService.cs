@@ -447,4 +447,39 @@ public sealed class RagService : IRagService
             return null;
         }
     }
+
+    /// <inheritdoc/>
+    public async Task<RagDirectoryStats?> GetDirectoryStatsAsync(string directoryPath, CancellationToken cancellationToken = default)
+    {
+        // Normalize path for comparison
+        var normalizedPath = directoryPath.TrimEnd('\\', '/').Replace('/', '\\');
+
+        // Find chunks where SourcePath starts with the directory path
+        var chunks = await _dbContext.RagChunks
+            .Where(c => c.SourcePath != null &&
+                (c.SourcePath.StartsWith(normalizedPath + "\\") ||
+                 c.SourcePath.StartsWith(normalizedPath + "/") ||
+                 c.SourcePath.Replace("/", "\\").StartsWith(normalizedPath + "\\")))
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        if (chunks.Count == 0)
+        {
+            return null;
+        }
+
+        var fileCount = chunks
+            .Select(c => c.SourcePath)
+            .Distinct()
+            .Count();
+
+        var lastIndexed = chunks
+            .Max(c => c.CreatedAt);
+
+        return new RagDirectoryStats(
+            directoryPath,
+            chunks.Count,
+            fileCount,
+            lastIndexed);
+    }
 }

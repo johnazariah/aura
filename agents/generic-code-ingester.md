@@ -6,7 +6,7 @@ Parses code files using LLM understanding of language structure. Used as a fallb
 
 - **Name**: Generic Code Ingester
 - **Description**: Parses code files using LLM understanding of language structure. Used as a fallback when no native parser is available.
-- **Priority**: 20
+- **Priority**: 40
 - **Provider**: ollama
 - **Model**: qwen2.5-coder:7b
 - **Temperature**: 0.1

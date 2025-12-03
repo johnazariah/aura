@@ -1,6 +1,19 @@
 # Task: Cross-File Relationship Enrichment
 
+## Status: Not Started
+
+## Relationship to TreeSitter Extraction
+
+TreeSitter now extracts `TypeReferences` from function signatures. This task uses those references to:
+
+1. Create `UsesType` edges between methods and types
+2. Build dependency graphs across files
+3. Answer "what code uses this type?" queries
+
+**Prerequisite**: Complete TreeSitter Phase 2 (semantic enrichment) to populate `TypeReferences` field.
+
 ## Overview
+
 Add enrichment phase to extract richer relationships: transitive call chains, type usage across files, and test-to-code mappings.
 
 ## Parent Spec

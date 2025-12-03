@@ -801,6 +801,46 @@ app.MapGet("/api/rag/stats", async (IRagService ragService, CancellationToken ca
     }
 });
 
+// Get directory-specific RAG stats
+app.MapGet("/api/rag/stats/directory", async (
+    string path,
+    IRagService ragService,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var stats = await ragService.GetDirectoryStatsAsync(path, cancellationToken);
+
+        if (stats is null)
+        {
+            return Results.Ok(new
+            {
+                isIndexed = false,
+                directoryPath = path,
+                chunkCount = 0,
+                fileCount = 0,
+                lastIndexedAt = (DateTimeOffset?)null
+            });
+        }
+
+        return Results.Ok(new
+        {
+            isIndexed = stats.IsIndexed,
+            directoryPath = stats.DirectoryPath,
+            chunkCount = stats.ChunkCount,
+            fileCount = stats.FileCount,
+            lastIndexedAt = stats.LastIndexedAt
+        });
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new
+        {
+            error = ex.Message
+        });
+    }
+});
+
 // Remove content from index
 app.MapDelete("/api/rag/{contentId}", async (
     string contentId,
@@ -1583,6 +1623,7 @@ app.MapPost("/api/developer/workflows", async (
 app.MapGet("/api/developer/workflows", async (
     IWorkflowService workflowService,
     string? status,
+    string? repositoryPath,
     CancellationToken ct) =>
 {
     WorkflowStatus? statusFilter = null;
@@ -1591,7 +1632,7 @@ app.MapGet("/api/developer/workflows", async (
         statusFilter = s;
     }
 
-    var workflows = await workflowService.ListAsync(statusFilter, ct);
+    var workflows = await workflowService.ListAsync(statusFilter, repositoryPath, ct);
 
     return Results.Ok(new
     {

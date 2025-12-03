@@ -214,6 +214,14 @@ export class WorkflowPanelProvider {
             background: var(--vscode-button-secondaryBackground);
             color: var(--vscode-button-secondaryForeground);
         }
+        .btn-info {
+            background: #0e639c;
+            color: white;
+            border: 1px solid #1177bb;
+        }
+        .btn-info:hover {
+            background: #1177bb;
+        }
         .loading {
             display: none;
             align-items: center;
@@ -463,7 +471,14 @@ export class WorkflowPanelProvider {
     private async handleMessage(workflowId: string, message: any, panel: vscode.WebviewPanel): Promise<void> {
         switch (message.type) {
             case 'analyze':
-                await this.handleAnalyze(workflowId, panel);
+            case 'enrich':
+                await this.handleEnrich(workflowId, panel);
+                break;
+            case 'indexCodebase':
+                await this.handleIndexCodebase(workflowId, panel);
+                break;
+            case 'indexAndEnrich':
+                await this.handleIndexAndEnrich(workflowId, panel);
                 break;
             case 'plan':
                 await this.handlePlan(workflowId, panel);
@@ -492,14 +507,105 @@ export class WorkflowPanelProvider {
         }
     }
 
-    private async handleAnalyze(workflowId: string, panel: vscode.WebviewPanel): Promise<void> {
-        panel.webview.postMessage({ type: 'loading', action: 'analyze' });
+    private async handleEnrich(workflowId: string, panel: vscode.WebviewPanel): Promise<void> {
         try {
+            // Get workflow to check repository path
+            const workflow = await this.apiService.getWorkflow(workflowId);
+            const repoPath = workflow.repositoryPath || workflow.workspacePath;
+
+            if (!repoPath) {
+                panel.webview.postMessage({ type: 'error', message: 'No repository path associated with this workflow' });
+                return;
+            }
+
+            // Check if codebase is indexed
+            const indexStatus = await this.apiService.getDirectoryIndexStatus(repoPath);
+
+            if (!indexStatus.isIndexed) {
+                // Send message to show confirmation dialog
+                panel.webview.postMessage({
+                    type: 'confirmIndexAndEnrich',
+                    message: 'Codebase not indexed. Index now and enrich?'
+                });
+                return;
+            }
+
+            // Codebase is indexed, proceed with enrichment
+            panel.webview.postMessage({ type: 'loading', action: 'enrich' });
             await this.apiService.analyzeWorkflow(workflowId);
             await this.refreshPanel(workflowId);
-            panel.webview.postMessage({ type: 'success', message: 'Workflow analyzed successfully' });
+            panel.webview.postMessage({ type: 'success', message: 'Workflow enriched successfully' });
         } catch (error) {
-            panel.webview.postMessage({ type: 'error', message: 'Failed to analyze workflow' });
+            const message = error instanceof Error ? error.message : 'Failed to enrich workflow';
+            panel.webview.postMessage({ type: 'error', message });
+        }
+    }
+
+    private async handleIndexCodebase(workflowId: string, panel: vscode.WebviewPanel): Promise<void> {
+        try {
+            const workflow = await this.apiService.getWorkflow(workflowId);
+            const repoPath = workflow.repositoryPath || workflow.workspacePath;
+
+            if (!repoPath) {
+                panel.webview.postMessage({ type: 'error', message: 'No repository path associated with this workflow' });
+                return;
+            }
+
+            panel.webview.postMessage({ type: 'loading', action: 'index' });
+
+            // Use vscode progress for status bar
+            await vscode.window.withProgress(
+                {
+                    location: vscode.ProgressLocation.Notification,
+                    title: 'Indexing codebase...',
+                    cancellable: false
+                },
+                async (progress) => {
+                    progress.report({ message: `Indexing ${repoPath}...` });
+                    await this.apiService.indexDirectory(repoPath);
+                }
+            );
+
+            await this.refreshPanel(workflowId);
+            panel.webview.postMessage({ type: 'success', message: 'Codebase indexed successfully' });
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to index codebase';
+            panel.webview.postMessage({ type: 'error', message });
+        }
+    }
+
+    private async handleIndexAndEnrich(workflowId: string, panel: vscode.WebviewPanel): Promise<void> {
+        try {
+            const workflow = await this.apiService.getWorkflow(workflowId);
+            const repoPath = workflow.repositoryPath || workflow.workspacePath;
+
+            if (!repoPath) {
+                panel.webview.postMessage({ type: 'error', message: 'No repository path associated with this workflow' });
+                return;
+            }
+
+            // First index
+            panel.webview.postMessage({ type: 'loading', action: 'index' });
+            await vscode.window.withProgress(
+                {
+                    location: vscode.ProgressLocation.Notification,
+                    title: 'Indexing codebase...',
+                    cancellable: false
+                },
+                async (progress) => {
+                    progress.report({ message: `Indexing ${repoPath}...` });
+                    await this.apiService.indexDirectory(repoPath);
+                }
+            );
+
+            // Then enrich
+            panel.webview.postMessage({ type: 'loading', action: 'enrich' });
+            await this.apiService.analyzeWorkflow(workflowId);
+            await this.refreshPanel(workflowId);
+            panel.webview.postMessage({ type: 'success', message: 'Codebase indexed and workflow enriched successfully' });
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to index and enrich';
+            panel.webview.postMessage({ type: 'error', message });
         }
     }
 
@@ -864,6 +970,14 @@ export class WorkflowPanelProvider {
             background: var(--vscode-button-secondaryBackground);
             color: var(--vscode-button-secondaryForeground);
         }
+        .btn-info {
+            background: #0e639c;
+            color: white;
+            border: 1px solid #1177bb;
+        }
+        .btn-info:hover {
+            background: #1177bb;
+        }
         .btn-danger {
             background: #d13438;
             color: white;
@@ -1062,7 +1176,8 @@ export class WorkflowPanelProvider {
                 actionBar.querySelectorAll('button').forEach(btn => btn.disabled = true);
                 // Show loading overlay with appropriate message
                 const messages = {
-                    'analyze': '🔍 Analyzing workflow and indexing codebase...',
+                    'enrich': '🔍 Enriching workflow with codebase context...',
+                    'index': '📚 Indexing codebase for RAG...',
                     'plan': '📋 Creating execution plan...',
                     'execute': '▶ Executing step...',
                     'executeAll': '▶▶ Executing all pending steps...',
@@ -1083,9 +1198,19 @@ export class WorkflowPanelProvider {
             vscode.postMessage({ type: 'executeStep', stepId });
         }
 
-        function analyze() {
-            setLoading('analyze', true);
-            vscode.postMessage({ type: 'analyze' });
+        function enrich() {
+            setLoading('enrich', true);
+            vscode.postMessage({ type: 'enrich' });
+        }
+
+        function indexCodebase() {
+            setLoading('index', true);
+            vscode.postMessage({ type: 'indexCodebase' });
+        }
+
+        function indexAndEnrich() {
+            setLoading('index', true);
+            vscode.postMessage({ type: 'indexAndEnrich' });
         }
 
         function plan() {
@@ -1167,6 +1292,12 @@ export class WorkflowPanelProvider {
                 case 'error':
                     setLoading(null, false);
                     alert('Error: ' + message.message);
+                    break;
+                case 'confirmIndexAndEnrich':
+                    setLoading(null, false);
+                    if (confirm(message.message)) {
+                        indexAndEnrich();
+                    }
                     break;
             }
         });
@@ -1260,7 +1391,8 @@ export class WorkflowPanelProvider {
 
         switch (workflow.status) {
             case 'Created':
-                buttons.push('<button class="btn btn-primary" onclick="analyze()">🔍 Analyze</button>');
+                buttons.push('<button class="btn btn-info" onclick="indexCodebase()">📚 Index Codebase</button>');
+                buttons.push('<button class="btn btn-primary" onclick="enrich()">🔍 Enrich Workflow Issue</button>');
                 buttons.push('<button class="btn btn-danger" onclick="cancel()">Cancel</button>');
                 break;
             case 'Analyzed':
