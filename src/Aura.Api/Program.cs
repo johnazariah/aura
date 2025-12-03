@@ -76,8 +76,11 @@ builder.Services.AddCors(options =>
 var app = builder.Build();
 
 // Apply EF Core migrations on startup (required for pgvector)
-using (var scope = app.Services.CreateScope())
+// Skip database operations in Testing environment (unit tests use stubs without a real DB)
+// Integration tests use Testcontainers which handle their own migrations
+if (!app.Environment.IsEnvironment("Testing"))
 {
+    using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<AuraDbContext>();
     var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
     try
@@ -85,7 +88,7 @@ using (var scope = app.Services.CreateScope())
         logger.LogInformation("Applying database migrations...");
         db.Database.Migrate();
         logger.LogInformation("Database migrations applied successfully");
-        
+
         // Ensure Developer module tables exist (they're defined in DeveloperDbContext)
         var developerDb = scope.ServiceProvider.GetRequiredService<DeveloperDbContext>();
         developerDb.Database.EnsureCreated();
@@ -1776,3 +1779,4 @@ record WorkflowChatRequest(
     string Message);
 
 public partial class Program { }
+

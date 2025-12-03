@@ -2,35 +2,36 @@
 // Copyright (c) Aura. All rights reserved.
 // </copyright>
 
-namespace Aura.Api.Tests.Endpoints;
+namespace Aura.Api.IntegrationTests.Endpoints;
 
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Aura.Api.IntegrationTests.Infrastructure;
 using FluentAssertions;
 using Xunit;
 
 /// <summary>
 /// Integration tests for health check endpoints.
 /// </summary>
-public class HealthEndpointTests : IClassFixture<AuraApiFactory>
+[Trait("Category", "Integration")]
+public class HealthEndpointTests : IntegrationTestBase
 {
-    private readonly HttpClient _client;
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = true,
     };
 
     public HealthEndpointTests(AuraApiFactory factory)
+        : base(factory)
     {
-        _client = factory.CreateClient();
     }
 
     [Fact]
     public async Task Health_ReturnsHealthy()
     {
         // Act
-        var response = await _client.GetAsync("/health");
+        var response = await Client.GetAsync("/health");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -45,7 +46,7 @@ public class HealthEndpointTests : IClassFixture<AuraApiFactory>
     public async Task HealthDb_ReturnsDbStatus()
     {
         // Act
-        var response = await _client.GetAsync("/health/db");
+        var response = await Client.GetAsync("/health/db");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
