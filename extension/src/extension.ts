@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { StatusTreeProvider } from './providers/statusTreeProvider';
-import { AgentTreeProvider, AgentItem } from './providers/agentTreeProvider';
+import { AgentTreeProvider, AgentItem, setExtensionPath } from './providers/agentTreeProvider';
 import { ChatWindowProvider } from './providers/chatWindowProvider';
 import { WorkflowTreeProvider } from './providers/workflowTreeProvider';
 import { WorkflowPanelProvider } from './providers/workflowPanelProvider';
@@ -19,6 +19,9 @@ let refreshInterval: NodeJS.Timeout | undefined;
 
 export async function activate(context: vscode.ExtensionContext) {
     console.log('Aura extension activating...');
+
+    // Set extension path for resource loading
+    setExtensionPath(context.extensionPath);
 
     // Initialize services
     auraApiService = new AuraApiService();
@@ -142,6 +145,10 @@ export async function activate(context: vscode.ExtensionContext) {
         await clearRagIndex();
     });
 
+    const showIndexingProgressCommand = vscode.commands.registerCommand('aura.showIndexingProgress', async () => {
+        await showIndexingProgress();
+    });
+
     // Workflow commands
     const createWorkflowCommand = vscode.commands.registerCommand('aura.createWorkflow', async () => {
         await createWorkflow();
@@ -186,6 +193,7 @@ export async function activate(context: vscode.ExtensionContext) {
         indexWorkspaceCommand,
         showRagStatsCommand,
         clearRagIndexCommand,
+        showIndexingProgressCommand,
         createWorkflowCommand,
         openWorkflowCommand,
         executeStepCommand,
@@ -214,51 +222,83 @@ async function indexWorkspace(): Promise<void> {
         return;
     }
 
-    // Let user pick patterns
-    const patterns = await vscode.window.showInputBox({
-        prompt: 'File patterns to index (comma-separated)',
-        value: '*.cs,*.ts,*.md',
-        placeHolder: '*.cs,*.ts,*.py,*.md'
-    });
-
-    if (!patterns) return;
-
-    const includePatterns = patterns.split(',').map(p => p.trim()).filter(p => p.length > 0);
     const workspacePath = workspaceFolders[0].uri.fsPath;
+    const excludePatterns = ['**/node_modules/**', '**/bin/**', '**/obj/**', '**/.git/**'];
 
-    await vscode.window.withProgress(
-        {
-            location: vscode.ProgressLocation.Notification,
-            title: 'Indexing workspace...',
-            cancellable: false
-        },
-        async (progress) => {
-            try {
-                progress.report({ message: 'Scanning files...' });
+    try {
+        // Start background indexing
+        const job = await auraApiService.startBackgroundIndex(
+            workspacePath,
+            true,
+            undefined,
+            excludePatterns
+        );
 
-                const result = await auraApiService.indexDirectory(
-                    workspacePath,
-                    includePatterns,
-                    ['**/node_modules/**', '**/bin/**', '**/obj/**', '**/.git/**'],
-                    true
-                );
+        vscode.window.showInformationMessage(`Indexing started in background (Job: ${job.jobId.slice(0, 8)}...)`);
 
-                if (result.success) {
-                    vscode.window.showInformationMessage(
-                        `✓ Indexed ${result.filesIndexed} files from workspace`
-                    );
-                } else {
-                    vscode.window.showErrorMessage('Indexing failed: ' + result.message);
-                }
+        // Update status bar to show indexing
+        updateIndexingStatusBar(job.jobId);
 
-                // Refresh status to show new RAG stats
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        vscode.window.showErrorMessage(`Failed to start indexing: ${message}`);
+    }
+}
+
+let indexingStatusBarItem: vscode.StatusBarItem | undefined;
+let indexingPollInterval: NodeJS.Timeout | undefined;
+
+function updateIndexingStatusBar(jobId: string): void {
+    // Create or show indexing status bar item
+    if (!indexingStatusBarItem) {
+        indexingStatusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 99);
+    }
+
+    indexingStatusBarItem.text = '$(sync~spin) Indexing...';
+    indexingStatusBarItem.tooltip = 'Background indexing in progress';
+    indexingStatusBarItem.command = 'aura.showIndexingProgress';
+    indexingStatusBarItem.show();
+
+    // Poll for progress
+    indexingPollInterval = setInterval(async () => {
+        try {
+            const status = await auraApiService.getBackgroundJobStatus(jobId);
+            
+            if (status.state === 'Processing') {
+                const percent = status.totalItems > 0 
+                    ? Math.round((status.processedItems / status.totalItems) * 100)
+                    : 0;
+                indexingStatusBarItem!.text = `$(sync~spin) Indexing ${percent}%`;
+                indexingStatusBarItem!.tooltip = `Indexing: ${status.processedItems}/${status.totalItems} files`;
+            } else if (status.state === 'Completed') {
+                clearInterval(indexingPollInterval);
+                indexingPollInterval = undefined;
+                
+                indexingStatusBarItem!.text = '$(check) Indexed';
+                indexingStatusBarItem!.tooltip = `Completed: ${status.processedItems} files indexed`;
+                
+                // Hide after 5 seconds
+                setTimeout(() => {
+                    indexingStatusBarItem?.hide();
+                }, 5000);
+
+                // Refresh status tree
                 statusTreeProvider.refresh();
-            } catch (error) {
-                const message = error instanceof Error ? error.message : 'Unknown error';
-                vscode.window.showErrorMessage(`Failed to index workspace: ${message}`);
+                vscode.window.showInformationMessage(`✓ Indexed ${status.processedItems} files`);
+            } else if (status.state === 'Failed') {
+                clearInterval(indexingPollInterval);
+                indexingPollInterval = undefined;
+                
+                indexingStatusBarItem!.text = '$(error) Index Failed';
+                indexingStatusBarItem!.tooltip = status.error || 'Indexing failed';
+                indexingStatusBarItem!.backgroundColor = new vscode.ThemeColor('statusBarItem.errorBackground');
+                
+                vscode.window.showErrorMessage(`Indexing failed: ${status.error}`);
             }
+        } catch (error) {
+            console.error('Failed to poll indexing status:', error);
         }
-    );
+    }, 1000);
 }
 
 async function showRagStats(): Promise<void> {
@@ -301,6 +341,23 @@ async function clearRagIndex(): Promise<void> {
     } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error';
         vscode.window.showErrorMessage(`Failed to clear RAG index: ${message}`);
+    }
+}
+
+async function showIndexingProgress(): Promise<void> {
+    // Show current indexing status in an info message
+    try {
+        const stats = await auraApiService.getRagStats();
+        vscode.window.showInformationMessage(
+            `RAG Index: ${stats.totalDocuments} documents, ${stats.totalChunks} chunks`,
+            'Index Workspace'
+        ).then(action => {
+            if (action === 'Index Workspace') {
+                vscode.commands.executeCommand('aura.indexWorkspace');
+            }
+        });
+    } catch {
+        vscode.window.showInformationMessage('Click the status bar icon while indexing to see progress');
     }
 }
 
@@ -565,4 +622,8 @@ export function deactivate() {
     if (refreshInterval) {
         clearInterval(refreshInterval);
     }
+    if (indexingPollInterval) {
+        clearInterval(indexingPollInterval);
+    }
+    indexingStatusBarItem?.dispose();
 }

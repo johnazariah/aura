@@ -1181,6 +1181,23 @@ app.MapPost("/api/index/background", (
     BackgroundIndexRequest request,
     Aura.Foundation.Rag.IBackgroundIndexer backgroundIndexer) =>
 {
+    if (string.IsNullOrWhiteSpace(request.Directory))
+    {
+        return Results.BadRequest(new
+        {
+            error = "'directory' is required",
+            hint = "POST body should be: { \"directory\": \"C:\\path\\to\\folder\" }"
+        });
+    }
+
+    if (!System.IO.Directory.Exists(request.Directory))
+    {
+        return Results.BadRequest(new
+        {
+            error = $"Directory does not exist: {request.Directory}"
+        });
+    }
+
     var options = new Aura.Foundation.Rag.RagIndexOptions
     {
         Recursive = request.Recursive ?? true,
@@ -1188,13 +1205,13 @@ app.MapPost("/api/index/background", (
         ExcludePatterns = request.ExcludePatterns?.ToArray(),
     };
 
-    var jobId = backgroundIndexer.QueueDirectory(request.Path, options);
+    var jobId = backgroundIndexer.QueueDirectory(request.Directory, options);
 
     return Results.Accepted($"/api/index/jobs/{jobId}", new
     {
         jobId = jobId,
         message = "Indexing queued. Check status at /api/index/jobs/{jobId}",
-        directoryPath = request.Path
+        directory = request.Directory
     });
 });
 
@@ -1888,7 +1905,7 @@ record SemanticIndexRequest(
 
 // Background indexing request models
 record BackgroundIndexRequest(
-    string Path,
+    string Directory,
     bool? Recursive = null,
     IReadOnlyList<string>? IncludePatterns = null,
     IReadOnlyList<string>? ExcludePatterns = null);

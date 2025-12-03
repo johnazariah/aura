@@ -172,5 +172,10 @@ public sealed class DeveloperModule : IAuraModule
             toolRegistry,
             processRunner,
             loggerFactory.CreateLogger("GoTools"));
+
+        RustTools.RegisterRustTools(
+            toolRegistry,
+            processRunner,
+            loggerFactory.CreateLogger("RustTools"));
     }
 }

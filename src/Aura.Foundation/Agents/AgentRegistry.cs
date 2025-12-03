@@ -14,6 +14,7 @@ using Microsoft.Extensions.Logging;
 public sealed class AgentRegistry : IAgentRegistry, IDisposable
 {
     private readonly ConcurrentDictionary<string, IAgent> _agents = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _hardcodedAgentIds = new(StringComparer.OrdinalIgnoreCase);
     private readonly IAgentLoader _agentLoader;
     private readonly IFileSystem _fileSystem;
     private readonly ILogger<AgentRegistry> _logger;
@@ -160,14 +161,30 @@ public sealed class AgentRegistry : IAgentRegistry, IDisposable
     /// <inheritdoc/>
     public void Register(IAgent agent)
     {
+        Register(agent, isHardcoded: false);
+    }
+
+    /// <summary>
+    /// Registers an agent with the registry.
+    /// </summary>
+    /// <param name="agent">The agent to register.</param>
+    /// <param name="isHardcoded">Whether this is a hardcoded (non-markdown) agent.</param>
+    public void Register(IAgent agent, bool isHardcoded)
+    {
         var isUpdate = _agents.ContainsKey(agent.AgentId);
         _agents[agent.AgentId] = agent;
 
+        if (isHardcoded)
+        {
+            _hardcodedAgentIds.Add(agent.AgentId);
+        }
+
         _logger.LogInformation(
-            "{Action} agent: {AgentId} ({Name})",
+            "{Action} agent: {AgentId} ({Name}){Hardcoded}",
             isUpdate ? "Updated" : "Registered",
             agent.AgentId,
-            agent.Metadata.Name);
+            agent.Metadata.Name,
+            isHardcoded ? " [hardcoded]" : string.Empty);
 
         OnAgentsChanged(new AgentRegistryChangedEventArgs
         {
@@ -234,8 +251,11 @@ public sealed class AgentRegistry : IAgentRegistry, IDisposable
                 }
             }
 
-            // Remove agents that no longer have files
-            var toRemove = _agents.Keys.Except(foundAgentIds).ToList();
+            // Remove markdown agents that no longer have files (but keep hardcoded agents!)
+            var toRemove = _agents.Keys
+                .Except(foundAgentIds)
+                .Except(_hardcodedAgentIds)
+                .ToList();
             foreach (var agentId in toRemove)
             {
                 Unregister(agentId);

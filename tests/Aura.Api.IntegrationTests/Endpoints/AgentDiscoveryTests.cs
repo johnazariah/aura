@@ -100,8 +100,8 @@ public class AgentDiscoveryTests : IntegrationTestBase
     [Fact]
     public async Task GetAgents_WithLanguageFilter_ReturnsPolyglotForUnknownLanguage()
     {
-        // Act - Rust isn't explicitly supported, polyglot agent should match
-        var response = await Client.GetAsync("/api/agents?capability=coding&language=rust");
+        // Act - COBOL isn't explicitly supported, polyglot agent should match
+        var response = await Client.GetAsync("/api/agents?capability=coding&language=cobol");
         var agents = await response.Content.ReadFromJsonAsync<AgentResponse[]>(JsonOptions);
 
         // Assert
@@ -147,8 +147,8 @@ public class AgentDiscoveryTests : IntegrationTestBase
     [Fact]
     public async Task GetBestAgent_ForUnknownLanguage_ReturnsPolyglot()
     {
-        // Act - Rust isn't explicitly supported, should fall back to polyglot
-        var response = await Client.GetAsync("/api/agents/best?capability=coding&language=rust");
+        // Act - COBOL isn't explicitly supported, should fall back to polyglot
+        var response = await Client.GetAsync("/api/agents/best?capability=coding&language=cobol");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);

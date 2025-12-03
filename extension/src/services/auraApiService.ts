@@ -33,6 +33,25 @@ export interface RagIndexResult {
     message: string;
 }
 
+export interface BackgroundIndexJob {
+    jobId: string;
+    directory: string;
+    message: string;
+}
+
+export interface BackgroundJobStatus {
+    jobId: string;
+    source: string;
+    state: 'Queued' | 'Processing' | 'Completed' | 'Failed';
+    totalItems: number;
+    processedItems: number;
+    failedItems: number;
+    progressPercent: number;
+    startedAt?: string;
+    completedAt?: string;
+    error?: string;
+}
+
 export interface RagQueryResult {
     contentId: string;
     chunkIndex: number;
@@ -224,6 +243,32 @@ export class AuraApiService {
 
     async clearRagIndex(): Promise<void> {
         await this.httpClient.delete(`${this.getBaseUrl()}/api/rag`);
+    }
+
+    // =====================
+    // Background Indexing Methods
+    // =====================
+
+    async startBackgroundIndex(
+        directory: string,
+        recursive: boolean = true,
+        includePatterns?: string[],
+        excludePatterns?: string[]
+    ): Promise<BackgroundIndexJob> {
+        const response = await this.httpClient.post(
+            `${this.getBaseUrl()}/api/index/background`,
+            { directory, recursive, includePatterns, excludePatterns },
+            { timeout: 10000 }
+        );
+        return response.data;
+    }
+
+    async getBackgroundJobStatus(jobId: string): Promise<BackgroundJobStatus> {
+        const response = await this.httpClient.get(
+            `${this.getBaseUrl()}/api/index/jobs/${jobId}`,
+            { timeout: 5000 }
+        );
+        return response.data;
     }
 
     // =====================

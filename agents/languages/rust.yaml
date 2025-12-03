@@ -1,0 +1,214 @@
+# Rust Language Configuration
+# Complete definition for Rust coding agent
+
+language:
+  id: rust
+  name: Rust
+  extensions: [".rs"]
+  projectFiles: ["Cargo.toml", "Cargo.lock"]
+
+capabilities:
+  - rust-coding
+  - coding
+  - systems-programming
+
+priority: 10
+
+agent:
+  provider: ollama
+  model: qwen2.5-coder:14b
+  temperature: 0.1
+  maxSteps: 15
+
+tools:
+  build:
+    id: rust.build
+    name: Build Rust Code
+    command: cargo
+    args: ["build"]
+    description: "Compile Rust code using cargo build"
+    categories: [rust, compilation]
+    requiresConfirmation: false
+    outputParsers:
+      errors:
+        type: regex
+        pattern: "error\\[E\\d+\\]:"
+        groups: []
+      warnings:
+        type: regex
+        pattern: "warning:"
+        groups: []
+
+  build_release:
+    id: rust.build_release
+    name: Build Release
+    command: cargo
+    args: ["build", "--release"]
+    description: "Compile optimized release build"
+    categories: [rust, compilation]
+    requiresConfirmation: false
+
+  test:
+    id: rust.test
+    name: Run Rust Tests
+    command: cargo
+    args: ["test"]
+    description: "Run tests using cargo test"
+    categories: [rust, testing]
+    requiresConfirmation: false
+    outputParsers:
+      testResults:
+        type: regex
+        pattern: "test (\\S+) \\.\\.\\.\\s+(ok|FAILED)"
+        groups: [testName, status]
+
+  clippy:
+    id: rust.clippy
+    name: Run Clippy Linter
+    command: cargo
+    args: ["clippy", "--", "-D", "warnings"]
+    description: "Run clippy for lint checks (warnings as errors)"
+    categories: [rust, linting]
+    requiresConfirmation: false
+    outputParsers:
+      lints:
+        type: regex
+        pattern: "warning: (.+)"
+        groups: [message]
+
+  fmt:
+    id: rust.fmt
+    name: Format Rust Code
+    command: cargo
+    args: ["fmt"]
+    description: "Format code using rustfmt"
+    categories: [rust, formatting]
+    requiresConfirmation: true
+
+  fmt_check:
+    id: rust.fmt_check
+    name: Check Formatting
+    command: cargo
+    args: ["fmt", "--check"]
+    description: "Check if code is properly formatted (no changes)"
+    categories: [rust, formatting]
+    requiresConfirmation: false
+
+  check:
+    id: rust.check
+    name: Check Rust Code
+    command: cargo
+    args: ["check"]
+    description: "Quick syntax and type check without full compilation"
+    categories: [rust, compilation]
+    requiresConfirmation: false
+
+  run:
+    id: rust.run
+    name: Run Rust Program
+    command: cargo
+    args: ["run"]
+    description: "Compile and run the Rust program"
+    categories: [rust, execution]
+    requiresConfirmation: true
+
+  doc:
+    id: rust.doc
+    name: Generate Documentation
+    command: cargo
+    args: ["doc", "--no-deps"]
+    description: "Generate documentation for this crate"
+    categories: [rust, documentation]
+    requiresConfirmation: false
+
+  update:
+    id: rust.update
+    name: Update Dependencies
+    command: cargo
+    args: ["update"]
+    description: "Update Cargo.lock with latest compatible versions"
+    categories: [rust, dependencies]
+    requiresConfirmation: true
+
+  add:
+    id: rust.add
+    name: Add Dependency
+    command: cargo
+    args: ["add"]
+    packageArg: -1
+    description: "Add a dependency to Cargo.toml"
+    categories: [rust, dependencies]
+    requiresConfirmation: true
+
+prompt:
+  workflow: |
+    Follow this workflow:
+    1. **Understand**: Read relevant files, understand module structure
+    2. **Plan**: Think through ownership, lifetimes, and error handling
+    3. **Implement**: Make targeted edits using file.modify or file.write
+    4. **Check**: Use rust.check for quick validation
+    5. **Clippy**: Use rust.clippy for comprehensive linting
+    6. **Format**: Use rust.fmt to ensure consistent formatting
+    7. **Build**: Use rust.build for full compilation
+    8. **Test**: Run tests with rust.test
+
+  bestPractices: |
+    - Embrace ownership and borrowing - don't fight the borrow checker
+    - Use Result<T, E> for recoverable errors, panic! only for bugs
+    - Prefer &str over String for function parameters
+    - Use Option<T> instead of null/sentinel values
+    - Implement From/Into for type conversions
+    - Use derive macros: Debug, Clone, PartialEq, Default
+    - Prefer iterators over explicit loops
+    - Use ? operator for error propagation
+    - Keep unsafe blocks minimal and well-documented
+    - Use cargo clippy regularly - it catches common mistakes
+    - Document public APIs with /// doc comments
+    - Use #[must_use] for important return values
+
+  syntaxReminders: |
+    - Let binding: `let x: i32 = 5;` or `let mut x = 5;`
+    - Function: `fn add(x: i32, y: i32) -> i32 { x + y }`
+    - Struct: `struct Person { name: String, age: u32 }`
+    - Enum: `enum Status { Active, Inactive(String) }`
+    - Impl block: `impl Person { fn new(name: &str) -> Self { ... } }`
+    - Trait: `trait Greet { fn greet(&self) -> String; }`
+    - Generic: `fn process<T: Clone>(item: T) -> T`
+    - Lifetime: `fn longest<'a>(x: &'a str, y: &'a str) -> &'a str`
+    - Match: `match x { Some(v) => v, None => default }`
+    - Result: `fn read() -> Result<String, io::Error>`
+    - Option: `fn find(id: u32) -> Option<User>`
+    - Reference: `&x` (borrow), `&mut x` (mutable borrow)
+    - Dereference: `*x`
+    - Closure: `|x, y| x + y` or `move |x| x + captured`
+    - Async: `async fn fetch() -> Result<Data, Error>`
+    - Await: `let result = fetch().await?;`
+
+  projectStructure: |
+    - Cargo.toml defines package metadata and dependencies
+    - src/main.rs for binary crates
+    - src/lib.rs for library crates
+    - src/bin/ for multiple binaries
+    - tests/ for integration tests
+    - benches/ for benchmarks
+    - examples/ for example code
+    - Module hierarchy: mod.rs or folder/mod.rs
+    - Use `pub mod` to expose modules
+    - Use `use` for imports: `use crate::module::Type;`
+
+  cargoToml: |
+    [package]
+    name = "my-crate"
+    version = "0.1.0"
+    edition = "2024"
+    
+    [dependencies]
+    serde = { version = "1.0", features = ["derive"] }
+    tokio = { version = "1", features = ["full"] }
+    
+    [dev-dependencies]
+    criterion = "0.5"
+    
+    [[bin]]
+    name = "my-app"
+    path = "src/main.rs"

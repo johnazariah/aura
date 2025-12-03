@@ -42,7 +42,7 @@ public sealed class AgentRegistryInitializer : IHostedService
     {
         _logger.LogInformation("Initializing agent registry");
 
-        // Load markdown agents from directories
+        // Load markdown agents from directories FIRST
         if (_registry is AgentRegistry agentRegistry)
         {
             foreach (var directory in _options.Directories)
@@ -53,13 +53,22 @@ public sealed class AgentRegistryInitializer : IHostedService
             await agentRegistry.ReloadAsync().ConfigureAwait(false);
         }
 
-        // Load hardcoded agents from all providers
+        // Load hardcoded agents AFTER markdown agents
+        // Mark them as hardcoded so they survive hot-reload
         var hardcodedCount = 0;
         foreach (var provider in _hardcodedProviders)
         {
             foreach (var agent in provider.GetAgents())
             {
-                _registry.Register(agent);
+                if (_registry is AgentRegistry registry)
+                {
+                    registry.Register(agent, isHardcoded: true);
+                }
+                else
+                {
+                    _registry.Register(agent);
+                }
+
                 hardcodedCount++;
                 _logger.LogDebug("Registered hardcoded agent: {AgentId} from {Provider}",
                     agent.AgentId, provider.GetType().Name);

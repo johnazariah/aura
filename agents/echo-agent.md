@@ -1,19 +1,20 @@
 # Echo Agent
 
+Simple test agent for integration testing. Uses the stub provider for predictable responses.
+
 ## Metadata
 
-- **Type**: Utility
-- **Name**: Echo Agent
-- **Version**: 1.0.0
-- **Author**: Aura System
+- **Priority**: 99
 - **Provider**: stub
 - **Model**: stub-model
-- **Temperature**: 0.7
-- **Description**: Simple echo agent for testing the end-to-end flow.
 
 ## Capabilities
 
 - testing
+
+## Tags
+
+- test
 - echo
 - utility
 

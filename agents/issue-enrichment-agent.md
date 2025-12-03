@@ -1,6 +1,6 @@
-# Issue Digester Agent
+# Issue Enrichment Agent
 
-Transforms raw issue text into structured, researched context for the Business Analyst.
+Enriches raw issue text with structured context, research, and codebase knowledge for the Business Analyst.
 
 ## Metadata
 
@@ -10,7 +10,7 @@ Transforms raw issue text into structured, researched context for the Business A
 
 ## Capabilities
 
-- digestion
+- enrichment
 
 ## Tags
 
