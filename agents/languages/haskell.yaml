@@ -1,0 +1,218 @@
+# Haskell Language Configuration
+# Complete definition - tools, prompt, best practices all in one file
+
+language:
+  id: haskell
+  name: Haskell
+  extensions: [".hs", ".lhs"]
+  projectFiles: ["package.yaml", "*.cabal", "stack.yaml", "cabal.project"]
+
+capabilities:
+  - haskell-coding
+  - coding
+  - functional-programming
+
+priority: 10
+
+agent:
+  provider: ollama
+  model: qwen2.5-coder:14b
+  temperature: 0.1
+  maxSteps: 15
+
+tools:
+  build:
+    id: haskell.build
+    name: Build Haskell Project
+    command: stack
+    args: ["build"]
+    fallback:
+      command: cabal
+      args: ["build"]
+    description: "Build Haskell project using Stack (or Cabal as fallback)"
+    categories: [haskell, compilation]
+    requiresConfirmation: false
+    outputParsers:
+      errors:
+        type: lineMatch
+        pattern: "error:"
+        ignoreCase: false
+
+  build_fast:
+    id: haskell.build_fast
+    name: Build Haskell (Fast)
+    command: stack
+    args: ["build", "--fast"]
+    fallback:
+      command: cabal
+      args: ["build", "-O0"]
+    description: "Fast build without optimizations (for development)"
+    categories: [haskell, compilation]
+    requiresConfirmation: false
+
+  test:
+    id: haskell.test
+    name: Run Haskell Tests
+    command: stack
+    args: ["test"]
+    fallback:
+      command: cabal
+      args: ["test"]
+    description: "Run Haskell tests"
+    categories: [haskell, testing]
+    requiresConfirmation: false
+
+  typecheck:
+    id: haskell.typecheck
+    name: Type Check Haskell
+    command: stack
+    args: ["build", "--fast", "--no-run-tests", "--no-run-benchmarks"]
+    fallback:
+      command: ghc
+      args: ["-fno-code"]
+    description: "Type-check without full compilation (fast feedback)"
+    categories: [haskell, compilation]
+    requiresConfirmation: false
+
+  format:
+    id: haskell.format
+    name: Format Haskell Code
+    command: ormolu
+    args: ["--mode", "inplace"]
+    pathArg: -1
+    fallback:
+      command: fourmolu
+      args: ["--mode", "inplace"]
+    description: "Format Haskell code with Ormolu (or Fourmolu)"
+    categories: [haskell, formatting]
+    requiresConfirmation: true
+
+  format_check:
+    id: haskell.format_check
+    name: Check Haskell Formatting
+    command: ormolu
+    args: ["--mode", "check"]
+    pathArg: -1
+    fallback:
+      command: fourmolu
+      args: ["--mode", "check"]
+    description: "Check Haskell formatting without modifying"
+    categories: [haskell, formatting]
+    requiresConfirmation: false
+
+  lint:
+    id: haskell.lint
+    name: Lint Haskell Code
+    command: hlint
+    args: []
+    pathArg: 0
+    description: "Lint Haskell code with HLint for style suggestions"
+    categories: [haskell, linting]
+    requiresConfirmation: false
+
+  lint_apply:
+    id: haskell.lint_apply
+    name: Apply HLint Suggestions
+    command: hlint
+    args: ["--refactor", "--refactor-options=-i"]
+    pathArg: 0
+    description: "Apply HLint suggestions automatically"
+    categories: [haskell, linting]
+    requiresConfirmation: true
+
+  repl:
+    id: haskell.ghci
+    name: Start GHCi REPL
+    command: stack
+    args: ["ghci"]
+    fallback:
+      command: ghci
+      args: []
+    description: "Start GHCi REPL for interactive Haskell"
+    categories: [haskell, repl]
+    requiresConfirmation: false
+
+  run:
+    id: haskell.run
+    name: Run Haskell Executable
+    command: stack
+    args: ["run"]
+    fallback:
+      command: cabal
+      args: ["run"]
+    description: "Build and run the Haskell executable"
+    categories: [haskell, execution]
+    requiresConfirmation: false
+
+  docs:
+    id: haskell.docs
+    name: Generate Haddock Docs
+    command: stack
+    args: ["haddock"]
+    fallback:
+      command: cabal
+      args: ["haddock"]
+    description: "Generate Haddock documentation"
+    categories: [haskell, documentation]
+    requiresConfirmation: false
+
+prompt:
+  workflow: |
+    Follow this workflow:
+    1. **Understand**: Read relevant files, understand the module structure
+    2. **Plan**: Think through the types first - Haskell is type-driven development
+    3. **Implement**: Make targeted edits using file.modify or file.write
+    4. **Type Check**: Use haskell.typecheck for fast type feedback
+    5. **Build**: Use haskell.build (or haskell.build_fast) to compile
+    6. **Lint**: Use haskell.lint (HLint) for style suggestions
+    7. **Format**: Use haskell.format (Ormolu) to ensure proper formatting
+    8. **Test**: Run tests with haskell.test if applicable
+    9. **REPL**: Use haskell.ghci to experiment interactively
+
+  bestPractices: |
+    - Haskell is lazy by default - be mindful of space leaks with large data
+    - Use strict data types when accumulating: `data Foo = Foo !Int !Int`
+    - Prefer `Text` over `String` for text processing (O(1) vs O(n) operations)
+    - Use `ByteString` for binary data
+    - Use `Maybe` for optional values, `Either` for computations that can fail
+    - Exceptions are for truly exceptional cases, not control flow
+    - Use newtypes for type safety with zero runtime cost
+    - Prefer `foldl'` (strict) over `foldl` (lazy) for accumulators
+    - Use `lens` or `optics` libraries for nested record access
+    - Keep IO at the edges, pure functions in the core
+    - Use `DerivingStrategies` to be explicit about how instances are derived
+    - Prefer `qualified` imports to avoid name clashes
+    - Use `-Wall -Wextra` for comprehensive warnings
+    - Consider `-Werror` in CI to treat warnings as errors
+
+  syntaxReminders: |
+    - Module: `module Main where`
+    - Import: `import Data.Text (Text)` or `import qualified Data.Map as M`
+    - Type signature: `add :: Int -> Int -> Int`
+    - Function: `add x y = x + y`
+    - Pattern matching: `case x of Just v -> v; Nothing -> 0`
+    - Guards: `abs x | x < 0 = -x | otherwise = x`
+    - Where clause: `f x = y + 1 where y = x * 2`
+    - Let expression: `let x = 5 in x + 1`
+    - Lambda: `\x -> x + 1` or `\x y -> x + y`
+    - Do notation: `do { x <- action; return (x + 1) }`
+    - Bind operator: `action >>= \x -> return (x + 1)`
+    - List comprehension: `[x * 2 | x <- [1..10], even x]`
+    - Type class: `class Eq a where (==) :: a -> a -> Bool`
+    - Instance: `instance Eq MyType where x == y = ...`
+    - Data type: `data Maybe a = Just a | Nothing`
+    - Record: `data Person = Person { name :: String, age :: Int }`
+    - Newtype: `newtype UserId = UserId Int`
+    - Type alias: `type Name = String`
+    - GADT: `data Expr a where Lit :: Int -> Expr Int; ...`
+    - Constraint: `(Ord a, Show a) => a -> String`
+    - Application: `f $ g $ h x` equals `f (g (h x))`
+    - Composition: `f . g . h` equals `\x -> f (g (h x))`
+
+  projectStructure: |
+    - package.yaml (hpack) or *.cabal defines project
+    - stack.yaml for Stack-based projects
+    - cabal.project for multi-package Cabal projects
+    - src/ or lib/ for library code, app/ for executables
+    - test/ for test suites, bench/ for benchmarks
+    - Use exposed-modules to define public API

@@ -1,0 +1,134 @@
+# F# Language Configuration
+# Complete definition - replaces both FSharpTools.cs and fsharp-coding.prompt
+
+language:
+  id: fsharp
+  name: F#
+  extensions: [".fs", ".fsx", ".fsi"]
+  projectFiles: ["*.fsproj", "*.sln"]
+
+capabilities:
+  - fsharp-coding
+  - coding
+  - functional-programming
+  - dotnet
+
+priority: 10
+
+agent:
+  provider: ollama
+  model: qwen2.5-coder:14b
+  temperature: 0.1
+  maxSteps: 15
+
+tools:
+  check_project:
+    id: fsharp.check_project
+    name: Check F# Project
+    command: dotnet
+    args: ["build", "--no-restore", "--verbosity", "quiet"]
+    projectArg: 1
+    description: "Type-check F# project without full build (faster than dotnet build)"
+    categories: [fsharp, compilation]
+    requiresConfirmation: false
+    outputParsers:
+      errors:
+        type: lineMatch
+        pattern: ": error "
+        ignoreCase: true
+
+  build:
+    id: fsharp.build
+    name: Build F# Project
+    command: dotnet
+    args: ["build"]
+    projectArg: 1
+    configArg: ["--configuration"]
+    description: "Build F# project with dotnet build"
+    categories: [fsharp, compilation]
+    requiresConfirmation: false
+    outputParsers:
+      errors:
+        type: lineMatch
+        pattern: ": error "
+        ignoreCase: true
+      warnings:
+        type: lineMatch
+        pattern: ": warning "
+        ignoreCase: true
+
+  format:
+    id: fsharp.format
+    name: Format F# Code
+    command: fantomas
+    args: []
+    pathArg: 0
+    description: "Format F# code using Fantomas (the standard F# formatter)"
+    categories: [fsharp, formatting]
+    requiresConfirmation: true
+
+  test:
+    id: fsharp.test
+    name: Run F# Tests
+    command: dotnet
+    args: ["test"]
+    projectArg: 1
+    description: "Run F# tests with dotnet test"
+    categories: [fsharp, testing]
+    requiresConfirmation: false
+    outputParsers:
+      testResults:
+        type: regex
+        pattern: "Passed:\\s*(\\d+).*Failed:\\s*(\\d+).*Skipped:\\s*(\\d+)"
+        ignoreCase: true
+        groups: [passed, failed, skipped]
+
+  fsi:
+    id: fsharp.fsi
+    name: Run F# Interactive
+    command: dotnet
+    args: ["fsi"]
+    scriptArg: 1
+    description: "Run F# script in F# Interactive (useful for testing snippets)"
+    categories: [fsharp, repl]
+    requiresConfirmation: false
+
+# Complete prompt template - no separate .prompt file needed
+prompt:
+  workflow: |
+    Follow this workflow:
+    1. **Understand**: Read relevant files, understand the module structure
+    2. **Plan**: Think through the changes needed
+    3. **Implement**: Make targeted edits using file.modify or file.write
+    4. **Check**: Use fsharp.check_project to type-check without full build
+    5. **Build**: Use fsharp.build to compile and catch errors
+    6. **Format**: Use fsharp.format (Fantomas) to ensure proper formatting
+    7. **Test**: Run tests with fsharp.test if applicable
+    8. **Interactive**: Use fsharp.fsi to experiment with code snippets
+
+  bestPractices: |
+    - Use the |> pipeline operator for data transformations
+    - Prefer immutable data (records, discriminated unions)
+    - Use pattern matching extensively
+    - Use Option<'T> instead of null
+    - Use Result<'T,'E> for error handling
+    - Prefer function composition over classes
+    - Use computation expressions for async, result, etc.
+    - Keep functions small and focused
+    - Use type inference - don't over-annotate
+
+  syntaxReminders: |
+    - Significant whitespace - indentation matters!
+    - let bindings: `let x = 5`
+    - Function definition: `let add x y = x + y`
+    - Pattern matching: `match x with | Some v -> v | None -> 0`
+    - Discriminated unions: `type Shape = Circle of float | Rectangle of float * float`
+    - Records: `type Person = { Name: string; Age: int }`
+    - Async: `async { let! result = asyncOp() return result }`
+    - Pipeline: `[1;2;3] |> List.map (fun x -> x * 2) |> List.sum`
+
+  projectStructure: |
+    - .fsproj files define F# projects
+    - File order matters in F# - dependencies must come first
+    - Use namespaces and modules for organization
+    - Tests often use Expecto, FsUnit, or Unquote

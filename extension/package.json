@@ -184,6 +184,16 @@
           "type": "number",
           "default": 120000,
           "description": "Timeout in milliseconds for agent execution (default: 2 minutes)"
+        },
+        "aura.workflowTimeout": {
+          "type": "number",
+          "default": 60000,
+          "description": "Timeout in milliseconds for workflow operations like creation (default: 1 minute)"
+        },
+        "aura.indexingTimeout": {
+          "type": "number",
+          "default": 300000,
+          "description": "Timeout in milliseconds for RAG indexing operations (default: 5 minutes)"
         }
       }
     }

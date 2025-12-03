@@ -14,6 +14,7 @@ using Microsoft.Extensions.Options;
 public sealed class AgentRegistryInitializer : IHostedService
 {
     private readonly IAgentRegistry _registry;
+    private readonly IEnumerable<IHardcodedAgentProvider> _hardcodedProviders;
     private readonly AgentOptions _options;
     private readonly ILogger<AgentRegistryInitializer> _logger;
 
@@ -21,14 +22,17 @@ public sealed class AgentRegistryInitializer : IHostedService
     /// Initializes a new instance of the <see cref="AgentRegistryInitializer"/> class.
     /// </summary>
     /// <param name="registry">Agent registry.</param>
+    /// <param name="hardcodedProviders">Hardcoded agent providers.</param>
     /// <param name="options">Agent options.</param>
     /// <param name="logger">Logger instance.</param>
     public AgentRegistryInitializer(
         IAgentRegistry registry,
+        IEnumerable<IHardcodedAgentProvider> hardcodedProviders,
         IOptions<AgentOptions> options,
         ILogger<AgentRegistryInitializer> logger)
     {
         _registry = registry;
+        _hardcodedProviders = hardcodedProviders;
         _options = options.Value;
         _logger = logger;
     }
@@ -38,6 +42,7 @@ public sealed class AgentRegistryInitializer : IHostedService
     {
         _logger.LogInformation("Initializing agent registry");
 
+        // Load markdown agents from directories
         if (_registry is AgentRegistry agentRegistry)
         {
             foreach (var directory in _options.Directories)
@@ -46,6 +51,24 @@ public sealed class AgentRegistryInitializer : IHostedService
             }
 
             await agentRegistry.ReloadAsync().ConfigureAwait(false);
+        }
+
+        // Load hardcoded agents from all providers
+        var hardcodedCount = 0;
+        foreach (var provider in _hardcodedProviders)
+        {
+            foreach (var agent in provider.GetAgents())
+            {
+                _registry.Register(agent);
+                hardcodedCount++;
+                _logger.LogDebug("Registered hardcoded agent: {AgentId} from {Provider}",
+                    agent.AgentId, provider.GetType().Name);
+            }
+        }
+
+        if (hardcodedCount > 0)
+        {
+            _logger.LogInformation("Registered {Count} hardcoded agents", hardcodedCount);
         }
 
         _logger.LogInformation(

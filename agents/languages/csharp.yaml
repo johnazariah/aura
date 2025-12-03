@@ -1,0 +1,159 @@
+# C# Language Configuration
+# NOTE: C# uses RoslynCodingAgent (hardcoded) because it requires Roslyn compiler APIs
+# This YAML is for documentation and potential future LanguageSpecialistAgent fallback
+
+language:
+  id: csharp
+  name: C#
+  extensions: [".cs", ".csx"]
+  projectFiles: ["*.csproj", "*.sln"]
+
+capabilities:
+  - csharp-coding
+  - coding
+  - dotnet
+  - refactoring
+
+priority: 10
+
+# C# uses the hardcoded RoslynCodingAgent which provides:
+# - Roslyn semantic analysis (not just CLI tools)
+# - Intelligent code navigation via code graph
+# - Precise refactoring with semantic understanding
+# - Real-time compilation validation
+#
+# The tools below are registered by RoslynTools.cs and used by RoslynCodingAgent.
+# They cannot be expressed as simple CLI wrappers because they use Roslyn APIs.
+
+agent:
+  type: hardcoded
+  class: RoslynCodingAgent
+  provider: ollama
+  model: qwen2.5-coder:14b
+  temperature: 0.2
+  maxSteps: 20
+
+# Reference to Roslyn-powered tools (registered separately in RoslynTools.cs)
+# These are NOT CLI wrappers - they use Microsoft.CodeAnalysis APIs
+roslynTools:
+  - roslyn.list_classes        # List classes in project with semantic info
+  - roslyn.list_methods        # List methods with signatures and docs
+  - roslyn.get_symbol_info     # Get detailed info about a symbol
+  - roslyn.find_references     # Find all references using Roslyn
+  - roslyn.validate_compilation # Compile and get diagnostics
+  - roslyn.get_diagnostics     # Get IDE-style diagnostics
+  - roslyn.suggest_fix         # Get Roslyn code fix suggestions
+
+# CLI-based fallback tools (if Roslyn unavailable or for simple operations)
+tools:
+  build:
+    id: dotnet.build
+    name: Build .NET Project
+    command: dotnet
+    args: ["build"]
+    projectArg: 1
+    configArg: ["--configuration"]
+    description: "Build C# project with dotnet build"
+    categories: [csharp, dotnet, compilation]
+    requiresConfirmation: false
+    outputParsers:
+      errors:
+        type: lineMatch
+        pattern: ": error "
+        ignoreCase: true
+      warnings:
+        type: lineMatch
+        pattern: ": warning "
+        ignoreCase: true
+
+  test:
+    id: dotnet.test
+    name: Run .NET Tests
+    command: dotnet
+    args: ["test"]
+    projectArg: 1
+    description: "Run C# tests with dotnet test"
+    categories: [csharp, dotnet, testing]
+    requiresConfirmation: false
+    outputParsers:
+      testResults:
+        type: regex
+        pattern: "Passed:\\s*(\\d+).*Failed:\\s*(\\d+).*Skipped:\\s*(\\d+)"
+        ignoreCase: true
+        groups: [passed, failed, skipped]
+
+  format:
+    id: dotnet.format
+    name: Format C# Code
+    command: dotnet
+    args: ["format"]
+    projectArg: 1
+    description: "Format C# code with dotnet format"
+    categories: [csharp, dotnet, formatting]
+    requiresConfirmation: true
+
+  clean:
+    id: dotnet.clean
+    name: Clean .NET Project
+    command: dotnet
+    args: ["clean"]
+    projectArg: 1
+    description: "Clean build outputs"
+    categories: [csharp, dotnet, build]
+    requiresConfirmation: false
+
+  restore:
+    id: dotnet.restore
+    name: Restore NuGet Packages
+    command: dotnet
+    args: ["restore"]
+    projectArg: 1
+    description: "Restore NuGet packages"
+    categories: [csharp, dotnet, packages]
+    requiresConfirmation: false
+
+# Prompt template used by RoslynCodingAgent (loaded from prompts/roslyn-coding.prompt)
+prompt:
+  workflow: |
+    Follow this workflow:
+    1. **Understand**: Use roslyn.list_classes, roslyn.list_methods to explore the codebase
+    2. **Analyze**: Use roslyn.get_symbol_info to understand types and dependencies
+    3. **Plan**: Think through the changes needed before making them
+    4. **Implement**: Make targeted edits using file.modify (preferred) or file.write
+    5. **Validate**: Use roslyn.validate_compilation to check for errors after changes
+    6. **Fix**: If there are compilation errors, analyze and fix them
+    7. **Document**: Add/update XML documentation comments
+    8. **Test**: Consider if tests are needed and create them
+
+  bestPractices: |
+    - Use file.modify for surgical edits to existing files
+    - Prefer small, targeted changes over large rewrites
+    - Always validate compilation after making changes
+    - Follow .NET naming conventions (PascalCase for public, _camelCase for private)
+    - Use modern C# features (records, pattern matching, nullable reference types)
+    - Include XML documentation for public APIs
+    - Use primary constructors for simple DI
+    - Prefer expression-bodied members for simple methods
+    - Use init-only properties for immutability
+    - Handle nullability explicitly with nullable reference types
+
+  syntaxReminders: |
+    - Record: `public record Person(string Name, int Age);`
+    - Primary constructor: `public class Service(ILogger logger) { }`
+    - Pattern matching: `if (obj is string { Length: > 0 } s) { }`
+    - Switch expression: `var result = x switch { 1 => "one", _ => "other" };`
+    - Null coalescing: `var value = x ?? defaultValue;`
+    - Null conditional: `var len = str?.Length ?? 0;`
+    - Target-typed new: `Person p = new("John", 30);`
+    - Collection expression: `int[] nums = [1, 2, 3];`
+    - Raw string literal: `var json = """{"name": "test"}""";`
+    - Required members: `public required string Name { get; init; }`
+    - File-scoped namespace: `namespace MyApp;`
+    - Global using: `global using System.Text.Json;`
+
+  projectStructure: |
+    - *.csproj defines project and dependencies
+    - Directory.Build.props for shared properties
+    - src/ for source code, tests/ for test projects
+    - Use folder-per-feature or layer-based organization
+    - Use namespaces matching folder structure

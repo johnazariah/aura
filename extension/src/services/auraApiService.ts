@@ -97,7 +97,7 @@ export class AuraApiService {
 
     constructor() {
         this.httpClient = axios.create({
-            timeout: 10000  // 10s for health checks and agent list
+            timeout: 30000  // 30s default for general API calls
         });
     }
 
@@ -109,6 +109,16 @@ export class AuraApiService {
     getExecutionTimeout(): number {
         const config = vscode.workspace.getConfiguration('aura');
         return config.get<number>('executionTimeout', 120000);  // 2 minutes default
+    }
+
+    getWorkflowTimeout(): number {
+        const config = vscode.workspace.getConfiguration('aura');
+        return config.get<number>('workflowTimeout', 60000);  // 1 minute for workflow operations (worktree creation, etc.)
+    }
+
+    getIndexingTimeout(): number {
+        const config = vscode.workspace.getConfiguration('aura');
+        return config.get<number>('indexingTimeout', 300000);  // 5 minutes for indexing
     }
 
     async getHealth(): Promise<HealthResponse> {
@@ -179,7 +189,7 @@ export class AuraApiService {
         const response = await this.httpClient.post(
             `${this.getBaseUrl()}/api/rag/index/directory`,
             { path, includePatterns, excludePatterns, recursive },
-            { timeout: 300000 }  // 5 minutes for indexing
+            { timeout: this.getIndexingTimeout() }
         );
         return response.data;
     }
@@ -223,7 +233,8 @@ export class AuraApiService {
     async createWorkflow(title: string, description?: string, repositoryPath?: string): Promise<Workflow> {
         const response = await this.httpClient.post(
             `${this.getBaseUrl()}/api/developer/workflows`,
-            { title, description, repositoryPath }
+            { title, description, repositoryPath },
+            { timeout: this.getWorkflowTimeout() }
         );
         return response.data;
     }

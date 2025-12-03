@@ -1,0 +1,136 @@
+# TypeScript Language Configuration
+# Complete definition - replaces both TypeScriptTools.cs and typescript-coding.prompt
+
+language:
+  id: typescript
+  name: TypeScript
+  extensions: [".ts", ".tsx", ".mts", ".cts"]
+  projectFiles: ["tsconfig.json", "package.json"]
+
+capabilities:
+  - typescript-coding
+  - javascript-coding
+  - coding
+  - frontend
+  - nodejs
+
+priority: 10
+
+agent:
+  provider: ollama
+  model: qwen2.5-coder:14b
+  temperature: 0.1
+  maxSteps: 15
+
+tools:
+  compile:
+    id: typescript.compile
+    name: Compile TypeScript
+    command: npx
+    args: ["tsc"]
+    projectArg: ["--project"]
+    description: "Compile TypeScript code using tsc"
+    categories: [typescript, compilation]
+    requiresConfirmation: false
+    outputParsers:
+      errors:
+        type: lineMatch
+        pattern: "error TS"
+        ignoreCase: false
+
+  type_check:
+    id: typescript.type_check
+    name: Type Check TypeScript
+    command: npx
+    args: ["tsc", "--noEmit"]
+    projectArg: ["--project"]
+    description: "Type-check TypeScript without emitting files"
+    categories: [typescript, compilation]
+    requiresConfirmation: false
+    outputParsers:
+      errors:
+        type: lineMatch
+        pattern: "error TS"
+        ignoreCase: false
+
+  run_tests:
+    id: typescript.run_tests
+    name: Run TypeScript Tests
+    command: npx
+    args: ["jest"]
+    pathArg: -1
+    fallback:
+      command: npx
+      args: ["vitest", "run"]
+    description: "Run TypeScript tests using Jest or Vitest"
+    categories: [typescript, testing]
+    requiresConfirmation: false
+    outputParsers:
+      testResults:
+        type: regex
+        pattern: "Tests:\\s*(\\d+) passed.*?(\\d+)? failed"
+        groups: [passed, failed]
+
+  lint:
+    id: typescript.lint
+    name: Lint TypeScript Code
+    command: npx
+    args: ["eslint"]
+    pathArg: -1
+    description: "Lint TypeScript code using ESLint"
+    categories: [typescript, linting]
+    requiresConfirmation: false
+
+  format:
+    id: typescript.format
+    name: Format TypeScript Code
+    command: npx
+    args: ["prettier", "--write"]
+    pathArg: -1
+    description: "Format TypeScript code using Prettier"
+    categories: [typescript, formatting]
+    requiresConfirmation: true
+
+prompt:
+  workflow: |
+    Follow this workflow:
+    1. **Understand**: Read relevant files, understand the module structure
+    2. **Plan**: Think through the changes needed
+    3. **Implement**: Make targeted edits using file.modify or file.write
+    4. **Type Check**: Use typescript.type_check to verify types
+    5. **Lint**: Use typescript.lint (ESLint) to check for issues
+    6. **Format**: Use typescript.format (Prettier) to ensure proper formatting
+    7. **Test**: Run tests with typescript.run_tests if applicable
+
+  bestPractices: |
+    - Use strict TypeScript configuration (strict: true)
+    - Prefer interfaces for object shapes, types for unions/intersections
+    - Use const assertions for literal types
+    - Avoid `any` - use `unknown` for truly unknown types
+    - Use discriminated unions for state machines
+    - Prefer immutable patterns (readonly, as const)
+    - Use utility types: Partial, Required, Pick, Omit, Record
+    - Export types explicitly from module boundaries
+    - Use ESLint + Prettier for consistent code style
+    - Prefer async/await over raw Promises
+
+  syntaxReminders: |
+    - Type annotation: `const name: string = "John"`
+    - Interface: `interface User { name: string; age: number }`
+    - Type alias: `type Status = "active" | "inactive"`
+    - Generic: `function identity<T>(arg: T): T { return arg }`
+    - Optional: `interface Config { timeout?: number }`
+    - Readonly: `readonly items: string[]`
+    - Union: `type Result = Success | Error`
+    - Intersection: `type Combined = A & B`
+    - Type guard: `function isString(x: unknown): x is string`
+    - Utility types: `Partial<T>`, `Required<T>`, `Pick<T, K>`, `Omit<T, K>`
+    - Template literals: `type Route = \`/api/${string}\``
+
+  projectStructure: |
+    - tsconfig.json defines TypeScript configuration
+    - package.json defines dependencies and scripts
+    - src/ for source code, dist/ or build/ for output
+    - Use ES modules (import/export) by default
+    - Common bundlers: Vite, esbuild, webpack, Rollup
+    - Test frameworks: Jest, Vitest, Mocha

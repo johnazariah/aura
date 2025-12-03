@@ -148,6 +148,7 @@ public static class ServiceCollectionExtensions
         services.Configure<RagOptions>(configuration.GetSection(RagOptions.SectionName));
         services.Configure<RagExecutionOptions>(configuration.GetSection(RagExecutionOptions.SectionName));
         services.Configure<RagWatcherOptions>(configuration.GetSection(RagWatcherOptions.SectionName));
+        services.Configure<BackgroundIndexerOptions>(configuration.GetSection(BackgroundIndexerOptions.SectionName));
 
         // Register embedding provider (OllamaProvider implements IEmbeddingProvider)
         services.AddScoped<IEmbeddingProvider>(sp => sp.GetRequiredService<OllamaProvider>());
@@ -166,6 +167,11 @@ public static class ServiceCollectionExtensions
 
         // RAG-enriched executor
         services.AddScoped<IRagEnrichedExecutor, RagEnrichedExecutor>();
+
+        // Background indexer (queue-based async indexing)
+        services.AddSingleton<BackgroundIndexer>();
+        services.AddSingleton<IBackgroundIndexer>(sp => sp.GetRequiredService<BackgroundIndexer>());
+        services.AddHostedService(sp => sp.GetRequiredService<BackgroundIndexer>());
 
         // Incremental indexer (background service for file watching)
         services.AddSingleton<IncrementalIndexer>();
@@ -208,6 +214,9 @@ public static class ServiceCollectionExtensions
 
         // Agent registry
         services.AddSingleton<IAgentRegistry, AgentRegistry>();
+
+        // Foundation-level hardcoded agents (fallback ingester, etc.)
+        services.AddSingleton<IHardcodedAgentProvider, FoundationAgentProvider>();
 
         // Initialize registry on startup
         services.AddHostedService<AgentRegistryInitializer>();

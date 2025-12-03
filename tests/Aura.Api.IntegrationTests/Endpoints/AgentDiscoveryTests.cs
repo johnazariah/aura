@@ -128,7 +128,7 @@ public class AgentDiscoveryTests : IntegrationTestBase
     }
 
     [Fact]
-    public async Task GetBestAgent_ForCoding_ReturnsPolyglotCodingAgent()
+    public async Task GetBestAgent_ForCoding_ReturnsHighestPriorityCodingAgent()
     {
         // Act
         var response = await Client.GetAsync("/api/agents/best?capability=coding");
@@ -139,8 +139,9 @@ public class AgentDiscoveryTests : IntegrationTestBase
         var agent = await response.Content.ReadFromJsonAsync<AgentResponse>(JsonOptions);
         agent.Should().NotBeNull();
         agent!.Capabilities.Should().Contain("coding");
-        agent.Id.Should().Be("coding-agent");
-        agent.Priority.Should().Be(70);
+
+        // Should return one of the specialist agents (priority 10) rather than the fallback (priority 70)
+        agent.Priority.Should().Be(10);
     }
 
     [Fact]

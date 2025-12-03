@@ -489,43 +489,11 @@ async function executeAgent(item?: AgentItem): Promise<void> {
 // =====================
 
 async function createWorkflow(): Promise<void> {
-    const title = await vscode.window.showInputBox({
-        prompt: 'Workflow Title',
-        placeHolder: 'What do you want to build?'
+    // Open the new workflow panel with a form
+    await workflowPanelProvider.openNewWorkflowPanel((workflowId: string) => {
+        // Refresh tree when workflow is created
+        workflowTreeProvider.refresh();
     });
-
-    if (!title) return;
-
-    const description = await vscode.window.showInputBox({
-        prompt: 'Description (optional)',
-        placeHolder: 'Describe the feature or bug in detail...'
-    });
-
-    const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-
-    try {
-        await vscode.window.withProgress(
-            {
-                location: vscode.ProgressLocation.Notification,
-                title: 'Creating workflow...',
-                cancellable: false
-            },
-            async () => {
-                const workflow = await auraApiService.createWorkflow(title, description || undefined, workspacePath);
-                workflowTreeProvider.refresh();
-
-                // Open the workflow panel
-                await workflowPanelProvider.openWorkflowPanel(workflow.id);
-
-                vscode.window.showInformationMessage(
-                    `Workflow created! Branch: ${workflow.gitBranch || 'N/A'}`
-                );
-            }
-        );
-    } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unknown error';
-        vscode.window.showErrorMessage(`Failed to create workflow: ${message}`);
-    }
 }
 
 async function executeStep(workflowId: string, stepId: string): Promise<void> {

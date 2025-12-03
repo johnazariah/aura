@@ -6,25 +6,48 @@ namespace Aura.Foundation.Prompts;
 
 using System.Collections.Concurrent;
 using System.IO.Abstractions;
-using System.Text;
-using System.Text.Json;
-using System.Text.RegularExpressions;
+using HandlebarsDotNet;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 /// <summary>
 /// Registry that loads prompt templates from .prompt files.
+/// Uses Handlebars.Net for full Handlebars template support.
 /// </summary>
 /// <remarks>
 /// Initializes a new instance of the <see cref="PromptRegistry"/> class.
 /// </remarks>
-public sealed partial class PromptRegistry(
-    IFileSystem fileSystem,
-    IOptions<PromptOptions> options,
-    ILogger<PromptRegistry> logger) : IPromptRegistry
+public sealed class PromptRegistry : IPromptRegistry
 {
-    private readonly PromptOptions _options = options.Value;
+    private readonly IFileSystem _fileSystem;
+    private readonly PromptOptions _options;
+    private readonly ILogger<PromptRegistry> _logger;
+    private readonly IHandlebars _handlebars;
     private readonly ConcurrentDictionary<string, PromptTemplate> _prompts = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, HandlebarsTemplate<object, object>> _compiledTemplates = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="PromptRegistry"/> class.
+    /// </summary>
+    public PromptRegistry(
+        IFileSystem fileSystem,
+        IOptions<PromptOptions> options,
+        ILogger<PromptRegistry> logger)
+    {
+        _fileSystem = fileSystem;
+        _options = options.Value;
+        _logger = logger;
+
+        // Configure Handlebars with custom settings
+        _handlebars = Handlebars.Create(new HandlebarsConfiguration
+        {
+            ThrowOnUnresolvedBindingExpression = false, // Don't throw on missing properties
+            NoEscape = true, // Don't HTML-escape output (we're generating prompts, not HTML)
+        });
+
+        // Register custom helpers
+        RegisterCustomHelpers();
+    }
 
     /// <inheritdoc/>
     public PromptTemplate? GetPrompt(string name)
@@ -36,10 +59,16 @@ public sealed partial class PromptRegistry(
     /// <inheritdoc/>
     public string Render(string name, object context)
     {
-        var prompt = GetPrompt(name)
-            ?? throw new InvalidOperationException($"Prompt '{name}' not found");
+        if (!_compiledTemplates.TryGetValue(name, out var template))
+        {
+            var prompt = GetPrompt(name)
+                ?? throw new InvalidOperationException($"Prompt '{name}' not found");
 
-        return RenderTemplate(prompt.Template, context);
+            template = _handlebars.Compile(prompt.Template);
+            _compiledTemplates[name] = template;
+        }
+
+        return template(context);
     }
 
     /// <inheritdoc/>
@@ -52,13 +81,14 @@ public sealed partial class PromptRegistry(
     public void Reload()
     {
         _prompts.Clear();
+        _compiledTemplates.Clear();
 
         foreach (var directory in _options.Directories)
         {
             LoadFromDirectory(directory);
         }
 
-        logger.LogInformation("Loaded {Count} prompts", _prompts.Count);
+        _logger.LogInformation("Loaded {Count} prompts", _prompts.Count);
     }
 
     /// <summary>
@@ -66,13 +96,13 @@ public sealed partial class PromptRegistry(
     /// </summary>
     public void LoadFromDirectory(string directory)
     {
-        if (!fileSystem.Directory.Exists(directory))
+        if (!_fileSystem.Directory.Exists(directory))
         {
-            logger.LogDebug("Prompt directory not found: {Directory}", directory);
+            _logger.LogDebug("Prompt directory not found: {Directory}", directory);
             return;
         }
 
-        var files = fileSystem.Directory.GetFiles(directory, "*.prompt", SearchOption.AllDirectories);
+        var files = _fileSystem.Directory.GetFiles(directory, "*.prompt", SearchOption.AllDirectories);
 
         foreach (var file in files)
         {
@@ -82,15 +112,15 @@ public sealed partial class PromptRegistry(
             }
             catch (Exception ex)
             {
-                logger.LogWarning(ex, "Failed to load prompt: {File}", file);
+                _logger.LogWarning(ex, "Failed to load prompt: {File}", file);
             }
         }
     }
 
     private void LoadPromptFile(string filePath)
     {
-        var content = fileSystem.File.ReadAllText(filePath);
-        var fileName = fileSystem.Path.GetFileNameWithoutExtension(filePath);
+        var content = _fileSystem.File.ReadAllText(filePath);
+        var fileName = _fileSystem.Path.GetFileNameWithoutExtension(filePath);
 
         // Parse frontmatter if present (YAML-style)
         string? description = null;
@@ -127,99 +157,143 @@ public sealed partial class PromptRegistry(
 
         _prompts[fileName] = prompt;
 
-        logger.LogDebug("Loaded prompt: {Name} from {Path}", fileName, filePath);
-    }
-
-    /// <summary>
-    /// Renders a template with the given context using simple variable substitution.
-    /// Supports {{propertyName}} and {{nested.property}} syntax.
-    /// </summary>
-    private static string RenderTemplate(string template, object context)
-    {
-        var result = new StringBuilder(template);
-
-        // Convert context to dictionary for easy lookup
-        var properties = GetPropertiesAsDictionary(context);
-
-        // Replace {{property}} patterns
-        var matches = TemplateVariableRegex().Matches(template);
-        foreach (Match match in matches.Cast<Match>().Reverse()) // Reverse to maintain positions
+        // Pre-compile the template
+        try
         {
-            var variableName = match.Groups[1].Value.Trim();
-            var value = GetPropertyValue(properties, variableName);
-
-            result.Remove(match.Index, match.Length);
-            result.Insert(match.Index, value ?? string.Empty);
+            _compiledTemplates[fileName] = _handlebars.Compile(template);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to compile prompt template: {Name}", fileName);
         }
 
-        return result.ToString();
+        _logger.LogDebug("Loaded prompt: {Name} from {Path}", fileName, filePath);
     }
 
-    private static Dictionary<string, object?> GetPropertiesAsDictionary(object obj)
+    private void RegisterCustomHelpers()
     {
-        var dict = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
-
-        if (obj is IDictionary<string, object?> existingDict)
+        // Helper: {{truncate text maxLength}}
+        _handlebars.RegisterHelper("truncate", (output, context, arguments) =>
         {
-            foreach (var kvp in existingDict)
+            if (arguments.Length < 2)
             {
-                dict[kvp.Key] = kvp.Value;
+                return;
             }
-        }
-        else
-        {
-            foreach (var prop in obj.GetType().GetProperties())
+
+            var text = arguments[0]?.ToString() ?? string.Empty;
+            if (arguments[1] is int maxLength || int.TryParse(arguments[1]?.ToString(), out maxLength))
             {
-                try
+                if (text.Length > maxLength)
                 {
-                    dict[prop.Name] = prop.GetValue(obj);
+                    output.Write(text[..maxLength] + "...");
                 }
-                catch
+                else
                 {
-                    // Skip properties that throw
-                }
-            }
-        }
-
-        return dict;
-    }
-
-    private static string? GetPropertyValue(Dictionary<string, object?> properties, string path)
-    {
-        var parts = path.Split('.');
-        object? current = properties;
-
-        foreach (var part in parts)
-        {
-            if (current is null)
-            {
-                return null;
-            }
-
-            if (current is IDictionary<string, object?> dict)
-            {
-                if (!dict.TryGetValue(part, out current))
-                {
-                    return null;
+                    output.Write(text);
                 }
             }
             else
             {
-                var prop = current.GetType().GetProperty(part);
-                if (prop is null)
-                {
-                    return null;
-                }
-
-                current = prop.GetValue(current);
+                output.Write(text);
             }
-        }
+        });
 
-        return current?.ToString();
+        // Helper: {{json object}} - Serialize object to JSON
+        _handlebars.RegisterHelper("json", (output, context, arguments) =>
+        {
+            if (arguments.Length < 1)
+            {
+                return;
+            }
+
+            var json = System.Text.Json.JsonSerializer.Serialize(
+                arguments[0],
+                new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+            output.Write(json);
+        });
+
+        // Helper: {{lowercase text}}
+        _handlebars.RegisterHelper("lowercase", (output, context, arguments) =>
+        {
+            if (arguments.Length < 1)
+            {
+                return;
+            }
+
+            output.Write(arguments[0]?.ToString()?.ToLowerInvariant() ?? string.Empty);
+        });
+
+        // Helper: {{uppercase text}}
+        _handlebars.RegisterHelper("uppercase", (output, context, arguments) =>
+        {
+            if (arguments.Length < 1)
+            {
+                return;
+            }
+
+            output.Write(arguments[0]?.ToString()?.ToUpperInvariant() ?? string.Empty);
+        });
+
+        // Helper: {{join array separator}}
+        _handlebars.RegisterHelper("join", (output, context, arguments) =>
+        {
+            if (arguments.Length < 2)
+            {
+                return;
+            }
+
+            if (arguments[0] is System.Collections.IEnumerable enumerable and not string)
+            {
+                var separator = arguments[1]?.ToString() ?? ", ";
+                var items = enumerable.Cast<object>().Select(x => x?.ToString() ?? string.Empty);
+                output.Write(string.Join(separator, items));
+            }
+        });
+
+        // Block helper: {{#ifEquals a b}}...{{else}}...{{/ifEquals}}
+        _handlebars.RegisterHelper("ifEquals", (output, options, context, arguments) =>
+        {
+            if (arguments.Length < 2)
+            {
+                options.Inverse(output, context);
+                return;
+            }
+
+            var a = arguments[0]?.ToString();
+            var b = arguments[1]?.ToString();
+
+            if (string.Equals(a, b, StringComparison.Ordinal))
+            {
+                options.Template(output, context);
+            }
+            else
+            {
+                options.Inverse(output, context);
+            }
+        });
+
+        // Block helper: {{#ifContains text substring}}...{{else}}...{{/ifContains}}
+        _handlebars.RegisterHelper("ifContains", (output, options, context, arguments) =>
+        {
+            if (arguments.Length < 2)
+            {
+                options.Inverse(output, context);
+                return;
+            }
+
+            var text = arguments[0]?.ToString() ?? string.Empty;
+            var substring = arguments[1]?.ToString() ?? string.Empty;
+
+            if (text.Contains(substring, StringComparison.OrdinalIgnoreCase))
+            {
+                options.Template(output, context);
+            }
+            else
+            {
+                options.Inverse(output, context);
+            }
+        });
     }
-
-    [GeneratedRegex(@"\{\{([^}]+)\}\}")]
-    private static partial Regex TemplateVariableRegex();
 }
 
 /// <summary>

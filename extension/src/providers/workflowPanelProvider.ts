@@ -3,11 +3,403 @@ import { AuraApiService, Workflow, WorkflowStep } from '../services/auraApiServi
 
 export class WorkflowPanelProvider {
     private panels: Map<string, vscode.WebviewPanel> = new Map();
+    private newWorkflowPanel: vscode.WebviewPanel | undefined;
 
     constructor(
         private extensionUri: vscode.Uri,
         private apiService: AuraApiService
     ) {}
+
+    /**
+     * Opens a panel to create a new workflow with a form UI
+     */
+    async openNewWorkflowPanel(onCreated: (workflowId: string) => void): Promise<void> {
+        // Reuse existing panel if open
+        if (this.newWorkflowPanel) {
+            this.newWorkflowPanel.reveal();
+            return;
+        }
+
+        const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+
+        // Create new panel
+        const panel = vscode.window.createWebviewPanel(
+            'auraNewWorkflow',
+            '✨ New Workflow',
+            vscode.ViewColumn.One,
+            {
+                enableScripts: true,
+                retainContextWhenHidden: false,
+                localResourceRoots: [this.extensionUri]
+            }
+        );
+
+        this.newWorkflowPanel = panel;
+
+        // Handle panel disposal
+        panel.onDidDispose(() => {
+            this.newWorkflowPanel = undefined;
+        });
+
+        // Handle messages from webview
+        panel.webview.onDidReceiveMessage(async (message) => {
+            switch (message.type) {
+                case 'create':
+                    await this.handleCreateWorkflow(message.title, message.description, workspacePath, panel, onCreated);
+                    break;
+                case 'cancel':
+                    panel.dispose();
+                    break;
+            }
+        });
+
+        // Set initial content
+        panel.webview.html = this.getNewWorkflowHtml(workspacePath);
+    }
+
+    private async handleCreateWorkflow(
+        title: string,
+        description: string | undefined,
+        workspacePath: string | undefined,
+        panel: vscode.WebviewPanel,
+        onCreated: (workflowId: string) => void
+    ): Promise<void> {
+        panel.webview.postMessage({ type: 'loading', message: 'Creating workflow...' });
+
+        try {
+            const workflow = await this.apiService.createWorkflow(title, description, workspacePath);
+
+            // Close the creation panel
+            panel.dispose();
+
+            // Notify caller
+            onCreated(workflow.id);
+
+            // Open the workflow management panel
+            await this.openWorkflowPanel(workflow.id);
+
+            vscode.window.showInformationMessage(
+                `Workflow created! Branch: ${workflow.gitBranch || 'N/A'}`
+            );
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Unknown error';
+            panel.webview.postMessage({ type: 'error', message: `Failed to create workflow: ${message}` });
+        }
+    }
+
+    private getNewWorkflowHtml(workspacePath: string | undefined): string {
+        const repoName = workspacePath ? workspacePath.split(/[/\\]/).pop() || 'repo' : 'repo';
+
+        return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>New Workflow</title>
+    <style>
+        :root {
+            --vscode-font-family: var(--vscode-editor-font-family, 'Segoe UI', sans-serif);
+        }
+        body {
+            font-family: var(--vscode-font-family);
+            padding: 24px;
+            color: var(--vscode-foreground);
+            background: var(--vscode-editor-background);
+            line-height: 1.5;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        .header {
+            margin-bottom: 24px;
+            text-align: center;
+        }
+        .header h1 {
+            font-size: 1.5em;
+            margin: 0 0 8px 0;
+        }
+        .header p {
+            color: var(--vscode-descriptionForeground);
+            margin: 0;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 500;
+        }
+        .form-group .hint {
+            font-size: 0.85em;
+            color: var(--vscode-descriptionForeground);
+            margin-top: 4px;
+        }
+        input, textarea {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--vscode-input-border);
+            border-radius: 4px;
+            background: var(--vscode-input-background);
+            color: var(--vscode-input-foreground);
+            font-size: 14px;
+            font-family: inherit;
+            box-sizing: border-box;
+        }
+        input:focus, textarea:focus {
+            outline: 1px solid var(--vscode-focusBorder);
+        }
+        textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+        .preview-box {
+            background: var(--vscode-textBlockQuote-background);
+            border-left: 3px solid var(--vscode-textBlockQuote-border);
+            padding: 12px 16px;
+            border-radius: 4px;
+            margin-bottom: 24px;
+        }
+        .preview-box h4 {
+            margin: 0 0 8px 0;
+            font-size: 0.9em;
+            color: var(--vscode-descriptionForeground);
+        }
+        .preview-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin: 4px 0;
+            font-size: 0.95em;
+        }
+        .preview-item .icon {
+            opacity: 0.8;
+        }
+        .preview-item .label {
+            color: var(--vscode-descriptionForeground);
+            min-width: 80px;
+        }
+        .preview-item .value {
+            font-family: var(--vscode-editor-font-family);
+            color: var(--vscode-foreground);
+        }
+        .button-row {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+            margin-top: 24px;
+        }
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .btn-primary {
+            background: var(--vscode-button-background);
+            color: var(--vscode-button-foreground);
+        }
+        .btn-primary:hover:not(:disabled) {
+            background: var(--vscode-button-hoverBackground);
+        }
+        .btn-secondary {
+            background: var(--vscode-button-secondaryBackground);
+            color: var(--vscode-button-secondaryForeground);
+        }
+        .loading {
+            display: none;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            padding: 20px;
+            color: var(--vscode-foreground);
+        }
+        .loading.active {
+            display: flex;
+        }
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid var(--vscode-badge-background);
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .error-message {
+            display: none;
+            background: var(--vscode-inputValidation-errorBackground);
+            border: 1px solid var(--vscode-inputValidation-errorBorder);
+            color: var(--vscode-inputValidation-errorForeground);
+            padding: 12px 16px;
+            border-radius: 4px;
+            margin-top: 16px;
+        }
+        .error-message.active {
+            display: block;
+        }
+        .form-content.hidden {
+            display: none;
+        }
+        .workspace-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            background: var(--vscode-editor-inactiveSelectionBackground);
+            border-radius: 4px;
+            margin-bottom: 20px;
+            font-size: 0.9em;
+        }
+        .workspace-info .icon {
+            opacity: 0.8;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>✨ Create New Workflow</h1>
+        <p>Describe what you want to build or fix</p>
+    </div>
+
+    <div id="formContent" class="form-content">
+        ${workspacePath ? `
+        <div class="workspace-info">
+            <span class="icon">📁</span>
+            <span>Repository: <strong>${this.escapeHtml(repoName)}</strong></span>
+        </div>
+        ` : `
+        <div class="workspace-info" style="border-left: 3px solid var(--vscode-editorWarning-foreground);">
+            <span class="icon">⚠️</span>
+            <span>No workspace folder open. Open a repository folder first.</span>
+        </div>
+        `}
+
+        <div class="form-group">
+            <label for="title">What do you want to build?</label>
+            <input type="text" id="title" placeholder="e.g., Add user authentication" autofocus>
+            <div class="hint">A short, descriptive title for this workflow</div>
+        </div>
+
+        <div class="form-group">
+            <label for="description">Describe the requirements (optional)</label>
+            <textarea id="description" placeholder="Add more details about the feature, bug, or task..."></textarea>
+            <div class="hint">The more context you provide, the better the AI can help</div>
+        </div>
+
+        <div class="preview-box">
+            <h4>Preview</h4>
+            <div class="preview-item">
+                <span class="icon">🌿</span>
+                <span class="label">Branch:</span>
+                <span class="value" id="branchPreview">aura/workflow-...</span>
+            </div>
+            <div class="preview-item">
+                <span class="icon">📂</span>
+                <span class="label">Worktree:</span>
+                <span class="value" id="worktreePreview">Auto-generated in .worktrees/</span>
+            </div>
+        </div>
+
+        <div class="button-row">
+            <button class="btn btn-secondary" onclick="cancel()">Cancel</button>
+            <button class="btn btn-primary" id="createBtn" onclick="create()" ${workspacePath ? '' : 'disabled'}>
+                ✨ Create Workflow
+            </button>
+        </div>
+
+        <div id="errorMessage" class="error-message"></div>
+    </div>
+
+    <div id="loadingState" class="loading">
+        <div class="spinner"></div>
+        <span id="loadingText">Creating workflow...</span>
+    </div>
+
+    <script>
+        const vscode = acquireVsCodeApi();
+
+        // Update branch preview as user types
+        const titleInput = document.getElementById('title');
+        const branchPreview = document.getElementById('branchPreview');
+
+        titleInput.addEventListener('input', () => {
+            const title = titleInput.value.trim();
+            if (title) {
+                const slug = title
+                    .toLowerCase()
+                    .replace(/[^a-z0-9]+/g, '-')
+                    .replace(/^-+|-+$/g, '')
+                    .substring(0, 30);
+                branchPreview.textContent = slug + '-...';
+            } else {
+                branchPreview.textContent = '<prefix>/<title>-<id>';
+            }
+        });
+
+        // Enter key submits
+        titleInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && titleInput.value.trim()) {
+                create();
+            }
+        });
+
+        function create() {
+            const title = document.getElementById('title').value.trim();
+            const description = document.getElementById('description').value.trim();
+
+            if (!title) {
+                showError('Please enter a title');
+                return;
+            }
+
+            vscode.postMessage({
+                type: 'create',
+                title: title,
+                description: description || undefined
+            });
+        }
+
+        function cancel() {
+            vscode.postMessage({ type: 'cancel' });
+        }
+
+        function showError(message) {
+            const errorEl = document.getElementById('errorMessage');
+            errorEl.textContent = message;
+            errorEl.classList.add('active');
+        }
+
+        window.addEventListener('message', (event) => {
+            const message = event.data;
+
+            switch (message.type) {
+                case 'loading':
+                    document.getElementById('formContent').classList.add('hidden');
+                    document.getElementById('loadingState').classList.add('active');
+                    document.getElementById('loadingText').textContent = message.message || 'Creating workflow...';
+                    break;
+                case 'error':
+                    document.getElementById('formContent').classList.remove('hidden');
+                    document.getElementById('loadingState').classList.remove('active');
+                    showError(message.message);
+                    break;
+            }
+        });
+    </script>
+</body>
+</html>`;
+    }
 
     async openWorkflowPanel(workflowId: string): Promise<void> {
         // Check if panel already exists

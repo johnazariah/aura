@@ -228,15 +228,59 @@ public sealed class OllamaProvider : ILlmProvider, IEmbeddingProvider
         IReadOnlyList<string> texts,
         CancellationToken cancellationToken = default)
     {
+        if (texts.Count == 0)
+        {
+            return Array.Empty<float[]>();
+        }
+
+        if (texts.Count == 1)
+        {
+            var single = await GenerateEmbeddingAsync(model, texts[0], cancellationToken).ConfigureAwait(false);
+            return [single];
+        }
+
         _logger.LogDebug("Ollama embed batch: model={Model}, count={Count}", model, texts.Count);
 
-        var results = new List<float[]>(texts.Count);
-        foreach (var text in texts)
+        try
         {
-            var embedding = await GenerateEmbeddingAsync(model, text, cancellationToken).ConfigureAwait(false);
-            results.Add(embedding);
+            // Use batch embedding API with array input
+            var request = new OllamaEmbedBatchRequest { Model = model, Input = texts.ToList() };
+            using var cts = CreateTimeoutCts(cancellationToken);
+
+            var response = await _httpClient.PostAsJsonAsync(
+                _options.BaseUrl + "/api/embed",
+                request,
+                JsonOptions,
+                cts.Token).ConfigureAwait(false);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await response.Content.ReadAsStringAsync(cts.Token).ConfigureAwait(false);
+                _logger.LogError("Ollama batch embed failed: {StatusCode} - {Error}", response.StatusCode, errorContent);
+                throw LlmException.GenerationFailed("HTTP " + response.StatusCode + ": " + errorContent);
+            }
+
+            var result = await response.Content.ReadFromJsonAsync<OllamaEmbedResponse>(JsonOptions, cts.Token).ConfigureAwait(false);
+
+            if (result?.Embeddings is null || result.Embeddings.Count != texts.Count)
+            {
+                throw LlmException.GenerationFailed($"Expected {texts.Count} embeddings, got {result?.Embeddings?.Count ?? 0}");
+            }
+
+            return result.Embeddings;
         }
-        return results;
+        catch (OperationCanceledException) { throw; }
+        catch (LlmException) { throw; }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogError(ex, "Ollama connection failed for batch embeddings");
+            throw LlmException.Unavailable("ollama");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Ollama batch embedding error");
+            throw LlmException.GenerationFailed(ex.Message, ex);
+        }
     }
 
     /// <inheritdoc/>
@@ -362,6 +406,12 @@ public sealed class OllamaProvider : ILlmProvider, IEmbeddingProvider
     {
         public required string Model { get; init; }
         public required string Input { get; init; }
+    }
+
+    private sealed record OllamaEmbedBatchRequest
+    {
+        public required string Model { get; init; }
+        public required List<string> Input { get; init; }
     }
 
     private sealed record OllamaEmbedResponse

@@ -86,19 +86,47 @@ public sealed class AgentRegistry : IAgentRegistry, IDisposable
     /// <inheritdoc/>
     public IAgent? GetBestForCapability(string capability, string? language = null)
     {
+        // First: exact match by priority
         var agent = GetByCapability(capability, language).FirstOrDefault();
         if (agent is not null)
         {
             return agent;
         }
 
-        // Try fallback to base capability (e.g., "csharp-coding" -> "coding")
+        // Second: try wildcard match (e.g., ingest:cs -> ingest:*)
+        var wildcardCapability = GetWildcardCapability(capability);
+        if (wildcardCapability is not null)
+        {
+            _logger.LogDebug("No agent for '{Capability}', trying wildcard '{WildcardCapability}'",
+                capability, wildcardCapability);
+            agent = GetByCapability(wildcardCapability, language).FirstOrDefault();
+            if (agent is not null)
+            {
+                return agent;
+            }
+        }
+
+        // Third: try fallback to base capability (e.g., "csharp-coding" -> "coding")
         var baseCapability = GetBaseCapability(capability);
         if (baseCapability is not null && baseCapability != capability)
         {
             _logger.LogDebug("No agent for '{Capability}', falling back to '{BaseCapability}'",
                 capability, baseCapability);
             return GetByCapability(baseCapability, language).FirstOrDefault();
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Gets the wildcard version of a capability (e.g., "ingest:cs" -> "ingest:*").
+    /// </summary>
+    private static string? GetWildcardCapability(string capability)
+    {
+        var colonIndex = capability.IndexOf(':');
+        if (colonIndex > 0 && colonIndex < capability.Length - 1)
+        {
+            return capability[..(colonIndex + 1)] + "*";
         }
 
         return null;

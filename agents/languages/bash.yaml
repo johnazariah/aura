@@ -1,0 +1,131 @@
+# Bash Language Configuration
+# Complete definition - tools, prompt, best practices all in one file
+
+language:
+  id: bash
+  name: Bash
+  extensions: [".sh", ".bash"]
+  projectFiles: []
+
+capabilities:
+  - bash-coding
+  - coding
+  - scripting
+  - shell
+  - automation
+
+priority: 10
+
+agent:
+  provider: ollama
+  model: qwen2.5-coder:14b
+  temperature: 0.1
+  maxSteps: 15
+
+tools:
+  run:
+    id: bash.run
+    name: Run Bash Script
+    command: bash
+    args: []
+    pathArg: 0
+    description: "Execute a Bash script"
+    categories: [bash, execution]
+    requiresConfirmation: true
+
+  check:
+    id: bash.check
+    name: Check Bash Syntax
+    command: bash
+    args: ["-n"]
+    pathArg: -1
+    description: "Syntax check a Bash script without executing"
+    categories: [bash, validation]
+    requiresConfirmation: false
+
+  lint:
+    id: bash.lint
+    name: Lint Bash Script
+    command: shellcheck
+    args: []
+    pathArg: 0
+    description: "Lint Bash script with ShellCheck for bugs and issues"
+    categories: [bash, linting]
+    requiresConfirmation: false
+    outputParsers:
+      errors:
+        type: lineMatch
+        pattern: "SC"
+        ignoreCase: false
+
+  format:
+    id: bash.format
+    name: Format Bash Script
+    command: shfmt
+    args: ["-w"]
+    pathArg: -1
+    description: "Format Bash script with shfmt"
+    categories: [bash, formatting]
+    requiresConfirmation: true
+
+  format_check:
+    id: bash.format_check
+    name: Check Bash Formatting
+    command: shfmt
+    args: ["-d"]
+    pathArg: -1
+    description: "Check if Bash script is formatted"
+    categories: [bash, formatting]
+    requiresConfirmation: false
+
+prompt:
+  workflow: |
+    Follow this workflow:
+    1. **Understand**: Read relevant script files
+    2. **Plan**: Think through the script logic and edge cases
+    3. **Implement**: Make targeted edits using file.modify or file.write
+    4. **Check**: Use bash.check to verify syntax
+    5. **Lint**: Use bash.lint (ShellCheck) for bugs and best practices
+    6. **Format**: Use bash.format (shfmt) to ensure proper formatting
+    7. **Test**: Use bash.run to test the script (with confirmation)
+
+  bestPractices: |
+    - Always start with `#!/usr/bin/env bash` shebang
+    - Use `set -euo pipefail` for safer scripts (exit on error, unset var, pipe fail)
+    - Quote all variable expansions: "$variable" not $variable
+    - Use `[[ ]]` instead of `[ ]` for conditionals (more features, safer)
+    - Use `$(command)` instead of backticks for command substitution
+    - Use `local` for function variables to avoid pollution
+    - Use `readonly` for constants
+    - Check command existence with `command -v` before using
+    - Use `trap` for cleanup on exit
+    - Use `shellcheck` to catch common bugs
+    - Prefer `printf` over `echo` for portability
+    - Use arrays for lists of items
+
+  syntaxReminders: |
+    - Shebang: `#!/usr/bin/env bash`
+    - Strict mode: `set -euo pipefail`
+    - Variable: `name="value"` (no spaces around =)
+    - Use variable: `"${name}"` or `"$name"`
+    - Command substitution: `result=$(command arg1 arg2)`
+    - Conditional: `if [[ "$x" == "value" ]]; then ...; elif ...; else ...; fi`
+    - Case: `case "$x" in pattern1) ... ;; pattern2) ... ;; *) ... ;; esac`
+    - For loop: `for item in "${array[@]}"; do ...; done`
+    - For range: `for i in {1..10}; do ...; done`
+    - While loop: `while read -r line; do ...; done < file`
+    - Function: `my_func() { local arg="$1"; ...; return 0; }`
+    - Array: `arr=(one two three)` then `"${arr[@]}"`
+    - Associative array: `declare -A map; map[key]="value"`
+    - Arithmetic: `((x++))` or `result=$((a + b))`
+    - Default value: `"${var:-default}"` or `"${var:=default}"`
+    - Substring: `"${var:0:5}"` (first 5 chars)
+    - Redirect: `cmd > file 2>&1` or `cmd &> file`
+    - Here document: `cat <<EOF ... EOF`
+    - Trap: `trap 'cleanup' EXIT`
+
+  projectStructure: |
+    - Scripts should be executable: chmod +x script.sh
+    - Place in bin/ or scripts/ directory
+    - Use .sh extension for clarity
+    - Source common functions with `. ./lib/common.sh`

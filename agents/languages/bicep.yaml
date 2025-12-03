@@ -1,0 +1,132 @@
+# Bicep Language Configuration
+# Complete definition - tools, prompt, best practices all in one file
+
+language:
+  id: bicep
+  name: Bicep
+  extensions: [".bicep"]
+  projectFiles: ["bicepconfig.json", "main.bicep"]
+
+capabilities:
+  - bicep-coding
+  - coding
+  - infrastructure-as-code
+  - azure
+
+priority: 10
+
+agent:
+  provider: ollama
+  model: qwen2.5-coder:14b
+  temperature: 0.1
+  maxSteps: 15
+
+tools:
+  build:
+    id: bicep.build
+    name: Build Bicep to ARM
+    command: az
+    args: ["bicep", "build", "--file"]
+    pathArg: -1
+    description: "Compile Bicep file to ARM template JSON"
+    categories: [bicep, compilation]
+    requiresConfirmation: false
+    outputParsers:
+      errors:
+        type: lineMatch
+        pattern: "Error "
+        ignoreCase: false
+
+  validate:
+    id: bicep.validate
+    name: Validate Bicep Template
+    command: az
+    args: ["deployment", "group", "validate", "--template-file"]
+    pathArg: -1
+    description: "Validate Bicep/ARM template against Azure"
+    categories: [bicep, validation]
+    requiresConfirmation: false
+
+  decompile:
+    id: bicep.decompile
+    name: Decompile ARM to Bicep
+    command: az
+    args: ["bicep", "decompile", "--file"]
+    pathArg: -1
+    description: "Decompile ARM JSON template to Bicep"
+    categories: [bicep, conversion]
+    requiresConfirmation: false
+
+  lint:
+    id: bicep.lint
+    name: Lint Bicep Code
+    command: az
+    args: ["bicep", "lint", "--file"]
+    pathArg: -1
+    description: "Lint Bicep file for best practices"
+    categories: [bicep, linting]
+    requiresConfirmation: false
+
+  what_if:
+    id: bicep.what_if
+    name: Preview Bicep Deployment
+    command: az
+    args: ["deployment", "group", "what-if", "--template-file"]
+    pathArg: -1
+    description: "Preview changes that would be made by deployment"
+    categories: [bicep, deployment]
+    requiresConfirmation: false
+
+  format:
+    id: bicep.format
+    name: Format Bicep Code
+    command: az
+    args: ["bicep", "format", "--file"]
+    pathArg: -1
+    description: "Format Bicep file"
+    categories: [bicep, formatting]
+    requiresConfirmation: true
+
+prompt:
+  workflow: |
+    Follow this workflow:
+    1. **Understand**: Read relevant Bicep files, understand the module structure
+    2. **Plan**: Think through the Azure resources and their dependencies
+    3. **Implement**: Make targeted edits using file.modify or file.write
+    4. **Build**: Use bicep.build to compile and check for errors
+    5. **Lint**: Use bicep.lint for best practice suggestions
+    6. **Format**: Use bicep.format to ensure proper formatting
+    7. **Validate**: Use bicep.validate to check against Azure
+    8. **Preview**: Use bicep.what_if to see what would change
+
+  bestPractices: |
+    - Use modules for reusability and organization
+    - Prefer Bicep over raw ARM templates for readability
+    - Use parameter files for environment-specific values
+    - Always specify API versions explicitly
+    - Use `existing` keyword to reference existing resources
+    - Use loops and conditions to reduce repetition
+    - Follow Azure naming conventions for resources
+    - Use `@description` decorator for all parameters
+    - Use `@allowed` decorator for constrained parameter values
+    - Group related resources in modules
+    - Use outputs to pass values between modules
+
+  syntaxReminders: |
+    - Resource: `resource storageAccount 'Microsoft.Storage/storageAccounts@2021-02-01' = { ... }`
+    - Parameter: `param storageAccountName string`
+    - Variable: `var location = resourceGroup().location`
+    - Module: `module network './network.bicep' = { name: 'networkDeploy', params: { ... } }`
+    - Output: `output storageId string = storageAccount.id`
+    - Existing resource: `resource existingVnet 'Microsoft.Network/virtualNetworks@2021-02-01' existing = { name: 'myVnet' }`
+    - Conditional: `resource sa '...' = if (deployStorage) { ... }`
+    - Loop: `resource sa '...' = [for i in range(0, count): { name: 'sa${i}' ... }]`
+    - Decorators: `@description('Storage account name') @minLength(3) @maxLength(24)`
+    - String interpolation: `'storage${uniqueString(resourceGroup().id)}'`
+    - Scope: `targetScope = 'subscription'` or `targetScope = 'resourceGroup'`
+
+  projectStructure: |
+    - main.bicep is the entry point for deployments
+    - modules/ contains reusable Bicep modules
+    - bicepconfig.json configures linting rules
+    - Parameter files: main.parameters.json, main.parameters.prod.json

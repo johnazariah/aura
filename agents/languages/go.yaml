@@ -1,0 +1,140 @@
+# Go Language Configuration
+# Complete definition - replaces both GoTools.cs and go-coding.prompt
+
+language:
+  id: go
+  name: Go
+  extensions: [".go"]
+  projectFiles: ["go.mod", "go.sum"]
+
+capabilities:
+  - go-coding
+  - coding
+  - systems-programming
+
+priority: 10
+
+agent:
+  provider: ollama
+  model: qwen2.5-coder:14b
+  temperature: 0.1
+  maxSteps: 15
+
+tools:
+  build:
+    id: go.build
+    name: Build Go Code
+    command: go
+    args: ["build"]
+    packageArg: -1
+    outputArg: ["-o"]
+    description: "Compile Go code using go build"
+    categories: [go, compilation]
+    requiresConfirmation: false
+    outputParsers:
+      errors:
+        type: lineMatch
+        pattern: ".go:"
+        ignoreCase: false
+
+  test:
+    id: go.test
+    name: Run Go Tests
+    command: go
+    args: ["test", "-v"]
+    packageArg: -1
+    description: "Run Go tests using go test"
+    categories: [go, testing]
+    requiresConfirmation: false
+    outputParsers:
+      testResults:
+        type: regex
+        pattern: "--- (PASS|FAIL):"
+        groups: [status]
+
+  vet:
+    id: go.vet
+    name: Vet Go Code
+    command: go
+    args: ["vet"]
+    packageArg: -1
+    description: "Run go vet to check for suspicious constructs"
+    categories: [go, linting]
+    requiresConfirmation: false
+
+  fmt:
+    id: go.fmt
+    name: Format Go Code
+    command: gofmt
+    args: ["-w"]
+    pathArg: -1
+    description: "Format Go code using gofmt"
+    categories: [go, formatting]
+    requiresConfirmation: true
+
+  mod_tidy:
+    id: go.mod_tidy
+    name: Tidy Go Modules
+    command: go
+    args: ["mod", "tidy"]
+    description: "Clean up go.mod and go.sum dependencies"
+    categories: [go, dependencies]
+    requiresConfirmation: true
+
+  run:
+    id: go.run
+    name: Run Go Program
+    command: go
+    args: ["run"]
+    pathArg: -1
+    description: "Compile and run Go program"
+    categories: [go, execution]
+    requiresConfirmation: true
+
+prompt:
+  workflow: |
+    Follow this workflow:
+    1. **Understand**: Read relevant files, understand the package structure
+    2. **Plan**: Think through the changes needed
+    3. **Implement**: Make targeted edits using file.modify or file.write
+    4. **Build**: Use go.build to compile and check for errors
+    5. **Vet**: Use go.vet to check for suspicious constructs
+    6. **Format**: Use go.fmt to ensure proper formatting
+    7. **Test**: Run tests with go.test if applicable
+    8. **Tidy**: Use go.mod_tidy to clean up dependencies
+
+  bestPractices: |
+    - Keep packages small and focused on one responsibility
+    - Accept interfaces, return structs
+    - Use table-driven tests for comprehensive coverage
+    - Handle errors explicitly - don't ignore them
+    - Prefer composition over inheritance (embedding)
+    - Use context.Context for cancellation and timeouts
+    - Avoid global state - prefer dependency injection
+    - Use defer for cleanup (closing files, unlocking)
+    - Keep concurrency simple - prefer channels over mutexes
+    - Document exported functions, types, and packages
+
+  syntaxReminders: |
+    - Variable declaration: `var x int` or `x := 5`
+    - Function: `func add(x, y int) int { return x + y }`
+    - Multiple return: `func divide(a, b int) (int, error)`
+    - Struct: `type Person struct { Name string; Age int }`
+    - Method: `func (p Person) Greet() string`
+    - Interface: `type Reader interface { Read([]byte) (int, error) }`
+    - Slice: `s := []int{1, 2, 3}` or `make([]int, 0, 10)`
+    - Map: `m := map[string]int{"a": 1}`
+    - Goroutine: `go func() { ... }()`
+    - Channel: `ch := make(chan int)` and `ch <- value`
+    - Error handling: `if err != nil { return err }`
+    - Defer: `defer file.Close()`
+
+  projectStructure: |
+    - go.mod defines module path and dependencies
+    - Package name matches directory name
+    - main package with main() function for executables
+    - cmd/ for multiple binaries: cmd/app1/, cmd/app2/
+    - internal/ for private packages
+    - pkg/ (optional) for public library code
+    - _test.go files for tests in same package
+    - testdata/ for test fixtures

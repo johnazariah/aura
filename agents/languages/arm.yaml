@@ -1,0 +1,117 @@
+# ARM Template Language Configuration
+# Complete definition - tools, prompt, best practices all in one file
+
+language:
+  id: arm
+  name: ARM Templates
+  extensions: [".json"]  # ARM templates are JSON with specific schema
+  projectFiles: ["azuredeploy.json", "mainTemplate.json"]
+
+capabilities:
+  - arm-coding
+  - coding
+  - infrastructure-as-code
+  - azure
+
+priority: 15  # Slightly lower than Bicep since Bicep is preferred
+
+agent:
+  provider: ollama
+  model: qwen2.5-coder:14b
+  temperature: 0.1
+  maxSteps: 15
+
+tools:
+  validate:
+    id: arm.validate
+    name: Validate ARM Template
+    command: az
+    args: ["deployment", "group", "validate", "--template-file"]
+    pathArg: -1
+    description: "Validate ARM template against Azure"
+    categories: [arm, validation]
+    requiresConfirmation: false
+    outputParsers:
+      errors:
+        type: lineMatch
+        pattern: "error"
+        ignoreCase: true
+
+  what_if:
+    id: arm.what_if
+    name: Preview ARM Deployment
+    command: az
+    args: ["deployment", "group", "what-if", "--template-file"]
+    pathArg: -1
+    description: "Preview changes that would be made by deployment"
+    categories: [arm, deployment]
+    requiresConfirmation: false
+
+  deploy:
+    id: arm.deploy
+    name: Deploy ARM Template
+    command: az
+    args: ["deployment", "group", "create", "--template-file"]
+    pathArg: -1
+    description: "Deploy ARM template to Azure"
+    categories: [arm, deployment]
+    requiresConfirmation: true
+
+  convert_to_bicep:
+    id: arm.to_bicep
+    name: Convert ARM to Bicep
+    command: az
+    args: ["bicep", "decompile", "--file"]
+    pathArg: -1
+    description: "Convert ARM template to Bicep"
+    categories: [arm, conversion]
+    requiresConfirmation: false
+
+  export:
+    id: arm.export
+    name: Export Resource Group
+    command: az
+    args: ["group", "export", "--name"]
+    description: "Export existing resource group as ARM template"
+    categories: [arm, export]
+    requiresConfirmation: false
+
+prompt:
+  workflow: |
+    Follow this workflow:
+    1. **Understand**: Read relevant ARM template files
+    2. **Plan**: Think through the Azure resources and dependencies
+    3. **Implement**: Make targeted edits using file.modify or file.write
+    4. **Validate**: Use arm.validate to check the template
+    5. **Preview**: Use arm.what_if to see what would change
+    6. **Consider Bicep**: Use arm.to_bicep if migrating to Bicep makes sense
+
+  bestPractices: |
+    - Consider migrating to Bicep for better readability
+    - Use linked templates for modular deployments
+    - Use parameter files for environment-specific values
+    - Always specify API versions explicitly
+    - Use template functions for dynamic values
+    - Use copy element for creating multiple resources
+    - Use dependsOn only when implicit dependencies aren't enough
+    - Validate templates before deployment
+    - Use what-if to preview changes
+    - Follow Azure naming conventions
+
+  syntaxReminders: |
+    - Schema: `"$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#"`
+    - Parameter: `"parameters": { "storageName": { "type": "string", "metadata": { "description": "..." } } }`
+    - Variable: `"variables": { "location": "[resourceGroup().location]" }`
+    - Resource: `"resources": [{ "type": "Microsoft.Storage/storageAccounts", "apiVersion": "2021-02-01", ... }]`
+    - Output: `"outputs": { "storageId": { "type": "string", "value": "[resourceId('...')]" } }`
+    - Functions: `[concat('storage', uniqueString(resourceGroup().id))]`
+    - Reference: `[reference(resourceId('Microsoft.Storage/storageAccounts', variables('storageName')))]`
+    - Copy: `"copy": { "name": "storageCopy", "count": "[parameters('storageCount')]" }`
+    - Condition: `"condition": "[parameters('deployStorage')]"`
+    - DependsOn: `"dependsOn": ["[resourceId('Microsoft.Network/virtualNetworks', 'myVnet')]"]`
+
+  projectStructure: |
+    - azuredeploy.json is the main template
+    - azuredeploy.parameters.json contains parameter values
+    - linked/ contains linked templates for modular deployments
+    - scripts/ contains deployment scripts

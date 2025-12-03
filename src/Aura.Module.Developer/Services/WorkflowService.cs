@@ -14,6 +14,7 @@ using Aura.Module.Developer.Data;
 using Aura.Module.Developer.Data.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 /// <summary>
 /// Service for managing development workflows.
@@ -25,6 +26,7 @@ public sealed class WorkflowService : IWorkflowService
     private readonly IPromptRegistry _promptRegistry;
     private readonly IGitWorktreeService _worktreeService;
     private readonly IRagService _ragService;
+    private readonly DeveloperModuleOptions _options;
     private readonly ILogger<WorkflowService> _logger;
 
     /// <summary>
@@ -36,6 +38,7 @@ public sealed class WorkflowService : IWorkflowService
         IPromptRegistry promptRegistry,
         IGitWorktreeService worktreeService,
         IRagService ragService,
+        IOptions<DeveloperModuleOptions> options,
         ILogger<WorkflowService> logger)
     {
         _db = db;
@@ -43,6 +46,7 @@ public sealed class WorkflowService : IWorkflowService
         _promptRegistry = promptRegistry;
         _worktreeService = worktreeService;
         _ragService = ragService;
+        _options = options.Value;
         _logger = logger;
     }
 
@@ -59,7 +63,8 @@ public sealed class WorkflowService : IWorkflowService
             .Replace(' ', '-')
             .Where(c => char.IsLetterOrDigit(c) || c == '-')
             .ToArray());
-        var branchName = $"feature/{sanitizedTitle}-{Guid.NewGuid():N}".Substring(0, Math.Min(63, 8 + sanitizedTitle.Length + 33));
+        var prefix = _options.BranchPrefix.TrimEnd('/');
+        var branchName = $"{prefix}/{sanitizedTitle}-{Guid.NewGuid():N}"[..Math.Min(63, prefix.Length + 1 + sanitizedTitle.Length + 33)];
 
         // Create the workflow
         var workflow = new Workflow
@@ -89,9 +94,10 @@ public sealed class WorkflowService : IWorkflowService
                 workflow.WorkspacePath = worktreeResult.Value.Path;
                 _logger.LogInformation("Created worktree at {Path} for workflow {WorkflowId}",
                     workflow.WorkspacePath, workflow.Id);
-                
-                // Index the worktree for RAG
-                await IndexWorktreeForRagAsync(workflow.WorkspacePath, ct);
+
+                // TODO: Index asynchronously in background, not blocking workflow creation
+                // For now, indexing happens on-demand during Analyze phase
+                // await IndexWorktreeForRagAsync(workflow.WorkspacePath, ct);
             }
             else
             {

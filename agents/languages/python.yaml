@@ -1,0 +1,124 @@
+# Python Language Configuration
+# Complete definition - replaces both PythonTools.cs and python-coding.prompt
+
+language:
+  id: python
+  name: Python
+  extensions: [".py", ".pyi"]
+  projectFiles: ["pyproject.toml", "setup.py", "requirements.txt"]
+
+capabilities:
+  - python-coding
+  - coding
+  - scripting
+
+priority: 10
+
+agent:
+  provider: ollama
+  model: qwen2.5-coder:14b
+  temperature: 0.1
+  maxSteps: 15
+
+tools:
+  run_script:
+    id: python.run_script
+    name: Run Python Script
+    command: python
+    args: []
+    pathArg: 0
+    description: "Execute a Python script"
+    categories: [python, execution]
+    requiresConfirmation: true
+
+  run_tests:
+    id: python.run_tests
+    name: Run Python Tests
+    command: pytest
+    args: ["-v"]
+    pathArg: -1
+    description: "Run Python tests using pytest"
+    categories: [python, testing]
+    requiresConfirmation: false
+    outputParsers:
+      testResults:
+        type: regex
+        pattern: "(\\d+) passed.*?(\\d+)? failed"
+        groups: [passed, failed]
+
+  lint:
+    id: python.lint
+    name: Lint Python Code
+    command: ruff
+    args: ["check"]
+    pathArg: -1
+    fallback:
+      command: flake8
+      args: []
+    description: "Lint Python code using ruff (or flake8 as fallback)"
+    categories: [python, linting]
+    requiresConfirmation: false
+
+  format:
+    id: python.format
+    name: Format Python Code
+    command: ruff
+    args: ["format"]
+    pathArg: -1
+    fallback:
+      command: black
+      args: []
+    description: "Format Python code using ruff format (or black as fallback)"
+    categories: [python, formatting]
+    requiresConfirmation: true
+
+  type_check:
+    id: python.type_check
+    name: Type Check Python Code
+    command: mypy
+    args: []
+    pathArg: 0
+    description: "Type-check Python code using mypy"
+    categories: [python, typing]
+    requiresConfirmation: false
+
+prompt:
+  workflow: |
+    Follow this workflow:
+    1. **Understand**: Read relevant files, understand the package structure
+    2. **Plan**: Think through the changes needed
+    3. **Implement**: Make targeted edits using file.modify or file.write
+    4. **Lint**: Use python.lint (ruff) to check for issues
+    5. **Format**: Use python.format (ruff format) to ensure proper formatting
+    6. **Type Check**: Use python.type_check (mypy) for type safety
+    7. **Test**: Run tests with python.run_tests (pytest) if applicable
+
+  bestPractices: |
+    - Use type hints for function signatures
+    - Follow PEP 8 style guide (enforced by ruff/black)
+    - Prefer f-strings for string formatting
+    - Use pathlib.Path instead of os.path
+    - Use dataclasses or Pydantic for structured data
+    - Use context managers (with statement) for resources
+    - Prefer list/dict/set comprehensions over loops
+    - Use `if __name__ == "__main__":` for scripts
+    - Document with docstrings (Google or NumPy style)
+    - Use virtual environments (venv, poetry, uv)
+
+  syntaxReminders: |
+    - Type hints: `def add(x: int, y: int) -> int:`
+    - F-strings: `f"Hello, {name}!"`
+    - List comprehension: `[x * 2 for x in items if x > 0]`
+    - Dict comprehension: `{k: v for k, v in pairs}`
+    - Dataclass: `@dataclass\nclass Person:\n    name: str\n    age: int`
+    - Context manager: `with open(path) as f:`
+    - Match statement (3.10+): `match value: case 1: ... case _: ...`
+    - Walrus operator: `if (n := len(items)) > 0:`
+    - Async/await: `async def fetch(): await response.json()`
+
+  projectStructure: |
+    - pyproject.toml is the modern standard (PEP 517/518)
+    - Use src/ layout for packages: src/mypackage/__init__.py
+    - Tests go in tests/ directory
+    - Use __init__.py for package initialization
+    - Common tools: pytest, ruff, mypy, poetry/uv

@@ -1,0 +1,159 @@
+# Elm Language Configuration
+# Complete definition - tools, prompt, best practices all in one file
+
+language:
+  id: elm
+  name: Elm
+  extensions: [".elm"]
+  projectFiles: ["elm.json"]
+
+capabilities:
+  - elm-coding
+  - coding
+  - functional-programming
+  - frontend
+
+priority: 10
+
+agent:
+  provider: ollama
+  model: qwen2.5-coder:14b
+  temperature: 0.1
+  maxSteps: 15
+
+tools:
+  build:
+    id: elm.build
+    name: Build Elm Application
+    command: elm
+    args: ["make", "src/Main.elm", "--output=main.js"]
+    entryArg: 1
+    outputArg: ["--output"]
+    description: "Compile Elm application to JavaScript"
+    categories: [elm, compilation]
+    requiresConfirmation: false
+    outputParsers:
+      errors:
+        type: lineMatch
+        pattern: "-- "
+        ignoreCase: false
+
+  build_optimized:
+    id: elm.build_optimized
+    name: Build Elm (Optimized)
+    command: elm
+    args: ["make", "src/Main.elm", "--optimize", "--output=main.js"]
+    entryArg: 1
+    outputArg: ["--output"]
+    description: "Compile Elm with optimizations for production"
+    categories: [elm, compilation]
+    requiresConfirmation: false
+
+  format:
+    id: elm.format
+    name: Format Elm Code
+    command: elm-format
+    args: ["--yes"]
+    pathArg: 0
+    description: "Format Elm code using elm-format (the standard formatter)"
+    categories: [elm, formatting]
+    requiresConfirmation: true
+
+  format_check:
+    id: elm.format_check
+    name: Check Elm Formatting
+    command: elm-format
+    args: ["--validate"]
+    pathArg: 0
+    description: "Check if Elm code is properly formatted without modifying"
+    categories: [elm, formatting]
+    requiresConfirmation: false
+
+  lint:
+    id: elm.review
+    name: Lint Elm Code
+    command: elm-review
+    args: []
+    description: "Run elm-review for linting and code quality checks"
+    categories: [elm, linting]
+    requiresConfirmation: false
+
+  test:
+    id: elm.test
+    name: Run Elm Tests
+    command: elm-test
+    args: []
+    description: "Run Elm tests using elm-test"
+    categories: [elm, testing]
+    requiresConfirmation: false
+
+  repl:
+    id: elm.repl
+    name: Start Elm REPL
+    command: elm
+    args: ["repl"]
+    description: "Start Elm REPL for interactive exploration"
+    categories: [elm, repl]
+    requiresConfirmation: false
+
+  install:
+    id: elm.install
+    name: Install Elm Package
+    command: elm
+    args: ["install"]
+    packageArg: -1
+    description: "Install an Elm package"
+    categories: [elm, packages]
+    requiresConfirmation: true
+
+prompt:
+  workflow: |
+    Follow this workflow:
+    1. **Understand**: Read relevant files, understand the module structure
+    2. **Plan**: Think through the changes needed (remember: Elm is strict!)
+    3. **Implement**: Make targeted edits using file.modify or file.write
+    4. **Build**: Use elm.build to compile - the Elm compiler has excellent errors
+    5. **Format**: Use elm.format (elm-format) to ensure proper formatting
+    6. **Lint**: Use elm.review for additional code quality checks
+    7. **Test**: Run tests with elm.test if applicable
+
+  bestPractices: |
+    - Elm has NO runtime exceptions - the compiler catches everything at compile time
+    - Follow The Elm Architecture (TEA): Model → View → Update
+    - Keep Model flat when possible; nest only when it makes semantic sense
+    - Use custom types (union types) over primitives for domain modeling
+    - Prefer type aliases for records: `type alias User = { name : String, age : Int }`
+    - Use opaque types (module-private constructors) for invariants
+    - Pipeline operator |> for readable data transformations
+    - Elm enforces semantic versioning - package API changes are detected automatically
+    - Use Html.Lazy for expensive view computations
+    - Use Html.Keyed for lists with stable identity
+    - Decoders are required for all external data (JSON, ports)
+    - Commands (Cmd) and Subscriptions (Sub) are the only way to do side effects
+    - Never reach for ports until you've exhausted Elm solutions
+
+  syntaxReminders: |
+    - Module: `module Main exposing (main)`
+    - Import: `import Html exposing (Html, div, text)`
+    - Type annotation: `add : Int -> Int -> Int`
+    - Function: `add x y = x + y`
+    - Anonymous function: `\x -> x + 1`
+    - If expression: `if x > 0 then "positive" else "non-positive"`
+    - Case expression: `case maybe of Just x -> x; Nothing -> 0`
+    - Let expression: `let x = 5 in x + 1`
+    - Records: `{ name = "John", age = 30 }`
+    - Record update: `{ person | age = 31 }`
+    - Record access: `person.name` or `.name person`
+    - Union type: `type Maybe a = Just a | Nothing`
+    - Type alias: `type alias Point = { x : Float, y : Float }`
+    - List: `[1, 2, 3]` or `1 :: [2, 3]`
+    - Tuple: `(1, "hello")`
+    - Pipeline: `list |> List.map fn |> List.filter pred`
+    - Composition: `fn1 >> fn2` or `fn2 << fn1`
+
+  projectStructure: |
+    - elm.json defines project and dependencies
+    - src/ contains all Elm source files
+    - Entry point is typically src/Main.elm
+    - Tests go in tests/ directory (for elm-test)
+    - review/ contains elm-review configuration

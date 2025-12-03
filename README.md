@@ -84,7 +84,9 @@ dotnet run --project src/Aura.AppHost
 
 ## Documentation
 
-See [.project/spec/](.project/spec/) for specifications and [.project/plan/](.project/plan/) for implementation plans.
+- [Tool Prerequisites](docs/TOOL-PREREQUISITES.md) - Required external tools for language-specific coding agents
+- [Specifications](.project/spec/) - System design and module specifications
+- [Implementation Plans](.project/plan/) - Phase-by-phase implementation guides
 
 ## License
 

@@ -1,0 +1,154 @@
+# PowerShell Language Configuration
+# Complete definition - tools, prompt, best practices all in one file
+
+language:
+  id: powershell
+  name: PowerShell
+  extensions: [".ps1", ".psm1", ".psd1"]
+  projectFiles: ["*.psd1"]  # Module manifests
+
+capabilities:
+  - powershell-coding
+  - coding
+  - scripting
+  - shell
+  - automation
+  - windows
+
+priority: 10
+
+agent:
+  provider: ollama
+  model: qwen2.5-coder:14b
+  temperature: 0.1
+  maxSteps: 15
+
+tools:
+  run:
+    id: powershell.run
+    name: Run PowerShell Script
+    command: pwsh
+    args: ["-File"]
+    pathArg: -1
+    description: "Execute a PowerShell script"
+    categories: [powershell, execution]
+    requiresConfirmation: true
+
+  check:
+    id: powershell.check
+    name: Check PowerShell Syntax
+    command: pwsh
+    args: ["-Command", "& { $null = [System.Management.Automation.Language.Parser]::ParseFile($args[0], [ref]$null, [ref]$errors); $errors }"]
+    description: "Syntax check a PowerShell script"
+    categories: [powershell, validation]
+    requiresConfirmation: false
+
+  lint:
+    id: powershell.lint
+    name: Lint PowerShell Script
+    command: pwsh
+    args: ["-Command", "Invoke-ScriptAnalyzer", "-Path"]
+    pathArg: -1
+    description: "Lint PowerShell script with PSScriptAnalyzer"
+    categories: [powershell, linting]
+    requiresConfirmation: false
+    outputParsers:
+      errors:
+        type: lineMatch
+        pattern: "Error"
+        ignoreCase: false
+      warnings:
+        type: lineMatch
+        pattern: "Warning"
+        ignoreCase: false
+
+  format:
+    id: powershell.format
+    name: Format PowerShell Script
+    command: pwsh
+    args: ["-Command", "Invoke-Formatter", "-ScriptDefinition", "(Get-Content -Raw"]
+    description: "Format PowerShell script (requires PSScriptAnalyzer)"
+    categories: [powershell, formatting]
+    requiresConfirmation: true
+
+  test:
+    id: powershell.test
+    name: Run Pester Tests
+    command: pwsh
+    args: ["-Command", "Invoke-Pester", "-Path"]
+    pathArg: -1
+    description: "Run Pester tests"
+    categories: [powershell, testing]
+    requiresConfirmation: false
+    outputParsers:
+      testResults:
+        type: regex
+        pattern: "Passed:\\s*(\\d+).*Failed:\\s*(\\d+)"
+        groups: [passed, failed]
+
+  help:
+    id: powershell.help
+    name: Get PowerShell Help
+    command: pwsh
+    args: ["-Command", "Get-Help"]
+    description: "Get help for a cmdlet or function"
+    categories: [powershell, documentation]
+    requiresConfirmation: false
+
+prompt:
+  workflow: |
+    Follow this workflow:
+    1. **Understand**: Read relevant script and module files
+    2. **Plan**: Think through the cmdlet/function design
+    3. **Implement**: Make targeted edits using file.modify or file.write
+    4. **Check**: Use powershell.check to verify syntax
+    5. **Lint**: Use powershell.lint (PSScriptAnalyzer) for best practices
+    6. **Format**: Use powershell.format to ensure proper formatting
+    7. **Test**: Use powershell.test (Pester) for testing
+
+  bestPractices: |
+    - Use approved verbs: Get-, Set-, New-, Remove-, etc. (Get-Verb for list)
+    - Use PascalCase for function names, cmdlet names
+    - Use full cmdlet names in scripts, not aliases (Get-ChildItem not gci)
+    - Use [CmdletBinding()] for advanced functions
+    - Always include comment-based help for functions
+    - Use param() block with type annotations
+    - Use [Parameter(Mandatory)] for required parameters
+    - Use Write-Verbose, Write-Debug for diagnostic output
+    - Use Write-Error for errors, don't throw for expected failures
+    - Use try/catch/finally for error handling
+    - Use $ErrorActionPreference = 'Stop' for strict mode
+    - Avoid Write-Host except for intentional console output
+    - Use splatting for cmdlets with many parameters
+    - Test with Pester
+
+  syntaxReminders: |
+    - Shebang (optional): `#!/usr/bin/env pwsh`
+    - Strict mode: `Set-StrictMode -Version Latest; $ErrorActionPreference = 'Stop'`
+    - Variable: `$name = "value"`
+    - String interpolation: `"Hello, $name!"` or `"Hello, $($obj.Prop)!"`
+    - Array: `$arr = @(1, 2, 3)` or `$arr = 1, 2, 3`
+    - Hashtable: `$hash = @{ Key = "Value"; Another = 123 }`
+    - Function: `function Get-Thing { param([string]$Name) ... }`
+    - Advanced function: `function Get-Thing { [CmdletBinding()] param(...) process { ... } }`
+    - Pipeline: `Get-ChildItem | Where-Object { $_.Length -gt 1MB } | ForEach-Object { ... }`
+    - If: `if ($x -eq $y) { ... } elseif ($x -gt $y) { ... } else { ... }`
+    - Switch: `switch ($x) { "a" { ... } "b" { ... } default { ... } }`
+    - For: `for ($i = 0; $i -lt 10; $i++) { ... }`
+    - Foreach: `foreach ($item in $collection) { ... }`
+    - While: `while ($condition) { ... }`
+    - Try/Catch: `try { ... } catch [ExceptionType] { ... } finally { ... }`
+    - Splatting: `$params = @{ Path = "..."; Recurse = $true }; Get-ChildItem @params`
+    - Here-string: `@" ... "@` or `@' ... '@`
+    - Comparison: `-eq`, `-ne`, `-gt`, `-lt`, `-ge`, `-le`, `-like`, `-match`
+    - Logical: `-and`, `-or`, `-not`, `!`
+    - Type check: `$x -is [string]`
+    - Comment-based help: `<# .SYNOPSIS ... .PARAMETER Name ... .EXAMPLE ... #>`
+
+  projectStructure: |
+    - Module manifest: MyModule.psd1
+    - Module script: MyModule.psm1
+    - Public functions in Public/ folder
+    - Private functions in Private/ folder
+    - Tests in Tests/ folder (*.Tests.ps1)
+    - Use Import-Module to load modules

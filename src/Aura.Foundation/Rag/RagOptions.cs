@@ -78,6 +78,26 @@ public sealed record RagQueryOptions
 public sealed record RagIndexOptions
 {
     /// <summary>
+    /// Default patterns to exclude from indexing.
+    /// </summary>
+    public static readonly IReadOnlyList<string> DefaultExcludePatterns =
+    [
+        "**/bin/**", "**/obj/**", "**/node_modules/**", "**/.git/**",
+        "**/.vs/**", "**/packages/**", "**/dist/**", "**/.nuget/**",
+        "**/*.dll", "**/*.exe", "**/*.pdb", "**/*.cache",
+        "**/wwwroot/lib/**", "**/.idea/**", "**/coverage/**",
+    ];
+
+    /// <summary>
+    /// Default patterns to include for indexing.
+    /// </summary>
+    public static readonly IReadOnlyList<string> DefaultIncludePatterns =
+    [
+        "*.cs", "*.md", "*.txt", "*.json", "*.yaml", "*.yml",
+        "*.ts", "*.tsx", "*.js", "*.jsx", "*.py", "*.rs",
+    ];
+
+    /// <summary>
     /// Gets or sets file patterns to include (e.g., "*.cs", "*.md").
     /// </summary>
     public IReadOnlyList<string>? IncludePatterns { get; init; }
@@ -97,4 +117,16 @@ public sealed record RagIndexOptions
     /// If null, type is auto-detected from file extension.
     /// </summary>
     public RagContentType? ContentType { get; init; }
+
+    /// <summary>
+    /// Gets the effective include patterns (uses defaults if not specified).
+    /// </summary>
+    public IReadOnlyList<string> EffectiveIncludePatterns =>
+        IncludePatterns ?? DefaultIncludePatterns;
+
+    /// <summary>
+    /// Gets the effective exclude patterns (uses defaults if not specified).
+    /// </summary>
+    public IReadOnlyList<string> EffectiveExcludePatterns =>
+        ExcludePatterns ?? DefaultExcludePatterns;
 }

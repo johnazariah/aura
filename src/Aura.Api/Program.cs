@@ -89,9 +89,49 @@ if (!app.Environment.IsEnvironment("Testing"))
         db.Database.Migrate();
         logger.LogInformation("Database migrations applied successfully");
 
-        // Ensure Developer module tables exist (they're defined in DeveloperDbContext)
+        // Ensure Developer module tables exist (EnsureCreated doesn't work after Migrate)
+        // Use raw SQL to create tables if they don't exist
         var developerDb = scope.ServiceProvider.GetRequiredService<DeveloperDbContext>();
-        developerDb.Database.EnsureCreated();
+        await developerDb.Database.ExecuteSqlRawAsync("""
+            CREATE TABLE IF NOT EXISTS workflows (
+                id UUID PRIMARY KEY,
+                title VARCHAR(1000) NOT NULL,
+                description TEXT,
+                repository_path VARCHAR(1000),
+                status VARCHAR(20) NOT NULL,
+                workspace_path VARCHAR(1000),
+                git_branch VARCHAR(500),
+                analyzed_context JSONB,
+                execution_plan JSONB,
+                created_at TIMESTAMPTZ NOT NULL,
+                updated_at TIMESTAMPTZ NOT NULL,
+                completed_at TIMESTAMPTZ
+            );
+            
+            CREATE INDEX IF NOT EXISTS ix_workflows_status ON workflows(status);
+            CREATE INDEX IF NOT EXISTS ix_workflows_created_at ON workflows(created_at);
+            
+            CREATE TABLE IF NOT EXISTS workflow_steps (
+                id UUID PRIMARY KEY,
+                workflow_id UUID NOT NULL REFERENCES workflows(id) ON DELETE CASCADE,
+                "order" INTEGER NOT NULL,
+                name VARCHAR(500) NOT NULL,
+                capability VARCHAR(100) NOT NULL,
+                language VARCHAR(50),
+                description TEXT,
+                status VARCHAR(20) NOT NULL,
+                assigned_agent_id VARCHAR(100),
+                input JSONB,
+                output JSONB,
+                error TEXT,
+                attempts INTEGER NOT NULL DEFAULT 0,
+                started_at TIMESTAMPTZ,
+                completed_at TIMESTAMPTZ
+            );
+            
+            CREATE INDEX IF NOT EXISTS ix_workflow_steps_workflow_order ON workflow_steps(workflow_id, "order");
+            CREATE INDEX IF NOT EXISTS ix_workflow_steps_status ON workflow_steps(status);
+            """);
         logger.LogInformation("Developer module tables ensured");
     }
     catch (Exception ex)
@@ -1086,6 +1126,119 @@ app.MapDelete("/api/graph/{workspacePath}", async (
     }
 });
 
+// Semantic index a directory (code graph + selective embeddings)
+app.MapPost("/api/semantic/index", async (
+    SemanticIndexRequest request,
+    IServiceScopeFactory scopeFactory,
+    CancellationToken ct) =>
+{
+    try
+    {
+        using var scope = scopeFactory.CreateScope();
+        var indexer = scope.ServiceProvider.GetRequiredService<Aura.Foundation.Rag.ISemanticIndexer>();
+
+        var options = new Aura.Foundation.Rag.SemanticIndexOptions
+        {
+            Recursive = request.Recursive ?? true,
+            Parallel = request.Parallel ?? true,
+        };
+
+        var result = await indexer.IndexDirectoryAsync(request.DirectoryPath, options, ct);
+
+        if (!result.Success)
+        {
+            return Results.BadRequest(new
+            {
+                success = false,
+                errors = result.Errors
+            });
+        }
+
+        return Results.Ok(new
+        {
+            success = true,
+            filesIndexed = result.FilesIndexed,
+            chunksCreated = result.ChunksCreated,
+            durationMs = (int)result.Duration.TotalMilliseconds,
+            filesByLanguage = result.FilesByLanguage,
+            warnings = result.Warnings
+        });
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new
+        {
+            success = false,
+            error = ex.Message
+        });
+    }
+});
+
+// ==== Background Indexing Endpoints ====
+
+// Queue a directory for background indexing (non-blocking)
+app.MapPost("/api/index/background", (
+    BackgroundIndexRequest request,
+    Aura.Foundation.Rag.IBackgroundIndexer backgroundIndexer) =>
+{
+    var options = new Aura.Foundation.Rag.RagIndexOptions
+    {
+        Recursive = request.Recursive ?? true,
+        IncludePatterns = request.IncludePatterns?.ToArray(),
+        ExcludePatterns = request.ExcludePatterns?.ToArray(),
+    };
+
+    var jobId = backgroundIndexer.QueueDirectory(request.Path, options);
+
+    return Results.Accepted($"/api/index/jobs/{jobId}", new
+    {
+        jobId = jobId,
+        message = "Indexing queued. Check status at /api/index/jobs/{jobId}",
+        directoryPath = request.Path
+    });
+});
+
+// Get background indexer status
+app.MapGet("/api/index/status", (Aura.Foundation.Rag.IBackgroundIndexer backgroundIndexer) =>
+{
+    var status = backgroundIndexer.GetStatus();
+    return Results.Ok(new
+    {
+        queuedItems = status.QueuedItems,
+        processedItems = status.ProcessedItems,
+        failedItems = status.FailedItems,
+        isProcessing = status.IsProcessing,
+        activeJobs = status.ActiveJobs
+    });
+});
+
+// Get specific job status
+app.MapGet("/api/index/jobs/{jobId:guid}", (
+    Guid jobId,
+    Aura.Foundation.Rag.IBackgroundIndexer backgroundIndexer) =>
+{
+    var status = backgroundIndexer.GetJobStatus(jobId);
+    Console.WriteLine($"DEBUG GetJobStatus: jobId={jobId}, status={status}, Source={status?.Source}");
+    if (status is null)
+    {
+        return Results.NotFound(new { error = $"Job {jobId} not found" });
+    }
+
+    return Results.Ok(new
+    {
+        jobId = status.JobId,
+        source = status.Source,
+        state = status.State.ToString(),
+        totalItems = status.TotalItems,
+        processedItems = status.ProcessedItems,
+        failedItems = status.FailedItems,
+        progressPercent = status.ProgressPercent,
+        startedAt = status.StartedAt,
+        completedAt = status.CompletedAt,
+        error = status.Error
+    });
+});
+
 
 // ==== Tool Endpoints ====
 
@@ -1726,6 +1879,19 @@ record IndexCodeGraphRequest(
     string SolutionPath,
     string WorkspacePath,
     bool Reindex = false);
+
+// Semantic indexing request models
+record SemanticIndexRequest(
+    string DirectoryPath,
+    bool? Recursive = null,
+    bool? Parallel = null);
+
+// Background indexing request models
+record BackgroundIndexRequest(
+    string Path,
+    bool? Recursive = null,
+    IReadOnlyList<string>? IncludePatterns = null,
+    IReadOnlyList<string>? ExcludePatterns = null);
 
 // Make Program accessible for WebApplicationFactory
 

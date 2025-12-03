@@ -6,13 +6,16 @@ namespace Aura.Module.Developer;
 
 using Aura.Foundation.Agents;
 using Aura.Foundation.Modules;
+using Aura.Foundation.Rag;
 using Aura.Foundation.Tools;
+using Aura.Module.Developer.Agents;
 using Aura.Module.Developer.Data;
 using Aura.Module.Developer.Services;
 using Aura.Module.Developer.Tools;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 /// <summary>
 /// Developer workflow module for Aura.
@@ -35,6 +38,9 @@ public sealed class DeveloperModule : IAuraModule
     /// <inheritdoc/>
     public void ConfigureServices(IServiceCollection services, IConfiguration config)
     {
+        // Register module options
+        services.Configure<DeveloperModuleOptions>(config.GetSection(DeveloperModuleOptions.SectionName));
+
         // Get connection string from configuration (shared with Foundation)
         var connectionString = config.GetConnectionString("auradb");
 
@@ -50,6 +56,12 @@ public sealed class DeveloperModule : IAuraModule
 
         // Register Code Graph indexer (for Graph RAG)
         services.AddScoped<ICodeGraphIndexer, CodeGraphIndexer>();
+
+        // Register semantic indexer (combines code graph + selective embeddings)
+        services.AddScoped<ISemanticIndexer, DeveloperSemanticIndexer>();
+
+        // Register hardcoded agents provider (C# ingester, etc.)
+        services.AddSingleton<IHardcodedAgentProvider, DeveloperAgentProvider>();
 
         // Register Roslyn tools
         services.AddSingleton<ListProjectsTool>();
@@ -91,6 +103,9 @@ public sealed class DeveloperModule : IAuraModule
     /// </summary>
     public void RegisterTools(IToolRegistry toolRegistry, IServiceProvider services)
     {
+        var loggerFactory = services.GetRequiredService<ILoggerFactory>();
+        var processRunner = services.GetRequiredService<Foundation.Shell.IProcessRunner>();
+
         // Roslyn tools (code analysis)
         var listProjects = services.GetRequiredService<ListProjectsTool>();
         toolRegistry.RegisterTool<ListProjectsInput, ListProjectsOutput>(listProjects);
@@ -136,5 +151,26 @@ public sealed class DeveloperModule : IAuraModule
 
         var getTypeMembers = services.GetRequiredService<GetTypeMembersTool>();
         toolRegistry.RegisterTool<GetTypeMembersInput, GetTypeMembersOutput>(getTypeMembers);
+
+        // Language-specific tools (use static registration)
+        FSharpTools.RegisterFSharpTools(
+            toolRegistry,
+            processRunner,
+            loggerFactory.CreateLogger("FSharpTools"));
+
+        PythonTools.RegisterPythonTools(
+            toolRegistry,
+            processRunner,
+            loggerFactory.CreateLogger("PythonTools"));
+
+        TypeScriptTools.RegisterTypeScriptTools(
+            toolRegistry,
+            processRunner,
+            loggerFactory.CreateLogger("TypeScriptTools"));
+
+        GoTools.RegisterGoTools(
+            toolRegistry,
+            processRunner,
+            loggerFactory.CreateLogger("GoTools"));
     }
 }

@@ -132,8 +132,8 @@ public sealed class RagService : IRagService
             ? SearchOption.AllDirectories
             : SearchOption.TopDirectoryOnly;
 
-        var patterns = options.IncludePatterns ?? new[] { "*.*" };
-        var excludePatterns = options.ExcludePatterns ?? Array.Empty<string>();
+        var patterns = options.EffectiveIncludePatterns;
+        var excludePatterns = options.EffectiveExcludePatterns;
 
         var indexedCount = 0;
 
@@ -143,8 +143,8 @@ public sealed class RagService : IRagService
 
             foreach (var filePath in files)
             {
-                // Check exclusions
-                if (excludePatterns.Any(ep => MatchesPattern(filePath, ep)))
+                // Check exclusions using shared GlobMatcher
+                if (GlobMatcher.MatchesAny(filePath, excludePatterns))
                 {
                     continue;
                 }
@@ -429,17 +429,6 @@ public sealed class RagService : IRagService
         _logger.LogInformation(
             "Indexed {ChunkCount} chunks for {FilePath} using {Ingestor}",
             chunks.Count, filePath, ingestor.IngestorId);
-    }
-
-    private static bool MatchesPattern(string filePath, string pattern)
-    {
-        // Simple pattern matching (could be enhanced with glob support)
-        if (pattern.StartsWith("*"))
-        {
-            return filePath.EndsWith(pattern.Substring(1), StringComparison.OrdinalIgnoreCase);
-        }
-
-        return filePath.Contains(pattern, StringComparison.OrdinalIgnoreCase);
     }
 
     private static IReadOnlyDictionary<string, string>? ParseMetadata(string? json)
