@@ -324,7 +324,9 @@ public sealed class AgentRegistry : IAgentRegistry, IDisposable
             return;
         }
 
-        foreach (var watcher in _watchers)
+        // Take a snapshot to avoid concurrent modification
+        var watchersSnapshot = _watchers.ToList();
+        foreach (var watcher in watchersSnapshot)
         {
             watcher.EnableRaisingEvents = false;
             watcher.Dispose();

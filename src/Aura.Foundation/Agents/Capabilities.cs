@@ -55,7 +55,12 @@ public static class Capabilities
     public const string Review = "review";
 
     /// <summary>
-    /// All valid capabilities.
+    /// Prefix for ingestion capabilities (e.g., "ingest:cs", "ingest:py", "ingest:*").
+    /// </summary>
+    public const string IngestPrefix = "ingest:";
+
+    /// <summary>
+    /// All valid capability base names (not including parameterized capabilities like ingest:X).
     /// </summary>
     public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
@@ -69,9 +74,24 @@ public static class Capabilities
     };
 
     /// <summary>
-    /// Checks if a capability is valid (in the fixed vocabulary).
+    /// Checks if a capability is valid (in the fixed vocabulary or a valid pattern).
     /// </summary>
     /// <param name="capability">The capability to check.</param>
     /// <returns>True if valid, false otherwise.</returns>
-    public static bool IsValid(string capability) => All.Contains(capability);
+    public static bool IsValid(string capability)
+    {
+        // Check if it's a base capability
+        if (All.Contains(capability))
+        {
+            return true;
+        }
+
+        // Check if it's a parameterized capability (e.g., "ingest:cs", "ingest:*")
+        if (capability.StartsWith(IngestPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return false;
+    }
 }

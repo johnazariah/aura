@@ -162,6 +162,30 @@
         }
       ]
     },
+    "keybindings": [
+      {
+        "command": "aura.createWorkflow",
+        "key": "ctrl+shift+w",
+        "mac": "cmd+shift+w",
+        "when": "workspaceFolderCount > 0"
+      },
+      {
+        "command": "aura.openChat",
+        "key": "ctrl+shift+a",
+        "mac": "cmd+shift+a"
+      },
+      {
+        "command": "aura.quickExecute",
+        "key": "ctrl+shift+e",
+        "mac": "cmd+shift+e"
+      },
+      {
+        "command": "aura.indexWorkspace",
+        "key": "ctrl+shift+i",
+        "mac": "cmd+shift+i",
+        "when": "workspaceFolderCount > 0"
+      }
+    ],
     "configuration": {
       "title": "Aura",
       "properties": {

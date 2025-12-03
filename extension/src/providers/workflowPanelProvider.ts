@@ -471,6 +471,9 @@ export class WorkflowPanelProvider {
             case 'executeStep':
                 await this.handleExecuteStep(workflowId, message.stepId, panel);
                 break;
+            case 'executeAllPending':
+                await this.handleExecuteAllPending(workflowId, panel);
+                break;
             case 'chat':
                 await this.handleChat(workflowId, message.text, panel);
                 break;
@@ -520,6 +523,48 @@ export class WorkflowPanelProvider {
         } catch (error) {
             panel.webview.postMessage({ type: 'error', message: 'Step execution failed' });
             await this.refreshPanel(workflowId);
+        }
+    }
+
+    private async handleExecuteAllPending(workflowId: string, panel: vscode.WebviewPanel): Promise<void> {
+        try {
+            // Get fresh workflow to find pending steps
+            const workflow = await this.apiService.getWorkflow(workflowId);
+            const pendingSteps = (workflow.steps || []).filter(s => s.status === 'Pending').sort((a, b) => a.order - b.order);
+
+            if (pendingSteps.length === 0) {
+                panel.webview.postMessage({ type: 'error', message: 'No pending steps to execute' });
+                return;
+            }
+
+            // Execute each step sequentially
+            for (let i = 0; i < pendingSteps.length; i++) {
+                const step = pendingSteps[i];
+                panel.webview.postMessage({
+                    type: 'loading',
+                    action: 'execute',
+                    stepId: step.id,
+                    message: `Executing step ${i + 1}/${pendingSteps.length}: ${step.name}`
+                });
+
+                try {
+                    await this.apiService.executeWorkflowStep(workflowId, step.id);
+                    await this.refreshPanel(workflowId);
+                } catch (stepError) {
+                    // Stop on first failure
+                    panel.webview.postMessage({
+                        type: 'error',
+                        message: `Step "${step.name}" failed. Stopping execution.`
+                    });
+                    await this.refreshPanel(workflowId);
+                    return;
+                }
+            }
+
+            panel.webview.postMessage({ type: 'success', message: `All ${pendingSteps.length} steps completed!` });
+            vscode.window.showInformationMessage(`All ${pendingSteps.length} workflow steps completed!`);
+        } catch (error) {
+            panel.webview.postMessage({ type: 'error', message: 'Failed to execute steps' });
         }
     }
 
@@ -1017,13 +1062,14 @@ export class WorkflowPanelProvider {
                 actionBar.querySelectorAll('button').forEach(btn => btn.disabled = true);
                 // Show loading overlay with appropriate message
                 const messages = {
-                    'analyze': '🔍 Analyzing workflow...',
-                    'plan': '📋 Creating plan...',
+                    'analyze': '🔍 Analyzing workflow and indexing codebase...',
+                    'plan': '📋 Creating execution plan...',
                     'execute': '▶ Executing step...',
+                    'executeAll': '▶▶ Executing all pending steps...',
                     'complete': '✓ Completing workflow...',
                     'cancel': '🛑 Cancelling...'
                 };
-                loadingText.textContent = messages[action] || 'Processing...';
+                loadingText.textContent = message.message || messages[action] || 'Processing...';
                 loadingOverlay.classList.add('active');
             } else {
                 loadingOverlay.classList.remove('active');
@@ -1057,19 +1103,22 @@ export class WorkflowPanelProvider {
             vscode.postMessage({ type: 'cancel' });
         }
 
+        function executeAllPending() {
+            setLoading('executeAll', true);
+            vscode.postMessage({ type: 'executeAllPending' });
+        }
+
         function refresh() {
             vscode.postMessage({ type: 'refresh' });
         }
 
         function openWorkspace() {
-            vscode.postMessage({ 
-                type: 'openWorkspace', 
+            vscode.postMessage({
+                type: 'openWorkspace',
                 workspacePath: workflow.workspacePath,
                 gitBranch: workflow.gitBranch
             });
-        }
-
-        function toggleOutput(stepId) {
+        }        function toggleOutput(stepId) {
             const el = document.getElementById('output-' + stepId);
             if (el) {
                 el.style.display = el.style.display === 'none' ? 'block' : 'none';
@@ -1206,6 +1255,8 @@ export class WorkflowPanelProvider {
 
     private getActionButtons(workflow: Workflow): string {
         const buttons: string[] = [];
+        const pendingSteps = (workflow.steps || []).filter(s => s.status === 'Pending');
+        const hasPendingSteps = pendingSteps.length > 0;
 
         switch (workflow.status) {
             case 'Created':
@@ -1218,6 +1269,9 @@ export class WorkflowPanelProvider {
                 break;
             case 'Planned':
             case 'Executing':
+                if (hasPendingSteps) {
+                    buttons.push(`<button class="btn btn-primary" onclick="executeAllPending()">▶▶ Execute All (${pendingSteps.length})</button>`);
+                }
                 buttons.push('<button class="btn btn-primary" onclick="complete()">✓ Complete</button>');
                 buttons.push('<button class="btn btn-danger" onclick="cancel()">Cancel</button>');
                 break;

@@ -8,6 +8,7 @@ using Aura.Foundation.Agents;
 using Aura.Foundation.Llm;
 using Aura.Foundation.Prompts;
 using Aura.Foundation.Tools;
+using Aura.Module.Developer.Agents.Ingesters;
 using Aura.Module.Developer.Services;
 using Microsoft.Extensions.Logging;
 
@@ -52,10 +53,31 @@ public sealed class DeveloperAgentProvider : IHardcodedAgentProvider
     public IEnumerable<IAgent> GetAgents()
     {
         // === Ingesters (for RAG indexing) ===
+        // Priority 10: Specialized native parsers for each language
 
         // C# ingester using Roslyn - highest priority for .cs files
         yield return new CSharpIngesterAgent(
             _loggerFactory.CreateLogger<CSharpIngesterAgent>());
+
+        // F# ingester using FSharp.Compiler.Service
+        yield return new FSharpIngesterAgent(
+            _loggerFactory.CreateLogger<FSharpIngesterAgent>());
+
+        // Python ingester using regex patterns
+        yield return new PythonIngesterAgent(
+            _loggerFactory.CreateLogger<PythonIngesterAgent>());
+
+        // TypeScript/JavaScript ingester using regex patterns
+        yield return new TypeScriptIngesterAgent(
+            _loggerFactory.CreateLogger<TypeScriptIngesterAgent>());
+
+        // Go ingester using regex patterns
+        yield return new GoIngesterAgent(
+            _loggerFactory.CreateLogger<GoIngesterAgent>());
+
+        // Rust ingester using regex patterns
+        yield return new RustIngesterAgent(
+            _loggerFactory.CreateLogger<RustIngesterAgent>());
 
         // === Specialist Coding Agents (Priority 10) ===
 

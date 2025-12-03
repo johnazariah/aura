@@ -453,6 +453,80 @@ public class MarkdownAgentLoaderTests
     }
 
     [Fact]
+    public void Parse_ExtractsIngesterCapabilities()
+    {
+        // Arrange
+        var content = """
+            # Generic Ingester
+
+            ## Metadata
+
+            - **Name**: Generic Ingester
+            - **Description**: Ingests any file type
+            - **Priority**: 20
+
+            ## Capabilities
+
+            - ingest:*
+
+            ## Tags
+
+            - ingester
+            - polyglot
+
+            ## System Prompt
+
+            Parse the code and extract chunks.
+            """;
+
+        // Act
+        var definition = _loader.Parse("generic-ingester", content);
+
+        // Assert
+        definition.Should().NotBeNull();
+        definition!.Capabilities.Should().Contain("ingest:*");
+        definition.Priority.Should().Be(20);
+        definition.Tags.Should().Contain("ingester");
+    }
+
+    [Fact]
+    public void Parse_ExtractsSpecificIngesterCapabilities()
+    {
+        // Arrange
+        var content = """
+            # Python Ingester
+
+            ## Metadata
+
+            - **Name**: Python Ingester
+            - **Description**: Ingests Python files
+            - **Priority**: 10
+
+            ## Capabilities
+
+            - ingest:py
+            - ingest:pyw
+
+            ## Languages
+
+            - python
+
+            ## System Prompt
+
+            Parse Python code.
+            """;
+
+        // Act
+        var definition = _loader.Parse("python-ingester", content);
+
+        // Assert
+        definition.Should().NotBeNull();
+        definition!.Capabilities.Should().BeEquivalentTo(["ingest:py", "ingest:pyw"]);
+        definition.Languages.Should().Contain("python");
+        definition.Priority.Should().Be(10);
+    }
+
+    [Fact]
     public void ToMetadata_ConvertsDefinitionCorrectly()
     {
         // Arrange

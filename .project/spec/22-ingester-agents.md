@@ -307,21 +307,27 @@ Results can be cached based on file hash:
 - [x] Create `text-ingester` agent (blank-line)
 - [x] Create `CSharpIngesterAgent` (Roslyn) - port from hve-hack
 - [x] Create `generic-code-ingester.md` (LLM-based)
-- [ ] Port TreeSitter ingesters from hve-hack
+- [ ] Port TreeSitter ingesters from hve-hack (see `.project/tasks/treesitter-ingesters.md`)
 - [x] Add `Capabilities` field to `AgentMetadata` (already existed)
 - [x] Add `GetBestForCapability` to `IAgentRegistry` (already existed, added wildcard support)
+- [x] Add unit tests for `TextIngesterAgent` and `FallbackIngesterAgent`
 
 ## Files
 
 | File | Purpose |
 |------|---------|
-| `agents/text-ingester.md` | Blank-line chunking fallback |
+| `agents/text-ingester.md` | Blank-line chunking fallback (NOT NEEDED - hardcoded) |
 | `agents/generic-code-ingester.md` | LLM-based code parsing |
-| `src/Aura.Foundation/Agents/FallbackIngesterAgent.cs` | Last resort (Priority 0) |
-| `src/Aura.Foundation/Agents/TextIngesterAgent.cs` | Text/markdown chunking (Priority 30) |
+| `src/Aura.Foundation/Agents/FallbackIngesterAgent.cs` | Last resort (Priority 99) |
+| `src/Aura.Foundation/Agents/TextIngesterAgent.cs` | Text/markdown chunking (Priority 50) |
+| `src/Aura.Foundation/Agents/FoundationAgentProvider.cs` | Registers Foundation agents |
 | `src/Aura.Foundation/Rag/ISemanticIndexer.cs` | SemanticChunk + ChunkTypes |
-| `src/Aura.Module.Developer/Agents/CSharpIngesterAgent.cs` | Roslyn ingester (Priority 100) |
+| `src/Aura.Foundation/Rag/BackgroundIndexer.cs` | Integrates with ingester agents |
+| `src/Aura.Module.Developer/Agents/CSharpIngesterAgent.cs` | Roslyn ingester (Priority 10) |
 | `src/Aura.Module.Developer/Agents/DeveloperAgentProvider.cs` | Registers C# ingester |
+| `tests/Aura.Foundation.Tests/Agents/TextIngesterAgentTests.cs` | TextIngesterAgent tests |
+| `tests/Aura.Foundation.Tests/Agents/FallbackIngesterAgentTests.cs` | FallbackIngesterAgent tests |
+| `tests/Aura.Module.Developer.Tests/Agents/CSharpIngesterAgentTests.cs` | CSharpIngesterAgent tests |
 
 ## See Also
 
