@@ -1,8 +1,8 @@
 # Implementation Plan Overview
 
-**Version:** 1.1  
-**Status:** Draft  
-**Last Updated:** 2025-11-26
+**Version:** 2.0
+**Status:** In Progress
+**Last Updated:** 2025-12-03
 
 ## Summary
 
@@ -10,6 +10,39 @@ This document outlines the implementation plan for the Aura rewrite. The goal is
 
 - **Foundation**: Cross-platform AI infrastructure (RAG, LLM, DB, agents)
 - **Verticals**: Domain-specific agent collections (Developer is first vertical)
+
+## Current Status
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| **Aura.Foundation** | ✅ Complete | Agents, LLM, RAG, Data, Tools, Git, Shell, Prompts, Conversations |
+| **Aura.Module.Developer** | ✅ Backend Complete | Workflows, Roslyn tools, Graph RAG, ReAct executor |
+| **Aura.Api** | ✅ Complete | All endpoints for Foundation + Developer |
+| **Aura.AppHost** | ✅ Complete | Aspire orchestration with PostgreSQL + Ollama |
+| **VS Code Extension** | ⚠️ Backend wired | UI needs completion (Phase 4 of Developer Module) |
+| **Tests** | ✅ 205 passing | 188 unit + 17 integration (Testcontainers) |
+
+### Developer Module Silver Thread
+
+| Feature | Status |
+|---------|--------|
+| Workflow lifecycle (Create → Analyze → Plan → Execute → Complete) | ✅ |
+| WorkflowService with all operations | ✅ |
+| Git worktree integration | ✅ |
+| RAG auto-indexing of worktrees | ✅ |
+| Chat-based plan modification | ✅ |
+| Prompt externalization (Handlebars) | ✅ |
+| **Extension UI for workflows** | ⏳ In Progress |
+
+### Additional Features Implemented
+
+| Feature | ADR | Status |
+|---------|-----|--------|
+| Capability-based Agent Routing | ADR-011 | ✅ |
+| Tool-Using Agents (ReAct) | ADR-012 | ✅ |
+| Strongly-typed Agent Contracts | ADR-013 | ✅ |
+| Roslyn Tools (6 tools) | ADR-014 | ✅ |
+| Graph RAG for Code | ADR-015 | ✅ |
 
 ## Architecture Vision
 

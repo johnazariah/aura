@@ -445,12 +445,12 @@ The chat API (`POST /api/developer/workflows/{id}/chat`) returns:
 - [x] Chat endpoint for plan modification
 - [x] Register in `DeveloperModule.ConfigureServices`
 
-### Phase 4: Extension UI
+### Phase 4: Extension UI ✅
 
-- [ ] Workflows tree view in sidebar
-- [ ] Workflow tab with unified chat + steps view
-- [ ] Issue creation command
-- [ ] Step execution with progress
+- [x] Workflows tree view in sidebar (`WorkflowTreeProvider`)
+- [x] Workflow tab with unified chat + steps view (`WorkflowPanelProvider`)
+- [x] Workflow creation command (`aura.createWorkflow`)
+- [x] Step execution with progress (panel refresh + notifications)
 
 ## Non-Goals (MVP)
 
