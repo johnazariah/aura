@@ -1,10 +1,10 @@
 # TreeSitter Ingesters
 
-## Status: ✅ Phase 1 Complete, 🔄 Phase 2a In Progress
+## Status: ✅ Phase 1 Complete, ✅ Phase 2a Complete
 
 ## Overview
 
-TreeSitter-based ingester for 30+ languages is implemented using `TreeSitter.DotNet v1.1.1`. Phase 2a adds semantic enrichment (signatures, parameters, types, decorators).
+TreeSitter-based ingester for 30+ languages is implemented using `TreeSitter.DotNet v1.1.1`. Phase 2a semantic enrichment is complete with signatures, docstrings, imports, parameters, types, and decorators.
 
 ## What's Implemented
 
@@ -14,7 +14,7 @@ TreeSitter-based ingester for 30+ languages is implemented using `TreeSitter.Dot
 - **Languages**: Python, TypeScript, JavaScript, Go, Rust, Java, C/C++, Ruby, PHP, Swift, Scala, Haskell, OCaml, Julia, Bash, HTML, CSS, JSON, TOML
 - **Not Supported**: F# (no grammar available - falls back to LLM at priority 40)
 
-### Phase 2a (In Progress - Semantic Enrichment)
+### Phase 2a (Complete - Semantic Enrichment)
 - **Extended SemanticChunk** with new fields:
   - `Signature` - function/method signature line
   - `Docstring` - full docstring/doc comment
@@ -23,14 +23,17 @@ TreeSitter-based ingester for 30+ languages is implemented using `TreeSitter.Dot
   - `Parameters` - list of `ParameterInfo` (name, type, default, description)
   - `Decorators` - decorators/attributes
   - `TypeReferences` - types used in signature
+  - `Imports` - module imports from file root
 
 - **Language-specific extractors implemented**:
-  - ✅ Python (signatures, type hints, decorators, docstrings)
-  - ✅ TypeScript (signatures, type annotations, JSDoc)
-  - ✅ JavaScript (signatures, JSDoc)
-  - ✅ Go (signatures, doc comments, parameters)
-  - ✅ Rust (signatures, doc comments, attributes)
-  - ✅ Java (signatures, Javadoc, annotations)
+  - ✅ Python (signatures, type hints, decorators, docstrings, imports)
+  - ✅ TypeScript (signatures, type annotations, JSDoc, imports)
+  - ✅ JavaScript (signatures, JSDoc, imports)
+  - ✅ Go (signatures, doc comments, parameters, imports)
+  - ✅ Rust (signatures, doc comments, attributes, imports)
+  - ✅ Java (signatures, Javadoc, annotations, imports)
+
+- **17 unit tests** covering all extraction features
 
 ## Current Priority Scheme
 
@@ -184,19 +187,20 @@ public record ImportInfo
 - [x] Delete regex ingesters (Python, TS, Go, Rust, F#)
 - [x] Update priority scheme
 
-### Phase 2: Semantic Enrichment
-- [ ] Add `Signature`, `Docstring`, `Summary` to `SemanticChunk`
-- [ ] Extract Python docstrings and type hints
-- [ ] Extract TypeScript/JavaScript JSDoc comments
-- [ ] Extract Go doc comments
-- [ ] Extract Rust doc comments (`///`)
-- [ ] Extract Java Javadoc
-- [ ] Extract decorators/attributes
-- [ ] Add `Parameters` with types and descriptions
-- [ ] Add `TypeReferences` for used types
+### Phase 2: ✅ Semantic Enrichment (Complete)
+- [x] Add `Signature`, `Docstring`, `Summary` to `SemanticChunk`
+- [x] Extract Python docstrings and type hints
+- [x] Extract TypeScript/JavaScript JSDoc comments
+- [x] Extract Go doc comments
+- [x] Extract Rust doc comments (`///`)
+- [x] Extract Java Javadoc
+- [x] Extract decorators/attributes
+- [x] Add `Parameters` with types and descriptions
+- [x] Add `TypeReferences` for used types
+- [x] Add `Imports` for dependency tracking
 
 ### Phase 3: Dependency Graph
-- [ ] Extract import statements for each language
+- [x] Extract import statements for each language (done in Phase 2)
 - [ ] Create `Imports` edges in code graph
 - [ ] Enable "find all files that import X" queries
 
