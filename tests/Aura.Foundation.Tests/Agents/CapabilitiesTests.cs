@@ -15,7 +15,7 @@ public class CapabilitiesTests
     [InlineData("review")]
     [InlineData("documentation")]
     [InlineData("analysis")]
-    [InlineData("digestion")]
+    [InlineData("enrichment")]
     [InlineData("fixing")]
     public void IsValid_WithBaseCapability_ReturnsTrue(string capability)
     {
@@ -78,14 +78,14 @@ public class CapabilitiesTests
         Assert.Contains(Capabilities.Review, Capabilities.All);
         Assert.Contains(Capabilities.Documentation, Capabilities.All);
         Assert.Contains(Capabilities.Analysis, Capabilities.All);
-        Assert.Contains(Capabilities.Digestion, Capabilities.All);
+        Assert.Contains(Capabilities.Enrichment, Capabilities.All);
         Assert.Contains(Capabilities.Fixing, Capabilities.All);
     }
 
     [Fact]
     public void All_HasExpectedCount()
     {
-        // 7 base capabilities: chat, coding, review, documentation, analysis, digestion, fixing
+        // 7 base capabilities: chat, coding, review, documentation, analysis, enrichment, fixing
         Assert.Equal(7, Capabilities.All.Count);
     }
 }

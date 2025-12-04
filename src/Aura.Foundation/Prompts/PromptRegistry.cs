@@ -32,18 +32,13 @@ public sealed class PromptRegistry : IPromptRegistry
     public PromptRegistry(
         IFileSystem fileSystem,
         IOptions<PromptOptions> options,
+        IHandlebars handlebars,
         ILogger<PromptRegistry> logger)
     {
         _fileSystem = fileSystem;
         _options = options.Value;
+        _handlebars = handlebars;
         _logger = logger;
-
-        // Configure Handlebars with custom settings
-        _handlebars = Handlebars.Create(new HandlebarsConfiguration
-        {
-            ThrowOnUnresolvedBindingExpression = false, // Don't throw on missing properties
-            NoEscape = true, // Don't HTML-escape output (we're generating prompts, not HTML)
-        });
 
         // Register custom helpers
         RegisterCustomHelpers();

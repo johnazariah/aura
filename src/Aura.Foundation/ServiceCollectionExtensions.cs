@@ -237,6 +237,14 @@ public static class ServiceCollectionExtensions
         // Configure options
         services.Configure<Prompts.PromptOptions>(configuration.GetSection(Prompts.PromptOptions.SectionName));
 
+        // Register shared Handlebars instance for template processing
+        services.AddSingleton<HandlebarsDotNet.IHandlebars>(_ =>
+            HandlebarsDotNet.Handlebars.Create(new HandlebarsDotNet.HandlebarsConfiguration
+            {
+                ThrowOnUnresolvedBindingExpression = false, // Don't throw on missing properties
+                NoEscape = true, // Don't HTML-escape output (we're generating prompts, not HTML)
+            }));
+
         // Prompt registry
         services.AddSingleton<Prompts.IPromptRegistry, Prompts.PromptRegistry>();
 

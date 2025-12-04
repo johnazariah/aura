@@ -47,8 +47,8 @@ public class Workflow
     public string? WorkspacePath { get; set; }
     public string? GitBranch { get; set; }
     
-    // Digested context (JSON)
-    public string? DigestedContext { get; set; }
+    // Enriched context (JSON)
+    public string? EnrichedContext { get; set; }
     
     // Timestamps
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
@@ -62,8 +62,8 @@ public class Workflow
 public enum WorkflowStatus
 {
     Created,
-    Digesting,
-    Digested,
+    Enriching,
+    Enriched,
     Planning,
     Planned,
     Executing,
@@ -161,7 +161,7 @@ public class AuraDbContext : DbContext
             e.HasIndex(w => w.WorkItemId);
             e.HasIndex(w => w.Status);
             e.Property(w => w.Status).HasConversion<string>();
-            e.Property(w => w.DigestedContext).HasColumnType("jsonb");
+            e.Property(w => w.EnrichedContext).HasColumnType("jsonb");
         });
         
         // WorkflowStep

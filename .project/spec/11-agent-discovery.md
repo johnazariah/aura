@@ -66,7 +66,7 @@ See [ADR-011](../adr/011-two-tier-capability-model.md) for decision rationale.
 | Capability | Description |
 |------------|-------------|
 | `chat` | General conversation (fallback) |
-| `digestion` | Turn raw issue text into structured, researched context |
+| `Enrichment` | Turn raw issue text into structured, researched context |
 | `analysis` | Break down requirements into implementation plan |
 | `coding` | Write/modify code (implementation, tests, refactoring) |
 | `fixing` | Iterate on build/test errors until passing |
@@ -165,7 +165,7 @@ Aura ships with these agents out of the box:
 | Agent | Capability | Languages | Priority | Type | Description |
 |-------|------------|-----------|----------|------|-------------|
 | **Chat Agent** | `chat` | - | 80 | Markdown | General conversation fallback |
-| **Issue Digester** | `digestion` | - | 50 | Markdown | Raw issue → structured context with RAG |
+| **Issue Enricher** | `Enrichment` | - | 50 | Markdown | Raw issue → structured context with RAG |
 | **Business Analyst** | `analysis` | - | 50 | Markdown | Requirements → implementation plan |
 | **Coding Agent** | `coding` | polyglot | 70 | Markdown | Write code, tests, refactoring |
 | **Roslyn Agent** | `coding` | csharp | 30 | Coded | C# with compilation validation |
@@ -179,7 +179,7 @@ Aura ships with these agents out of the box:
 ┌─────────────────────────────────────────────────────────────┐
 │  User: "fix the login bug"                                   │
 │                                                              │
-│  1. Issue Digester (digestion)                               │
+│  1. Issue Enricher (Enrichment)                               │
 │     → Researches codebase, adds context, acceptance criteria │
 │                                                              │
 │  2. Business Analyst (analysis)                              │
@@ -207,7 +207,7 @@ When this is complete, here's the end-to-end experience:
 
 ```text
 AGENTS
-├── 📋 Issue Digester (digestion) [50]
+├── 📋 Issue Enricher (Enrichment) [50]
 ├── 📊 Business Analyst (analysis) [50]
 ├── ⚙️ Roslyn Agent (coding) [csharp] [30]      ← Coded, C# specialist
 ├── 💻 Coding Agent (coding) [polyglot] [70]

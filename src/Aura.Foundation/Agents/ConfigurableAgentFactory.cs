@@ -5,6 +5,7 @@
 namespace Aura.Foundation.Agents;
 
 using Aura.Foundation.Llm;
+using HandlebarsDotNet;
 using Microsoft.Extensions.Logging;
 
 /// <summary>
@@ -13,18 +14,22 @@ using Microsoft.Extensions.Logging;
 public sealed class ConfigurableAgentFactory : IAgentFactory
 {
     private readonly ILlmProviderRegistry _providerRegistry;
+    private readonly IHandlebars _handlebars;
     private readonly ILoggerFactory _loggerFactory;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ConfigurableAgentFactory"/> class.
     /// </summary>
     /// <param name="providerRegistry">LLM provider registry.</param>
+    /// <param name="handlebars">Handlebars template engine.</param>
     /// <param name="loggerFactory">Logger factory.</param>
     public ConfigurableAgentFactory(
         ILlmProviderRegistry providerRegistry,
+        IHandlebars handlebars,
         ILoggerFactory loggerFactory)
     {
         _providerRegistry = providerRegistry;
+        _handlebars = handlebars;
         _loggerFactory = loggerFactory;
     }
 
@@ -32,6 +37,6 @@ public sealed class ConfigurableAgentFactory : IAgentFactory
     public IAgent CreateAgent(AgentDefinition definition)
     {
         var logger = _loggerFactory.CreateLogger<ConfigurableAgent>();
-        return new ConfigurableAgent(definition, _providerRegistry, logger);
+        return new ConfigurableAgent(definition, _providerRegistry, _handlebars, logger);
     }
 }

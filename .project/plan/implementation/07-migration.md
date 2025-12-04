@@ -58,7 +58,7 @@ Expected agents:
 - business-analyst-agent
 - coding-agent
 - documentation-agent
-- issue-digestion-agent
+- issue-enrichment-agent
 - testing-agent
 - pr-health-monitor-agent
 
@@ -74,8 +74,8 @@ $workflow = curl -X POST http://localhost:5258/api/workflows `
 
 $id = ($workflow | ConvertFrom-Json).id
 
-# Digest
-curl -X POST "http://localhost:5258/api/workflows/$id/digest"
+# ENRICH
+curl -X POST "http://localhost:5258/api/workflows/$id/enrich"
 
 # Plan
 curl -X POST "http://localhost:5258/api/workflows/$id/plan"
@@ -96,7 +96,7 @@ curl -X POST "http://localhost:5258/api/workflows/$id/steps/$stepId/execute"
    - Agents panel (with loaded agents)
 3. Create a new workflow via command palette
 4. Open workflow, verify phases are visible
-5. Test Digest, Plan, Execute buttons
+5. Test ENRICH, Plan, Execute buttons
 
 ### 7.6 Update Solution File
 
@@ -213,7 +213,7 @@ cd extension && npm run compile
 
 1. **API URL** - Now `/api/workflows` instead of `/api/orchestration/workflows`
 2. **Agent registration** - POST to `/api/agents` instead of gRPC
-3. **Workflow phases** - Explicit `/digest`, `/plan`, `/execute` endpoints
+3. **Workflow phases** - Explicit `/enrich`, `/plan`, `/execute` endpoints
 4. **Step execution** - POST to `/steps/{id}/execute` with optional `agentId`
 
 ## Removed Features
@@ -249,7 +249,7 @@ dotnet ef database update
 - [ ] Agents load from `agents/` folder
 - [ ] Hot-reload works (edit agent .md, verify changes)
 - [ ] Workflow CRUD works
-- [ ] Digest phase calls agent
+- [ ] ENRICH phase calls agent
 - [ ] Plan phase creates steps
 - [ ] Execute step calls agent
 - [ ] Git worktree creation works

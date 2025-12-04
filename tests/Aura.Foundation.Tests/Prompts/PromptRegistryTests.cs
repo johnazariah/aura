@@ -6,6 +6,7 @@ namespace Aura.Foundation.Tests.Prompts;
 
 using System.IO.Abstractions.TestingHelpers;
 using Aura.Foundation.Prompts;
+using HandlebarsDotNet;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -24,7 +25,12 @@ public sealed class PromptRegistryTests
         _fileSystem.AddDirectory("prompts");
 
         var options = Options.Create(new PromptOptions { Directories = ["prompts"] });
-        _registry = new PromptRegistry(_fileSystem, options, NullLogger<PromptRegistry>.Instance);
+        var handlebars = Handlebars.Create(new HandlebarsConfiguration
+        {
+            ThrowOnUnresolvedBindingExpression = false,
+            NoEscape = true,
+        });
+        _registry = new PromptRegistry(_fileSystem, options, handlebars, NullLogger<PromptRegistry>.Instance);
     }
 
     #region Basic Variable Substitution

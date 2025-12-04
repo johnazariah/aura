@@ -7,6 +7,7 @@ namespace Aura.Foundation.Tests.Agents;
 using Aura.Foundation.Agents;
 using Aura.Foundation.Llm;
 using FluentAssertions;
+using HandlebarsDotNet;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
@@ -19,6 +20,7 @@ public class ConfigurableAgentTests
 {
     private readonly ILlmProviderRegistry _providerRegistry;
     private readonly ILlmProvider _provider;
+    private readonly IHandlebars _handlebars;
     private readonly ILogger<ConfigurableAgent> _logger;
 
     public ConfigurableAgentTests()
@@ -26,6 +28,13 @@ public class ConfigurableAgentTests
         _providerRegistry = Substitute.For<ILlmProviderRegistry>();
         _provider = Substitute.For<ILlmProvider>();
         _logger = Substitute.For<ILogger<ConfigurableAgent>>();
+
+        // Create real Handlebars instance for template testing
+        _handlebars = Handlebars.Create(new HandlebarsConfiguration
+        {
+            ThrowOnUnresolvedBindingExpression = false,
+            NoEscape = true,
+        });
 
         _provider.ProviderId.Returns("ollama");
         _providerRegistry.TryGetProvider("ollama", out Arg.Any<ILlmProvider?>())
@@ -41,7 +50,7 @@ public class ConfigurableAgentTests
     {
         // Arrange
         var definition = CreateDefinition("test-agent");
-        var agent = new ConfigurableAgent(definition, _providerRegistry, _logger);
+        var agent = new ConfigurableAgent(definition, _providerRegistry, _handlebars, _logger);
 
         // Act & Assert
         agent.AgentId.Should().Be("test-agent");
@@ -52,7 +61,7 @@ public class ConfigurableAgentTests
     {
         // Arrange
         var definition = CreateDefinition("test-agent", name: "Test Agent", description: "Test");
-        var agent = new ConfigurableAgent(definition, _providerRegistry, _logger);
+        var agent = new ConfigurableAgent(definition, _providerRegistry, _handlebars, _logger);
 
         // Act
         var metadata = agent.Metadata;
@@ -68,7 +77,7 @@ public class ConfigurableAgentTests
     {
         // Arrange
         var definition = CreateDefinition("test-agent");
-        var agent = new ConfigurableAgent(definition, _providerRegistry, _logger);
+        var agent = new ConfigurableAgent(definition, _providerRegistry, _handlebars, _logger);
         var context = AgentContext.FromPrompt("Hello, world!");
 
         _provider.ChatAsync(
@@ -91,7 +100,7 @@ public class ConfigurableAgentTests
     {
         // Arrange
         var definition = CreateDefinition("test-agent", systemPrompt: "You are a helpful assistant.");
-        var agent = new ConfigurableAgent(definition, _providerRegistry, _logger);
+        var agent = new ConfigurableAgent(definition, _providerRegistry, _handlebars, _logger);
         var context = AgentContext.FromPrompt("Hello!");
 
         IReadOnlyList<ChatMessage>? capturedMessages = null;
@@ -121,7 +130,7 @@ public class ConfigurableAgentTests
         var definition = CreateDefinition(
             "test-agent",
             systemPrompt: "Workspace: {{context.WorkspacePath}}");
-        var agent = new ConfigurableAgent(definition, _providerRegistry, _logger);
+        var agent = new ConfigurableAgent(definition, _providerRegistry, _handlebars, _logger);
         var context = AgentContext.FromPromptAndWorkspace("Do something", @"C:\work\project");
 
         IReadOnlyList<ChatMessage>? capturedMessages = null;
@@ -141,11 +150,97 @@ public class ConfigurableAgentTests
     }
 
     [Fact]
+    public async Task ExecuteAsync_HandlesConditionalWithRagContext()
+    {
+        // Arrange
+        var definition = CreateDefinition(
+            "test-agent",
+            systemPrompt: "{{#if context.RagContext}}RAG: {{context.RagContext}}{{/if}}End");
+        var agent = new ConfigurableAgent(definition, _providerRegistry, _handlebars, _logger);
+        var context = new AgentContext("Query", WorkspacePath: null)
+        {
+            RagContext = "File content here",
+        };
+
+        IReadOnlyList<ChatMessage>? capturedMessages = null;
+        _provider.ChatAsync(
+            Arg.Any<string>(),
+            Arg.Do<IReadOnlyList<ChatMessage>>(m => capturedMessages = m),
+            Arg.Any<double>(),
+            Arg.Any<CancellationToken>())
+            .Returns(new LlmResponse("Done!"));
+
+        // Act
+        await agent.ExecuteAsync(context);
+
+        // Assert
+        capturedMessages.Should().NotBeNull();
+        capturedMessages![0].Content.Should().Be("RAG: File content hereEnd");
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_ConditionalOmitsBlockWhenRagContextEmpty()
+    {
+        // Arrange
+        var definition = CreateDefinition(
+            "test-agent",
+            systemPrompt: "Start{{#if context.RagContext}}RAG: {{context.RagContext}}{{/if}}End");
+        var agent = new ConfigurableAgent(definition, _providerRegistry, _handlebars, _logger);
+        var context = AgentContext.FromPrompt("Query"); // No RAG context
+
+        IReadOnlyList<ChatMessage>? capturedMessages = null;
+        _provider.ChatAsync(
+            Arg.Any<string>(),
+            Arg.Do<IReadOnlyList<ChatMessage>>(m => capturedMessages = m),
+            Arg.Any<double>(),
+            Arg.Any<CancellationToken>())
+            .Returns(new LlmResponse("Done!"));
+
+        // Act
+        await agent.ExecuteAsync(context);
+
+        // Assert
+        capturedMessages.Should().NotBeNull();
+        capturedMessages![0].Content.Should().Be("StartEnd");
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_AppendsRagContextWhenNotInTemplate()
+    {
+        // Arrange - template doesn't mention RagContext
+        var definition = CreateDefinition(
+            "test-agent",
+            systemPrompt: "You are a helpful assistant.");
+        var agent = new ConfigurableAgent(definition, _providerRegistry, _handlebars, _logger);
+        var context = new AgentContext("Query", WorkspacePath: null)
+        {
+            RagContext = "Important file content",
+        };
+
+        IReadOnlyList<ChatMessage>? capturedMessages = null;
+        _provider.ChatAsync(
+            Arg.Any<string>(),
+            Arg.Do<IReadOnlyList<ChatMessage>>(m => capturedMessages = m),
+            Arg.Any<double>(),
+            Arg.Any<CancellationToken>())
+            .Returns(new LlmResponse("Done!"));
+
+        // Act
+        await agent.ExecuteAsync(context);
+
+        // Assert
+        capturedMessages.Should().NotBeNull();
+        capturedMessages![0].Content.Should().Contain("You are a helpful assistant.");
+        capturedMessages[0].Content.Should().Contain("Relevant Context from Knowledge Base");
+        capturedMessages[0].Content.Should().Contain("Important file content");
+    }
+
+    [Fact]
     public async Task ExecuteAsync_ThrowsWhenProviderNotFound()
     {
         // Arrange
         var definition = CreateDefinition("test-agent", provider: "unknown-provider");
-        var agent = new ConfigurableAgent(definition, _providerRegistry, _logger);
+        var agent = new ConfigurableAgent(definition, _providerRegistry, _handlebars, _logger);
         var context = AgentContext.FromPrompt("Hello!");
 
         _providerRegistry.TryGetProvider("unknown-provider", out Arg.Any<ILlmProvider?>())
@@ -163,7 +258,7 @@ public class ConfigurableAgentTests
     {
         // Arrange
         var definition = CreateDefinition("test-agent", provider: "unknown-provider");
-        var agent = new ConfigurableAgent(definition, _providerRegistry, _logger);
+        var agent = new ConfigurableAgent(definition, _providerRegistry, _handlebars, _logger);
         var context = AgentContext.FromPrompt("Hello!");
 
         var defaultProvider = Substitute.For<ILlmProvider>();
@@ -191,7 +286,7 @@ public class ConfigurableAgentTests
     {
         // Arrange
         var definition = CreateDefinition("test-agent");
-        var agent = new ConfigurableAgent(definition, _providerRegistry, _logger);
+        var agent = new ConfigurableAgent(definition, _providerRegistry, _handlebars, _logger);
         var context = AgentContext.FromPrompt("Hello!");
 
         _provider.ChatAsync(
@@ -212,7 +307,7 @@ public class ConfigurableAgentTests
     {
         // Arrange
         var definition = CreateDefinition("test-agent");
-        var agent = new ConfigurableAgent(definition, _providerRegistry, _logger);
+        var agent = new ConfigurableAgent(definition, _providerRegistry, _handlebars, _logger);
         var context = AgentContext.FromPrompt("Hello!");
         using var cts = new CancellationTokenSource();
         cts.Cancel();
@@ -234,7 +329,7 @@ public class ConfigurableAgentTests
     {
         // Arrange
         var definition = CreateDefinition("test-agent");
-        var agent = new ConfigurableAgent(definition, _providerRegistry, _logger);
+        var agent = new ConfigurableAgent(definition, _providerRegistry, _handlebars, _logger);
         var history = new List<ChatMessage>
         {
             new(ChatRole.User, "First message"),
@@ -267,7 +362,7 @@ public class ConfigurableAgentTests
     {
         // Arrange
         var definition = CreateDefinition("test-agent", temperature: 0.9);
-        var agent = new ConfigurableAgent(definition, _providerRegistry, _logger);
+        var agent = new ConfigurableAgent(definition, _providerRegistry, _handlebars, _logger);
         var context = AgentContext.FromPrompt("Hello!");
 
         double capturedTemperature = 0;

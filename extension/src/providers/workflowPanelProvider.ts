@@ -410,9 +410,13 @@ export class WorkflowPanelProvider {
     }
 
     async openWorkflowPanel(workflowId: string): Promise<void> {
+        const startTime = Date.now();
+        console.log(`[WorkflowPanel] Opening panel for ${workflowId}`);
+        
         // Check if panel already exists
         const existingPanel = this.panels.get(workflowId);
         if (existingPanel) {
+            console.log(`[WorkflowPanel] Revealing existing panel (+${Date.now() - startTime}ms)`);
             existingPanel.reveal();
             await this.refreshPanel(workflowId);
             return;
@@ -421,13 +425,16 @@ export class WorkflowPanelProvider {
         // Fetch workflow data
         let workflow: Workflow;
         try {
+            console.log(`[WorkflowPanel] Fetching workflow data... (+${Date.now() - startTime}ms)`);
             workflow = await this.apiService.getWorkflow(workflowId);
+            console.log(`[WorkflowPanel] Got workflow data (+${Date.now() - startTime}ms)`);
         } catch (error) {
             vscode.window.showErrorMessage('Failed to load workflow');
             return;
         }
 
         // Create new panel
+        console.log(`[WorkflowPanel] Creating webview panel... (+${Date.now() - startTime}ms)`);
         const panel = vscode.window.createWebviewPanel(
             'auraWorkflow',
             `📋 ${workflow.title}`,
@@ -438,6 +445,7 @@ export class WorkflowPanelProvider {
                 localResourceRoots: [this.extensionUri]
             }
         );
+        console.log(`[WorkflowPanel] Webview panel created (+${Date.now() - startTime}ms)`);
 
         this.panels.set(workflowId, panel);
 
@@ -452,7 +460,11 @@ export class WorkflowPanelProvider {
         });
 
         // Set initial content
-        panel.webview.html = this.getHtml(workflow, panel.webview);
+        console.log(`[WorkflowPanel] Generating HTML... (+${Date.now() - startTime}ms)`);
+        const html = this.getHtml(workflow, panel.webview);
+        console.log(`[WorkflowPanel] Setting HTML (${html.length} chars)... (+${Date.now() - startTime}ms)`);
+        panel.webview.html = html;
+        console.log(`[WorkflowPanel] Panel ready (+${Date.now() - startTime}ms)`);
     }
 
     private async refreshPanel(workflowId: string): Promise<void> {
@@ -508,21 +520,27 @@ export class WorkflowPanelProvider {
     }
 
     private async handleEnrich(workflowId: string, panel: vscode.WebviewPanel): Promise<void> {
+        console.log(`[Enrich] Starting enrichment for workflow ${workflowId}`);
         try {
             // Get workflow to check repository path
             const workflow = await this.apiService.getWorkflow(workflowId);
             const repoPath = workflow.repositoryPath || workflow.workspacePath;
+            console.log(`[Enrich] Repository path: ${repoPath}`);
 
             if (!repoPath) {
+                console.log('[Enrich] No repository path - showing error');
                 panel.webview.postMessage({ type: 'error', message: 'No repository path associated with this workflow' });
                 return;
             }
 
             // Check if codebase is indexed
+            console.log(`[Enrich] Checking index status for ${repoPath}`);
             const indexStatus = await this.apiService.getDirectoryIndexStatus(repoPath);
+            console.log(`[Enrich] Index status: isIndexed=${indexStatus.isIndexed}`);
 
             if (!indexStatus.isIndexed) {
                 // Send message to show confirmation dialog
+                console.log('[Enrich] Codebase not indexed - sending confirmIndexAndEnrich message');
                 panel.webview.postMessage({
                     type: 'confirmIndexAndEnrich',
                     message: 'Codebase not indexed. Index now and enrich?'
@@ -531,11 +549,13 @@ export class WorkflowPanelProvider {
             }
 
             // Codebase is indexed, proceed with enrichment
+            console.log('[Enrich] Codebase is indexed - proceeding with enrichment');
             panel.webview.postMessage({ type: 'loading', action: 'enrich' });
             await this.apiService.analyzeWorkflow(workflowId);
             await this.refreshPanel(workflowId);
             panel.webview.postMessage({ type: 'success', message: 'Workflow enriched successfully' });
         } catch (error) {
+            console.error('[Enrich] Error:', error);
             const message = error instanceof Error ? error.message : 'Failed to enrich workflow';
             panel.webview.postMessage({ type: 'error', message });
         }
@@ -553,15 +573,14 @@ export class WorkflowPanelProvider {
 
             panel.webview.postMessage({ type: 'loading', action: 'index' });
 
-            // Use vscode progress for status bar
+            // Use vscode progress in status bar
             await vscode.window.withProgress(
                 {
-                    location: vscode.ProgressLocation.Notification,
-                    title: 'Indexing codebase...',
-                    cancellable: false
+                    location: vscode.ProgressLocation.Window,
+                    title: '$(sync~spin) Indexing codebase...'
                 },
                 async (progress) => {
-                    progress.report({ message: `Indexing ${repoPath}...` });
+                    progress.report({ message: repoPath });
                     await this.apiService.indexDirectory(repoPath);
                 }
             );
@@ -588,12 +607,11 @@ export class WorkflowPanelProvider {
             panel.webview.postMessage({ type: 'loading', action: 'index' });
             await vscode.window.withProgress(
                 {
-                    location: vscode.ProgressLocation.Notification,
-                    title: 'Indexing codebase...',
-                    cancellable: false
+                    location: vscode.ProgressLocation.Window,
+                    title: '$(sync~spin) Indexing codebase...'
                 },
                 async (progress) => {
-                    progress.report({ message: `Indexing ${repoPath}...` });
+                    progress.report({ message: repoPath });
                     await this.apiService.indexDirectory(repoPath);
                 }
             );
@@ -1081,6 +1099,48 @@ export class WorkflowPanelProvider {
             cursor: not-allowed;
         }
 
+        /* Modal Dialog Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        .modal-dialog {
+            background: var(--vscode-editor-background);
+            border: 1px solid var(--vscode-panel-border);
+            border-radius: 8px;
+            padding: 24px;
+            max-width: 400px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        }
+        .modal-content {
+            text-align: center;
+        }
+        .modal-icon {
+            font-size: 2.5em;
+            margin-bottom: 16px;
+        }
+        .modal-message {
+            margin-bottom: 20px;
+            color: var(--vscode-foreground);
+            line-height: 1.5;
+        }
+        .modal-buttons {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+        }
+        .modal-buttons .btn {
+            min-width: 100px;
+        }
+
         .action-bar {
             display: flex;
             gap: 8px;
@@ -1088,6 +1148,25 @@ export class WorkflowPanelProvider {
             padding: 12px;
             background: var(--vscode-toolbar-hoverBackground);
             border-radius: 6px;
+            align-items: center;
+        }
+        .action-group {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        .action-spacer {
+            flex: 1;
+        }
+        .status-text {
+            font-weight: 500;
+            padding: 6px 12px;
+        }
+        .status-text.success {
+            color: #107c10;
+        }
+        .status-text.error {
+            color: #d13438;
         }
     </style>
 </head>
@@ -1109,6 +1188,17 @@ export class WorkflowPanelProvider {
         <div class="loading-content">
             <div class="spinner"></div>
             <span id="loadingText">Processing...</span>
+        </div>
+    </div>
+
+    <!-- Custom Modal Dialog (replaces confirm/alert which are blocked in sandboxed webviews) -->
+    <div id="modalOverlay" class="modal-overlay" style="display: none;">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-icon" id="modalIcon">⚠️</div>
+                <div class="modal-message" id="modalMessage"></div>
+                <div class="modal-buttons" id="modalButtons"></div>
+            </div>
         </div>
     </div>
 
@@ -1184,7 +1274,7 @@ export class WorkflowPanelProvider {
                     'complete': '✓ Completing workflow...',
                     'cancel': '🛑 Cancelling...'
                 };
-                loadingText.textContent = message.message || messages[action] || 'Processing...';
+                loadingText.textContent = messages[action] || 'Processing...';
                 loadingOverlay.classList.add('active');
             } else {
                 loadingOverlay.classList.remove('active');
@@ -1235,6 +1325,26 @@ export class WorkflowPanelProvider {
 
         function refresh() {
             vscode.postMessage({ type: 'refresh' });
+        }
+
+        // Modal dialog functions (replace confirm/alert which are blocked in sandboxed webviews)
+        function showModal(icon, message, buttons) {
+            document.getElementById('modalIcon').textContent = icon;
+            document.getElementById('modalMessage').textContent = message;
+            const buttonsDiv = document.getElementById('modalButtons');
+            buttonsDiv.innerHTML = '';
+            buttons.forEach(btn => {
+                const button = document.createElement('button');
+                button.className = 'btn ' + (btn.primary ? 'btn-primary' : 'btn-secondary');
+                button.textContent = btn.text;
+                button.onclick = btn.action;
+                buttonsDiv.appendChild(button);
+            });
+            document.getElementById('modalOverlay').style.display = 'flex';
+        }
+
+        function hideModal() {
+            document.getElementById('modalOverlay').style.display = 'none';
         }
 
         function openWorkspace() {
@@ -1291,13 +1401,16 @@ export class WorkflowPanelProvider {
                     break;
                 case 'error':
                     setLoading(null, false);
-                    alert('Error: ' + message.message);
+                    showModal('❌', 'Error: ' + message.message, [
+                        { text: 'OK', primary: true, action: hideModal }
+                    ]);
                     break;
                 case 'confirmIndexAndEnrich':
                     setLoading(null, false);
-                    if (confirm(message.message)) {
-                        indexAndEnrich();
-                    }
+                    showModal('📚', message.message, [
+                        { text: 'Index & Enrich', primary: true, action: () => { hideModal(); indexAndEnrich(); } },
+                        { text: 'Cancel', primary: false, action: hideModal }
+                    ]);
                     break;
             }
         });
@@ -1315,6 +1428,7 @@ export class WorkflowPanelProvider {
         return steps.map(step => {
             const statusClass = step.status.toLowerCase();
             const canExecute = step.status === 'Pending';
+            const canRetry = step.status === 'Completed' || step.status === 'Failed';
             
             // Parse output if it's JSON
             let outputContent = '';
@@ -1365,6 +1479,11 @@ export class WorkflowPanelProvider {
                     <button class="btn btn-primary" onclick="executeStep('${step.id}')">▶ Execute</button>
                 </div>
                 ` : ''}
+                ${canRetry ? `
+                <div class="step-actions">
+                    <button class="btn btn-secondary" onclick="executeStep('${step.id}')">🔄 Retry</button>
+                </div>
+                ` : ''}
             </div>
             `;
         }).join('');
@@ -1385,43 +1504,52 @@ export class WorkflowPanelProvider {
     }
 
     private getActionButtons(workflow: Workflow): string {
-        const buttons: string[] = [];
+        const leftButtons: string[] = [];
+        const rightButtons: string[] = [];
         const pendingSteps = (workflow.steps || []).filter(s => s.status === 'Pending');
         const hasPendingSteps = pendingSteps.length > 0;
 
+        // Status-specific primary actions (left side)
         switch (workflow.status) {
             case 'Created':
-                buttons.push('<button class="btn btn-info" onclick="indexCodebase()">📚 Index Codebase</button>');
-                buttons.push('<button class="btn btn-primary" onclick="enrich()">🔍 Enrich Workflow Issue</button>');
-                buttons.push('<button class="btn btn-danger" onclick="cancel()">Cancel</button>');
+                leftButtons.push('<button class="btn btn-primary" onclick="enrich()">🔍 Enrich Issue</button>');
+                leftButtons.push('<button class="btn btn-primary" onclick="indexCodebase()">📚 Index Codebase</button>');
+                rightButtons.push('<button class="btn btn-danger" onclick="cancel()">Cancel Workflow</button>');
                 break;
             case 'Analyzed':
-                buttons.push('<button class="btn btn-primary" onclick="plan()">📋 Create Plan</button>');
-                buttons.push('<button class="btn btn-danger" onclick="cancel()">Cancel</button>');
+                leftButtons.push('<button class="btn btn-primary" onclick="plan()">📋 Create Plan</button>');
+                rightButtons.push('<button class="btn btn-danger" onclick="cancel()">Cancel Workflow</button>');
                 break;
             case 'Planned':
             case 'Executing':
                 if (hasPendingSteps) {
-                    buttons.push(`<button class="btn btn-primary" onclick="executeAllPending()">▶▶ Execute All (${pendingSteps.length})</button>`);
+                    leftButtons.push(`<button class="btn btn-primary" onclick="executeAllPending()">▶ Execute All (${pendingSteps.length})</button>`);
                 }
-                buttons.push('<button class="btn btn-primary" onclick="complete()">✓ Complete</button>');
-                buttons.push('<button class="btn btn-danger" onclick="cancel()">Cancel</button>');
+                leftButtons.push('<button class="btn btn-primary" onclick="complete()">✓ Mark Complete</button>');
+                rightButtons.push('<button class="btn btn-danger" onclick="cancel()">Cancel Workflow</button>');
                 break;
             case 'Completed':
-                buttons.push('<span style="color: #107c10;">✓ Workflow Completed</span>');
+                leftButtons.push('<span class="status-text success">✓ Workflow Completed</span>');
                 break;
             case 'Cancelled':
             case 'Failed':
-                buttons.push(`<span style="color: #d13438;">${workflow.status}</span>`);
+                leftButtons.push(`<span class="status-text error">✗ ${workflow.status}</span>`);
                 break;
         }
 
-        if (workflow.workspacePath) {
-            buttons.push('<button class="btn btn-secondary" onclick="openWorkspace()">📂 Open Workspace</button>');
+        // Utility buttons (left side, after primary actions)
+        if (workflow.workspacePath && workflow.status !== 'Completed' && workflow.status !== 'Cancelled' && workflow.status !== 'Failed') {
+            leftButtons.push('<button class="btn btn-primary" onclick="openWorkspace()">📂 Open Workspace</button>');
         }
-        buttons.push('<button class="btn btn-secondary" onclick="refresh()">🔄 Refresh</button>');
+        leftButtons.push('<button class="btn btn-primary" onclick="refresh()">🔄 Refresh</button>');
 
-        return buttons.join('');
+        // Build the layout: [left actions] [spacer] [right actions]
+        let html = '<div class="action-group">' + leftButtons.join('') + '</div>';
+        if (rightButtons.length > 0) {
+            html += '<div class="action-spacer"></div>';
+            html += '<div class="action-group">' + rightButtons.join('') + '</div>';
+        }
+        return html;
     }
 
     private escapeHtml(text: string): string {

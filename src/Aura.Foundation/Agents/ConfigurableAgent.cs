@@ -6,6 +6,7 @@ namespace Aura.Foundation.Agents;
 
 using System.Text;
 using Aura.Foundation.Llm;
+using HandlebarsDotNet;
 using Microsoft.Extensions.Logging;
 
 /// <summary>
@@ -16,6 +17,8 @@ public sealed class ConfigurableAgent : IAgent
 {
     private readonly AgentDefinition _definition;
     private readonly ILlmProviderRegistry _providerRegistry;
+    private readonly IHandlebars _handlebars;
+    private readonly HandlebarsTemplate<object, object> _compiledTemplate;
     private readonly ILogger _logger;
 
     /// <summary>
@@ -23,15 +26,21 @@ public sealed class ConfigurableAgent : IAgent
     /// </summary>
     /// <param name="definition">The agent definition.</param>
     /// <param name="providerRegistry">LLM provider registry.</param>
+    /// <param name="handlebars">Handlebars template engine.</param>
     /// <param name="logger">Logger instance.</param>
     public ConfigurableAgent(
         AgentDefinition definition,
         ILlmProviderRegistry providerRegistry,
+        IHandlebars handlebars,
         ILogger<ConfigurableAgent> logger)
     {
         _definition = definition;
         _providerRegistry = providerRegistry;
+        _handlebars = handlebars;
         _logger = logger;
+
+        // Pre-compile the system prompt template
+        _compiledTemplate = _handlebars.Compile(_definition.SystemPrompt);
     }
 
     /// <inheritdoc/>
@@ -101,15 +110,29 @@ public sealed class ConfigurableAgent : IAgent
     {
         var messages = new List<ChatMessage>();
 
-        // System prompt with template substitution
-        var systemPrompt = SubstituteTemplateVariables(_definition.SystemPrompt, context);
-        
-        // Inject RAG context if available
-        if (!string.IsNullOrEmpty(context.RagContext))
+        // Build template context object for Handlebars
+        var templateContext = new
         {
-            systemPrompt = InjectRagContext(systemPrompt, context.RagContext);
+            context = new
+            {
+                Prompt = context.Prompt,
+                WorkspacePath = context.WorkspacePath ?? string.Empty,
+                RagContext = context.RagContext ?? string.Empty,
+                Data = context.Properties,
+            },
+            // Also expose at top level for simpler templates
+            ragContext = context.RagContext ?? string.Empty,
+        };
+
+        // Render system prompt using Handlebars
+        var systemPrompt = _compiledTemplate(templateContext);
+
+        // If RAG context wasn't included in template but is available, append it
+        if (!string.IsNullOrEmpty(context.RagContext) && !_definition.SystemPrompt.Contains("RagContext"))
+        {
+            systemPrompt = AppendRagContext(systemPrompt, context.RagContext);
         }
-        
+
         messages.Add(new ChatMessage(ChatRole.System, systemPrompt));
 
         // Add conversation history
@@ -121,48 +144,14 @@ public sealed class ConfigurableAgent : IAgent
         return messages;
     }
 
-    private static string SubstituteTemplateVariables(string template, AgentContext context)
+    private static string AppendRagContext(string systemPrompt, string ragContext)
     {
-        var result = new StringBuilder(template);
-
-        // Substitute context properties
-        result.Replace("{{context.Prompt}}", context.Prompt);
-        result.Replace("{{context.WorkspacePath}}", context.WorkspacePath ?? string.Empty);
-        result.Replace("{{ragContext}}", context.RagContext ?? string.Empty);
-
-        // Substitute properties dictionary
-        foreach (var (key, value) in context.Properties)
-        {
-            result.Replace("{{context." + key + "}}", value?.ToString() ?? string.Empty);
-            result.Replace("{{context.Data." + key + "}}", value?.ToString() ?? string.Empty);
-        }
-
-        // Clean up any remaining template variables with empty strings
-        // This handles optional variables that were not provided
-        var remaining = System.Text.RegularExpressions.Regex.Replace(
-            result.ToString(),
-            @"\{\{[^}]+\}\}",
-            string.Empty);
-
-        return remaining;
-    }
-
-    private static string InjectRagContext(string systemPrompt, string ragContext)
-    {
-        // If the system prompt already contains a RAG context placeholder, it was substituted
-        // If not, append the RAG context as additional context
-        if (systemPrompt.Contains("{{ragContext}}"))
-        {
-            return systemPrompt; // Already handled by template substitution
-        }
-
-        // Append RAG context to the system prompt
         var sb = new StringBuilder(systemPrompt);
         sb.AppendLine();
         sb.AppendLine();
         sb.AppendLine("## Relevant Context from Knowledge Base");
         sb.AppendLine();
-        sb.AppendLine("The following information may be relevant to the user's question:");
+        sb.AppendLine("The following information may be relevant to the user's request:");
         sb.AppendLine();
         sb.Append(ragContext);
 

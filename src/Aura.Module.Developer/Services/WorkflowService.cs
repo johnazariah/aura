@@ -200,15 +200,15 @@ public sealed class WorkflowService : IWorkflowService
 
         try
         {
-            // Get the issue-digester agent (still uses digestion capability internally)
-            var analyzer = _agentRegistry.GetBestForCapability("digestion");
+            // Get the issue-enrichment agent
+            var analyzer = _agentRegistry.GetBestForCapability(Capabilities.Enrichment);
             if (analyzer is null)
             {
-                throw new InvalidOperationException("No agent with 'digestion' capability found");
+                throw new InvalidOperationException($"No agent with '{Capabilities.Enrichment}' capability found");
             }
 
             // Build the prompt from template
-            var prompt = _promptRegistry.Render("workflow-digest", new
+            var prompt = _promptRegistry.Render("workflow-enrich", new
             {
                 title = workflow.Title,
                 description = workflow.Description ?? "No description provided.",
@@ -271,10 +271,10 @@ public sealed class WorkflowService : IWorkflowService
         try
         {
             // Get the business-analyst agent for planning
-            var planner = _agentRegistry.GetBestForCapability("analysis");
+            var planner = _agentRegistry.GetBestForCapability(Capabilities.Analysis);
             if (planner is null)
             {
-                throw new InvalidOperationException("No agent with 'analysis' capability found");
+                throw new InvalidOperationException($"No agent with '{Capabilities.Analysis}' capability found");
             }
 
             // Build the planning prompt from template
@@ -282,7 +282,7 @@ public sealed class WorkflowService : IWorkflowService
             {
                 title = workflow.Title,
                 description = workflow.Description ?? "No description provided.",
-                digestedContext = workflow.AnalyzedContext ?? "No analysis available.",
+                enrichedContext = workflow.AnalyzedContext ?? "No analysis available.",
             });
 
             var context = new AgentContext(prompt, WorkspacePath: workflow.WorkspacePath);
@@ -443,8 +443,8 @@ public sealed class WorkflowService : IWorkflowService
                 {
                     try
                     {
-                        var digest = JsonSerializer.Deserialize<JsonElement>(workflow.AnalyzedContext);
-                        if (digest.TryGetProperty("analysis", out var analysisElement))
+                        var enriched = JsonSerializer.Deserialize<JsonElement>(workflow.AnalyzedContext);
+                        if (enriched.TryGetProperty("analysis", out var analysisElement))
                         {
                             analysis = $"Analysis: {analysisElement.GetString()}";
                         }
@@ -463,7 +463,24 @@ public sealed class WorkflowService : IWorkflowService
                     analysis,
                 });
             }
-            var context = new AgentContext(prompt, WorkspacePath: workflow.WorkspacePath);
+
+            // Query RAG for step-specific context
+            var stepQuery = $"{step.Name} {step.Description} {workflow.Title}";
+            var ragContext = await GetRagContextAsync(
+                stepQuery,
+                workflow.WorkspacePath ?? workflow.RepositoryPath,
+                ct);
+
+            _logger.LogInformation(
+                "Step {StepName} RAG context: {HasContext}, query: {Query}",
+                step.Name,
+                ragContext is not null ? $"{ragContext.Length} chars" : "none",
+                stepQuery.Length > 50 ? stepQuery[..50] + "..." : stepQuery);
+
+            var context = new AgentContext(prompt, WorkspacePath: workflow.WorkspacePath)
+            {
+                RagContext = ragContext,
+            };
             var output = await agent.ExecuteAsync(context, ct);
 
             stopwatch.Stop();
@@ -649,8 +666,7 @@ public sealed class WorkflowService : IWorkflowService
             ?? throw new InvalidOperationException($"Workflow {workflowId} not found");
 
         // Get a chat-capable agent
-        var chatAgent = _agentRegistry.GetBestForCapability("chat")
-            ?? _agentRegistry.GetBestForCapability("general")
+        var chatAgent = _agentRegistry.GetBestForCapability(Capabilities.Chat)
             ?? throw new InvalidOperationException("No chat agent available");
 
         // Build context with current plan

@@ -198,7 +198,7 @@ public static class WorkflowEndpoints
         group.MapDelete("/{id:guid}", DeleteWorkflow);
         
         // Phases
-        group.MapPost("/{id:guid}/digest", DigestWorkflow);
+        group.MapPost("/{id:guid}/Enrich", EnrichWorkflow);
         group.MapPost("/{id:guid}/plan", PlanWorkflow);
         group.MapPost("/{id:guid}/replan", ReplanWorkflow);
         
@@ -252,7 +252,7 @@ public static class WorkflowEndpoints
         return Results.Created($"/api/workflows/{workflow.Id}", ToDetail(workflow));
     }
     
-    private static async Task<IResult> DigestWorkflow(
+    private static async Task<IResult> EnrichWorkflow(
         Guid id,
         IWorkflowRepository repo,
         IAgentRegistry agents)
@@ -260,21 +260,21 @@ public static class WorkflowEndpoints
         var workflow = await repo.GetByIdAsync(id);
         if (workflow is null) return Results.NotFound();
         
-        workflow.Status = WorkflowStatus.Digesting;
+        workflow.Status = WorkflowStatus.Enriching;
         await repo.UpdateAsync(workflow);
         
-        // Get digestion agent
-        var digestAgents = agents.GetByCapability("requirements-analysis");
-        var agent = digestAgents.FirstOrDefault();
+        // Get Enrichment agent
+        var EnrichAgents = agents.GetByCapability("requirements-analysis");
+        var agent = EnrichAgents.FirstOrDefault();
         
         if (agent is null)
         {
-            workflow.Status = WorkflowStatus.Digested;
+            workflow.Status = WorkflowStatus.Enriched;
             await repo.UpdateAsync(workflow);
-            return Results.Ok(new { status = "Digested", context = (object?)null });
+            return Results.Ok(new { status = "Enriched", context = (object?)null });
         }
         
-        // Execute digestion
+        // Execute Enrichment
         var context = new AgentContext
         {
             WorkflowId = workflow.Id,
@@ -286,11 +286,11 @@ public static class WorkflowEndpoints
         
         var result = await agent.ExecuteAsync(context);
         
-        workflow.DigestedContext = result.Output;
-        workflow.Status = WorkflowStatus.Digested;
+        workflow.EnrichedContext = result.Output;
+        workflow.Status = WorkflowStatus.Enriched;
         await repo.UpdateAsync(workflow);
         
-        return Results.Ok(new { status = "Digested", context = result.Output });
+        return Results.Ok(new { status = "Enriched", context = result.Output });
     }
     
     private static async Task<IResult> PlanWorkflow(
@@ -322,7 +322,7 @@ public static class WorkflowEndpoints
             WorkspacePath = workflow.WorkspacePath,
             Data = new Dictionary<string, object>
             {
-                ["DigestedContext"] = workflow.DigestedContext ?? "",
+                ["EnrichedContext"] = workflow.EnrichedContext ?? "",
                 ["Mode"] = "Planning"
             }
         };
@@ -430,7 +430,7 @@ public static class WorkflowEndpoints
     private static WorkflowDetail ToDetail(Workflow w) => new(
         w.Id, w.WorkItemId, w.WorkItemTitle, w.WorkItemDescription,
         w.Status.ToString(), w.WorkspacePath, w.GitBranch,
-        w.DigestedContext, w.Steps.Select(ToStepResponse).ToList(),
+        w.EnrichedContext, w.Steps.Select(ToStepResponse).ToList(),
         w.CreatedAt, w.UpdatedAt);
     
     private static StepResponse ToStepResponse(WorkflowStep s) => new(
@@ -470,7 +470,7 @@ public record WorkflowSummary(
 public record WorkflowDetail(
     Guid Id, string WorkItemId, string WorkItemTitle, string? WorkItemDescription,
     string Status, string? WorkspacePath, string? GitBranch,
-    string? DigestedContext, List<StepResponse> Steps,
+    string? EnrichedContext, List<StepResponse> Steps,
     DateTime CreatedAt, DateTime UpdatedAt);
 
 public record StepResponse(

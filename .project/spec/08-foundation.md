@@ -324,7 +324,7 @@ verticals/developer/
 │   ├── testing-agent.md
 │   ├── documentation-agent.md
 │   ├── business-analyst-agent.md
-│   ├── issue-digestion-agent.md
+│   ├── issue-enrichment-agent.md
 │   └── pr-health-monitor-agent.md
 ├── tools/
 │   └── roslyn-tools.cs         # Roslyn-based code tools

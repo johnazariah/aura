@@ -214,7 +214,7 @@ Full system tests with real LLM.
 public class E2EWorkflowTests
 {
     [Fact]
-    public async Task CompleteWorkflow_DigestPlanExecute()
+    public async Task CompleteWorkflow_ENRICHPlanExecute()
     {
         // This test requires:
         // - Running Aura API
@@ -232,8 +232,8 @@ public class E2EWorkflowTests
         });
         var workflowId = (await workflow.Content.ReadFromJsonAsync<dynamic>()).id;
         
-        // 2. Digest
-        await client.PostAsync($"/api/workflows/{workflowId}/digest", null);
+        // 2. ENRICH
+        await client.PostAsync($"/api/workflows/{workflowId}/enrich", null);
         
         // 3. Plan
         var planResponse = await client.PostAsync($"/api/workflows/{workflowId}/plan", null);

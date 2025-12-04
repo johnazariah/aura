@@ -24,7 +24,7 @@ Aura uses PostgreSQL for persistence, accessed via Entity Framework Core. The sc
 │  │ Status          │         │ Name            │                           │
 │  │ WorkspacePath   │         │ Capability      │                           │
 │  │ GitBranch       │         │ Status          │                           │
-│  │ DigestedContext │         │ AssignedAgentId │                           │
+│  │ EnrichedContext │         │ AssignedAgentId │                           │
 │  │ CreatedAt       │         │ Input           │                           │
 │  │ UpdatedAt       │         │ Output          │                           │
 │  └─────────────────┘         │ Error           │                           │
@@ -84,8 +84,8 @@ public class Workflow
     public string? WorkspacePath { get; set; }           // e.g., "/workspaces/repo-wt-123"
     public string? GitBranch { get; set; }               // e.g., "feature/issue-123"
     
-    // Digested context (RAG output)
-    public string? DigestedContext { get; set; }         // JSON blob
+    // Enriched context (RAG output)
+    public string? EnrichedContext { get; set; }         // JSON blob
     
     // Timestamps
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
@@ -99,8 +99,8 @@ public class Workflow
 public enum WorkflowStatus
 {
     Created,        // Just created
-    Digesting,      // RAG ingestion in progress
-    Digested,       // Context ready
+    Enriching,      // RAG ingestion in progress
+    Enriched,       // Context ready
     Planning,       // Creating execution plan
     Planned,        // Steps defined
     Executing,      // Steps being executed
@@ -224,7 +224,7 @@ public class AuraDbContext : DbContext
             e.HasKey(w => w.Id);
             e.HasIndex(w => w.WorkItemId);
             e.HasIndex(w => w.Status);
-            e.Property(w => w.DigestedContext).HasColumnType("jsonb");
+            e.Property(w => w.EnrichedContext).HasColumnType("jsonb");
         });
         
         // WorkflowStep

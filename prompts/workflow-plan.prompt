@@ -10,7 +10,7 @@ Create an implementation plan for this development task. Break it down into disc
 {{description}}
 
 ## Analysis Context
-{{digestedContext}}
+{{enrichedContext}}
 
 ## Available Capabilities
 - coding: Code generation and implementation

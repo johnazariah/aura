@@ -19,15 +19,33 @@ namespace Aura.Foundation.Agents;
 /// </remarks>
 public static class Capabilities
 {
+    // =====================
+    // Foundation Capabilities (always required)
+    // =====================
+
     /// <summary>
     /// General conversation and Q&amp;A.
     /// </summary>
     public const string Chat = "chat";
 
     /// <summary>
-    /// Transforming raw input into structured context.
+    /// Prefix for ingestion capabilities (e.g., "ingest:cs", "ingest:py", "ingest:*").
     /// </summary>
-    public const string Digestion = "digestion";
+    public const string IngestPrefix = "ingest:";
+
+    /// <summary>
+    /// Wildcard ingestion capability for generic code parsing.
+    /// </summary>
+    public const string IngestWildcard = "ingest:*";
+
+    // =====================
+    // Developer Module Capabilities
+    // =====================
+
+    /// <summary>
+    /// Enriching raw input with structured context, research, and codebase knowledge.
+    /// </summary>
+    public const string Enrichment = "enrichment";
 
     /// <summary>
     /// Requirements analysis and planning.
@@ -55,9 +73,25 @@ public static class Capabilities
     public const string Review = "review";
 
     /// <summary>
-    /// Prefix for ingestion capabilities (e.g., "ingest:cs", "ingest:py", "ingest:*").
+    /// Foundation capabilities required for basic operation.
     /// </summary>
-    public const string IngestPrefix = "ingest:";
+    public static readonly IReadOnlyList<string> Foundation = new[]
+    {
+        Chat,
+    };
+
+    /// <summary>
+    /// Developer module capabilities required for workflow execution.
+    /// </summary>
+    public static readonly IReadOnlyList<string> Developer = new[]
+    {
+        Enrichment,
+        Analysis,
+        Coding,
+        Fixing,
+        Documentation,
+        Review,
+    };
 
     /// <summary>
     /// All valid capability base names (not including parameterized capabilities like ingest:X).
@@ -65,7 +99,7 @@ public static class Capabilities
     public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
         Chat,
-        Digestion,
+        Enrichment,
         Analysis,
         Coding,
         Fixing,

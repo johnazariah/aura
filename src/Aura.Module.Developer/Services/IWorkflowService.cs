@@ -58,7 +58,7 @@ public interface IWorkflowService
     Task DeleteAsync(Guid workflowId, CancellationToken ct = default);
 
     /// <summary>
-    /// Analyzes the workflow requirements using the issue-digester agent.
+    /// Enriches the workflow requirements using the issue-enrichment agent.
     /// </summary>
     /// <param name="workflowId">The workflow ID.</param>
     /// <param name="ct">Cancellation token.</param>

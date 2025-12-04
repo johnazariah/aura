@@ -27,7 +27,7 @@ This phase implements the 8 default agents that ship with Aura. Each agent is de
 | File | To Create |
 |------|-----------|
 | `Capabilities.cs` | Static constants for fixed capabilities |
-| `agents/issue-digester-agent.md` | New |
+| `agents/issue-enricher-agent.md` | New |
 | `agents/business-analyst-agent.md` | New |
 | `agents/build-fixer-agent.md` | New |
 | `agents/documentation-agent.md` | New |
@@ -51,7 +51,7 @@ namespace Aura.Foundation.Agents;
 public static class Capabilities
 {
     public const string Chat = "chat";
-    public const string Digestion = "digestion";
+    public const string Enrichment = "Enrichment";
     public const string Analysis = "analysis";
     public const string Coding = "coding";
     public const string Fixing = "fixing";
@@ -60,7 +60,7 @@ public static class Capabilities
     
     public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
-        Chat, Digestion, Analysis, Coding, Fixing, Documentation, Review
+        Chat, Enrichment, Analysis, Coding, Fixing, Documentation, Review
     };
     
     public static bool IsValid(string capability) => All.Contains(capability);
@@ -326,10 +326,10 @@ Already updated in previous work. Verify format matches spec.
 
 Already updated. Verify format matches spec.
 
-#### 8.3 Create `agents/issue-digester-agent.md`
+#### 8.3 Create `agents/issue-enricher-agent.md`
 
 ```markdown
-# Issue Digester Agent
+# Issue Enricher Agent
 
 Transforms raw issue text into structured, researched context for the Business Analyst.
 
@@ -341,7 +341,7 @@ Transforms raw issue text into structured, researched context for the Business A
 
 ## Capabilities
 
-- digestion
+- Enrichment
 
 ## Tags
 
@@ -398,7 +398,7 @@ Output format:
 ```markdown
 # Business Analyst Agent
 
-Creates implementation plans from digested issue context.
+Creates implementation plans from Enriched issue context.
 
 ## Metadata
 
@@ -627,7 +627,7 @@ Add tests for:
 
 - [ ] Verify `agents/chat-agent.md` format
 - [ ] Verify `agents/coding-agent.md` format
-- [ ] Create `agents/issue-digester-agent.md`
+- [ ] Create `agents/issue-enricher-agent.md`
 - [ ] Create `agents/business-analyst-agent.md`
 - [ ] Create `agents/build-fixer-agent.md`
 - [ ] Create `agents/documentation-agent.md`
@@ -672,7 +672,7 @@ curl "http://localhost:5258/api/agents/best?capability=coding"
 
 - **Phase 1**: Core infrastructure (IAgent, AgentRegistry) ✅ Done
 - **Phase 2**: LLM providers (Ollama) ✅ Done
-- **RAG**: Issue Digester needs RAG - can stub `context.RagContext` initially
+- **RAG**: Issue Enricher needs RAG - can stub `context.RagContext` initially
 - **Roslyn SDK**: For RoslynAgent - defer to separate phase
 
 ---
@@ -1097,7 +1097,7 @@ Code Review Agent:
 
 ### Purpose
 
-Turn digested issue context into a concrete implementation plan with steps.
+Turn Enriched issue context into a concrete implementation plan with steps.
 
 ### Implementation
 
@@ -1129,8 +1129,8 @@ Architecture and existing patterns:
 {{context.RagContext}}
 {{/if}}
 
-Digested issue context:
-{{context.DigestedIssue}}
+Enriched issue context:
+{{context.EnrichedIssue}}
 
 Create an implementation plan with:
 
@@ -1154,7 +1154,7 @@ Format each step as:
 ### Silver Thread
 
 ```
-Input (from Issue Digester):
+Input (from Issue Enricher):
 ## Issue: Add password reset functionality
 ### Context: AuthService exists, uses JWT, SendGrid for email
 ### Acceptance: User can reset password via email link
@@ -1206,10 +1206,10 @@ Add password reset flow: user requests reset, gets email with token, clicks link
 
 ---
 
-## 8.7 Issue Digester Agent
+## 8.7 Issue Enricher Agent
 
-**File:** `agents/issue-digester-agent.md`  
-**Capability:** `digestion`  
+**File:** `agents/issue-enricher-agent.md`  
+**Capability:** `Enrichment`  
 **Priority:** 50  
 **RAG Usage:** Heavy (this is the RAG showcase)
 
@@ -1220,7 +1220,7 @@ Turn raw issue text ("fix the login bug") into structured, researched context th
 ### Implementation
 
 ```markdown
-# Issue Digester Agent
+# Issue Enricher Agent
 
 ## Metadata
 
@@ -1230,7 +1230,7 @@ Turn raw issue text ("fix the login bug") into structured, researched context th
 
 ## Capabilities
 
-- digestion
+- Enrichment
 
 ## Tags
 
@@ -1288,7 +1288,7 @@ Output format:
 ```
 User input: "fix the login bug"
 
-Issue Digester:
+Issue Enricher:
 1. Searches RAG: "login", "authentication", "auth"
 2. Finds: AuthService.cs, LoginController.cs, recent changes
 3. Searches git: recent commits to auth files
@@ -1520,7 +1520,7 @@ public class CodingAgentTests
 - [ ] 8.4 Build Fixer Agent (`agents/build-fixer-agent.md`)
 - [ ] 8.5 Code Review Agent (`agents/code-review-agent.md`)
 - [ ] 8.6 Business Analyst Agent (`agents/business-analyst-agent.md`)
-- [ ] 8.7 Issue Digester Agent (`agents/issue-digester-agent.md`)
+- [ ] 8.7 Issue Enricher Agent (`agents/issue-enricher-agent.md`)
 - [ ] 8.8 Roslyn Agent (`src/Aura.Foundation/Agents/RoslynAgent.cs`)
 - [ ] Update MarkdownAgentLoader to parse Languages field
 - [ ] Update AgentRegistry with GetByCapability(capability, language)
@@ -1531,5 +1531,5 @@ public class CodingAgentTests
 
 - **Phase 1**: Core infrastructure (IAgent, AgentRegistry)
 - **Phase 2**: LLM providers (Ollama)
-- **RAG**: Issue Digester needs RAG to be useful (can stub initially)
+- **RAG**: Issue Enricher needs RAG to be useful (can stub initially)
 - **Roslyn SDK**: For RoslynAgent compilation validation

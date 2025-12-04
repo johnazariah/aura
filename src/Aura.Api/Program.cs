@@ -244,6 +244,78 @@ app.MapGet("/health/ollama", async (ILlmProviderRegistry registry) =>
     }
 });
 
+// Critical agent health check
+app.MapGet("/health/agents", (IAgentRegistry registry) =>
+{
+    // Check foundation capabilities (always required)
+    var foundationResults = Capabilities.Foundation.Select(cap =>
+    {
+        var agent = registry.GetBestForCapability(cap);
+        return new
+        {
+            capability = cap,
+            category = "foundation",
+            available = agent is not null,
+            agentId = agent?.AgentId
+        };
+    }).ToList();
+
+    // Check for ingest:* capability (required for RAG)
+    var ingestAgent = registry.GetBestForCapability(Capabilities.IngestWildcard);
+    foundationResults.Add(new
+    {
+        capability = Capabilities.IngestWildcard,
+        category = "foundation",
+        available = ingestAgent is not null,
+        agentId = ingestAgent?.AgentId
+    });
+
+    // Check developer module capabilities
+    var developerResults = Capabilities.Developer.Select(cap =>
+    {
+        var agent = registry.GetBestForCapability(cap);
+        return new
+        {
+            capability = cap,
+            category = "developer",
+            available = agent is not null,
+            agentId = agent?.AgentId
+        };
+    }).ToList();
+
+    var allResults = foundationResults.Concat(developerResults).ToList();
+    var foundationHealthy = foundationResults.All(r => r.available);
+    var developerHealthy = developerResults.All(r => r.available);
+    var allHealthy = foundationHealthy && developerHealthy;
+
+    var missingFoundation = foundationResults.Where(r => !r.available).Select(r => r.capability).ToList();
+    var missingDeveloper = developerResults.Where(r => !r.available).Select(r => r.capability).ToList();
+
+    string details;
+    if (allHealthy)
+    {
+        details = "All critical agents available";
+    }
+    else if (!foundationHealthy)
+    {
+        details = $"Missing foundation: {string.Join(", ", missingFoundation)}";
+    }
+    else
+    {
+        details = $"Missing developer: {string.Join(", ", missingDeveloper)}";
+    }
+
+    return Results.Ok(new
+    {
+        healthy = allHealthy,
+        foundationHealthy,
+        developerHealthy,
+        details,
+        agents = allResults,
+        timestamp = DateTime.UtcNow
+    });
+});
+
 // Agent endpoints
 app.MapGet("/api/agents", (IAgentRegistry registry, string? capability, string? language) =>
 {

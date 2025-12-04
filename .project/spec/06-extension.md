@@ -29,7 +29,7 @@ The VS Code extension provides the developer interface for Aura. It's a control 
 │  │  │ TreeViews   │  │ WebViews    │  │ Commands    │ │    │
 │  │  │             │  │             │  │             │ │    │
 │  │  │ - Issues    │  │ - Workflow  │  │ - Execute   │ │    │
-│  │  │ - Agents    │  │   Detail    │  │ - Digest    │ │    │
+│  │  │ - Agents    │  │   Detail    │  │ - ENRICH    │ │    │
 │  │  │ - Workflows │  │ - Chat      │  │ - Plan      │ │    │
 │  │  └─────────────┘  └─────────────┘  └─────────────┘ │    │
 │  │                         │                           │    │
@@ -166,7 +166,7 @@ The main interaction surface. Shows workflow phases and steps.
 │ │ [View Plan] [Edit Plan]                                  │ │
 │ └─────────────────────────────────────────────────────────┘ │
 │                                                              │
-│ PHASE 1: DIGEST                                              │
+│ PHASE 1: ENRICH                                              │
 │ ┌─────────────────────────────────────────────────────────┐ │
 │ │ ✓ Context extracted                                      │ │
 │ │ Relevant files: 5 | Patterns detected: 3                │ │
@@ -243,7 +243,7 @@ export class AuraService {
   async deleteWorkflow(id: string): Promise<void>;
   
   // Phases
-  async digestWorkflow(id: string): Promise<DigestResult>;
+  async EnrichWorkflow(id: string): Promise<EnrichResult>;
   async planWorkflow(id: string): Promise<PlanResult>;
   async replanWorkflow(id: string, feedback: string): Promise<PlanResult>;
   

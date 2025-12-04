@@ -48,7 +48,7 @@ public class RoslynCodingAgentTests
         Assert.Contains("csharp-coding", _agent.Metadata.Capabilities);
         Assert.Contains("coding", _agent.Metadata.Capabilities);
         Assert.Contains("refactoring", _agent.Metadata.Capabilities);
-        Assert.Contains("documentation", _agent.Metadata.Capabilities);
+        Assert.Contains("csharp-documentation", _agent.Metadata.Capabilities);
     }
 
     [Fact]

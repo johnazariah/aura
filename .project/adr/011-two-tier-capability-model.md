@@ -30,7 +30,7 @@ But users (like mum with her bible study agent) want to create specialized agent
 public static class Capabilities
 {
     public const string Chat = "chat";
-    public const string Digestion = "digestion";
+    public const string Enrichment = "Enrichment";
     public const string Analysis = "analysis";
     public const string Coding = "coding";
     public const string Fixing = "fixing";
@@ -42,7 +42,7 @@ public static class Capabilities
 | Capability | Description |
 |------------|-------------|
 | `chat` | General conversation (fallback) |
-| `digestion` | Turn raw issue text into structured, researched context |
+| `Enrichment` | Turn raw issue text into structured, researched context |
 | `analysis` | Break down requirements into implementation plan |
 | `coding` | Write/modify code (implementation, tests, refactoring) |
 | `fixing` | Iterate on build/test errors until passing |

@@ -41,7 +41,7 @@ public class AgentDiscoveryTests : IntegrationTestBase
         agents.Should().NotBeNull();
 
         // We have 8 agent files in agents/: build-fixer, business-analyst, chat,
-        // code-review, coding, documentation, echo, issue-digester
+        // code-review, coding, documentation, echo, issue-enricher
         agents!.Length.Should().BeGreaterThanOrEqualTo(5);
     }
 

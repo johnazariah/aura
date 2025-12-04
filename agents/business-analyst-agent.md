@@ -1,6 +1,6 @@
 # Business Analyst Agent
 
-Creates implementation plans from digested issue context.
+Creates implementation plans from enriched issue context.
 
 ## Metadata
 

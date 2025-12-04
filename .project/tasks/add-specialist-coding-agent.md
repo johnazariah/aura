@@ -28,7 +28,7 @@ What does your agent need to do?
 
 # Option A: Markdown Agent
 
-**Use for:** Chat, analysis, documentation, digestion, general-purpose tasks.
+**Use for:** Chat, analysis, documentation, enrichment, general-purpose tasks.
 
 ## Create the Agent
 
@@ -39,7 +39,7 @@ Create `agents/{agent-name}.md`:
 name: My Agent
 description: What this agent does
 capabilities:
-  - chat           # or: analysis, coding, digestion, documentation, fixing, review
+  - chat           # or: analysis, coding, enrichment, documentation, fixing, review
 priority: 50       # Lower = higher priority (10=specialist, 50=general, 70=fallback)
 provider: ollama
 model: llama3:8b

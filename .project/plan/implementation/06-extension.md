@@ -49,7 +49,7 @@ export interface Workflow {
   status: string;
   workspacePath?: string;
   gitBranch?: string;
-  digestedContext?: string;
+  EnrichedContext?: string;
   steps: WorkflowStep[];
   createdAt: string;
   updatedAt: string;
@@ -124,8 +124,8 @@ export class AuraService {
 
   // ==================== Phases ====================
 
-  async digestWorkflow(id: string): Promise<{ status: string; context?: string }> {
-    return await this.fetch(`/api/workflows/${id}/digest`, { method: 'POST' });
+  async EnrichWorkflow(id: string): Promise<{ status: string; context?: string }> {
+    return await this.fetch(`/api/workflows/${id}/enrich`, { method: 'POST' });
   }
 
   async planWorkflow(id: string): Promise<{ status: string; steps: WorkflowStep[] }> {
@@ -306,7 +306,7 @@ class WorkflowItem extends vscode.TreeItem {
       case 'failed': return new vscode.ThemeIcon('x', new vscode.ThemeColor('testing.iconFailed'));
       case 'executing': return new vscode.ThemeIcon('sync~spin');
       case 'planned': return new vscode.ThemeIcon('list-ordered');
-      case 'digested': return new vscode.ThemeIcon('book');
+      case 'Enriched': return new vscode.ThemeIcon('book');
       default: return new vscode.ThemeIcon('circle-outline');
     }
   }
@@ -366,8 +366,8 @@ export class WorkflowDetailPanel {
     this._panel.webview.onDidReceiveMessage(
       async (message) => {
         switch (message.command) {
-          case 'digest':
-            await this.handleDigest();
+          case 'ENRICH':
+            await this.handleEnrich();
             break;
           case 'plan':
             await this.handlePlan();
@@ -409,16 +409,16 @@ export class WorkflowDetailPanel {
     }
   }
 
-  private async handleDigest() {
+  private async handleEnrich() {
     const service = getAuraService();
     
     try {
-      vscode.window.showInformationMessage('Digesting workflow...');
-      await service.digestWorkflow(this._workflowId);
+      vscode.window.showInformationMessage('Enriching workflow...');
+      await service.EnrichWorkflow(this._workflowId);
       await this.refresh();
-      vscode.window.showInformationMessage('Digestion complete!');
+      vscode.window.showInformationMessage('Enrichment complete!');
     } catch (err) {
-      vscode.window.showErrorMessage(`Digestion failed: ${err}`);
+      vscode.window.showErrorMessage(`Enrichment failed: ${err}`);
     }
   }
 
@@ -507,8 +507,8 @@ export class WorkflowDetailPanel {
       <script>
         const vscode = acquireVsCodeApi();
         
-        function digest() {
-          vscode.postMessage({ command: 'digest' });
+        function ENRICH() {
+          vscode.postMessage({ command: 'ENRICH' });
         }
         
         function plan() {
@@ -538,15 +538,15 @@ export class WorkflowDetailPanel {
   }
 
   private _renderPhases(workflow: Workflow, agents: Agent[]): string {
-    const canDigest = workflow.status === 'Created';
-    const canPlan = workflow.status === 'Digested';
+    const canEnrich = workflow.status === 'Created';
+    const canPlan = workflow.status === 'Enriched';
     const canExecute = workflow.status === 'Planned' || workflow.status === 'Executing';
     
     return `
       <div class="phase">
-        <div class="phase-title">Phase 1: Digest</div>
-        ${workflow.digestedContext ? '✓ Context extracted' : 'Not started'}
-        ${canDigest ? '<button onclick="digest()">▶ Digest</button>' : ''}
+        <div class="phase-title">Phase 1: ENRICH</div>
+        ${workflow.EnrichedContext ? '✓ Context extracted' : 'Not started'}
+        ${canEnrich ? '<button onclick="ENRICH()">▶ ENRICH</button>' : ''}
       </div>
       
       <div class="phase">
@@ -721,7 +721,7 @@ Add/update configuration and commands:
 3. ✅ Workflows tree shows workflows
 4. ✅ Agents tree shows agents
 5. ✅ Open workflow shows detail panel
-6. ✅ Digest/Plan/Execute buttons work
+6. ✅ ENRICH/Plan/Execute buttons work
 7. ✅ Agent selection works
 
 ## Deliverables

@@ -124,7 +124,7 @@ GET /api/workflows/{id}
   "status": "Planned",
   "workspacePath": "/workspaces/repo-wt-123",
   "gitBranch": "feature/issue-123",
-  "digestedContext": { ... },
+  "EnrichedContext": { ... },
   "steps": [
     {
       "id": "...",
@@ -165,20 +165,20 @@ DELETE /api/workflows/{id}
 
 ### Workflow Phases
 
-The three-phase workflow model: Digest → Plan → Execute
+The three-phase workflow model: ENRICH → Plan → Execute
 
-#### Phase 1: Digest
+#### Phase 1: ENRICH
 
 Augment the workflow with codebase context via RAG.
 
 ```http
-POST /api/workflows/{id}/digest
+POST /api/workflows/{id}/enrich
 ```
 
 **Response:**
 ```json
 {
-  "status": "Digested",
+  "status": "Enriched",
   "context": {
     "relevantFiles": ["src/Services/UserService.cs", "src/Models/User.cs"],
     "architectureNotes": "Uses repository pattern...",

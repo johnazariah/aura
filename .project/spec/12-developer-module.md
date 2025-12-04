@@ -25,8 +25,8 @@ The Developer Module is the **first vertical application** built on Aura Foundat
 │     └─> Issue → Workflow with WorkspacePath + GitBranch          │
 │     └─> Create git worktree for isolated development             │
 │                                                                  │
-│  3. DIGEST ISSUE                                                 │
-│     └─> issue-digester-agent → structured requirements           │
+│  3. ENRICH ISSUE                                                 │
+│     └─> issue-enrichment-agent → structured requirements           │
 │     └─> RAG: index relevant codebase context                     │
 │                                                                  │
 │  4. PLAN IMPLEMENTATION                                          │
@@ -119,7 +119,7 @@ public sealed class Workflow
     
     // Status
     public WorkflowStatus Status { get; set; }
-    public string? DigestedContext { get; set; }         // JSON from digestion
+    public string? EnrichedContext { get; set; }         // JSON from Enrichment
     public string? ExecutionPlan { get; set; }           // JSON from planning
     
     // Timestamps
@@ -165,7 +165,7 @@ The workflow steps use **capability** to select agents:
 
 | Step | Capability | Agent |
 |------|------------|-------|
-| Digest Issue | `digestion` | issue-digester-agent |
+| ENRICH ISSUE | `Enrichment` | issue-enrichment-agent |
 | Create Plan | `analysis` | business-analyst-agent |
 | Implement Code | `coding` | coding-agent |
 | Fix Build Errors | `fixing` | build-fixer-agent |
@@ -202,7 +202,7 @@ public interface IWorkflowService
     Task<IReadOnlyList<Workflow>> ListAsync(WorkflowStatus? status = null, CancellationToken ct = default);
     
     // Workflow lifecycle
-    Task<Workflow> DigestAsync(Guid workflowId, CancellationToken ct = default);
+    Task<Workflow> EnrichAsync(Guid workflowId, CancellationToken ct = default);
     Task<Workflow> PlanAsync(Guid workflowId, CancellationToken ct = default);
     Task<WorkflowStep> ExecuteStepAsync(Guid workflowId, Guid stepId, CancellationToken ct = default);
     Task<Workflow> CompleteAsync(Guid workflowId, CancellationToken ct = default);
@@ -223,12 +223,12 @@ CreateFromIssueAsync(issueId)
      └─> Workflow.Status = Created
      │
      ▼
-DigestAsync(workflowId)
+EnrichAsync(workflowId)
      │
-     ├─> Run issue-digester-agent
-     ├─> Store DigestedContext JSON
+     ├─> Run issue-enrichment-agent
+     ├─> Store EnrichedContext JSON
      ├─> Index relevant code via RAG
-     └─> Workflow.Status = Digested
+     └─> Workflow.Status = Enriched
      │
      ▼
 PlanAsync(workflowId)
@@ -273,7 +273,7 @@ DELETE /api/developer/issues/{id}         # Delete issue
 POST   /api/developer/issues/{id}/workflow     # Create workflow from issue
 GET    /api/developer/workflows                # List workflows
 GET    /api/developer/workflows/{id}           # Get workflow with steps
-POST   /api/developer/workflows/{id}/digest    # Digest issue context
+POST   /api/developer/workflows/{id}/enrich    # ENRICH ISSUE context
 POST   /api/developer/workflows/{id}/plan      # Create execution plan
 POST   /api/developer/workflows/{id}/steps/{stepId}/execute  # Execute step
 POST   /api/developer/workflows/{id}/complete  # Mark complete
@@ -292,7 +292,7 @@ The extension will add a **Workflows** tree view to the sidebar:
 │   ├── Status: Planned
 │   ├── Branch: feature/issue-abc123
 │   └── Steps:
-│       ├── ✅ Digest Issue
+│       ├── ✅ ENRICH ISSUE
 │       ├── ✅ Create Plan
 │       ├── 🔄 Implement UserService (Running)
 │       ├── ⏳ Add unit tests
@@ -361,8 +361,8 @@ Clicking a workflow in the sidebar opens it as a **VS Code tab** with integrated
 │ │ 3 steps generated | Duration: 4.2s                [View Plan] ││
 │ └────────────────────────────────────────────────────────────────┘│
 │                                                                  │
-│ ┌─ PHASE: DIGEST ───────────────────────────────────────────────┐│
-│ │ ✅ Context extracted by issue-digester-agent                  ││
+│ ┌─ PHASE: ENRICH ───────────────────────────────────────────────┐│
+│ │ ✅ Context extracted by issue-enrichment-agent                  ││
 │ │ 5 files indexed | 3 patterns detected          [View Context] ││
 │ └────────────────────────────────────────────────────────────────┘│
 │                                                                  │
@@ -466,7 +466,7 @@ The chat API (`POST /api/developer/workflows/{id}/chat`) returns:
 
 1. User creates a local issue: "Add a greeting endpoint"
 2. User creates workflow → worktree created
-3. User digests issue → context extracted
+3. User enriches issue → context extracted
 4. User plans → steps created
 5. User executes each step → code generated in worktree
 6. User completes → branch ready for PR

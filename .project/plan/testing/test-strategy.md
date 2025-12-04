@@ -57,10 +57,10 @@ This document defines the three-level testing strategy for Aura, ensuring qualit
    - Assert: Response contains valid C# code with `Reverse` or character manipulation
    - Model: qwen2.5-coder:7b
 
-3. **Issue Digester Summarization**
+3. **Issue Enricher Summarization**
    - Input: Multi-paragraph GitHub issue text
    - Assert: Response is shorter than input, contains key terms
-   - Capability: digestion
+   - Capability: Enrichment
 
 4. **Build Fixer Diagnostic Analysis**
    - Input: Compiler error messages (CS0246, CS1061, etc.)
@@ -122,8 +122,8 @@ This document defines the three-level testing strategy for Aura, ensuring qualit
 
 2. **Issue Breakdown Workflow**
    - Given: GitHub issue URL in workspace
-   - When: User requests issue digestion
-   - Then: Best digestion agent is selected
+   - When: User requests issue Enrichment
+   - Then: Best Enrichment agent is selected
    - And: Response summarizes the issue
    - And: Execution appears in history
 
@@ -302,7 +302,7 @@ tests/
 │   └── Agents/
 │       ├── ChatAgentTests.cs
 │       ├── CodingAgentTests.cs
-│       └── DigestionAgentTests.cs
+│       └── EnrichmentAgentTests.cs
 ├── Aura.E2E.Tests/               # Level 3: Silver threads (TODO)
 │   ├── Infrastructure/
 │   │   └── DockerComposeFixture.cs

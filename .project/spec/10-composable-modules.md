@@ -164,7 +164,7 @@ public class DeveloperModule : IAuraModule
         
         group.MapGet("/workflows", GetWorkflows);
         group.MapPost("/workflows", CreateWorkflow);
-        group.MapPost("/workflows/{id}/digest", DigestWorkflow);
+        group.MapPost("/workflows/{id}/enrich", EnrichWorkflow);
         group.MapPost("/workflows/{id}/plan", PlanWorkflow);
         group.MapPost("/workflows/{id}/steps/{stepId}/execute", ExecuteStep);
         group.MapGet("/worktrees", ListWorktrees);
