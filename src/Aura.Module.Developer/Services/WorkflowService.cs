@@ -465,19 +465,18 @@ public sealed class WorkflowService : IWorkflowService
                 });
             }
 
-            // Query RAG for step-specific context
-            // Use RepositoryPath for RAG (where files are indexed), not WorkspacePath (worktree)
-            var stepQuery = $"{step.Name} {step.Description} {workflow.Title}";
-            var ragContext = await GetRagContextAsync(
-                stepQuery,
+            // Build capability-specific RAG queries for better context
+            var ragQueries = BuildRagQueriesForStep(step, workflow);
+            var ragContext = await GetRagContextForStepAsync(
+                ragQueries,
                 workflow.RepositoryPath ?? workflow.WorkspacePath,
                 ct);
 
             _logger.LogInformation(
-                "Step {StepName} RAG context: {HasContext}, query: {Query}",
+                "Step {StepName} RAG context: {HasContext}, queries: {QueryCount}",
                 step.Name,
                 ragContext is not null ? $"{ragContext.Length} chars" : "none",
-                stepQuery.Length > 50 ? stepQuery[..50] + "..." : stepQuery);
+                ragQueries.Count);
 
             var context = new AgentContext(prompt, WorkspacePath: workflow.WorkspacePath)
             {
@@ -1039,5 +1038,143 @@ public sealed class WorkflowService : IWorkflowService
         public required string Capability { get; init; }
         public string? Language { get; init; }
         public string? Description { get; init; }
+    }
+
+    /// <summary>
+    /// Builds capability-specific RAG queries for a step.
+    /// Different capabilities need different types of context.
+    /// </summary>
+    private static List<string> BuildRagQueriesForStep(WorkflowStep step, Workflow workflow)
+    {
+        var queries = new List<string>();
+
+        // Always include a query about project structure and build
+        queries.Add("project structure build setup dotnet csproj solution");
+
+        // Add capability-specific queries
+        switch (step.Capability?.ToLowerInvariant())
+        {
+            case "documentation":
+                queries.Add("README documentation getting started installation");
+                queries.Add("project description purpose features");
+                if (!string.IsNullOrEmpty(step.Description))
+                {
+                    queries.Add(step.Description);
+                }
+                break;
+
+            case "coding":
+                queries.Add($"{step.Name} implementation class interface");
+                if (!string.IsNullOrEmpty(step.Description))
+                {
+                    queries.Add(step.Description);
+                }
+                // Add language-specific query if known
+                if (!string.IsNullOrEmpty(step.Language))
+                {
+                    queries.Add($"{step.Language} code pattern example");
+                }
+                break;
+
+            case "review":
+                queries.Add("code style conventions best practices");
+                queries.Add($"{step.Name} quality review");
+                break;
+
+            case "fixing":
+                queries.Add("error handling exception build test");
+                if (!string.IsNullOrEmpty(step.Description))
+                {
+                    queries.Add(step.Description);
+                }
+                break;
+
+            case "testing":
+                queries.Add("test unit integration xunit nunit");
+                queries.Add($"{step.Name} test case");
+                break;
+
+            default:
+                // Generic fallback
+                queries.Add($"{step.Name} {step.Description ?? ""} {workflow.Title}");
+                break;
+        }
+
+        return queries;
+    }
+
+    /// <summary>
+    /// Queries RAG with multiple queries and combines results.
+    /// </summary>
+    private async Task<string?> GetRagContextForStepAsync(
+        List<string> queries,
+        string? workspacePath,
+        CancellationToken ct)
+    {
+        try
+        {
+            var allResults = new List<(string Query, RagResult Result)>();
+
+            foreach (var query in queries)
+            {
+                var options = new RagQueryOptions
+                {
+                    TopK = 3, // Get top 3 per query
+                    MinScore = 0.4, // Slightly higher threshold for relevance
+                    SourcePathPrefix = workspacePath,
+                };
+
+                var results = await _ragService.QueryAsync(query, options, ct);
+                foreach (var result in results)
+                {
+                    allResults.Add((query, result));
+                }
+            }
+
+            if (allResults.Count == 0)
+            {
+                _logger.LogDebug("No RAG results found for {QueryCount} queries", queries.Count);
+                return null;
+            }
+
+            // Deduplicate by content (same file/chunk might match multiple queries)
+            var uniqueResults = allResults
+                .GroupBy(r => r.Result.ContentId + "_" + r.Result.ChunkIndex)
+                .Select(g => g.OrderByDescending(r => r.Result.Score).First())
+                .OrderByDescending(r => r.Result.Score)
+                .Take(10) // Limit to top 10 unique results
+                .ToList();
+
+            _logger.LogInformation(
+                "Found {TotalCount} RAG results from {QueryCount} queries, {UniqueCount} unique, top scores: {Scores}",
+                allResults.Count,
+                queries.Count,
+                uniqueResults.Count,
+                string.Join(", ", uniqueResults.Take(5).Select(r => r.Result.Score.ToString("F2"))));
+
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine("## Relevant Project Context");
+            sb.AppendLine();
+
+            foreach (var (query, result) in uniqueResults)
+            {
+                sb.AppendLine("---");
+                if (!string.IsNullOrEmpty(result.SourcePath))
+                {
+                    sb.AppendLine($"**File:** {result.SourcePath}");
+                }
+                sb.AppendLine($"**Relevance:** {result.Score:P0}");
+                sb.AppendLine();
+                sb.AppendLine(result.Text);
+                sb.AppendLine();
+            }
+
+            return sb.ToString();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "RAG query failed, proceeding without context");
+            return null;
+        }
     }
 }
