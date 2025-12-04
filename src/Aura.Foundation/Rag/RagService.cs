@@ -89,7 +89,7 @@ public sealed class RagService : IRagService
                 ChunkIndex = i,
                 Content = chunks[i],
                 ContentType = content.ContentType,
-                SourcePath = content.SourcePath,
+                SourcePath = content.SourcePath is not null ? NormalizePath(content.SourcePath) : null,
                 Embedding = new Vector(embeddings[i]),
                 MetadataJson = metadataJson,
                 CreatedAt = DateTimeOffset.UtcNow,
@@ -226,7 +226,10 @@ public sealed class RagService : IRagService
 
         if (!string.IsNullOrEmpty(options.SourcePathPrefix))
         {
-            dbQuery = dbQuery.Where(c => c.SourcePath != null && c.SourcePath.StartsWith(options.SourcePathPrefix));
+            // Normalize path for case-insensitive comparison on Windows
+            var normalizedPrefix = NormalizePath(options.SourcePathPrefix);
+            dbQuery = dbQuery.Where(c => c.SourcePath != null && 
+                EF.Functions.ILike(c.SourcePath, normalizedPrefix + "%"));
         }
 
         // Order by vector similarity (cosine distance)
@@ -411,11 +414,11 @@ public sealed class RagService : IRagService
             var ragChunk = new RagChunk
             {
                 Id = Guid.NewGuid(),
-                ContentId = filePath,
+                ContentId = NormalizePath(filePath),
                 ChunkIndex = i,
                 Content = chunk.Text,
                 ContentType = ingestor.ContentType,
-                SourcePath = filePath,
+                SourcePath = NormalizePath(filePath),
                 Embedding = new Vector(embeddings[i]),
                 MetadataJson = JsonSerializer.Serialize(metadata),
                 CreatedAt = DateTimeOffset.UtcNow,
@@ -448,18 +451,26 @@ public sealed class RagService : IRagService
         }
     }
 
+    /// <summary>
+    /// Normalizes a file path for consistent storage and comparison.
+    /// Uses forward slashes and lowercase for case-insensitive matching.
+    /// </summary>
+    private static string NormalizePath(string path)
+    {
+        // Use lowercase and forward slashes for consistent comparison
+        return path.Replace('\\', '/').ToLowerInvariant();
+    }
+
     /// <inheritdoc/>
     public async Task<RagDirectoryStats?> GetDirectoryStatsAsync(string directoryPath, CancellationToken cancellationToken = default)
     {
-        // Normalize path for comparison
-        var normalizedPath = directoryPath.TrimEnd('\\', '/').Replace('/', '\\');
+        // Normalize path for case-insensitive comparison
+        var normalizedPath = NormalizePath(directoryPath.TrimEnd('\\', '/'));
 
-        // Find chunks where SourcePath starts with the directory path
+        // Find chunks where SourcePath starts with the directory path (using ILike for case-insensitive)
         var chunks = await _dbContext.RagChunks
             .Where(c => c.SourcePath != null &&
-                (c.SourcePath.StartsWith(normalizedPath + "\\") ||
-                 c.SourcePath.StartsWith(normalizedPath + "/") ||
-                 c.SourcePath.Replace("/", "\\").StartsWith(normalizedPath + "\\")))
+                EF.Functions.ILike(c.SourcePath, normalizedPath + "/%"))
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
