@@ -456,7 +456,14 @@ public sealed class WorkflowService : IWorkflowService
                     }
                 }
 
-                prompt = _promptRegistry.Render("step-execute", new
+                // Use capability-specific prompts for richer guidance
+                var promptName = step.Capability?.ToLowerInvariant() switch
+                {
+                    "documentation" => "step-execute-documentation",
+                    _ => "step-execute"
+                };
+
+                prompt = _promptRegistry.Render(promptName, new
                 {
                     stepName = step.Name,
                     stepDescription = step.Description ?? "No additional description.",
@@ -1056,7 +1063,13 @@ public sealed class WorkflowService : IWorkflowService
         {
             case "documentation":
                 queries.Add("README documentation getting started installation");
-                queries.Add("project description purpose features");
+                queries.Add("project description purpose features overview");
+                queries.Add("architecture design structure packages components");
+                queries.Add("dependencies packages libraries imports references relationship");
+                queries.Add("build compile configuration prerequisites setup");
+                queries.Add("performance optimization caching patterns characteristics");
+                queries.Add("API reference usage examples code samples");
+                queries.Add("contributing guidelines versioning release");
                 if (!string.IsNullOrEmpty(step.Description))
                 {
                     queries.Add(step.Description);
@@ -1119,8 +1132,8 @@ public sealed class WorkflowService : IWorkflowService
             {
                 var options = new RagQueryOptions
                 {
-                    TopK = 3, // Get top 3 per query
-                    MinScore = 0.4, // Slightly higher threshold for relevance
+                    TopK = 5, // Get top 5 per query for richer context
+                    MinScore = 0.35, // Slightly lower threshold to capture more relevant content
                     SourcePathPrefix = workspacePath,
                 };
 
@@ -1142,7 +1155,7 @@ public sealed class WorkflowService : IWorkflowService
                 .GroupBy(r => r.Result.ContentId + "_" + r.Result.ChunkIndex)
                 .Select(g => g.OrderByDescending(r => r.Result.Score).First())
                 .OrderByDescending(r => r.Result.Score)
-                .Take(10) // Limit to top 10 unique results
+                .Take(20) // Limit to top 20 unique results for richer context
                 .ToList();
 
             _logger.LogInformation(

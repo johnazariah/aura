@@ -12,5 +12,21 @@ Issue: {{issueTitle}}
 {{analysis}}
 
 ## Instructions
-Complete this step. If generating code, output the complete file contents.
-If modifying existing files, show the complete updated file.
+Complete this step thoroughly and accurately.
+
+**For documentation tasks:**
+- Use ONLY information from the provided RAG context - do not invent file names, classes, or features
+- Include specific package/project names, their exact purposes, and dependency relationships
+- Reference real documentation files with their actual paths
+- Include accurate build commands from the project's build system
+- Mention technical details like frameworks, patterns, and performance characteristics when available
+
+**For coding tasks:**
+- Output complete file contents, not snippets
+- Follow existing code patterns and conventions from the codebase
+- Include necessary imports and dependencies
+
+**General guidance:**
+- If information is not in the context, say "information not available" rather than guessing
+- Be specific and technical, not generic
+- Reference actual file paths from the RAG context

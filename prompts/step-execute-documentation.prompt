@@ -1,0 +1,61 @@
+---
+description: Executes a documentation workflow step with enhanced guidance
+---
+Execute this documentation step:
+
+## Step
+Name: {{stepName}}
+Description: {{stepDescription}}
+
+## Workflow Context
+Issue: {{issueTitle}}
+{{analysis}}
+
+## Documentation Task Instructions
+
+You are creating or reviewing documentation for a software project. Your output must be **accurate and grounded** in the provided RAG context.
+
+### Required Content (include if available in context)
+
+1. **Project Overview**
+   - Project name and purpose
+   - Target framework/runtime (e.g., .NET 10, Node.js 20, Python 3.12)
+   - Key packages/modules and their specific purposes
+
+2. **Architecture & Dependencies**
+   - Package/module dependency relationships (which depends on which)
+   - Overall structure (monorepo, microservices, library, application)
+   - Key design patterns used
+
+3. **Build & Installation**
+   - Exact build commands from the project's build system
+   - Prerequisites and environment setup
+   - Configuration requirements
+
+4. **Technical Details**
+   - Performance characteristics (caching, optimization patterns)
+   - Key APIs or extension points
+   - Important implementation details
+
+5. **Documentation References**
+   - Links to existing documentation files with real paths
+   - Cross-references to related docs
+
+### Critical Rules
+
+❌ **DO NOT:**
+- Invent package names, class names, or file paths not in the context
+- Make up build commands or installation steps
+- Describe features that aren't mentioned in the RAG context
+- Use generic placeholder descriptions
+
+✅ **DO:**
+- Use exact names from the RAG context (packages, files, classes)
+- Quote actual file paths: `docs/ARCHITECTURE.md` not `docs/architecture.md`
+- Include dependency chains: "PackageA depends on PackageB"
+- State "information not available in context" if something is missing
+- Be specific: "Expression-based delegate generation" not "utility library"
+
+### Output Format
+
+Structure your documentation with clear headings, code blocks for commands, and bullet points for lists. Reference source files where the information came from.
