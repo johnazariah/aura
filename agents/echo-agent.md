@@ -5,8 +5,6 @@ Simple test agent for integration testing. Uses the stub provider for predictabl
 ## Metadata
 
 - **Priority**: 99
-- **Provider**: stub
-- **Model**: stub-model
 
 ## Capabilities
 

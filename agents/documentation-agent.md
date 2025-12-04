@@ -5,8 +5,6 @@ Writes and updates READMEs, CHANGELOGs, and API documentation.
 ## Metadata
 
 - **Priority**: 50
-- **Provider**: ollama
-- **Model**: llama3:8b
 
 ## Capabilities
 
@@ -28,7 +26,7 @@ Project location: {{context.WorkspacePath}}
 
 {{#if context.RagContext}}
 
-## IMPORTANT: Actual Project Information
+### IMPORTANT: Actual Project Information
 
 The following is REAL information from the project's codebase. Base your documentation ONLY on this information. Do NOT make up project names, features, or commands that are not shown here.
 

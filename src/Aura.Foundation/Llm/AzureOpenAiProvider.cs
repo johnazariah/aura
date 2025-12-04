@@ -239,7 +239,7 @@ public sealed class AzureOpenAiProvider : ILlmProvider
 public sealed class AzureOpenAiOptions
 {
     /// <summary>Configuration section name.</summary>
-    public const string SectionName = "AzureOpenAI";
+    public const string SectionName = "LlmProviders:AzureOpenAI";
 
     /// <summary>Gets or sets the Azure OpenAI endpoint URL.</summary>
     public string Endpoint { get; set; } = string.Empty;

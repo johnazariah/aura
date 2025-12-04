@@ -209,7 +209,7 @@ public sealed class OpenAiProvider : ILlmProvider
 public sealed class OpenAiOptions
 {
     /// <summary>Configuration section name.</summary>
-    public const string SectionName = "OpenAI";
+    public const string SectionName = "LlmProviders:OpenAI";
 
     /// <summary>Gets or sets the OpenAI API key.</summary>
     public string ApiKey { get; set; } = string.Empty;

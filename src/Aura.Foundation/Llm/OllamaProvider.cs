@@ -429,7 +429,7 @@ public sealed class OllamaProvider : ILlmProvider, IEmbeddingProvider
 public sealed class OllamaOptions
 {
     /// <summary>Configuration section name.</summary>
-    public const string SectionName = "Ollama";
+    public const string SectionName = "LlmProviders:Ollama";
 
     /// <summary>Gets or sets the base URL for Ollama API.</summary>
     public string BaseUrl { get; set; } = "http://localhost:11434";

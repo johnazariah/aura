@@ -68,7 +68,7 @@ public sealed class LlmOptions
     /// <summary>
     /// Configuration section name.
     /// </summary>
-    public const string SectionName = "Aura:Llm";
+    public const string SectionName = "LlmProviders";
 
     /// <summary>
     /// Gets or sets the default provider ID.

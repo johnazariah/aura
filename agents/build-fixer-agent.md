@@ -5,8 +5,6 @@ Iterates on build and test errors until everything passes.
 ## Metadata
 
 - **Priority**: 50
-- **Provider**: ollama
-- **Model**: qwen2.5-coder:7b
 
 ## Capabilities
 

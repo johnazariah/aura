@@ -180,10 +180,12 @@ public sealed class AgentRegistry : IAgentRegistry, IDisposable
         }
 
         _logger.LogInformation(
-            "{Action} agent: {AgentId} ({Name}){Hardcoded}",
+            "{Action} agent: {AgentId} ({Name}) -> {Provider}/{Model}{Hardcoded}",
             isUpdate ? "Updated" : "Registered",
             agent.AgentId,
             agent.Metadata.Name,
+            agent.Metadata.Provider,
+            agent.Metadata.Model,
             isHardcoded ? " [hardcoded]" : string.Empty);
 
         OnAgentsChanged(new AgentRegistryChangedEventArgs

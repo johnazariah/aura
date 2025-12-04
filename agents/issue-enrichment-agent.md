@@ -5,8 +5,6 @@ Enriches raw issue text with structured context, research, and codebase knowledg
 ## Metadata
 
 - **Priority**: 50
-- **Provider**: ollama
-- **Model**: qwen2.5-coder:7b
 
 ## Capabilities
 

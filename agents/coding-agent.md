@@ -5,9 +5,6 @@ A polyglot coding agent that handles implementation, tests, refactoring, and doc
 ## Metadata
 
 - **Priority**: 70
-- **Provider**: ollama
-- **Model**: qwen2.5-coder:7b
-- **Temperature**: 0.7
 
 ## Capabilities
 

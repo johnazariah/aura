@@ -5,8 +5,6 @@ Creates implementation plans from enriched issue context.
 ## Metadata
 
 - **Priority**: 50
-- **Provider**: ollama
-- **Model**: qwen2.5-coder:7b
 
 ## Capabilities
 

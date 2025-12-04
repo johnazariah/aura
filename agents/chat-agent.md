@@ -5,8 +5,6 @@ A general-purpose conversational agent. This is the default fallback when no spe
 ## Metadata
 
 - **Priority**: 80
-- **Provider**: ollama
-- **Model**: llama3:8b
 
 ## Capabilities
 

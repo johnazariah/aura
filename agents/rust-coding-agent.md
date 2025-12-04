@@ -5,9 +5,6 @@ Expert Rust developer specializing in safe, performant systems code with idiomat
 ## Metadata
 
 - **Priority**: 10
-- **Provider**: ollama
-- **Model**: qwen2.5-coder:14b
-- **Temperature**: 0.1
 
 ## Capabilities
 

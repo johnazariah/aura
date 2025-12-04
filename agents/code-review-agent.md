@@ -5,8 +5,6 @@ Reviews code changes and suggests improvements.
 ## Metadata
 
 - **Priority**: 50
-- **Provider**: ollama
-- **Model**: qwen2.5-coder:7b
 
 ## Capabilities
 
