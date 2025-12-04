@@ -112,6 +112,8 @@ public static class ServiceCollectionExtensions
         // Configure options
         services.Configure<LlmOptions>(configuration.GetSection(LlmOptions.SectionName));
         services.Configure<OllamaOptions>(configuration.GetSection(OllamaOptions.SectionName));
+        services.Configure<OpenAiOptions>(configuration.GetSection(OpenAiOptions.SectionName));
+        services.Configure<AzureOpenAiOptions>(configuration.GetSection(AzureOpenAiOptions.SectionName));
 
         // Registry
         services.AddSingleton<ILlmProviderRegistry, LlmProviderRegistry>();
@@ -124,6 +126,20 @@ public static class ServiceCollectionExtensions
             client.BaseAddress = new Uri(baseUrl);
             client.Timeout = Timeout.InfiniteTimeSpan; // No timeout on HttpClient, let resilience handle it
         });
+
+        // OpenAI provider (direct API, optional, only if configured)
+        var openAiSection = configuration.GetSection(OpenAiOptions.SectionName);
+        if (!string.IsNullOrEmpty(openAiSection["ApiKey"]))
+        {
+            services.AddSingleton<OpenAiProvider>();
+        }
+
+        // Azure OpenAI provider (optional, only if configured)
+        var azureSection = configuration.GetSection(AzureOpenAiOptions.SectionName);
+        if (!string.IsNullOrEmpty(azureSection["Endpoint"]) && !string.IsNullOrEmpty(azureSection["ApiKey"]))
+        {
+            services.AddSingleton<AzureOpenAiProvider>();
+        }
 
         // Stub provider for testing/fallback
         services.AddSingleton<StubLlmProvider>();
