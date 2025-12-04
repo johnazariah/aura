@@ -216,9 +216,10 @@ public sealed class WorkflowService : IWorkflowService
             });
 
             // Query RAG for relevant code context
+            // Use RepositoryPath for RAG (where files are indexed), not WorkspacePath (worktree)
             var ragContext = await GetRagContextAsync(
                 $"{workflow.Title} {workflow.Description}",
-                workflow.WorkspacePath ?? workflow.RepositoryPath,
+                workflow.RepositoryPath ?? workflow.WorkspacePath,
                 ct);
 
             var context = new AgentContext(prompt, WorkspacePath: workflow.WorkspacePath)
@@ -465,10 +466,11 @@ public sealed class WorkflowService : IWorkflowService
             }
 
             // Query RAG for step-specific context
+            // Use RepositoryPath for RAG (where files are indexed), not WorkspacePath (worktree)
             var stepQuery = $"{step.Name} {step.Description} {workflow.Title}";
             var ragContext = await GetRagContextAsync(
                 stepQuery,
-                workflow.WorkspacePath ?? workflow.RepositoryPath,
+                workflow.RepositoryPath ?? workflow.WorkspacePath,
                 ct);
 
             _logger.LogInformation(
