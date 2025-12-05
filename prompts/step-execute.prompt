@@ -2,6 +2,11 @@
 description: Executes a single workflow step
 ragQueries:
   - "project structure build setup dotnet csproj solution"
+tools:
+  - file.read
+  - file.write
+  - file.modify
+  - roslyn.validate_compilation
 ---
 Execute this development step:
 

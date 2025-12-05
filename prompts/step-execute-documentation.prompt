@@ -10,6 +10,10 @@ ragQueries:
   - "API reference usage examples code samples"
   - "contributing guidelines versioning release"
   - "project structure build setup dotnet csproj solution"
+tools:
+  - file.read
+  - file.write
+  - file.modify
 ---
 Execute this documentation step:
 
@@ -25,35 +29,42 @@ Issue: {{issueTitle}}
 
 **Your task is ONLY what the step description says.** Do not jump ahead to later steps.
 
+### File-Specific Steps
+
+If the step name or description mentions a **specific file** (e.g., "Review current README.md", "Analyze build.md"):
+- The RAG context below contains prioritized content from that file
+- Focus your analysis on the ACTUAL content from that file
+- Quote specific text you find from the file
+- If the file content seems missing or incomplete, note what sections you can see vs. what appears to be missing
+
 ### Step Type Guidelines
 
 If the step says **"Review"** or **"Analyze"** or **"Examine"**:
-→ Output an ANALYSIS, not a finished document
-→ Structure your output as:
+- Output an ANALYSIS, not a finished document
+- Structure your output as:
   - **Current State**: What exists now (quote actual content)
   - **Gaps Found**: What's missing or incomplete
   - **Outdated Content**: What needs updating (with specifics)
   - **Recommendations**: What should be added/changed
-→ Do NOT write the final README/documentation yet
+- Do NOT write the final README/documentation yet
 
-If the step says **"Draft"** or **"Create"** or **"Write"**:
-→ NOW produce the actual documentation content
-→ Use findings from previous analysis steps
-→ Output complete, formatted markdown ready to be saved
+If the step says **"Draft"** or **"Create"** or **"Write"** or **"Update"**:
+- First use **file.read** to read the current file content
+- Produce the actual documentation content based on analysis
+- Use **file.write** or **file.modify** to ACTUALLY SAVE the changes to the file
+- Do not just output markdown - you MUST use the file tools to write it
 
 If the step says **"Validate"** or **"Review draft"**:
-→ Review the draft from the previous step
-→ List specific improvements needed
-→ Check accuracy against RAG context
+- Use **file.read** to read the current file
+- Review the content for accuracy and completeness
+- List specific improvements needed
+- Check accuracy against RAG context
 
 If the step says **"Finalize"** or **"Commit"** or **"Save"**:
-→ Output the polished final version as complete, ready-to-save content
-→ Apply all feedback and formatting best practices
-→ **Output the file content in a code block** with the filename as the language tag:
-  ```markdown:README.md
-  <the complete README content here>
-  ```
-→ This allows the content to be extracted and saved to the workspace
+- Use **file.read** to review the current state
+- Apply all feedback and formatting best practices
+- Use **file.write** or **file.modify** to save the final polished version
+- You MUST write the file, not just describe what to write
 
 ## Documentation Quality Requirements
 
@@ -63,12 +74,12 @@ Your output must be **accurate and grounded** in the provided RAG context.
 
 1. **Project Overview**
    - Project name and purpose
-   - Target framework/runtime (e.g., .NET 10, Node.js 20, Python 3.12)
+   - Target framework/runtime
    - Key packages/modules and their specific purposes
 
 2. **Architecture & Dependencies**
-   - Package/module dependency relationships (which depends on which)
-   - Overall structure (monorepo, microservices, library, application)
+   - Package/module dependency relationships
+   - Overall structure
    - Key design patterns used
 
 3. **Build & Installation**
@@ -77,29 +88,14 @@ Your output must be **accurate and grounded** in the provided RAG context.
    - Configuration requirements
 
 4. **Technical Details**
-   - Performance characteristics (caching, optimization patterns)
+   - Performance characteristics
    - Key APIs or extension points
    - Important implementation details
 
-5. **Documentation References**
-   - Links to existing documentation files with real paths
-   - Cross-references to related docs
-
 ### Critical Rules
 
-❌ **DO NOT:**
-- Invent package names, class names, or file paths not in the context
-- Make up build commands or installation steps
-- Describe features that aren't mentioned in the RAG context
-- Use generic placeholder descriptions
-
-✅ **DO:**
 - Use exact names from the RAG context (packages, files, classes)
-- Quote actual file paths: `docs/ARCHITECTURE.md` not `docs/architecture.md`
-- Include dependency chains: "PackageA depends on PackageB"
+- Quote actual file paths
+- Include dependency chains
 - State "information not available in context" if something is missing
-- Be specific: "Expression-based delegate generation" not "utility library"
-
-### Output Format
-
-Structure your documentation with clear headings, code blocks for commands, and bullet points for lists. Reference source files where the information came from.
+- Be specific, not generic

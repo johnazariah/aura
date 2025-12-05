@@ -515,4 +515,162 @@ public sealed class PromptRegistryTests
     }
 
     #endregion
+
+    #region Tools Frontmatter
+
+    [Fact]
+    public void GetTools_PromptWithTools_ReturnsToolsList()
+    {
+        // Arrange
+        var template = """
+            ---
+            description: Prompt with tools
+            tools:
+              - file.read
+              - file.write
+              - roslyn.validate_compilation
+            ---
+            Do something with tools.
+            """;
+
+        _fileSystem.AddFile("prompts/with-tools.prompt", new MockFileData(template));
+        _registry.Reload();
+
+        // Act
+        var tools = _registry.GetTools("with-tools");
+
+        // Assert
+        Assert.Equal(3, tools.Count);
+        Assert.Contains("file.read", tools);
+        Assert.Contains("file.write", tools);
+        Assert.Contains("roslyn.validate_compilation", tools);
+    }
+
+    [Fact]
+    public void GetTools_PromptWithoutTools_ReturnsEmptyList()
+    {
+        // Arrange
+        var template = """
+            ---
+            description: Prompt without tools
+            ---
+            No tools here.
+            """;
+
+        _fileSystem.AddFile("prompts/no-tools.prompt", new MockFileData(template));
+        _registry.Reload();
+
+        // Act
+        var tools = _registry.GetTools("no-tools");
+
+        // Assert
+        Assert.Empty(tools);
+    }
+
+    [Fact]
+    public void GetTools_NonexistentPrompt_ReturnsEmptyList()
+    {
+        // Arrange
+        _registry.Reload();
+
+        // Act
+        var tools = _registry.GetTools("nonexistent");
+
+        // Assert
+        Assert.Empty(tools);
+    }
+
+    [Fact]
+    public void GetPrompt_PromptWithToolsAndRagQueries_ParsesBoth()
+    {
+        // Arrange
+        var template = """
+            ---
+            description: Prompt with both
+            ragQueries:
+              - "search query one"
+              - "search query two"
+            tools:
+              - file.read
+              - file.write
+            ---
+            Template content.
+            """;
+
+        _fileSystem.AddFile("prompts/both.prompt", new MockFileData(template));
+        _registry.Reload();
+
+        // Act
+        var prompt = _registry.GetPrompt("both");
+        var ragQueries = _registry.GetRagQueries("both");
+        var tools = _registry.GetTools("both");
+
+        // Assert
+        Assert.NotNull(prompt);
+        Assert.Equal("Prompt with both", prompt.Description);
+        Assert.Equal(2, ragQueries.Count);
+        Assert.Contains("search query one", ragQueries);
+        Assert.Contains("search query two", ragQueries);
+        Assert.Equal(2, tools.Count);
+        Assert.Contains("file.read", tools);
+        Assert.Contains("file.write", tools);
+    }
+
+    [Fact]
+    public void GetPrompt_ToolsBeforeRagQueries_ParsesBoth()
+    {
+        // Arrange - tools declared before ragQueries
+        var template = """
+            ---
+            description: Tools first
+            tools:
+              - file.read
+            ragQueries:
+              - "query"
+            ---
+            Content.
+            """;
+
+        _fileSystem.AddFile("prompts/tools-first.prompt", new MockFileData(template));
+        _registry.Reload();
+
+        // Act
+        var tools = _registry.GetTools("tools-first");
+        var ragQueries = _registry.GetRagQueries("tools-first");
+
+        // Assert
+        Assert.Single(tools);
+        Assert.Contains("file.read", tools);
+        Assert.Single(ragQueries);
+        Assert.Contains("query", ragQueries);
+    }
+
+    [Fact]
+    public void GetPrompt_ToolsProperty_IsAvailableOnPromptTemplate()
+    {
+        // Arrange
+        var template = """
+            ---
+            description: Check Tools property
+            tools:
+              - tool.one
+              - tool.two
+            ---
+            Content.
+            """;
+
+        _fileSystem.AddFile("prompts/tools-prop.prompt", new MockFileData(template));
+        _registry.Reload();
+
+        // Act
+        var prompt = _registry.GetPrompt("tools-prop");
+
+        // Assert
+        Assert.NotNull(prompt);
+        Assert.Equal(2, prompt.Tools.Count);
+        Assert.Contains("tool.one", prompt.Tools);
+        Assert.Contains("tool.two", prompt.Tools);
+    }
+
+    #endregion
 }

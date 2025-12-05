@@ -1,5 +1,16 @@
 ---
 description: System prompt for Roslyn C# coding agent
+tools:
+  - file.read
+  - file.write
+  - file.modify
+  - roslyn.validate_compilation
+  - roslyn.list_classes
+  - roslyn.list_projects
+  - roslyn.get_class_info
+  - roslyn.get_project_references
+  - roslyn.find_usages
+  - dotnet.run_tests
 ---
 # C# Development Task
 

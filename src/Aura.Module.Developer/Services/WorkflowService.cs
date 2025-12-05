@@ -6,10 +6,13 @@ namespace Aura.Module.Developer.Services;
 
 using System.Diagnostics;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Aura.Foundation.Agents;
 using Aura.Foundation.Git;
+using Aura.Foundation.Llm;
 using Aura.Foundation.Prompts;
 using Aura.Foundation.Rag;
+using Aura.Foundation.Tools;
 using Aura.Module.Developer.Data;
 using Aura.Module.Developer.Data.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -27,6 +30,9 @@ public sealed class WorkflowService : IWorkflowService
     private readonly IGitWorktreeService _worktreeService;
     private readonly IRagService _ragService;
     private readonly ICodebaseContextService _codebaseContextService;
+    private readonly IToolRegistry _toolRegistry;
+    private readonly IReActExecutor _reactExecutor;
+    private readonly ILlmProviderRegistry _llmProviderRegistry;
     private readonly DeveloperModuleOptions _options;
     private readonly ILogger<WorkflowService> _logger;
 
@@ -40,6 +46,9 @@ public sealed class WorkflowService : IWorkflowService
         IGitWorktreeService worktreeService,
         IRagService ragService,
         ICodebaseContextService codebaseContextService,
+        IToolRegistry toolRegistry,
+        IReActExecutor reactExecutor,
+        ILlmProviderRegistry llmProviderRegistry,
         IOptions<DeveloperModuleOptions> options,
         ILogger<WorkflowService> logger)
     {
@@ -49,6 +58,9 @@ public sealed class WorkflowService : IWorkflowService
         _worktreeService = worktreeService;
         _ragService = ragService;
         _codebaseContextService = codebaseContextService;
+        _toolRegistry = toolRegistry;
+        _reactExecutor = reactExecutor;
+        _llmProviderRegistry = llmProviderRegistry;
         _options = options.Value;
         _logger = logger;
     }
@@ -441,10 +453,12 @@ public sealed class WorkflowService : IWorkflowService
         {
             // Build the step execution prompt from template
             string prompt;
+            string promptName;
             List<string>? ragQueriesFromPrompt = null;
 
             if (step.Capability == "review")
             {
+                promptName = "step-review";
                 // For review capability, gather outputs from previous coding steps
                 var codeToReview = new System.Text.StringBuilder();
                 var codingSteps = workflow.Steps
@@ -503,7 +517,7 @@ public sealed class WorkflowService : IWorkflowService
                 }
 
                 // Use capability-specific prompts for richer guidance
-                var promptName = step.Capability?.ToLowerInvariant() switch
+                promptName = step.Capability?.ToLowerInvariant() switch
                 {
                     "documentation" => "step-execute-documentation",
                     _ => "step-execute"
@@ -523,8 +537,26 @@ public sealed class WorkflowService : IWorkflowService
             }
 
             // Build codebase context (combines code graph + RAG)
-            var ragQueries = ragQueriesFromPrompt ?? BuildRagQueriesForStep(step, workflow);
-            var contextOptions = CodebaseContextOptions.ForDocumentation(ragQueries);
+            List<string> ragQueries;
+            List<string>? fileReferences = null;
+
+            if (ragQueriesFromPrompt is not null)
+            {
+                ragQueries = ragQueriesFromPrompt;
+                // Also extract file references from step even when using prompt queries
+                fileReferences = ExtractFileReferences(step.Name)
+                    .Concat(ExtractFileReferences(step.Description ?? string.Empty))
+                    .Distinct()
+                    .ToList();
+            }
+            else
+            {
+                var (queries, files) = BuildRagQueriesForStep(step, workflow);
+                ragQueries = queries;
+                fileReferences = files;
+            }
+
+            var contextOptions = CodebaseContextOptions.ForDocumentation(ragQueries, fileReferences);
             var workspaceForContext = workflow.RepositoryPath ?? workflow.WorkspacePath;
             var codebaseContext = workspaceForContext is not null
                 ? await _codebaseContextService.GetContextAsync(workspaceForContext, contextOptions, ct)
@@ -532,17 +564,76 @@ public sealed class WorkflowService : IWorkflowService
             var ragContext = codebaseContext?.ToPromptContext();
 
             _logger.LogInformation(
-                "Step {StepName} codebase context: {HasContext}, queries: {QueryCount}, hasProjectStructure: {HasProjectStructure}",
+                "Step {StepName} codebase context: {HasContext}, queries: {QueryCount}, prioritizedFiles: {FileCount}, hasProjectStructure: {HasProjectStructure}",
                 step.Name,
                 ragContext is not null ? $"{ragContext.Length} chars" : "none",
                 ragQueries.Count,
+                fileReferences?.Count ?? 0,
                 codebaseContext?.ProjectStructure is not null);
 
-            var context = new AgentContext(prompt, WorkspacePath: workflow.WorkspacePath)
+            // Check if tools are defined for this prompt
+            var promptToolNames = _promptRegistry.GetTools(promptName);
+            var availableTools = promptToolNames
+                .Select(name => _toolRegistry.GetTool(name))
+                .Where(t => t is not null)
+                .Cast<ToolDefinition>()
+                .ToList();
+
+            AgentOutput output;
+            IReadOnlyList<ReActStep>? toolSteps = null;
+
+            if (availableTools.Count > 0)
             {
-                RagContext = ragContext,
-            };
-            var output = await agent.ExecuteAsync(context, ct);
+                // Use ReAct executor for tool-enabled execution
+                _logger.LogInformation(
+                    "Step {StepName} has {ToolCount} tools available: {Tools}",
+                    step.Name,
+                    availableTools.Count,
+                    string.Join(", ", availableTools.Select(t => t.ToolId)));
+
+                var llmProvider = _llmProviderRegistry.GetDefaultProvider()
+                    ?? throw new InvalidOperationException("No LLM provider available");
+
+                // Build the full task with RAG context
+                var taskWithContext = ragContext is not null
+                    ? $"{prompt}\n\n## Relevant Context from Knowledge Base\n{ragContext}"
+                    : prompt;
+
+                var reactOptions = new ReActOptions
+                {
+                    WorkingDirectory = workflow.WorkspacePath,
+                    MaxSteps = 15,
+                    Temperature = 0.2,
+                    RequireConfirmation = false, // Auto-approve for now (human reviews step output)
+                };
+
+                var reactResult = await _reactExecutor.ExecuteAsync(
+                    taskWithContext,
+                    availableTools,
+                    llmProvider,
+                    reactOptions,
+                    ct);
+
+                output = new AgentOutput(
+                    Content: reactResult.FinalAnswer,
+                    TokensUsed: reactResult.TotalTokensUsed);
+                toolSteps = reactResult.Steps;
+
+                _logger.LogInformation(
+                    "ReAct execution completed: {Success}, {StepCount} steps, {TokenCount} tokens",
+                    reactResult.Success,
+                    reactResult.Steps.Count,
+                    reactResult.TotalTokensUsed);
+            }
+            else
+            {
+                // Standard agent execution without tools
+                var context = new AgentContext(prompt, WorkspacePath: workflow.WorkspacePath)
+                {
+                    RagContext = ragContext,
+                };
+                output = await agent.ExecuteAsync(context, ct);
+            }
 
             stopwatch.Stop();
 
@@ -555,6 +646,13 @@ public sealed class WorkflowService : IWorkflowService
                 artifacts = output.Artifacts,
                 tokensUsed = output.TokensUsed,
                 durationMs = stopwatch.ElapsedMilliseconds,
+                toolSteps = toolSteps?.Select(s => new
+                {
+                    thought = s.Thought,
+                    action = s.Action,
+                    actionInput = s.ActionInput,
+                    observation = s.Observation,
+                }).ToList(),
             });
 
             workflow.UpdatedAt = DateTimeOffset.UtcNow;
@@ -1261,9 +1359,23 @@ public sealed class WorkflowService : IWorkflowService
     /// Builds capability-specific RAG queries for a step.
     /// Different capabilities need different types of context.
     /// </summary>
-    private static List<string> BuildRagQueriesForStep(WorkflowStep step, Workflow workflow)
+    private static (List<string> Queries, List<string> FileReferences) BuildRagQueriesForStep(WorkflowStep step, Workflow workflow)
     {
         var queries = new List<string>();
+        var fileReferences = new List<string>();
+
+        // Extract explicit file references from step name and description
+        fileReferences.AddRange(ExtractFileReferences(step.Name));
+        if (!string.IsNullOrEmpty(step.Description))
+        {
+            fileReferences.AddRange(ExtractFileReferences(step.Description));
+        }
+
+        // Add file references as high-priority queries (semantic search on file names)
+        foreach (var fileRef in fileReferences.Distinct())
+        {
+            queries.Add(fileRef);
+        }
 
         // Always include a query about project structure and build
         queries.Add("project structure build setup dotnet csproj solution");
@@ -1323,7 +1435,40 @@ public sealed class WorkflowService : IWorkflowService
                 break;
         }
 
-        return queries;
+        return (queries, fileReferences.Distinct().ToList());
+    }
+
+    /// <summary>
+    /// Extracts file references from text (e.g., "README.md", "src/Program.cs").
+    /// </summary>
+    private static List<string> ExtractFileReferences(string text)
+    {
+        var files = new List<string>();
+        if (string.IsNullOrEmpty(text))
+        {
+            return files;
+        }
+
+        // Pattern to match file names with common extensions
+        var pattern = @"\b[\w\-\.\/\\]+\.(md|cs|json|yaml|yml|xml|proj|props|targets|csproj|sln|ts|tsx|js|jsx|py|rs|fs|go|txt|config)\b";
+        var matches = Regex.Matches(text, pattern, RegexOptions.IgnoreCase);
+
+        foreach (Match match in matches)
+        {
+            var fileName = match.Value;
+            // Normalize path separators and get just the file name
+            fileName = fileName.Replace('\\', '/');
+            files.Add(fileName);
+
+            // Also add just the file name without path for broader matching
+            var justFileName = Path.GetFileName(fileName);
+            if (!string.IsNullOrEmpty(justFileName) && justFileName != fileName)
+            {
+                files.Add(justFileName);
+            }
+        }
+
+        return files;
     }
 
     /// <summary>

@@ -33,6 +33,13 @@ public interface IPromptRegistry
     IReadOnlyList<string> GetRagQueries(string name);
 
     /// <summary>
+    /// Gets the tools defined for a prompt.
+    /// </summary>
+    /// <param name="name">The prompt name.</param>
+    /// <returns>The list of tool names, or empty if none defined.</returns>
+    IReadOnlyList<string> GetTools(string name);
+
+    /// <summary>
     /// Gets all registered prompt names.
     /// </summary>
     IReadOnlyList<string> GetPromptNames();

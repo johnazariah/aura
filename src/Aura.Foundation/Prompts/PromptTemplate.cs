@@ -26,4 +26,7 @@ public sealed class PromptTemplate
 
     /// <summary>Gets the RAG queries to use for context retrieval.</summary>
     public IReadOnlyList<string> RagQueries { get; init; } = [];
+
+    /// <summary>Gets the tools available for this prompt.</summary>
+    public IReadOnlyList<string> Tools { get; init; } = [];
 }

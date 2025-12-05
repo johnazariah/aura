@@ -85,6 +85,17 @@ public sealed class PromptRegistry : IPromptRegistry
     }
 
     /// <inheritdoc/>
+    public IReadOnlyList<string> GetTools(string name)
+    {
+        if (_prompts.TryGetValue(name, out var prompt))
+        {
+            return prompt.Tools;
+        }
+
+        return [];
+    }
+
+    /// <inheritdoc/>
     public void Reload()
     {
         _prompts.Clear();
@@ -132,8 +143,10 @@ public sealed class PromptRegistry : IPromptRegistry
         // Parse frontmatter if present (YAML-style)
         string? description = null;
         var ragQueries = new List<string>();
+        var tools = new List<string>();
         var template = content;
         var inRagQueries = false;
+        var inTools = false;
 
         if (content.StartsWith("---"))
         {
@@ -160,10 +173,23 @@ public sealed class PromptRegistry : IPromptRegistry
                         continue;
                     }
 
-                    // End of ragQueries section when we hit another key
-                    if (inRagQueries && !trimmed.StartsWith("-") && trimmed.Contains(':'))
+                    // Check for tools list items (lines starting with -)
+                    if (inTools && trimmed.StartsWith("-"))
+                    {
+                        var tool = trimmed[1..].Trim().Trim('"', '\'');
+                        if (!string.IsNullOrEmpty(tool))
+                        {
+                            tools.Add(tool);
+                        }
+
+                        continue;
+                    }
+
+                    // End of list section when we hit another key
+                    if ((inRagQueries || inTools) && !trimmed.StartsWith("-") && trimmed.Contains(':'))
                     {
                         inRagQueries = false;
+                        inTools = false;
                     }
 
                     if (trimmed.StartsWith("description:", StringComparison.OrdinalIgnoreCase))
@@ -173,6 +199,12 @@ public sealed class PromptRegistry : IPromptRegistry
                     else if (trimmed.StartsWith("ragQueries:", StringComparison.OrdinalIgnoreCase))
                     {
                         inRagQueries = true;
+                        inTools = false;
+                    }
+                    else if (trimmed.StartsWith("tools:", StringComparison.OrdinalIgnoreCase))
+                    {
+                        inTools = true;
+                        inRagQueries = false;
                     }
                 }
             }
@@ -186,6 +218,7 @@ public sealed class PromptRegistry : IPromptRegistry
             SourcePath = filePath,
             LoadedAt = DateTimeOffset.UtcNow,
             RagQueries = ragQueries,
+            Tools = tools,
         };
 
         _prompts[fileName] = prompt;

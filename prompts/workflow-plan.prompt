@@ -1,7 +1,7 @@
 ---
-description: Creates an execution plan with discrete steps
+description: Creates a focused execution plan with 3-6 actionable steps
 ---
-Create an implementation plan for this development task. Break it down into discrete, executable steps.
+Create an implementation plan for this development task.
 
 ## Issue Title
 {{title}}
@@ -12,6 +12,52 @@ Create an implementation plan for this development task. Break it down into disc
 ## Analysis Context
 {{enrichedContext}}
 
+## Planning Guidelines
+
+**CRITICAL: Create 3-6 focused, actionable steps. Not 10+.**
+
+### Step Design Principles
+
+1. **Each step should produce a concrete deliverable** (a file, a test result, a review)
+2. **Combine related analysis into ONE step** - don't split "Review X", "Analyze X", "Examine X"
+3. **Final step must be an ACTION** - "Write README.md", "Apply changes", "Commit code"
+4. **Skip meta-steps** - No "solicit feedback", "validate with team", "implement CI checks"
+
+### Good vs Bad Examples
+
+BAD (too many steps):
+1. Review current README
+2. Gather architecture docs
+3. Gather build info
+4. Gather contribution guidelines
+5. Extract usage examples
+6. Verify build commands
+7. Draft structure
+8. Write content
+9. Format markdown
+10. Cross-check accuracy
+11. Get feedback
+12. Finalize
+13. Add CI validation
+
+GOOD (focused):
+1. Analyze current README and codebase (review) - Identify gaps, outdated content, missing sections
+2. Draft updated README (documentation) - Write complete README based on analysis
+3. Review and refine (review) - Check accuracy, formatting, completeness
+4. Write final README.md (documentation) - Output the final file content ready to save
+
+### For Documentation Tasks
+- Step 1: Analyze (what exists, what's missing)
+- Step 2: Draft (write the content)
+- Step 3: Review (check quality)
+- Step 4: Finalize (output the file)
+
+### For Coding Tasks
+- Step 1: Understand (read relevant code, identify changes)
+- Step 2: Implement (write the code)
+- Step 3: Validate (run tests, check compilation)
+- Step 4: Finalize (apply changes)
+
 ## Available Capabilities
 - coding: Code generation and implementation
 - testing: Unit and integration test creation
@@ -19,13 +65,15 @@ Create an implementation plan for this development task. Break it down into disc
 - documentation: README, API docs, comments
 - fixing: Build error and test failure fixing
 
-## Languages (optional, specify when relevant)
+## Languages (optional)
 - csharp, python, typescript, javascript, go, rust, java, etc.
 
-Create a JSON array of steps. Each step must have:
-- name: Short descriptive name (string, required)
-- capability: One of: coding, testing, review, documentation, fixing (string, required)
-- language: Programming language if relevant, e.g. "csharp" (string, optional)
-- description: What this step should accomplish (string, optional)
+## Output Format
+
+Return a JSON array with 3-6 steps. Each step:
+- name: Short actionable name (string, required)
+- capability: One of: coding, testing, review, documentation, fixing (required)
+- language: Programming language if relevant (optional)
+- description: What this step produces/accomplishes (optional)
 
 Return ONLY a valid JSON array, no markdown code blocks or other text.

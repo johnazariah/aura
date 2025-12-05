@@ -1,12 +1,15 @@
 # Tool Execution for Agents
 
-**Status**: Draft  
-**Created**: 2025-12-05  
+**Status**: Draft
+**Created**: 2025-12-05
+**Updated**: 2025-12-05
 **Author**: AI-assisted specification
 
 ## Problem Statement
 
 Agents can declare tools in their markdown definitions (e.g., `file.write`, `file.read`), but the runtime doesn't actually execute these tools. When an agent needs to write a file (like a README), it can only output text describing what to do rather than actually performing the action.
+
+Additionally, **prompt templates** (`.prompt` files) need a way to specify which tools should be available during execution of that specific task, independent of the agent's default tool set.
 
 ## Current State
 
@@ -16,14 +19,106 @@ Agents can declare tools in their markdown definitions (e.g., `file.write`, `fil
 - `AgentDefinition.Tools` property stores the list of tool names
 - `AgentOutput.ToolCalls` property exists for recording tool invocations
 - `IToolRegistry` for discovering available tools
+- Prompt templates have YAML frontmatter with `ragQueries:` for context retrieval
 
 ### What's Missing
 1. **Tool binding**: No code connects an agent's declared tools to actual tool instances
 2. **Tool execution loop**: `ConfigurableAgent.ExecuteAsync` calls LLM once and returns - no loop to handle tool calls
 3. **LLM function calling**: Providers don't pass tool schemas to the LLM or parse tool call responses
 4. **Human-in-the-loop for tools**: Tools like `file.write` have `RequiresConfirmation = true` but no confirmation flow exists
+5. **Prompt-level tool declaration**: No `tools:` frontmatter in `.prompt` files to specify task-specific tools
 
-## Proposed Solution
+## Part 1: Prompt Template Tool Frontmatter
+
+### Design
+
+Add `tools:` to prompt template YAML frontmatter, parallel to existing `ragQueries:`:
+
+```yaml
+---
+description: Executes a documentation workflow step
+ragQueries:
+  - "README documentation getting started"
+  - "project structure architecture"
+tools:
+  - file.read
+  - file.write
+  - git.status
+---
+Execute this documentation step:
+...
+```
+
+### Implementation
+
+#### 1. PromptTemplate Record
+
+Add `Tools` property to `PromptTemplate`:
+
+```csharp
+public sealed class PromptTemplate
+{
+    public required string Name { get; init; }
+    public string? Description { get; init; }
+    public required string Template { get; init; }
+    public string? SourcePath { get; init; }
+    public DateTimeOffset LoadedAt { get; init; } = DateTimeOffset.UtcNow;
+    public IReadOnlyList<string> RagQueries { get; init; } = [];
+    public IReadOnlyList<string> Tools { get; init; } = [];  // NEW
+}
+```
+
+#### 2. PromptRegistry Parsing
+
+Update frontmatter parsing to handle `tools:` list:
+
+```csharp
+// In LoadPromptFile:
+var tools = new List<string>();
+var inTools = false;
+
+// ... existing parsing loop ...
+if (inTools && trimmed.StartsWith("-"))
+{
+    var tool = trimmed[1..].Trim().Trim('"', '\'');
+    if (!string.IsNullOrEmpty(tool))
+    {
+        tools.Add(tool);
+    }
+    continue;
+}
+
+if (trimmed.StartsWith("tools:", StringComparison.OrdinalIgnoreCase))
+{
+    inTools = true;
+    inRagQueries = false;  // End ragQueries section
+}
+```
+
+#### 3. IPromptRegistry Interface
+
+Add method to retrieve tools for a prompt:
+
+```csharp
+public interface IPromptRegistry
+{
+    // Existing methods...
+    IReadOnlyList<string> GetRagQueries(string name);
+    
+    // NEW
+    IReadOnlyList<string> GetTools(string name);
+}
+```
+
+### Tool Precedence
+
+When executing a step, tools come from multiple sources. Precedence (highest to lowest):
+
+1. **Prompt template `tools:`** - Task-specific tools (e.g., `step-execute-documentation.prompt`)
+2. **Agent definition `## Tools Available`** - Agent's default tool set
+3. **Empty** - No tools available (current behavior)
+
+The runtime should **merge** these, with prompt-level tools taking priority for conflicts.## Proposed Solution
 
 ### Architecture
 
