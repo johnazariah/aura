@@ -137,6 +137,45 @@ public interface IWorkflowService
     /// <param name="ct">Cancellation token.</param>
     /// <returns>The chat response with any plan modifications.</returns>
     Task<WorkflowChatResponse> ChatAsync(Guid workflowId, string message, CancellationToken ct = default);
+
+    /// <summary>
+    /// Approves a step's output.
+    /// </summary>
+    /// <param name="workflowId">The workflow ID.</param>
+    /// <param name="stepId">The step ID.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>The updated step.</returns>
+    Task<WorkflowStep> ApproveStepAsync(Guid workflowId, Guid stepId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Rejects a step's output with optional feedback.
+    /// </summary>
+    /// <param name="workflowId">The workflow ID.</param>
+    /// <param name="stepId">The step ID.</param>
+    /// <param name="feedback">Feedback about why it was rejected.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>The updated step.</returns>
+    Task<WorkflowStep> RejectStepAsync(Guid workflowId, Guid stepId, string? feedback = null, CancellationToken ct = default);
+
+    /// <summary>
+    /// Skips a step with optional reason.
+    /// </summary>
+    /// <param name="workflowId">The workflow ID.</param>
+    /// <param name="stepId">The step ID.</param>
+    /// <param name="reason">Reason for skipping.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>The updated step.</returns>
+    Task<WorkflowStep> SkipStepAsync(Guid workflowId, Guid stepId, string? reason = null, CancellationToken ct = default);
+
+    /// <summary>
+    /// Chats with an agent in the context of a specific step.
+    /// </summary>
+    /// <param name="workflowId">The workflow ID.</param>
+    /// <param name="stepId">The step ID.</param>
+    /// <param name="message">The user message.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>The updated step and agent response.</returns>
+    Task<(WorkflowStep Step, string Response)> ChatWithStepAsync(Guid workflowId, Guid stepId, string message, CancellationToken ct = default);
 }
 
 /// <summary>

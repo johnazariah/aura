@@ -243,18 +243,18 @@ public enum StepApproval
 
 ## Implementation Phases
 
-### Phase 1: Step Card Redesign
+### Phase 1: Step Card Redesign ✅
 
-- [ ] Update webview HTML with new card layout
-- [ ] Add collapsible sections (Output, Chat)
-- [ ] Status indicators and action buttons
-- [ ] CSS styling for compact/expanded states
+- [x] Update webview HTML with new card layout
+- [x] Add collapsible sections (Output, Chat)
+- [x] Status indicators and action buttons
+- [x] CSS styling for compact/expanded states
 
-### Phase 2: Execute Gating
+### Phase 2: Execute Gating ✅
 
-- [ ] Add `canExecute` logic based on step order/dependencies
-- [ ] Disable Execute button when not ready
-- [ ] Show blocked indicator
+- [x] Add `canExecute` logic based on step order/dependencies
+- [x] Disable Execute button when not ready
+- [x] Show blocked indicator (◑)
 
 ### Phase 3: Output Approval
 
@@ -275,7 +275,7 @@ public enum StepApproval
 - [ ] Skip step functionality
 - [ ] Reassign agent dropdown
 - [ ] Edit description inline
-- [ ] View context panel
+- [ ] View context panel (use VS Code's built-in diff for file changes)
 
 ## File Changes
 

@@ -1899,6 +1899,103 @@ app.MapDelete("/api/developer/workflows/{workflowId:guid}/steps/{stepId:guid}", 
     return Results.NoContent();
 });
 
+// Approve step output
+app.MapPost("/api/developer/workflows/{workflowId:guid}/steps/{stepId:guid}/approve", async (
+    Guid workflowId,
+    Guid stepId,
+    IWorkflowService workflowService,
+    CancellationToken ct) =>
+{
+    try
+    {
+        var step = await workflowService.ApproveStepAsync(workflowId, stepId, ct);
+        return Results.Ok(new
+        {
+            id = step.Id,
+            name = step.Name,
+            approval = step.Approval?.ToString()
+        });
+    }
+    catch (InvalidOperationException ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+});
+
+// Reject step output (request revision)
+app.MapPost("/api/developer/workflows/{workflowId:guid}/steps/{stepId:guid}/reject", async (
+    Guid workflowId,
+    Guid stepId,
+    RejectStepRequest? request,
+    IWorkflowService workflowService,
+    CancellationToken ct) =>
+{
+    try
+    {
+        var step = await workflowService.RejectStepAsync(workflowId, stepId, request?.Feedback, ct);
+        return Results.Ok(new
+        {
+            id = step.Id,
+            name = step.Name,
+            approval = step.Approval?.ToString(),
+            approvalFeedback = step.ApprovalFeedback
+        });
+    }
+    catch (InvalidOperationException ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+});
+
+// Skip step
+app.MapPost("/api/developer/workflows/{workflowId:guid}/steps/{stepId:guid}/skip", async (
+    Guid workflowId,
+    Guid stepId,
+    SkipStepRequest? request,
+    IWorkflowService workflowService,
+    CancellationToken ct) =>
+{
+    try
+    {
+        var step = await workflowService.SkipStepAsync(workflowId, stepId, request?.Reason, ct);
+        return Results.Ok(new
+        {
+            id = step.Id,
+            name = step.Name,
+            status = step.Status.ToString(),
+            skipReason = step.SkipReason
+        });
+    }
+    catch (InvalidOperationException ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+});
+
+// Step chat - interact with agent before/after execution
+app.MapPost("/api/developer/workflows/{workflowId:guid}/steps/{stepId:guid}/chat", async (
+    Guid workflowId,
+    Guid stepId,
+    StepChatRequest request,
+    IWorkflowService workflowService,
+    CancellationToken ct) =>
+{
+    try
+    {
+        var (step, response) = await workflowService.ChatWithStepAsync(workflowId, stepId, request.Message, ct);
+        return Results.Ok(new
+        {
+            stepId = step.Id,
+            response = response,
+            updatedDescription = step.Description
+        });
+    }
+    catch (InvalidOperationException ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+});
+
 app.MapPost("/api/developer/workflows/{id:guid}/complete", async (
     Guid id,
     IWorkflowService workflowService,
@@ -2070,6 +2167,15 @@ record AddStepRequest(
     string Capability,
     string? Description = null,
     int? AfterOrder = null);
+
+record RejectStepRequest(
+    string? Feedback = null);
+
+record SkipStepRequest(
+    string? Reason = null);
+
+record StepChatRequest(
+    string Message);
 
 record WorkflowChatRequest(
     string Message);

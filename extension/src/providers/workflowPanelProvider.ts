@@ -795,10 +795,10 @@ export class WorkflowPanelProvider {
     private async handleSkipStep(workflowId: string, stepId: string, panel: vscode.WebviewPanel): Promise<void> {
         try {
             panel.webview.postMessage({ type: 'loading', action: 'skip', stepId });
-            // TODO: Add skip step API call when implemented
-            // For now, show a message that this is not yet implemented
-            vscode.window.showInformationMessage('Skip step functionality coming soon');
+            await this.apiService.skipStep(workflowId, stepId);
+            vscode.window.showInformationMessage('Step skipped ⏭');
             panel.webview.postMessage({ type: 'loadingDone' });
+            await this.refreshPanel(workflowId);
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Failed to skip step';
             panel.webview.postMessage({ type: 'error', message });
@@ -807,12 +807,12 @@ export class WorkflowPanelProvider {
 
     private async handleStepChat(workflowId: string, stepId: string, message: string, panel: vscode.WebviewPanel): Promise<void> {
         try {
-            // TODO: Add step-level chat API when implemented
-            // For now, send a placeholder response
-            panel.webview.postMessage({ 
-                type: 'stepChatResponse', 
-                stepId, 
-                response: 'Step-level chat is coming soon. For now, use the main workflow chat.'
+            const response = await this.apiService.chatWithStep(workflowId, stepId, message);
+            panel.webview.postMessage({
+                type: 'stepChatResponse',
+                stepId,
+                response: response.response,
+                updatedDescription: response.updatedDescription
             });
         } catch (error) {
             const errMessage = error instanceof Error ? error.message : 'Failed to send message';
@@ -823,7 +823,7 @@ export class WorkflowPanelProvider {
     private async handleApproveStepOutput(workflowId: string, stepId: string, panel: vscode.WebviewPanel): Promise<void> {
         try {
             panel.webview.postMessage({ type: 'loading', action: 'approve', stepId });
-            // TODO: Add approve output API when implemented
+            await this.apiService.approveStepOutput(workflowId, stepId);
             vscode.window.showInformationMessage('Output approved ✓');
             panel.webview.postMessage({ type: 'loadingDone' });
             await this.refreshPanel(workflowId);
@@ -836,9 +836,10 @@ export class WorkflowPanelProvider {
     private async handleRejectStepOutput(workflowId: string, stepId: string, reason: string, panel: vscode.WebviewPanel): Promise<void> {
         try {
             panel.webview.postMessage({ type: 'loading', action: 'reject', stepId });
-            // TODO: Add reject output API when implemented - this would trigger re-execution with feedback
-            vscode.window.showInformationMessage(`Output rejected. Reason: ${reason || 'No reason given'}`);
+            await this.apiService.rejectStepOutput(workflowId, stepId, reason);
+            vscode.window.showInformationMessage(`Output rejected - step reset to pending for re-execution`);
             panel.webview.postMessage({ type: 'loadingDone' });
+            await this.refreshPanel(workflowId);
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Failed to reject output';
             panel.webview.postMessage({ type: 'error', message });

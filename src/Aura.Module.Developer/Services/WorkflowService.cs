@@ -774,6 +774,156 @@ public sealed class WorkflowService : IWorkflowService
         };
     }
 
+    /// <inheritdoc/>
+    public async Task<WorkflowStep> ApproveStepAsync(Guid workflowId, Guid stepId, CancellationToken ct = default)
+    {
+        var workflow = await _db.Workflows
+            .Include(w => w.Steps)
+            .FirstOrDefaultAsync(w => w.Id == workflowId, ct)
+            ?? throw new InvalidOperationException($"Workflow {workflowId} not found");
+
+        var step = workflow.Steps.FirstOrDefault(s => s.Id == stepId)
+            ?? throw new InvalidOperationException($"Step {stepId} not found in workflow");
+
+        if (step.Status != StepStatus.Completed)
+        {
+            throw new InvalidOperationException($"Cannot approve step in status {step.Status}");
+        }
+
+        step.Approval = StepApproval.Approved;
+        step.ApprovalFeedback = null;
+        await _db.SaveChangesAsync(ct);
+
+        _logger.LogInformation("Step {StepId} approved in workflow {WorkflowId}", stepId, workflowId);
+        return step;
+    }
+
+    /// <inheritdoc/>
+    public async Task<WorkflowStep> RejectStepAsync(Guid workflowId, Guid stepId, string? feedback = null, CancellationToken ct = default)
+    {
+        var workflow = await _db.Workflows
+            .Include(w => w.Steps)
+            .FirstOrDefaultAsync(w => w.Id == workflowId, ct)
+            ?? throw new InvalidOperationException($"Workflow {workflowId} not found");
+
+        var step = workflow.Steps.FirstOrDefault(s => s.Id == stepId)
+            ?? throw new InvalidOperationException($"Step {stepId} not found in workflow");
+
+        if (step.Status != StepStatus.Completed)
+        {
+            throw new InvalidOperationException($"Cannot reject step in status {step.Status}");
+        }
+
+        step.Approval = StepApproval.Rejected;
+        step.ApprovalFeedback = feedback;
+        // Reset to pending so it can be re-executed
+        step.Status = StepStatus.Pending;
+        step.Output = null;
+        step.Attempts = 0;
+        await _db.SaveChangesAsync(ct);
+
+        _logger.LogInformation("Step {StepId} rejected in workflow {WorkflowId}: {Feedback}", stepId, workflowId, feedback ?? "(no feedback)");
+        return step;
+    }
+
+    /// <inheritdoc/>
+    public async Task<WorkflowStep> SkipStepAsync(Guid workflowId, Guid stepId, string? reason = null, CancellationToken ct = default)
+    {
+        var workflow = await _db.Workflows
+            .Include(w => w.Steps)
+            .FirstOrDefaultAsync(w => w.Id == workflowId, ct)
+            ?? throw new InvalidOperationException($"Workflow {workflowId} not found");
+
+        var step = workflow.Steps.FirstOrDefault(s => s.Id == stepId)
+            ?? throw new InvalidOperationException($"Step {stepId} not found in workflow");
+
+        if (step.Status is StepStatus.Running)
+        {
+            throw new InvalidOperationException("Cannot skip a running step");
+        }
+
+        step.Status = StepStatus.Skipped;
+        step.SkipReason = reason;
+        step.CompletedAt = DateTimeOffset.UtcNow;
+        await _db.SaveChangesAsync(ct);
+
+        _logger.LogInformation("Step {StepId} skipped in workflow {WorkflowId}: {Reason}", stepId, workflowId, reason ?? "(no reason)");
+        return step;
+    }
+
+    /// <inheritdoc/>
+    public async Task<(WorkflowStep Step, string Response)> ChatWithStepAsync(Guid workflowId, Guid stepId, string message, CancellationToken ct = default)
+    {
+        var workflow = await _db.Workflows
+            .Include(w => w.Steps)
+            .FirstOrDefaultAsync(w => w.Id == workflowId, ct)
+            ?? throw new InvalidOperationException($"Workflow {workflowId} not found");
+
+        var step = workflow.Steps.FirstOrDefault(s => s.Id == stepId)
+            ?? throw new InvalidOperationException($"Step {stepId} not found in workflow");
+
+        // Get the assigned agent or find one by capability
+        var agent = step.AssignedAgentId is not null
+            ? _agentRegistry.GetAgent(step.AssignedAgentId)
+            : _agentRegistry.GetBestForCapability(step.Capability, step.Language);
+
+        if (agent is null)
+        {
+            throw new InvalidOperationException($"No agent found for step {stepId}");
+        }
+
+        // Build context for the chat
+        var contextBuilder = new System.Text.StringBuilder();
+        contextBuilder.AppendLine($"## Step Context");
+        contextBuilder.AppendLine($"**Step Name:** {step.Name}");
+        contextBuilder.AppendLine($"**Step Description:** {step.Description}");
+        contextBuilder.AppendLine($"**Capability:** {step.Capability}");
+        contextBuilder.AppendLine($"**Current Status:** {step.Status}");
+        if (!string.IsNullOrEmpty(step.Output))
+        {
+            contextBuilder.AppendLine();
+            contextBuilder.AppendLine("## Previous Output");
+            contextBuilder.AppendLine(step.Output);
+        }
+        contextBuilder.AppendLine();
+        contextBuilder.AppendLine("## User Message");
+        contextBuilder.AppendLine(message);
+
+        // Get agent response
+        var agentContext = new AgentContext(contextBuilder.ToString(), WorkspacePath: workflow.WorkspacePath);
+        var output = await agent.ExecuteAsync(agentContext, ct);
+        var response = output.Content ?? "No response from agent.";
+
+        // Update chat history
+        var history = new List<ChatMessage>();
+        if (!string.IsNullOrEmpty(step.ChatHistory))
+        {
+            try
+            {
+                history = JsonSerializer.Deserialize<List<ChatMessage>>(step.ChatHistory) ?? [];
+            }
+            catch { /* ignore parse errors */ }
+        }
+        history.Add(new ChatMessage("user", message));
+        history.Add(new ChatMessage("assistant", response));
+        step.ChatHistory = JsonSerializer.Serialize(history);
+
+        // If the user is refining the step before execution, update the description
+        if (step.Status == StepStatus.Pending && message.Contains("focus", StringComparison.OrdinalIgnoreCase))
+        {
+            // Extract any refined description from the response
+            // This is a simple heuristic - could be improved
+            step.Description = $"{step.Description} (Refined: {message})";
+        }
+
+        await _db.SaveChangesAsync(ct);
+
+        _logger.LogInformation("Chat with step {StepId} in workflow {WorkflowId}: {MessagePreview}", stepId, workflowId, message.Length > 50 ? message[..50] + "..." : message);
+        return (step, response);
+    }
+
+    private record ChatMessage(string Role, string Content);
+
     private static List<StepDefinition> ParseStepsFromResponse(string response)
     {
         var steps = new List<StepDefinition>();

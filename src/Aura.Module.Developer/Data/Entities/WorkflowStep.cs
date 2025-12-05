@@ -57,6 +57,30 @@ public sealed class WorkflowStep
 
     /// <summary>Gets or sets when the step completed.</summary>
     public DateTimeOffset? CompletedAt { get; set; }
+
+    /// <summary>Gets or sets the approval state of the step output.</summary>
+    public StepApproval? Approval { get; set; }
+
+    /// <summary>Gets or sets feedback provided when rejecting output.</summary>
+    public string? ApprovalFeedback { get; set; }
+
+    /// <summary>Gets or sets the reason for skipping this step.</summary>
+    public string? SkipReason { get; set; }
+
+    /// <summary>Gets or sets the chat history as JSON array.</summary>
+    public string? ChatHistory { get; set; }
+}
+
+/// <summary>
+/// The approval state of a step's output.
+/// </summary>
+public enum StepApproval
+{
+    /// <summary>Output approved by user.</summary>
+    Approved,
+
+    /// <summary>Output rejected, needs revision.</summary>
+    Rejected,
 }
 
 /// <summary>

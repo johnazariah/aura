@@ -111,6 +111,12 @@ export interface WorkflowChatResponse {
     stepsRemoved: string[];
 }
 
+export interface StepChatResponse {
+    stepId: string;
+    response: string;
+    updatedDescription?: string;
+}
+
 export class AuraApiService {
     private httpClient: AxiosInstance;
 
@@ -380,6 +386,40 @@ export class AuraApiService {
     async sendWorkflowChat(workflowId: string, message: string): Promise<WorkflowChatResponse> {
         const response = await this.httpClient.post(
             `${this.getBaseUrl()}/api/developer/workflows/${workflowId}/chat`,
+            { message },
+            { timeout: this.getExecutionTimeout() }
+        );
+        return response.data;
+    }
+
+    // Step management methods
+
+    async approveStepOutput(workflowId: string, stepId: string): Promise<WorkflowStep> {
+        const response = await this.httpClient.post(
+            `${this.getBaseUrl()}/api/developer/workflows/${workflowId}/steps/${stepId}/approve`
+        );
+        return response.data;
+    }
+
+    async rejectStepOutput(workflowId: string, stepId: string, feedback?: string): Promise<WorkflowStep> {
+        const response = await this.httpClient.post(
+            `${this.getBaseUrl()}/api/developer/workflows/${workflowId}/steps/${stepId}/reject`,
+            feedback ? { feedback } : {}
+        );
+        return response.data;
+    }
+
+    async skipStep(workflowId: string, stepId: string, reason?: string): Promise<WorkflowStep> {
+        const response = await this.httpClient.post(
+            `${this.getBaseUrl()}/api/developer/workflows/${workflowId}/steps/${stepId}/skip`,
+            reason ? { reason } : {}
+        );
+        return response.data;
+    }
+
+    async chatWithStep(workflowId: string, stepId: string, message: string): Promise<StepChatResponse> {
+        const response = await this.httpClient.post(
+            `${this.getBaseUrl()}/api/developer/workflows/${workflowId}/steps/${stepId}/chat`,
             { message },
             { timeout: this.getExecutionTimeout() }
         );
