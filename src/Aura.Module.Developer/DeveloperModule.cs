@@ -60,6 +60,9 @@ public sealed class DeveloperModule : IAuraModule
         // Register semantic indexer (combines code graph + selective embeddings)
         services.AddScoped<ISemanticIndexer, DeveloperSemanticIndexer>();
 
+        // Register codebase context service (combines graph + RAG for agent context)
+        services.AddScoped<ICodebaseContextService, CodebaseContextService>();
+
         // Register hardcoded agents provider (C# ingester, etc.)
         services.AddSingleton<IHardcodedAgentProvider, DeveloperAgentProvider>();
 

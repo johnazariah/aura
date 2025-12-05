@@ -26,6 +26,13 @@ public interface IPromptRegistry
     string Render(string name, object context);
 
     /// <summary>
+    /// Gets the RAG queries defined for a prompt.
+    /// </summary>
+    /// <param name="name">The prompt name.</param>
+    /// <returns>The list of RAG queries, or empty if none defined.</returns>
+    IReadOnlyList<string> GetRagQueries(string name);
+
+    /// <summary>
     /// Gets all registered prompt names.
     /// </summary>
     IReadOnlyList<string> GetPromptNames();

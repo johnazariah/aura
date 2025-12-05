@@ -516,6 +516,24 @@ export class WorkflowPanelProvider {
             case 'openWorkspace':
                 await this.handleOpenWorkspace(message.workspacePath, message.gitBranch);
                 break;
+            case 'skipStep':
+                await this.handleSkipStep(workflowId, message.stepId, panel);
+                break;
+            case 'stepChat':
+                await this.handleStepChat(workflowId, message.stepId, message.message, panel);
+                break;
+            case 'approveStepOutput':
+                await this.handleApproveStepOutput(workflowId, message.stepId, panel);
+                break;
+            case 'rejectStepOutput':
+                await this.handleRejectStepOutput(workflowId, message.stepId, message.reason, panel);
+                break;
+            case 'viewStepContext':
+                await this.handleViewStepContext(workflowId, message.stepId, panel);
+                break;
+            case 'reassignStep':
+                await this.handleReassignStep(workflowId, message.stepId, message.agentId, panel);
+                break;
         }
     }
 
@@ -774,6 +792,86 @@ export class WorkflowPanelProvider {
         }
     }
 
+    private async handleSkipStep(workflowId: string, stepId: string, panel: vscode.WebviewPanel): Promise<void> {
+        try {
+            panel.webview.postMessage({ type: 'loading', action: 'skip', stepId });
+            // TODO: Add skip step API call when implemented
+            // For now, show a message that this is not yet implemented
+            vscode.window.showInformationMessage('Skip step functionality coming soon');
+            panel.webview.postMessage({ type: 'loadingDone' });
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to skip step';
+            panel.webview.postMessage({ type: 'error', message });
+        }
+    }
+
+    private async handleStepChat(workflowId: string, stepId: string, message: string, panel: vscode.WebviewPanel): Promise<void> {
+        try {
+            // TODO: Add step-level chat API when implemented
+            // For now, send a placeholder response
+            panel.webview.postMessage({ 
+                type: 'stepChatResponse', 
+                stepId, 
+                response: 'Step-level chat is coming soon. For now, use the main workflow chat.'
+            });
+        } catch (error) {
+            const errMessage = error instanceof Error ? error.message : 'Failed to send message';
+            panel.webview.postMessage({ type: 'error', message: errMessage });
+        }
+    }
+
+    private async handleApproveStepOutput(workflowId: string, stepId: string, panel: vscode.WebviewPanel): Promise<void> {
+        try {
+            panel.webview.postMessage({ type: 'loading', action: 'approve', stepId });
+            // TODO: Add approve output API when implemented
+            vscode.window.showInformationMessage('Output approved ✓');
+            panel.webview.postMessage({ type: 'loadingDone' });
+            await this.refreshPanel(workflowId);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to approve output';
+            panel.webview.postMessage({ type: 'error', message });
+        }
+    }
+
+    private async handleRejectStepOutput(workflowId: string, stepId: string, reason: string, panel: vscode.WebviewPanel): Promise<void> {
+        try {
+            panel.webview.postMessage({ type: 'loading', action: 'reject', stepId });
+            // TODO: Add reject output API when implemented - this would trigger re-execution with feedback
+            vscode.window.showInformationMessage(`Output rejected. Reason: ${reason || 'No reason given'}`);
+            panel.webview.postMessage({ type: 'loadingDone' });
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to reject output';
+            panel.webview.postMessage({ type: 'error', message });
+        }
+    }
+
+    private async handleViewStepContext(workflowId: string, stepId: string, panel: vscode.WebviewPanel): Promise<void> {
+        try {
+            // Get step details and show in a new panel or message
+            const workflow = await this.apiService.getWorkflow(workflowId);
+            const step = (workflow.steps || []).find(s => s.id === stepId);
+            if (step) {
+                // Show step context in a quick pick or information message
+                vscode.window.showInformationMessage(`Step Context: ${step.name}\n\nCapability: ${step.capability}\nAgent: ${step.assignedAgentId || 'Not assigned'}\nStatus: ${step.status}`);
+            }
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to view step context';
+            panel.webview.postMessage({ type: 'error', message });
+        }
+    }
+
+    private async handleReassignStep(workflowId: string, stepId: string, agentId: string, panel: vscode.WebviewPanel): Promise<void> {
+        try {
+            panel.webview.postMessage({ type: 'loading', action: 'reassign', stepId });
+            // TODO: Add reassign step API when implemented
+            vscode.window.showInformationMessage(`Step will be reassigned to agent: ${agentId} (coming soon)`);
+            panel.webview.postMessage({ type: 'loadingDone' });
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to reassign step';
+            panel.webview.postMessage({ type: 'error', message });
+        }
+    }
+
     private getHtml(workflow: Workflow, webview: vscode.Webview): string {
         const stepsHtml = this.getStepsHtml(workflow.steps || []);
         const statusClass = workflow.status.toLowerCase();
@@ -929,6 +1027,405 @@ export class WorkflowPanelProvider {
             margin-top: 12px;
             display: flex;
             gap: 8px;
+        }
+
+        /* Step card compact design */
+        .step-compact {
+            padding: 10px 14px;
+        }
+        .step-status-icon {
+            font-size: 0.9em;
+            margin-right: 6px;
+        }
+        .step-status-icon.completed { color: #107c10; }
+        .step-status-icon.running { color: #0078d4; }
+        .step-status-icon.pending { color: var(--vscode-descriptionForeground); }
+        .step-status-icon.failed { color: #d13438; }
+
+        /* Collapsible step sections */
+        .step-section {
+            margin-top: 10px;
+            border: 1px solid var(--vscode-panel-border);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .step-section.collapsed .section-content {
+            display: none;
+        }
+        .section-header {
+            padding: 8px 12px;
+            background: var(--vscode-editor-inactiveSelectionBackground);
+            cursor: pointer;
+            font-size: 0.85em;
+            color: var(--vscode-descriptionForeground);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            user-select: none;
+        }
+        .section-header:hover {
+            background: var(--vscode-list-hoverBackground);
+        }
+        .section-toggle {
+            font-size: 0.75em;
+            opacity: 0.7;
+        }
+        .section-content {
+            padding: 12px;
+            background: var(--vscode-textCodeBlock-background);
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        /* Step toolbar */
+        .step-toolbar {
+            margin-top: 10px;
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+        .toolbar-btn {
+            padding: 4px 10px;
+            border: 1px solid var(--vscode-button-secondaryBackground);
+            border-radius: 3px;
+            background: transparent;
+            color: var(--vscode-foreground);
+            font-size: 12px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .toolbar-btn:hover:not(:disabled) {
+            background: var(--vscode-button-secondaryBackground);
+        }
+        .toolbar-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+        .toolbar-btn.primary {
+            background: var(--vscode-button-background);
+            color: var(--vscode-button-foreground);
+            border-color: var(--vscode-button-background);
+        }
+        .toolbar-btn.primary:hover:not(:disabled) {
+            background: var(--vscode-button-hoverBackground);
+        }
+
+        /* Step chat section */
+        .step-chat {
+            margin-top: 10px;
+            border: 1px solid var(--vscode-panel-border);
+            border-radius: 4px;
+            padding: 12px;
+            background: var(--vscode-editor-inactiveSelectionBackground);
+        }
+        .step-chat.hidden {
+            display: none;
+        }
+        .chat-messages {
+            max-height: 200px;
+            overflow-y: auto;
+            margin-bottom: 10px;
+        }
+        .chat-message {
+            margin-bottom: 8px;
+            padding: 8px 10px;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+        .chat-message.user {
+            background: var(--vscode-button-secondaryBackground);
+            margin-left: 20%;
+        }
+        .chat-message.assistant {
+            background: var(--vscode-textCodeBlock-background);
+            margin-right: 20%;
+        }
+        .chat-input-row {
+            display: flex;
+            gap: 8px;
+        }
+        .chat-input-row input {
+            flex: 1;
+            padding: 6px 10px;
+            border: 1px solid var(--vscode-input-border);
+            border-radius: 3px;
+            background: var(--vscode-input-background);
+            color: var(--vscode-input-foreground);
+            font-size: 13px;
+        }
+        .chat-input-row input:focus {
+            outline: 1px solid var(--vscode-focusBorder);
+        }
+
+        /* Approve/reject buttons */
+        .output-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid var(--vscode-panel-border);
+        }
+        .btn-approve {
+            background: #107c10;
+            color: white;
+            border: none;
+        }
+        .btn-approve:hover {
+            background: #0e6b0e;
+        }
+        .btn-reject {
+            background: transparent;
+            color: #d13438;
+            border: 1px solid #d13438;
+        }
+        .btn-reject:hover {
+            background: rgba(209, 52, 56, 0.1);
+        }
+
+        /* Step card layout */
+        .step-card {
+            margin-bottom: 12px;
+            padding: 12px 16px;
+            background: var(--vscode-editor-inactiveSelectionBackground);
+            border-radius: 6px;
+            border: 1px solid var(--vscode-panel-border);
+            transition: border-color 0.2s;
+        }
+        .step-card:hover {
+            border-color: var(--vscode-focusBorder);
+        }
+        .step-card.completed {
+            border-left: 3px solid #107c10;
+        }
+        .step-card.running {
+            border-left: 3px solid #0078d4;
+            animation: running-pulse 1.5s ease-in-out infinite;
+        }
+        .step-card.failed {
+            border-left: 3px solid #d13438;
+        }
+        .step-card.pending {
+            border-left: 3px solid var(--vscode-descriptionForeground);
+        }
+        .step-card.blocked {
+            opacity: 0.6;
+        }
+
+        @keyframes running-pulse {
+            0%, 100% { background: var(--vscode-editor-inactiveSelectionBackground); }
+            50% { background: rgba(0, 120, 212, 0.1); }
+        }
+
+        .step-header {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+        }
+        .step-status {
+            font-size: 1.1em;
+            flex-shrink: 0;
+            width: 20px;
+            text-align: center;
+        }
+        .step-card.completed .step-status { color: #107c10; }
+        .step-card.running .step-status { color: #0078d4; }
+        .step-card.failed .step-status { color: #d13438; }
+        .step-card.pending .step-status { color: var(--vscode-descriptionForeground); }
+
+        .step-info {
+            flex: 1;
+            min-width: 0;
+        }
+        .step-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .step-name {
+            font-weight: 600;
+            font-size: 0.95em;
+        }
+        .step-agent {
+            font-size: 0.8em;
+            color: var(--vscode-descriptionForeground);
+            background: var(--vscode-badge-background);
+            padding: 2px 8px;
+            border-radius: 10px;
+        }
+        .step-description {
+            margin-top: 4px;
+            font-size: 0.85em;
+            color: var(--vscode-descriptionForeground);
+            line-height: 1.4;
+        }
+
+        .step-actions {
+            display: flex;
+            gap: 4px;
+            flex-shrink: 0;
+        }
+        .btn-icon {
+            width: 28px;
+            height: 28px;
+            border: none;
+            border-radius: 4px;
+            background: transparent;
+            color: var(--vscode-foreground);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+        }
+        .btn-icon:hover {
+            background: var(--vscode-button-secondaryBackground);
+        }
+        .btn-icon.primary {
+            background: var(--vscode-button-background);
+            color: var(--vscode-button-foreground);
+        }
+        .btn-icon.primary:hover {
+            background: var(--vscode-button-hoverBackground);
+        }
+
+        .step-menu {
+            position: absolute;
+            top: 100%;
+            right: 0;
+            background: var(--vscode-menu-background);
+            border: 1px solid var(--vscode-menu-border);
+            border-radius: 4px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            z-index: 100;
+            min-width: 150px;
+        }
+        .step-menu button {
+            display: block;
+            width: 100%;
+            padding: 8px 12px;
+            border: none;
+            background: transparent;
+            color: var(--vscode-menu-foreground);
+            text-align: left;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        .step-menu button:hover {
+            background: var(--vscode-menu-selectionBackground);
+        }
+
+        .step-progress {
+            margin-top: 10px;
+            height: 3px;
+            background: var(--vscode-progressBar-background);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        .progress-bar {
+            height: 100%;
+            width: 30%;
+            background: #0078d4;
+            animation: progress-move 1.5s ease-in-out infinite;
+        }
+        @keyframes progress-move {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(400%); }
+        }
+
+        .step-error {
+            margin-top: 8px;
+            padding: 8px 12px;
+            background: rgba(209, 52, 56, 0.1);
+            border: 1px solid #d13438;
+            border-radius: 4px;
+            color: #d13438;
+            font-size: 0.85em;
+        }
+
+        .step-section {
+            margin-top: 10px;
+            border: 1px solid var(--vscode-panel-border);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .section-header {
+            padding: 8px 12px;
+            background: var(--vscode-editor-inactiveSelectionBackground);
+            font-size: 0.85em;
+            color: var(--vscode-descriptionForeground);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .section-content {
+            padding: 12px;
+            background: var(--vscode-textCodeBlock-background);
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .section-content pre {
+            margin: 0;
+            white-space: pre-wrap;
+            word-break: break-word;
+            font-family: var(--vscode-editor-font-family);
+            font-size: 12px;
+            line-height: 1.4;
+        }
+
+        .approval-buttons {
+            display: flex;
+            gap: 4px;
+        }
+        .approval-buttons .btn-icon {
+            width: 24px;
+            height: 24px;
+            font-size: 12px;
+        }
+        .approval-buttons .approve { color: #107c10; }
+        .approval-buttons .reject { color: #d13438; }
+
+        .chat-messages {
+            max-height: 150px;
+            overflow-y: auto;
+            margin-bottom: 10px;
+        }
+        .chat-message {
+            margin-bottom: 8px;
+            padding: 8px 10px;
+            border-radius: 4px;
+            font-size: 0.85em;
+            line-height: 1.4;
+        }
+        .chat-message.user {
+            background: var(--vscode-button-secondaryBackground);
+            margin-left: 20%;
+        }
+        .chat-message.assistant {
+            background: var(--vscode-editor-inactiveSelectionBackground);
+            margin-right: 20%;
+        }
+        .chat-input-row {
+            display: flex;
+            gap: 8px;
+        }
+        .chat-input {
+            flex: 1;
+            padding: 6px 10px;
+            border: 1px solid var(--vscode-input-border);
+            border-radius: 3px;
+            background: var(--vscode-input-background);
+            color: var(--vscode-input-foreground);
+            font-size: 12px;
+        }
+        .chat-input:focus {
+            outline: 1px solid var(--vscode-focusBorder);
+        }
+        .btn.btn-small {
+            padding: 4px 10px;
+            font-size: 12px;
         }
 
         .step-output {
@@ -1288,6 +1785,84 @@ export class WorkflowPanelProvider {
             vscode.postMessage({ type: 'executeStep', stepId });
         }
 
+        // Toggle collapsible sections (Output/Chat)
+        function toggleStepSection(stepId, section) {
+            const sectionEl = document.getElementById('step-' + section + '-' + stepId);
+            if (sectionEl) {
+                sectionEl.classList.toggle('collapsed');
+            }
+        }
+
+        // Open step chat (show chat panel)
+        function openStepChat(stepId) {
+            const chatEl = document.getElementById('step-chat-' + stepId);
+            if (chatEl) {
+                chatEl.classList.toggle('hidden');
+                // Focus the input if now visible
+                if (!chatEl.classList.contains('hidden')) {
+                    const input = chatEl.querySelector('input');
+                    if (input) input.focus();
+                }
+            }
+        }
+
+        // Skip a step
+        function skipStep(stepId) {
+            if (confirm('Are you sure you want to skip this step?')) {
+                vscode.postMessage({ type: 'skipStep', stepId });
+            }
+        }
+
+        // Open step menu (for additional options)
+        function openStepMenu(stepId) {
+            // For now, show a simple alert - in future this could be a dropdown
+            alert('Additional options coming soon: Edit prompt, View history, Retry with modifications');
+        }
+
+        // Approve step output
+        function approveOutput(stepId) {
+            vscode.postMessage({ type: 'approveStepOutput', stepId });
+        }
+
+        // Reject step output (request regeneration)
+        function rejectOutput(stepId) {
+            const reason = prompt('Why should this output be regenerated? (optional)');
+            vscode.postMessage({ type: 'rejectStepOutput', stepId, reason: reason || '' });
+        }
+
+        // Send chat message for a step
+        function sendStepChat(stepId) {
+            const input = document.getElementById('chat-input-' + stepId);
+            if (input && input.value.trim()) {
+                const message = input.value.trim();
+                input.value = '';
+                
+                // Add user message to chat immediately
+                const messagesEl = document.querySelector('#step-chat-' + stepId + ' .chat-messages');
+                if (messagesEl) {
+                    messagesEl.innerHTML += '<div class="chat-message user">' + escapeHtml(message) + '</div>';
+                    messagesEl.scrollTop = messagesEl.scrollHeight;
+                }
+                
+                vscode.postMessage({ type: 'stepChat', stepId, message });
+            }
+        }
+
+        // Handle Enter key in chat input
+        function handleChatKeypress(event, stepId) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendStepChat(stepId);
+            }
+        }
+
+        // Helper to escape HTML
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
         function enrich() {
             setLoading('enrich', true);
             vscode.postMessage({ type: 'enrich' });
@@ -1353,10 +1928,77 @@ export class WorkflowPanelProvider {
                 workspacePath: workflow.workspacePath,
                 gitBranch: workflow.gitBranch
             });
-        }        function toggleOutput(stepId) {
-            const el = document.getElementById('output-' + stepId);
+        }
+
+        function toggleOutput(stepId) {
+            const el = document.getElementById('output-section-' + stepId);
             if (el) {
                 el.style.display = el.style.display === 'none' ? 'block' : 'none';
+            }
+        }
+
+        function toggleChat(stepId) {
+            const el = document.getElementById('chat-section-' + stepId);
+            if (el) {
+                el.style.display = el.style.display === 'none' ? 'block' : 'none';
+                // Focus the input if now visible
+                if (el.style.display !== 'none') {
+                    const input = document.getElementById('chat-input-' + stepId);
+                    if (input) input.focus();
+                }
+            }
+        }
+
+        function toggleStepMenu(stepId) {
+            const el = document.getElementById('menu-' + stepId);
+            if (el) {
+                el.style.display = el.style.display === 'none' ? 'block' : 'none';
+            }
+        }
+
+        function skipStep(stepId) {
+            if (confirm('Are you sure you want to skip this step?')) {
+                vscode.postMessage({ type: 'skipStep', stepId });
+            }
+        }
+
+        function reassignStep(stepId) {
+            const agent = prompt('Enter new agent ID:');
+            if (agent) {
+                vscode.postMessage({ type: 'reassignStep', stepId, agentId: agent });
+            }
+        }
+
+        function viewContext(stepId) {
+            vscode.postMessage({ type: 'viewStepContext', stepId });
+        }
+
+        function approveStep(stepId) {
+            vscode.postMessage({ type: 'approveStepOutput', stepId });
+        }
+
+        function rejectStep(stepId) {
+            const reason = prompt('Why should this output be regenerated? (optional)');
+            vscode.postMessage({ type: 'rejectStepOutput', stepId, reason: reason || '' });
+        }
+
+        function sendStepChat(stepId) {
+            const input = document.getElementById('chat-input-' + stepId);
+            if (input && input.value.trim()) {
+                const message = input.value.trim();
+                input.value = '';
+                
+                // Add user message to chat immediately
+                const messagesEl = document.getElementById('chat-messages-' + stepId);
+                if (messagesEl) {
+                    const msgDiv = document.createElement('div');
+                    msgDiv.className = 'chat-message user';
+                    msgDiv.textContent = message;
+                    messagesEl.appendChild(msgDiv);
+                    messagesEl.scrollTop = messagesEl.scrollHeight;
+                }
+                
+                vscode.postMessage({ type: 'stepChat', stepId, message });
             }
         }
 
@@ -1412,6 +2054,17 @@ export class WorkflowPanelProvider {
                         { text: 'Cancel', primary: false, action: hideModal }
                     ]);
                     break;
+                case 'stepChatResponse':
+                    // Add assistant response to step chat
+                    const chatMessagesEl = document.getElementById('chat-messages-' + message.stepId);
+                    if (chatMessagesEl) {
+                        const msgDiv = document.createElement('div');
+                        msgDiv.className = 'chat-message assistant';
+                        msgDiv.textContent = message.response;
+                        chatMessagesEl.appendChild(msgDiv);
+                        chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
+                    }
+                    break;
             }
         });
     </script>
@@ -1421,75 +2074,135 @@ export class WorkflowPanelProvider {
 
     private getStepsHtml(steps: WorkflowStep[]): string {
         if (steps.length === 0) {
-            return '<div class="timeline-item pending"><em>No steps yet. Run Plan to create steps.</em></div>';
+            return '<div class="step-card pending"><em>No steps yet. Run Plan to create steps.</em></div>';
         }
 
-        // Show in order (oldest first for timeline)
-        return steps.map(step => {
+        // Determine which steps can execute (only if all previous steps are completed)
+        const canExecuteStep = (index: number): boolean => {
+            if (steps[index].status !== 'Pending') return false;
+            // Check all previous steps are completed
+            for (let i = 0; i < index; i++) {
+                if (steps[i].status !== 'Completed' && steps[i].status !== 'Skipped') {
+                    return false;
+                }
+            }
+            return true;
+        };
+
+        // Show in order
+        return steps.map((step, index) => {
             const statusClass = step.status.toLowerCase();
-            const canExecute = step.status === 'Pending';
+            const canExecute = canExecuteStep(index);
+            const isBlocked = step.status === 'Pending' && !canExecute;
             const canRetry = step.status === 'Completed' || step.status === 'Failed';
-            
-            // Parse output if it's JSON
-            let outputContent = '';
+            const hasOutput = !!step.output;
+
+            // Status icon
+            const statusIcon = {
+                'pending': isBlocked ? '◑' : '○',
+                'running': '◐',
+                'completed': '●',
+                'failed': '✗',
+                'skipped': '⊘'
+            }[statusClass] || '○';
+
+            // Parse output if available
+            let outputHtml = '';
+            let tokenInfo = '';
             if (step.output) {
                 try {
                     const parsed = JSON.parse(step.output);
                     if (parsed.content) {
-                        // Truncate long content for display
-                        const content = parsed.content.length > 500 
-                            ? parsed.content.substring(0, 500) + '...' 
-                            : parsed.content;
-                        outputContent = `
-                        <div class="step-output">
-                            <div class="output-header" onclick="toggleOutput('${step.id}')">
-                                📄 Output (click to expand)
-                                ${parsed.tokensUsed ? ` • ${parsed.tokensUsed} tokens` : ''}
-                                ${parsed.durationMs ? ` • ${(parsed.durationMs / 1000).toFixed(1)}s` : ''}
+                        tokenInfo = parsed.tokensUsed ? `${parsed.tokensUsed} tokens` : '';
+                        if (parsed.durationMs) {
+                            tokenInfo += tokenInfo ? ` • ${(parsed.durationMs / 1000).toFixed(1)}s` : `${(parsed.durationMs / 1000).toFixed(1)}s`;
+                        }
+                        outputHtml = `
+                        <div class="step-section output-section" id="output-section-${step.id}" style="display: none;">
+                            <div class="section-header">
+                                <span>Output</span>
+                                <div class="approval-buttons">
+                                    <button class="btn-icon approve" onclick="approveStep('${step.id}')" title="Approve">✓</button>
+                                    <button class="btn-icon reject" onclick="rejectStep('${step.id}')" title="Request Changes">✗</button>
+                                </div>
                             </div>
-                            <div class="output-content" id="output-${step.id}" style="display: none;">
+                            <div class="section-content">
                                 <pre>${this.escapeHtml(parsed.content)}</pre>
                             </div>
                         </div>`;
                     }
                 } catch {
-                    // Not JSON, show raw
-                    outputContent = `<div class="step-output"><pre>${this.escapeHtml(step.output)}</pre></div>`;
+                    outputHtml = `
+                    <div class="step-section output-section" id="output-section-${step.id}" style="display: none;">
+                        <div class="section-header"><span>Output</span></div>
+                        <div class="section-content"><pre>${this.escapeHtml(step.output)}</pre></div>
+                    </div>`;
                 }
             }
 
+            // Chat section (always available)
+            const chatHtml = `
+            <div class="step-section chat-section" id="chat-section-${step.id}" style="display: none;">
+                <div class="section-header"><span>Chat with ${step.assignedAgentId || 'agent'}</span></div>
+                <div class="section-content">
+                    <div class="chat-messages" id="chat-messages-${step.id}"></div>
+                    <div class="chat-input-row">
+                        <input type="text" class="chat-input" id="chat-input-${step.id}" 
+                            placeholder="Refine this step..." 
+                            onkeypress="if(event.key==='Enter')sendStepChat('${step.id}')">
+                        <button class="btn btn-small" onclick="sendStepChat('${step.id}')">Send</button>
+                    </div>
+                </div>
+            </div>`;
+
+            // Action buttons (right side of header)
+            const actionButtons = [];
+            actionButtons.push(`<button class="btn-icon" onclick="toggleChat('${step.id}')" title="Chat with agent">💬</button>`);
+            
+            if (hasOutput) {
+                actionButtons.push(`<button class="btn-icon" onclick="toggleOutput('${step.id}')" title="View output">👁</button>`);
+            }
+            
+            if (canExecute) {
+                actionButtons.push(`<button class="btn-icon primary" onclick="executeStep('${step.id}')" title="Execute step">▶</button>`);
+            } else if (canRetry) {
+                actionButtons.push(`<button class="btn-icon" onclick="executeStep('${step.id}')" title="Retry step">🔄</button>`);
+            }
+            
+            actionButtons.push(`<button class="btn-icon" onclick="toggleStepMenu('${step.id}')" title="More options">⋮</button>`);
+
+            // Step menu (hidden by default)
+            const menuHtml = `
+            <div class="step-menu" id="menu-${step.id}" style="display: none;">
+                <button onclick="skipStep('${step.id}')">⏭ Skip step</button>
+                <button onclick="reassignStep('${step.id}')">🔄 Reassign agent</button>
+                <button onclick="viewContext('${step.id}')">🔍 View context</button>
+            </div>`;
+
             return `
-            <div class="timeline-item ${statusClass}">
+            <div class="step-card ${statusClass}${isBlocked ? ' blocked' : ''}" data-step-id="${step.id}">
                 <div class="step-header">
-                    <span class="step-name">${step.order}. ${this.escapeHtml(step.name)}</span>
-                    <span class="step-capability">${step.capability}</span>
+                    <div class="step-status">${statusIcon}</div>
+                    <div class="step-info">
+                        <div class="step-title">
+                            <span class="step-name">${step.order}. ${this.escapeHtml(step.name)}</span>
+                            <span class="step-agent">${step.assignedAgentId || step.capability}</span>
+                        </div>
+                        <div class="step-description">${step.description ? this.escapeHtml(step.description) : ''}</div>
+                    </div>
+                    <div class="step-actions">
+                        ${actionButtons.join('')}
+                    </div>
+                    ${menuHtml}
                 </div>
-                ${step.description ? `<div class="step-description">${this.escapeHtml(step.description)}</div>` : ''}
-                <div style="margin-top: 8px; font-size: 0.85em;">
-                    Status: <strong>${step.status}</strong>
-                    ${step.assignedAgentId ? ` • Agent: ${step.assignedAgentId}` : ''}
-                    ${step.attempts > 0 ? ` • Attempts: ${step.attempts}` : ''}
-                    ${step.startedAt ? ` • Started: ${new Date(step.startedAt).toLocaleTimeString()}` : ''}
-                    ${step.completedAt ? ` • Completed: ${new Date(step.completedAt).toLocaleTimeString()}` : ''}
-                </div>
-                ${step.error ? `<div style="color: #d13438; margin-top: 8px;">Error: ${this.escapeHtml(step.error)}</div>` : ''}
-                ${outputContent}
-                ${canExecute ? `
-                <div class="step-actions">
-                    <button class="btn btn-primary" onclick="executeStep('${step.id}')">▶ Execute</button>
-                </div>
-                ` : ''}
-                ${canRetry ? `
-                <div class="step-actions">
-                    <button class="btn btn-secondary" onclick="executeStep('${step.id}')">🔄 Retry</button>
-                </div>
-                ` : ''}
+                ${step.status === 'Running' ? '<div class="step-progress"><div class="progress-bar"></div></div>' : ''}
+                ${step.error ? `<div class="step-error">Error: ${this.escapeHtml(step.error)}</div>` : ''}
+                ${outputHtml}
+                ${chatHtml}
             </div>
             `;
         }).join('');
-    }
-
-    private getChatPlaceholder(workflow: Workflow): string {
+    }    private getChatPlaceholder(workflow: Workflow): string {
         switch (workflow.status) {
             case 'Created':
                 return 'Chat about the workflow before analysis...';

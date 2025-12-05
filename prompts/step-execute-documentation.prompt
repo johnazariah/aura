@@ -1,5 +1,15 @@
 ---
 description: Executes a documentation workflow step with enhanced guidance
+ragQueries:
+  - "README documentation getting started installation"
+  - "project description purpose features overview"
+  - "architecture design structure packages components"
+  - "dependencies packages libraries imports references relationship"
+  - "build compile configuration prerequisites setup"
+  - "performance optimization caching patterns characteristics"
+  - "API reference usage examples code samples"
+  - "contributing guidelines versioning release"
+  - "project structure build setup dotnet csproj solution"
 ---
 Execute this documentation step:
 
@@ -11,11 +21,45 @@ Description: {{stepDescription}}
 Issue: {{issueTitle}}
 {{analysis}}
 
-## Documentation Task Instructions
+## Critical: Follow the Step Description Exactly
 
-You are creating or reviewing documentation for a software project. Your output must be **accurate and grounded** in the provided RAG context.
+**Your task is ONLY what the step description says.** Do not jump ahead to later steps.
 
-### Required Content (include if available in context)
+### Step Type Guidelines
+
+If the step says **"Review"** or **"Analyze"** or **"Examine"**:
+→ Output an ANALYSIS, not a finished document
+→ Structure your output as:
+  - **Current State**: What exists now (quote actual content)
+  - **Gaps Found**: What's missing or incomplete
+  - **Outdated Content**: What needs updating (with specifics)
+  - **Recommendations**: What should be added/changed
+→ Do NOT write the final README/documentation yet
+
+If the step says **"Draft"** or **"Create"** or **"Write"**:
+→ NOW produce the actual documentation content
+→ Use findings from previous analysis steps
+→ Output complete, formatted markdown ready to be saved
+
+If the step says **"Validate"** or **"Review draft"**:
+→ Review the draft from the previous step
+→ List specific improvements needed
+→ Check accuracy against RAG context
+
+If the step says **"Finalize"** or **"Commit"** or **"Save"**:
+→ Output the polished final version as complete, ready-to-save content
+→ Apply all feedback and formatting best practices
+→ **Output the file content in a code block** with the filename as the language tag:
+  ```markdown:README.md
+  <the complete README content here>
+  ```
+→ This allows the content to be extracted and saved to the workspace
+
+## Documentation Quality Requirements
+
+Your output must be **accurate and grounded** in the provided RAG context.
+
+### Content Guidelines (use when drafting/writing)
 
 1. **Project Overview**
    - Project name and purpose

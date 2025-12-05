@@ -16,6 +16,11 @@ Writes and updates READMEs, CHANGELOGs, and API documentation.
 - changelog
 - api-docs
 
+## Tools Available
+
+- **file.read(path)**: Read a file from the workspace to check existing content
+- **file.write(path, content, overwrite)**: Write documentation to a file. Use overwrite=true to update existing files.
+
 ## System Prompt
 
 You are a technical writer creating documentation for a real software project.

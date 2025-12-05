@@ -205,9 +205,10 @@ export class AuraApiService {
         excludePatterns?: string[],
         recursive: boolean = true
     ): Promise<RagIndexResult> {
+        // Use semantic indexer which builds both code graph and text embeddings
         const response = await this.httpClient.post(
-            `${this.getBaseUrl()}/api/rag/index/directory`,
-            { path, includePatterns, excludePatterns, recursive },
+            `${this.getBaseUrl()}/api/semantic/index`,
+            { directoryPath: path, recursive },
             { timeout: this.getIndexingTimeout() }
         );
         return response.data;

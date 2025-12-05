@@ -1,5 +1,9 @@
 ---
 description: Executes a code review step with previous outputs
+ragQueries:
+  - "code style conventions best practices"
+  - "error handling exception patterns"
+  - "test unit integration patterns"
 ---
 Execute this code review step:
 

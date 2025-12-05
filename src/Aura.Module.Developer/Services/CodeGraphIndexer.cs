@@ -27,6 +27,12 @@ public class CodeGraphIndexer : ICodeGraphIndexer
     private readonly ILogger<CodeGraphIndexer> _logger;
 
     /// <summary>
+    /// Normalizes a path for consistent storage (lowercase, forward slashes).
+    /// </summary>
+    private static string NormalizePath(string path) =>
+        path.Replace('\\', '/').ToLowerInvariant();
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="CodeGraphIndexer"/> class.
     /// </summary>
     public CodeGraphIndexer(
@@ -53,9 +59,12 @@ public class CodeGraphIndexer : ICodeGraphIndexer
         var fileCount = 0;
         var typeCount = 0;
 
+        // Normalize workspace path for consistent storage (lowercase, forward slashes)
+        var normalizedWorkspacePath = NormalizePath(workspacePath);
+
         try
         {
-            _logger.LogInformation("Indexing {Path} for workspace {WorkspacePath}", solutionOrProjectPath, workspacePath);
+            _logger.LogInformation("Indexing {Path} for workspace {WorkspacePath}", solutionOrProjectPath, normalizedWorkspacePath);
 
             // Load the solution/project
             var solution = await _roslynWorkspace.GetSolutionAsync(solutionOrProjectPath, cancellationToken);
@@ -76,7 +85,7 @@ public class CodeGraphIndexer : ICodeGraphIndexer
                 NodeType = CodeNodeType.Solution,
                 Name = Path.GetFileNameWithoutExtension(solutionOrProjectPath),
                 FilePath = solutionOrProjectPath,
-                WorkspacePath = workspacePath,
+                WorkspacePath = normalizedWorkspacePath,
             }, cancellationToken);
             nodeCount++;
 
@@ -94,7 +103,7 @@ public class CodeGraphIndexer : ICodeGraphIndexer
                 var projectResult = await IndexProjectAsync(
                     project,
                     solutionNode,
-                    workspacePath,
+                    normalizedWorkspacePath,
                     nodesBySymbol,
                     warnings,
                     cancellationToken);
@@ -161,10 +170,11 @@ public class CodeGraphIndexer : ICodeGraphIndexer
         string workspacePath,
         CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("Re-indexing workspace {WorkspacePath}", workspacePath);
+        var normalizedPath = NormalizePath(workspacePath);
+        _logger.LogInformation("Re-indexing workspace {WorkspacePath}", normalizedPath);
 
         // Clear existing graph
-        await _graphService.ClearWorkspaceGraphAsync(workspacePath, cancellationToken);
+        await _graphService.ClearWorkspaceGraphAsync(normalizedPath, cancellationToken);
 
         // Index fresh
         return await IndexAsync(solutionOrProjectPath, workspacePath, cancellationToken);

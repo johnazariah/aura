@@ -159,3 +159,12 @@ dotnet run --project src/Aura.AppHost
 - **macOS**: OrbStack
 
 Both are Docker-compatible, so Aspire works seamlessly with either.
+
+## Quick Reference
+
+**READ FIRST**: See `.project/ARCHITECTURE-QUICK-REFERENCE.md` for:
+- API endpoint reference (all endpoints are in `src/Aura.Api/Program.cs`)
+- Key file locations
+- Common debugging commands
+- Configuration locations
+- RAG and prompt architecture

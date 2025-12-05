@@ -95,6 +95,7 @@ public sealed record RagIndexOptions
     [
         "*.cs", "*.md", "*.txt", "*.json", "*.yaml", "*.yml",
         "*.ts", "*.tsx", "*.js", "*.jsx", "*.py", "*.rs",
+        "*.csproj", "*.sln", "*.props", "*.targets", "*.fsproj",
     ];
 
     /// <summary>

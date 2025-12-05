@@ -67,9 +67,21 @@ public sealed class PromptRegistry : IPromptRegistry
     }
 
     /// <inheritdoc/>
+    /// <inheritdoc/>
     public IReadOnlyList<string> GetPromptNames()
     {
         return _prompts.Keys.ToList();
+    }
+
+    /// <inheritdoc/>
+    public IReadOnlyList<string> GetRagQueries(string name)
+    {
+        if (_prompts.TryGetValue(name, out var prompt))
+        {
+            return prompt.RagQueries;
+        }
+
+        return [];
     }
 
     /// <inheritdoc/>
@@ -119,7 +131,9 @@ public sealed class PromptRegistry : IPromptRegistry
 
         // Parse frontmatter if present (YAML-style)
         string? description = null;
+        var ragQueries = new List<string>();
         var template = content;
+        var inRagQueries = false;
 
         if (content.StartsWith("---"))
         {
@@ -129,13 +143,36 @@ public sealed class PromptRegistry : IPromptRegistry
                 var frontmatter = content[3..endIndex].Trim();
                 template = content[(endIndex + 3)..].Trim();
 
-                // Simple parsing for description
+                // Simple parsing for frontmatter fields
                 foreach (var line in frontmatter.Split('\n'))
                 {
                     var trimmed = line.Trim();
+
+                    // Check for ragQueries list items (lines starting with -)
+                    if (inRagQueries && trimmed.StartsWith("-"))
+                    {
+                        var query = trimmed[1..].Trim().Trim('"', '\'');
+                        if (!string.IsNullOrEmpty(query))
+                        {
+                            ragQueries.Add(query);
+                        }
+
+                        continue;
+                    }
+
+                    // End of ragQueries section when we hit another key
+                    if (inRagQueries && !trimmed.StartsWith("-") && trimmed.Contains(':'))
+                    {
+                        inRagQueries = false;
+                    }
+
                     if (trimmed.StartsWith("description:", StringComparison.OrdinalIgnoreCase))
                     {
                         description = trimmed["description:".Length..].Trim();
+                    }
+                    else if (trimmed.StartsWith("ragQueries:", StringComparison.OrdinalIgnoreCase))
+                    {
+                        inRagQueries = true;
                     }
                 }
             }
@@ -148,6 +185,7 @@ public sealed class PromptRegistry : IPromptRegistry
             Template = template,
             SourcePath = filePath,
             LoadedAt = DateTimeOffset.UtcNow,
+            RagQueries = ragQueries,
         };
 
         _prompts[fileName] = prompt;

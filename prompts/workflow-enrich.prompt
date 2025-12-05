@@ -1,5 +1,15 @@
 ---
 description: Analyzes a development issue and extracts requirements
+ragQueries:
+  - "README project overview description purpose what is this"
+  - "project structure architecture design components modules"
+  - "main entry point program startup initialization"
+  - "build configuration csproj project dependencies packages"
+  - "public class interface API contract service"
+  - "namespace using imports references"
+  - "configuration settings options appsettings"
+  - "documentation comments summary description usage"
+  - "examples sample code demonstration how to use"
 ---
 Analyze this development task and extract key requirements, constraints, and implementation notes.
 
@@ -12,8 +22,9 @@ Analyze this development task and extract key requirements, constraints, and imp
 ## Repository
 {{workspacePath}}
 
-Provide a structured analysis including:
-1. Core requirements (what needs to be built)
-2. Technical constraints (languages, frameworks, patterns)
-3. Files likely to be affected
-4. Key considerations for implementation
+Based on the codebase context provided, give a structured analysis including:
+1. **Core requirements** - What specifically needs to be built or changed
+2. **Technical constraints** - Languages, frameworks, patterns used in this codebase
+3. **Files likely to be affected** - Based on the codebase structure
+4. **Key considerations** - Important implementation details, dependencies, or risks
+5. **Suggested approach** - How to tackle this task given the existing codebase

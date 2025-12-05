@@ -23,4 +23,7 @@ public sealed class PromptTemplate
 
     /// <summary>Gets when the prompt was last loaded.</summary>
     public DateTimeOffset LoadedAt { get; init; } = DateTimeOffset.UtcNow;
+
+    /// <summary>Gets the RAG queries to use for context retrieval.</summary>
+    public IReadOnlyList<string> RagQueries { get; init; } = [];
 }

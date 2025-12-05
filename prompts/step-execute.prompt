@@ -1,5 +1,7 @@
 ---
 description: Executes a single workflow step
+ragQueries:
+  - "project structure build setup dotnet csproj solution"
 ---
 Execute this development step:
 
@@ -11,8 +13,39 @@ Description: {{stepDescription}}
 Issue: {{issueTitle}}
 {{analysis}}
 
-## Instructions
-Complete this step thoroughly and accurately.
+## Critical: Follow the Step Description Exactly
+
+**Your task is ONLY what the step description says.** Do not jump ahead to later steps.
+
+### Step Type Guidelines
+
+If the step says **"Review"** or **"Analyze"** or **"Examine"**:
+→ Output an ANALYSIS with findings, not a finished product
+→ List what you found: gaps, issues, outdated content, missing sections
+→ Do NOT produce the final deliverable yet
+
+If the step says **"Draft"** or **"Create"** or **"Write"**:
+→ Output the actual content/code as requested
+→ Use information gathered from previous steps
+
+If the step says **"Validate"** or **"Review draft"**:
+→ Output a review with specific feedback
+→ List what's good, what needs improvement, specific suggestions
+
+If the step says **"Incorporate feedback"** or **"Finalize"**:
+→ Apply the changes from the review step
+→ Output the improved version
+
+If the step says **"Commit"** or **"Apply"**:
+→ Output the final artifact ready for commit
+→ Include the exact file path and complete content
+
+## General Instructions
+
+**For analysis/review steps:**
+- Use ONLY information from the provided RAG context
+- Be specific: cite file names, line numbers, exact issues found
+- Structure as: "Current state → Issues found → Recommendations"
 
 **For documentation tasks:**
 - Use ONLY information from the provided RAG context - do not invent file names, classes, or features
@@ -26,7 +59,7 @@ Complete this step thoroughly and accurately.
 - Follow existing code patterns and conventions from the codebase
 - Include necessary imports and dependencies
 
-**General guidance:**
-- If information is not in the context, say "information not available" rather than guessing
+**If information is missing:**
+- Say "information not available in context" rather than guessing
 - Be specific and technical, not generic
 - Reference actual file paths from the RAG context

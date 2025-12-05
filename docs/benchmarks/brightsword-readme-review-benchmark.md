@@ -5,6 +5,7 @@ This document defines what a **high-quality** LLM-generated review of the Bright
 ## Ground Truth: BrightSword Repository Facts
 
 ### Repository Structure
+
 - **4 main packages**: SwissKnife, Crucible, Feber, Squid
 - **4 test projects**: corresponding `*.Tests` projects
 - **2 sample apps**: `BrightSword.Feber.SamplesApp`, `BrightSword.Squid.Samples`
@@ -12,18 +13,21 @@ This document defines what a **high-quality** LLM-generated review of the Bright
 - **Target framework**: .NET 10
 
 ### Package Purposes (Must Mention)
+
 1. **BrightSword.SwissKnife** - Utility classes and extension methods (base package, no dependencies)
 2. **BrightSword.Crucible** - MSTest testing utilities with `ExpectException<T>()` fluent API
 3. **BrightSword.Feber** - Automated delegate generation using LINQ Expression trees (depends on SwissKnife)
 4. **BrightSword.Squid** - Runtime type emission using Reflection.Emit (depends on Feber and SwissKnife)
 
 ### Dependency Chain (Critical Knowledge)
-```
+
+```text
 SwissKnife (base) ← Feber ← Squid
 Crucible (independent, depends only on MSTest)
 ```
 
 ### Key Build Commands
+
 ```bash
 # Canonical CI build
 dotnet msbuild Build.proj /t:CI /p:Configuration=Release /v:minimal
@@ -36,6 +40,7 @@ dotnet run --project BrightSword.Feber.SamplesApp/BrightSword.Feber.SamplesApp.c
 ```
 
 ### Documentation Files That Exist
+
 - `docs/ARCHITECTURE.md` - Complete architecture overview
 - `docs/BUILD.md` - Build instructions
 - `docs/CONTRIBUTING.md` - Contribution guidelines  
@@ -44,6 +49,7 @@ dotnet run --project BrightSword.Feber.SamplesApp/BrightSword.Feber.SamplesApp.c
 - Per-package docs in `{Package}/docs/` folders
 
 ### Key Technical Details
+
 - **Feber performance**: First call ~10-100ms (reflection + expression building + JIT), subsequent calls <0.001ms (cached compiled delegates)
 - **Build orchestration**: Uses `Build.proj` for MSBuild targets
 - **Versioning**: Per-package `version.props` files
@@ -88,7 +94,8 @@ dotnet run --project BrightSword.Feber.SamplesApp/BrightSword.Feber.SamplesApp.c
 ## Example: Hallucinated vs Grounded Output
 
 ### ❌ Hallucinated (Bad) Example
-```
+
+```text
 BrightSword is a .NET project for building applications. It includes various 
 utilities and helpers. To install, run `npm install brightsword`. The main 
 class is `BrightSwordCore` which you can use like:
@@ -98,12 +105,14 @@ sword.Execute();
 ```
 
 **Problems:**
+
 - Invented non-existent `npm install` command
 - Made up `BrightSwordCore` class that doesn't exist
 - No mention of actual packages
 - Generic description not based on repo
 
 ### ✅ Grounded (Good) Example
+
 ```
 BrightSword is a .NET monorepo containing four packages:
 
@@ -119,6 +128,7 @@ See docs/ARCHITECTURE.md for full system design.
 ```
 
 **Why it's good:**
+
 - Correct package names
 - Accurate descriptions matching repo docs
 - Valid commands from actual README
@@ -132,6 +142,7 @@ See docs/ARCHITECTURE.md for full system design.
 ### Azure OpenAI Output (After RAG Improvements)
 
 **Essential Elements (43/50):**
+
 - ✅ Correct package names (10) - Mentions Feber, Crucible, SwissKnife
 - ⚠️ Package purposes (7/10) - Partially accurate, missing Squid details
 - ❌ Dependency chain (3/10) - Not explicitly stated
@@ -139,6 +150,7 @@ See docs/ARCHITECTURE.md for full system design.
 - ✅ Documentation refs (10) - Real paths like `docs/BUILD.md`
 
 **Good-to-Have (20/30):**
+
 - ❌ Performance characteristics (0)
 - ❌ Target framework (0)
 - ⚠️ Test structure (3/5) - Mentioned briefly
@@ -147,6 +159,7 @@ See docs/ARCHITECTURE.md for full system design.
 - ✅ Architecture overview (5) - Good structure
 
 **Bonus (0/20):**
+
 - ❌ Expression trees (0)
 - ❌ Reflection.Emit (0)
 - ❌ Warm-up patterns (0)

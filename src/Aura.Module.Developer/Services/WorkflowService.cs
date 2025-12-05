@@ -26,6 +26,7 @@ public sealed class WorkflowService : IWorkflowService
     private readonly IPromptRegistry _promptRegistry;
     private readonly IGitWorktreeService _worktreeService;
     private readonly IRagService _ragService;
+    private readonly ICodebaseContextService _codebaseContextService;
     private readonly DeveloperModuleOptions _options;
     private readonly ILogger<WorkflowService> _logger;
 
@@ -38,6 +39,7 @@ public sealed class WorkflowService : IWorkflowService
         IPromptRegistry promptRegistry,
         IGitWorktreeService worktreeService,
         IRagService ragService,
+        ICodebaseContextService codebaseContextService,
         IOptions<DeveloperModuleOptions> options,
         ILogger<WorkflowService> logger)
     {
@@ -46,6 +48,7 @@ public sealed class WorkflowService : IWorkflowService
         _promptRegistry = promptRegistry;
         _worktreeService = worktreeService;
         _ragService = ragService;
+        _codebaseContextService = codebaseContextService;
         _options = options.Value;
         _logger = logger;
     }
@@ -140,10 +143,10 @@ public sealed class WorkflowService : IWorkflowService
 
         if (!string.IsNullOrEmpty(repositoryPath))
         {
-            // Normalize path for comparison (handle trailing slashes, case sensitivity on Windows)
-            var normalizedPath = repositoryPath.TrimEnd('\\', '/').Replace('/', '\\');
+            // Normalize path for comparison (handle trailing slashes, case-insensitive on Windows)
+            var normalizedPath = repositoryPath.TrimEnd('\\', '/').Replace('/', '\\').ToLowerInvariant();
             query = query.Where(w => w.RepositoryPath != null &&
-                w.RepositoryPath.Replace("/", "\\").TrimEnd('\\') == normalizedPath);
+                w.RepositoryPath.Replace("/", "\\").TrimEnd('\\').ToLower() == normalizedPath);
         }
 
         return await query
@@ -215,12 +218,24 @@ public sealed class WorkflowService : IWorkflowService
                 workspacePath = workflow.WorkspacePath ?? workflow.RepositoryPath ?? "Not specified",
             });
 
-            // Query RAG for relevant code context
-            // Use RepositoryPath for RAG (where files are indexed), not WorkspacePath (worktree)
-            var ragContext = await GetRagContextAsync(
-                $"{workflow.Title} {workflow.Description}",
-                workflow.RepositoryPath ?? workflow.WorkspacePath,
-                ct);
+            // Get codebase context (combines code graph + RAG)
+            var promptQueries = _promptRegistry.GetRagQueries("workflow-enrich");
+            var ragQueries = promptQueries.Count > 0
+                ? promptQueries.ToList()
+                : BuildRagQueriesForAnalysis(workflow);
+
+            var contextOptions = CodebaseContextOptions.ForDocumentation(ragQueries);
+            var workspaceForContext = workflow.RepositoryPath ?? workflow.WorkspacePath;
+            var codebaseContext = workspaceForContext is not null
+                ? await _codebaseContextService.GetContextAsync(workspaceForContext, contextOptions, ct)
+                : null;
+            var ragContext = codebaseContext?.ToPromptContext();
+
+            _logger.LogInformation(
+                "Analyze codebase context: {HasContext}, queries: {QueryCount}, hasProjectStructure: {HasProjectStructure}",
+                ragContext is not null ? $"{ragContext.Length} chars" : "none",
+                ragQueries.Count,
+                codebaseContext?.ProjectStructure is not null);
 
             var context = new AgentContext(prompt, WorkspacePath: workflow.WorkspacePath)
             {
@@ -400,6 +415,7 @@ public sealed class WorkflowService : IWorkflowService
         {
             // Build the step execution prompt from template
             string prompt;
+            List<string>? ragQueriesFromPrompt = null;
 
             if (step.Capability == "review")
             {
@@ -435,6 +451,10 @@ public sealed class WorkflowService : IWorkflowService
                     issueTitle = workflow.Title,
                     codeToReview = codeToReview.ToString(),
                 });
+
+                // Use RAG queries from prompt template if defined
+                var reviewQueries = _promptRegistry.GetRagQueries("step-review");
+                ragQueriesFromPrompt = reviewQueries.Count > 0 ? reviewQueries.ToList() : null;
             }
             else
             {
@@ -470,20 +490,27 @@ public sealed class WorkflowService : IWorkflowService
                     issueTitle = workflow.Title,
                     analysis,
                 });
+
+                // Use RAG queries from prompt template if defined, otherwise use defaults
+                var promptQueries = _promptRegistry.GetRagQueries(promptName);
+                ragQueriesFromPrompt = promptQueries.Count > 0 ? promptQueries.ToList() : null;
             }
 
-            // Build capability-specific RAG queries for better context
-            var ragQueries = BuildRagQueriesForStep(step, workflow);
-            var ragContext = await GetRagContextForStepAsync(
-                ragQueries,
-                workflow.RepositoryPath ?? workflow.WorkspacePath,
-                ct);
+            // Build codebase context (combines code graph + RAG)
+            var ragQueries = ragQueriesFromPrompt ?? BuildRagQueriesForStep(step, workflow);
+            var contextOptions = CodebaseContextOptions.ForDocumentation(ragQueries);
+            var workspaceForContext = workflow.RepositoryPath ?? workflow.WorkspacePath;
+            var codebaseContext = workspaceForContext is not null
+                ? await _codebaseContextService.GetContextAsync(workspaceForContext, contextOptions, ct)
+                : null;
+            var ragContext = codebaseContext?.ToPromptContext();
 
             _logger.LogInformation(
-                "Step {StepName} RAG context: {HasContext}, queries: {QueryCount}",
+                "Step {StepName} codebase context: {HasContext}, queries: {QueryCount}, hasProjectStructure: {HasProjectStructure}",
                 step.Name,
                 ragContext is not null ? $"{ragContext.Length} chars" : "none",
-                ragQueries.Count);
+                ragQueries.Count,
+                codebaseContext?.ProjectStructure is not null);
 
             var context = new AgentContext(prompt, WorkspacePath: workflow.WorkspacePath)
             {
@@ -1111,6 +1138,38 @@ public sealed class WorkflowService : IWorkflowService
                 // Generic fallback
                 queries.Add($"{step.Name} {step.Description ?? ""} {workflow.Title}");
                 break;
+        }
+
+        return queries;
+    }
+
+    /// <summary>
+    /// Builds RAG queries for workflow analysis to understand the codebase.
+    /// </summary>
+    private static List<string> BuildRagQueriesForAnalysis(Workflow workflow)
+    {
+        var queries = new List<string>
+        {
+            // Core project understanding
+            "README project overview description purpose what is this",
+            "project structure architecture design components modules",
+            "main entry point program startup initialization",
+            "build configuration csproj project dependencies packages",
+
+            // Technical details
+            "public class interface API contract service",
+            "namespace using imports references",
+            "configuration settings options appsettings",
+
+            // Documentation
+            "documentation comments summary description usage",
+            "examples sample code demonstration how to use",
+        };
+
+        // Add workflow-specific query
+        if (!string.IsNullOrEmpty(workflow.Description))
+        {
+            queries.Add(workflow.Description);
         }
 
         return queries;
