@@ -256,23 +256,23 @@ public enum StepApproval
 - [x] Disable Execute button when not ready
 - [x] Show blocked indicator (◑)
 
-### Phase 3: Output Approval
+### Phase 3: Output Approval ✅
 
-- [ ] Add Approve/Reject buttons to output section
-- [ ] Create API endpoints
-- [ ] Store approval state
-- [ ] Visual feedback for approved/rejected
+- [x] Add Approve/Reject buttons to output section
+- [x] Create API endpoints (approve, reject, skip, chat)
+- [x] Store approval state in WorkflowStep entity
+- [x] Visual feedback for approved/rejected
 
-### Phase 4: Step Chat
+### Phase 4: Step Chat ✅
 
-- [ ] Add chat panel to step card
-- [ ] Create chat API endpoint
-- [ ] Store chat history
-- [ ] Agent responds in context of step
+- [x] Add chat panel to step card
+- [x] Create chat API endpoint
+- [x] Store chat history
+- [x] Agent responds in context of step
 
 ### Phase 5: Step Management
 
-- [ ] Skip step functionality
+- [ ] Skip step functionality (API done, UI needs testing)
 - [ ] Reassign agent dropdown
 - [ ] Edit description inline
 - [ ] View context panel (use VS Code's built-in diff for file changes)
