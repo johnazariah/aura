@@ -1428,8 +1428,73 @@ public sealed class WorkflowService : IWorkflowService
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "RAG query failed, proceeding without context");
+            _logger.LogWarning(ex, "RAG query failed, proceeding without context");      
             return null;
         }
+    }
+
+    /// <inheritdoc />
+    public async Task<WorkflowStep> ReassignStepAsync(
+        Guid workflowId,
+        Guid stepId,
+        string agentId,
+        CancellationToken ct = default)
+    {
+        var workflow = await _db.Workflows
+            .Include(w => w.Steps)
+            .FirstOrDefaultAsync(w => w.Id == workflowId, ct)
+            ?? throw new KeyNotFoundException($"Workflow {workflowId} not found");
+
+        var step = workflow.Steps.FirstOrDefault(s => s.Id == stepId)
+            ?? throw new KeyNotFoundException($"Step {stepId} not found in workflow {workflowId}");
+
+        // Validate the agent exists
+        var agent = _agentRegistry.GetAgent(agentId);
+        if (agent is null)
+        {
+            throw new ArgumentException($"Agent '{agentId}' not found");
+        }
+
+        step.AssignedAgentId = agentId;
+
+        // If step was completed, mark it as needing re-execution
+        if (step.Status == StepStatus.Completed)
+        {
+            step.NeedsRework = true;
+        }
+
+        await _db.SaveChangesAsync(ct);
+
+        _logger.LogInformation("Reassigned step {StepId} to agent {AgentId}", stepId, agentId);
+        return step;
+    }
+
+    /// <inheritdoc />
+    public async Task<WorkflowStep> UpdateStepDescriptionAsync(
+        Guid workflowId,
+        Guid stepId,
+        string description,
+        CancellationToken ct = default)
+    {
+        var workflow = await _db.Workflows
+            .Include(w => w.Steps)
+            .FirstOrDefaultAsync(w => w.Id == workflowId, ct)
+            ?? throw new KeyNotFoundException($"Workflow {workflowId} not found");
+
+        var step = workflow.Steps.FirstOrDefault(s => s.Id == stepId)
+            ?? throw new KeyNotFoundException($"Step {stepId} not found in workflow {workflowId}");
+
+        step.Description = description;
+
+        // If step was completed, mark it as needing re-execution since description changed
+        if (step.Status == StepStatus.Completed)
+        {
+            step.NeedsRework = true;
+        }
+
+        await _db.SaveChangesAsync(ct);
+
+        _logger.LogInformation("Updated description for step {StepId}", stepId);
+        return step;
     }
 }

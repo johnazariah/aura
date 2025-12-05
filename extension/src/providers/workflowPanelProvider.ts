@@ -534,6 +534,9 @@ export class WorkflowPanelProvider {
             case 'reassignStep':
                 await this.handleReassignStep(workflowId, message.stepId, message.agentId, panel);
                 break;
+            case 'updateStepDescription':
+                await this.handleUpdateStepDescription(workflowId, message.stepId, message.description, panel);
+                break;
         }
     }
 
@@ -864,11 +867,28 @@ export class WorkflowPanelProvider {
     private async handleReassignStep(workflowId: string, stepId: string, agentId: string, panel: vscode.WebviewPanel): Promise<void> {
         try {
             panel.webview.postMessage({ type: 'loading', action: 'reassign', stepId });
-            // TODO: Add reassign step API when implemented
-            vscode.window.showInformationMessage(`Step will be reassigned to agent: ${agentId} (coming soon)`);
+            await this.apiService.reassignStep(workflowId, stepId, agentId);
+            // Refresh the workflow to show updated step
+            const updatedWorkflow = await this.apiService.getWorkflow(workflowId);
+            panel.webview.postMessage({ type: 'refresh', workflow: updatedWorkflow });
             panel.webview.postMessage({ type: 'loadingDone' });
+            vscode.window.showInformationMessage(`Step reassigned to ${agentId}`);
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Failed to reassign step';
+            panel.webview.postMessage({ type: 'error', message });
+        }
+    }
+
+    private async handleUpdateStepDescription(workflowId: string, stepId: string, description: string, panel: vscode.WebviewPanel): Promise<void> {
+        try {
+            panel.webview.postMessage({ type: 'loading', action: 'updateDescription', stepId });
+            await this.apiService.updateStepDescription(workflowId, stepId, description);
+            // Refresh the workflow to show updated step
+            const updatedWorkflow = await this.apiService.getWorkflow(workflowId);
+            panel.webview.postMessage({ type: 'refresh', workflow: updatedWorkflow });
+            panel.webview.postMessage({ type: 'loadingDone' });
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to update description';
             panel.webview.postMessage({ type: 'error', message });
         }
     }
@@ -1979,9 +1999,19 @@ export class WorkflowPanelProvider {
         }
 
         function reassignStep(stepId) {
-            const agent = prompt('Enter new agent ID:');
-            if (agent) {
-                vscode.postMessage({ type: 'reassignStep', stepId, agentId: agent });
+            const agent = prompt('Enter agent ID (e.g., coding-agent, documentation-agent, code-review-agent):');
+            if (agent && agent.trim()) {
+                vscode.postMessage({ type: 'reassignStep', stepId, agentId: agent.trim() });
+            }
+        }
+
+        function editDescription(stepId) {
+            const stepCard = document.querySelector(\`[data-step-id="\${stepId}"]\`);
+            const descEl = stepCard?.querySelector('.step-description');
+            const currentDesc = descEl?.textContent || '';
+            const newDesc = prompt('Edit step description:', currentDesc);
+            if (newDesc !== null && newDesc !== currentDesc) {
+                vscode.postMessage({ type: 'updateStepDescription', stepId, description: newDesc });
             }
         }
 
@@ -2197,8 +2227,9 @@ export class WorkflowPanelProvider {
             // Step menu (hidden by default)
             const menuHtml = `
             <div class="step-menu" id="menu-${step.id}" style="display: none;">
-                <button onclick="skipStep('${step.id}')">⏭ Skip step</button>
+                <button onclick="editDescription('${step.id}')">✏️ Edit description</button>
                 <button onclick="reassignStep('${step.id}')">🔄 Reassign agent</button>
+                <button onclick="skipStep('${step.id}')">⏭ Skip step</button>
                 <button onclick="viewContext('${step.id}')">🔍 View context</button>
             </div>`;
 

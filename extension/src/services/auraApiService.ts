@@ -428,4 +428,20 @@ export class AuraApiService {
         );
         return response.data;
     }
+
+    async reassignStep(workflowId: string, stepId: string, agentId: string): Promise<WorkflowStep> {
+        const response = await this.httpClient.post(
+            `${this.getBaseUrl()}/api/developer/workflows/${workflowId}/steps/${stepId}/reassign`,
+            { agentId }
+        );
+        return response.data;
+    }
+
+    async updateStepDescription(workflowId: string, stepId: string, description: string): Promise<WorkflowStep> {
+        const response = await this.httpClient.put(
+            `${this.getBaseUrl()}/api/developer/workflows/${workflowId}/steps/${stepId}/description`,
+            { description }
+        );
+        return response.data;
+    }
 }

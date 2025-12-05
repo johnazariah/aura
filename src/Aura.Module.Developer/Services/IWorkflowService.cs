@@ -176,6 +176,26 @@ public interface IWorkflowService
     /// <param name="ct">Cancellation token.</param>
     /// <returns>The updated step and agent response.</returns>
     Task<(WorkflowStep Step, string Response)> ChatWithStepAsync(Guid workflowId, Guid stepId, string message, CancellationToken ct = default);
+
+    /// <summary>
+    /// Reassigns a step to a different agent.
+    /// </summary>
+    /// <param name="workflowId">The workflow ID.</param>
+    /// <param name="stepId">The step ID.</param>
+    /// <param name="agentId">The new agent ID.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>The updated step.</returns>
+    Task<WorkflowStep> ReassignStepAsync(Guid workflowId, Guid stepId, string agentId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Updates a step's description.
+    /// </summary>
+    /// <param name="workflowId">The workflow ID.</param>
+    /// <param name="stepId">The step ID.</param>
+    /// <param name="description">The new description.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>The updated step.</returns>
+    Task<WorkflowStep> UpdateStepDescriptionAsync(Guid workflowId, Guid stepId, string description, CancellationToken ct = default);
 }
 
 /// <summary>

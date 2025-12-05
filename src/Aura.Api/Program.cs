@@ -1999,6 +1999,60 @@ app.MapPost("/api/developer/workflows/{workflowId:guid}/steps/{stepId:guid}/chat
     }
 });
 
+// Reassign step to different agent
+app.MapPost("/api/developer/workflows/{workflowId:guid}/steps/{stepId:guid}/reassign", async (
+    Guid workflowId,
+    Guid stepId,
+    ReassignStepRequest request,
+    IWorkflowService workflowService,
+    CancellationToken ct) =>
+{
+    try
+    {
+        var step = await workflowService.ReassignStepAsync(workflowId, stepId, request.AgentId, ct);
+        return Results.Ok(new
+        {
+            id = step.Id,
+            name = step.Name,
+            agentId = step.AgentId,
+            needsRework = step.NeedsRework
+        });
+    }
+    catch (KeyNotFoundException ex)
+    {
+        return Results.NotFound(new { error = ex.Message });
+    }
+    catch (ArgumentException ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+});
+
+// Update step description
+app.MapPut("/api/developer/workflows/{workflowId:guid}/steps/{stepId:guid}/description", async (
+    Guid workflowId,
+    Guid stepId,
+    UpdateStepDescriptionRequest request,
+    IWorkflowService workflowService,
+    CancellationToken ct) =>
+{
+    try
+    {
+        var step = await workflowService.UpdateStepDescriptionAsync(workflowId, stepId, request.Description, ct);
+        return Results.Ok(new
+        {
+            id = step.Id,
+            name = step.Name,
+            description = step.Description,
+            needsRework = step.NeedsRework
+        });
+    }
+    catch (KeyNotFoundException ex)
+    {
+        return Results.NotFound(new { error = ex.Message });
+    }
+});
+
 app.MapPost("/api/developer/workflows/{id:guid}/complete", async (
     Guid id,
     IWorkflowService workflowService,
@@ -2179,6 +2233,12 @@ record SkipStepRequest(
 
 record StepChatRequest(
     string Message);
+
+record ReassignStepRequest(
+    string AgentId);
+
+record UpdateStepDescriptionRequest(
+    string Description);
 
 record WorkflowChatRequest(
     string Message);
