@@ -69,6 +69,12 @@ public sealed class WorkflowStep
 
     /// <summary>Gets or sets the chat history as JSON array.</summary>
     public string? ChatHistory { get; set; }
+
+    /// <summary>Gets or sets whether this step needs rework because a dependency was re-executed.</summary>
+    public bool NeedsRework { get; set; }
+
+    /// <summary>Gets or sets the previous output before re-execution (for comparison).</summary>
+    public string? PreviousOutput { get; set; }
 }
 
 /// <summary>

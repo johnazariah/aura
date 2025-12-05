@@ -379,6 +379,32 @@ public sealed class WorkflowService : IWorkflowService
             throw new InvalidOperationException($"Step {stepId} is already running");
         }
 
+        // If re-executing a completed step, save previous output and mark subsequent steps for rework
+        var isReExecution = step.Status == StepStatus.Completed;
+        if (isReExecution)
+        {
+            _logger.LogInformation("Re-executing completed step {StepId}, will cascade rework to subsequent steps", stepId);
+            
+            // Save previous output for comparison
+            step.PreviousOutput = step.Output;
+            step.Approval = null;  // Clear approval since we're re-doing it
+            step.ApprovalFeedback = null;
+            
+            // Mark all subsequent steps as needing rework
+            var subsequentSteps = workflow.Steps
+                .Where(s => s.Order > step.Order && s.Status == StepStatus.Completed)
+                .ToList();
+            
+            foreach (var subsequentStep in subsequentSteps)
+            {
+                subsequentStep.NeedsRework = true;
+                _logger.LogInformation("Marked step {StepId} ({StepName}) for rework", subsequentStep.Id, subsequentStep.Name);
+            }
+        }
+
+        // Clear rework flag since we're now executing
+        step.NeedsRework = false;
+
         // Get the agent for this step
         IAgent? agent;
         if (!string.IsNullOrEmpty(agentIdOverride))
@@ -533,12 +559,19 @@ public sealed class WorkflowService : IWorkflowService
 
             workflow.UpdatedAt = DateTimeOffset.UtcNow;
 
-            // Check if all steps are complete
-            var allComplete = workflow.Steps.All(s => s.Status == StepStatus.Completed || s.Status == StepStatus.Skipped);
+            // Check if all steps are complete AND none need rework
+            var allComplete = workflow.Steps.All(s => 
+                (s.Status == StepStatus.Completed || s.Status == StepStatus.Skipped) && !s.NeedsRework);
+            
             if (allComplete)
             {
                 workflow.Status = WorkflowStatus.Completed;
                 workflow.CompletedAt = DateTimeOffset.UtcNow;
+            }
+            else
+            {
+                // If there are steps needing rework, keep executing status
+                workflow.Status = WorkflowStatus.Executing;
             }
 
             await _db.SaveChangesAsync(ct);

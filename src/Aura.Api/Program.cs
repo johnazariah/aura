@@ -1760,7 +1760,10 @@ app.MapGet("/api/developer/workflows/{id:guid}", async (
             output = s.Output,
             error = s.Error,
             startedAt = s.StartedAt,
-            completedAt = s.CompletedAt
+            completedAt = s.CompletedAt,
+            needsRework = s.NeedsRework,
+            previousOutput = s.PreviousOutput,
+            approval = s.Approval?.ToString()
         }),
         createdAt = workflow.CreatedAt,
         updatedAt = workflow.UpdatedAt,

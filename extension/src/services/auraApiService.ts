@@ -85,6 +85,9 @@ export interface WorkflowStep {
     error?: string;
     startedAt?: string;
     completedAt?: string;
+    needsRework?: boolean;
+    previousOutput?: string;
+    approval?: string;
 }
 
 export interface Workflow {

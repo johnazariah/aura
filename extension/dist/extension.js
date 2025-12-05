@@ -3430,6 +3430,21 @@ class WorkflowPanelProvider {
         .step-card.blocked {
             opacity: 0.6;
         }
+        .step-card.needs-rework {
+            border-left: 3px solid #f0ad4e;
+            background: rgba(240, 173, 78, 0.05);
+        }
+        .step-card.approved {
+            border-left: 3px solid #107c10;
+        }
+        .rework-badge {
+            font-size: 0.7em;
+            background: #f0ad4e;
+            color: #000;
+            padding: 2px 6px;
+            border-radius: 8px;
+            margin-left: 8px;
+        }
 
         @keyframes running-pulse {
             0%, 100% { background: var(--vscode-editor-inactiveSelectionBackground); }
@@ -4312,14 +4327,22 @@ class WorkflowPanelProvider {
             const isBlocked = step.status === 'Pending' && !canExecute;
             const canRetry = step.status === 'Completed' || step.status === 'Failed';
             const hasOutput = !!step.output;
-            // Status icon
-            const statusIcon = {
-                'pending': isBlocked ? '◑' : '○',
-                'running': '◐',
-                'completed': '●',
-                'failed': '✗',
-                'skipped': '⊘'
-            }[statusClass] || '○';
+            const needsRework = step.needsRework === true;
+            const isApproved = step.approval === 'Approved';
+            // Status icon - show rework indicator for completed steps that need rework
+            let statusIcon;
+            if (needsRework && step.status === 'Completed') {
+                statusIcon = '⟲'; // Rework needed
+            }
+            else {
+                statusIcon = {
+                    'pending': isBlocked ? '◑' : '○',
+                    'running': '◐',
+                    'completed': isApproved ? '✓' : '●',
+                    'failed': '✗',
+                    'skipped': '⊘'
+                }[statusClass] || '○';
+            }
             // Parse output if available
             let outputHtml = '';
             let tokenInfo = '';
@@ -4388,14 +4411,25 @@ class WorkflowPanelProvider {
                 <button onclick="reassignStep('${step.id}')">🔄 Reassign agent</button>
                 <button onclick="viewContext('${step.id}')">🔍 View context</button>
             </div>`;
+            // Build CSS classes for the step card
+            const cardClasses = [
+                'step-card',
+                statusClass,
+                isBlocked ? 'blocked' : '',
+                needsRework ? 'needs-rework' : '',
+                isApproved ? 'approved' : ''
+            ].filter(c => c).join(' ');
+            // Rework badge if needed
+            const reworkBadge = needsRework ? '<span class="rework-badge">needs rework</span>' : '';
             return `
-            <div class="step-card ${statusClass}${isBlocked ? ' blocked' : ''}" data-step-id="${step.id}">
+            <div class="${cardClasses}" data-step-id="${step.id}">
                 <div class="step-header">
                     <div class="step-status">${statusIcon}</div>
                     <div class="step-info">
                         <div class="step-title">
                             <span class="step-name">${step.order}. ${this.escapeHtml(step.name)}</span>
                             <span class="step-agent">${step.assignedAgentId || step.capability}</span>
+                            ${reworkBadge}
                         </div>
                         <div class="step-description">${step.description ? this.escapeHtml(step.description) : ''}</div>
                     </div>
