@@ -131,6 +131,14 @@ if (!app.Environment.IsEnvironment("Testing"))
             
             CREATE INDEX IF NOT EXISTS ix_workflow_steps_workflow_order ON workflow_steps(workflow_id, "order");
             CREATE INDEX IF NOT EXISTS ix_workflow_steps_status ON workflow_steps(status);
+            
+            -- Add new columns for assisted workflow UI (idempotent)
+            ALTER TABLE workflow_steps ADD COLUMN IF NOT EXISTS approval INTEGER;
+            ALTER TABLE workflow_steps ADD COLUMN IF NOT EXISTS approval_feedback TEXT;
+            ALTER TABLE workflow_steps ADD COLUMN IF NOT EXISTS skip_reason TEXT;
+            ALTER TABLE workflow_steps ADD COLUMN IF NOT EXISTS chat_history JSONB;
+            ALTER TABLE workflow_steps ADD COLUMN IF NOT EXISTS needs_rework BOOLEAN NOT NULL DEFAULT false;
+            ALTER TABLE workflow_steps ADD COLUMN IF NOT EXISTS previous_output JSONB;
             """);
         logger.LogInformation("Developer module tables ensured");
     }
@@ -2014,7 +2022,7 @@ app.MapPost("/api/developer/workflows/{workflowId:guid}/steps/{stepId:guid}/reas
         {
             id = step.Id,
             name = step.Name,
-            agentId = step.AgentId,
+            agentId = step.AssignedAgentId,
             needsRework = step.NeedsRework
         });
     }
