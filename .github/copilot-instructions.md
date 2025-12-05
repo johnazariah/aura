@@ -1,170 +1,103 @@
 # Aura Project - Copilot Instructions
 
-## Project Overview
-
-Aura is a **local-first, privacy-safe AI foundation** for knowledge work. Think of it as "Windows Recall, but local and safe" - all data stays on the user's machine.
+> **Read First**: `.project/STATUS.md` for current project state and feature inventory.
 
 ## Core Principles
 
-1. **Local-First, Privacy-Safe** - No cloud uploads, no telemetry, works offline
-2. **Cross-Platform** - Windows, macOS, Linux (wherever .NET runs)
-3. **Composable Modules** - Mix-and-match capabilities, no fixed SKUs
-4. **Hot-Reloadable Agents** - Add agents by dropping markdown files
-5. **Human-in-the-Loop** - Users control workflow execution
+1. **NEVER implement without a spec** - All changes require documented requirements and context
+2. **Design before coding** - Seek approval before implementing; prefer planning over spontaneous coding
+3. **User controls the server** - Never start/stop the API server; user runs `Start-Api` manually
+4. **Document all decisions** - Update `.project/STATUS.md` after significant changes
 
-## Architecture
+## Quick Context
 
-```
-Aura.Foundation (always loaded)
-    ├── Agents/       - Agent registry, loading, execution
-    ├── Llm/          - Local LLM via Ollama
-    ├── Rag/          - Local RAG pipeline
-    ├── Data/         - PostgreSQL via EF Core
-    ├── Tools/        - Tool registry
-    └── Modules/      - Module loader (IAuraModule)
+Aura is a **local-first, privacy-safe AI foundation** for knowledge work. The Developer Module MVP is **complete** with full workflow UI, multi-language code indexing, and cloud LLM support.
 
-Aura.Module.Developer (optional)
-    ├── Workflows, git worktrees, coding agents
+## Key Documents (Source of Truth)
 
-Aura.Module.Research (optional, future)
-    ├── Paper indexing, synthesis, citations
+| Document | Purpose |
+|----------|---------|
+| `.project/STATUS.md` | **Start here** - Current state, feature inventory, open items |
+| `.project/ARCHITECTURE-QUICK-REFERENCE.md` | API endpoints, file locations, debugging |
+| `.project/spec/*.md` | Feature specifications (read before implementing) |
+| `.project/adr/*.md` | Architecture decisions |
+| `.project/standards/coding-standards.md` | Code style and patterns |
 
-Aura.Module.Personal (optional, future)
-    ├── Receipts, budgets, general assistant
+## Development Protocol
 
-Aura.Api
-    ├── REST API, loads enabled modules
+### What You CAN Do
 
-Aura.AppHost
-    ├── Aspire orchestration (PostgreSQL, Ollama, API)
-```
+```powershell
+# Test API (server must be running)
+curl http://localhost:5300/health
+curl http://localhost:5300/api/developer/workflows
 
-## Implementation Status
+# Build extension after changes
+.\scripts\Build-Extension.ps1
 
-### Completed
-- [x] GitHub repo created (johnazariah/aura)
-- [x] Solution scaffolded (Aura.sln)
-- [x] Directory.Build.props configured
-- [x] .editorconfig, .gitignore in place
-- [x] Specs and plans copied to .project/
-- [x] CI/CD pipeline (.github/workflows/ci.yml)
-- [x] README and LICENSE
-
-### In Progress
-- [ ] **Phase 1: Core Infrastructure** (.project/plan/implementation/01-core-infrastructure.md)
-  - [ ] Aura.Foundation project
-  - [ ] Agent interfaces (IAgent, IAgentRegistry)
-  - [ ] Agent loading (markdown parser)
-  - [ ] Module system (IAuraModule, ModuleLoader)
-
-### Not Started
-- [ ] Phase 2: LLM Providers (Ollama)
-- [ ] Phase 3: Data Layer (PostgreSQL, EF Core)
-- [ ] Phase 4: API + AppHost
-- [ ] Phase 5: Developer Module (git worktrees, workflows)
-- [ ] Phase 6: VS Code Extension
-- [ ] Phase 7: Migration from hve-hack
-
-## Key Files
-
-| File | Purpose |
-|------|---------|
-| `.project/spec/00-overview.md` | System overview and principles |
-| `.project/spec/10-composable-modules.md` | Module system design |
-| `.project/plan/implementation/01-core-infrastructure.md` | Current phase implementation guide |
-| `src/Aura.Foundation/` | Core library (in progress) |
-
-## Coding Standards
-
-Follow the standards from hve-hack (see `c:\work\hve-hack\docs\CODING-STANDARDS.md`):
-
-1. **Strongly-typed over stringly-typed** - No `Dictionary<string, object>` for known schemas
-2. **Use `nameof()`** - Never string literals for member names
-3. **Enums over string constants** - For closed value sets
-4. **Result<T> for expected errors** - Not exceptions
-5. **Immutability by default** - Records, init-only properties
-6. **Nullable reference types** - Handle nulls explicitly
-
-## Module Contract
-
-```csharp
-public interface IAuraModule
-{
-    string ModuleId { get; }
-    string Name { get; }
-    string Description { get; }
-    IReadOnlyList<string> Dependencies => [];  // Should be empty!
-    
-    void ConfigureServices(IServiceCollection services, IConfiguration config);
-    void RegisterAgents(IAgentRegistry registry, IConfiguration config);
-}
-```
-
-**Critical: Modules must NOT depend on each other. Only on Foundation.**
-
-## Configuration
-
-```json
-{
-  "Aura": {
-    "Modules": {
-      "Enabled": ["developer"]
-    }
-  }
-}
-```
-
-## Next Steps
-
-1. Continue Phase 1: Create Aura.Foundation with:
-   - `Agents/IAgent.cs` - Agent contract
-   - `Agents/AgentMetadata.cs` - Agent definition
-   - `Agents/IAgentRegistry.cs` - Registry interface
-   - `Agents/AgentRegistry.cs` - Implementation
-   - `Agents/MarkdownAgentLoader.cs` - Parse .md agent files
-   - `Modules/IAuraModule.cs` - Module contract
-   - `Modules/ModuleLoader.cs` - Module discovery
-
-2. Reference the existing hve-hack code for patterns:
-   - `c:\work\hve-hack\src\AgentOrchestrator.Agents\` - Agent parsing
-   - `c:\work\hve-hack\src\AgentOrchestrator.Core\` - Core interfaces
-   - `c:\work\hve-hack\agents\*.md` - Agent markdown format
-
-3. After Phase 1 compiles, move to Phase 2 (LLM providers).
-
-## Reference: Old Codebase
-
-The old codebase is at `c:\work\hve-hack\` for reference:
-- 17 projects, ~38k lines (over-engineered)
-- Good code to port: Git worktree service, agent markdown parser, Ollama client
-- Delete: Orchestration layer, execution planner, complex validation
-
-## Commands
-
-```bash
-# Build
-dotnet build
-
-# Test
+# Run tests
+.\scripts\Run-UnitTests.ps1
 dotnet test
 
-# Run (after AppHost is created)
+# Build solution
+dotnet build
+```
+
+### What You Must NOT Do
+
+```powershell
+# NEVER run these - user controls the server
+.\scripts\Start-Api.ps1
 dotnet run --project src/Aura.AppHost
 ```
 
-## Development Environment
+### Workflow
 
-**Container Runtime** (README says "Docker" for discoverability, but we use):
+1. **Understand** - Read relevant spec/ADR before making changes
+2. **Propose** - Describe planned changes and get approval
+3. **Implement** - Make code changes
+4. **Build** - If extension changed → `Build-Extension.ps1`
+5. **Ask for restart** - If server code changed → ask user to run `Start-Api`
+6. **Test** - Use curl to verify
+7. **Document** - Update STATUS.md if needed
+
+## Project Structure
+
+```
+src/
+├── Aura.Foundation/          # Core: agents, LLM, RAG, data, tools
+├── Aura.Module.Developer/    # Developer vertical: workflows, git, Roslyn
+├── Aura.Api/                 # API host (all endpoints in Program.cs)
+└── Aura.AppHost/             # Aspire orchestration
+
+extension/src/                # VS Code extension
+agents/                       # Markdown agent definitions
+prompts/                      # Handlebars prompt templates
+tests/                        # Unit and integration tests
+.project/                     # Specs, ADRs, status, standards
+```
+
+## Coding Standards
+
+See `.project/standards/coding-standards.md`. Key rules:
+
+- **Strongly-typed** - No `Dictionary<string, object>` for known schemas
+- **Use `nameof()`** - Never string literals for member names
+- **Records for DTOs** - Immutable by default
+- **Nullable reference types** - Handle nulls explicitly
+
+## When Making Changes
+
+| Change Type | Location | Notes |
+|-------------|----------|-------|
+| API endpoints | `src/Aura.Api/Program.cs` | Single file for all endpoints |
+| Agent behavior | `agents/*.md` or `prompts/*.prompt` | Hot-reloadable |
+| Extension UI | `extension/src/providers/` | Run Build-Extension after |
+| Documentation | `.project/STATUS.md` | Keep current |
+
+## Container Runtime
+
 - **Windows**: Podman
 - **macOS**: OrbStack
 
-Both are Docker-compatible, so Aspire works seamlessly with either.
-
-## Quick Reference
-
-**READ FIRST**: See `.project/ARCHITECTURE-QUICK-REFERENCE.md` for:
-- API endpoint reference (all endpoints are in `src/Aura.Api/Program.cs`)
-- Key file locations
-- Common debugging commands
-- Configuration locations
-- RAG and prompt architecture
+Both are Docker-compatible for Aspire.

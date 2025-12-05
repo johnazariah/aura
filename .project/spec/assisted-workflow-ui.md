@@ -1,10 +1,8 @@
 # Assisted Workflow UI
 
-**Status**: Active Development  
-**Created**: 2025-12-05  
-**Author**: AI-assisted specification
-
-## Overview
+**Status**: ✅ Complete
+**Created**: 2025-12-05
+**Author**: AI-assisted specification## Overview
 
 Transform the workflow UI from a simple "execute and wait" model to an **assisted collaboration** where users and agents work together step by step.
 
@@ -270,12 +268,13 @@ public enum StepApproval
 - [x] Store chat history
 - [x] Agent responds in context of step
 
-### Phase 5: Step Management
+### Phase 5: Step Management ✅
 
-- [ ] Skip step functionality (API done, UI needs testing)
-- [ ] Reassign agent dropdown
-- [ ] Edit description inline
-- [ ] View context panel (use VS Code's built-in diff for file changes)
+- [x] Skip step functionality
+- [x] Reassign agent dropdown
+- [x] Edit description inline
+- [x] View context panel
+- [x] Cascade rework when predecessor re-runs
 
 ## File Changes
 

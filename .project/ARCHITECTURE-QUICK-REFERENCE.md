@@ -14,7 +14,16 @@
 | DELETE | `/api/developer/workflows/{id}` | Delete workflow and cleanup worktree |
 | POST | `/api/developer/workflows/{id}/analyze` | Enrich/analyze workflow (uses RAG) |
 | POST | `/api/developer/workflows/{id}/plan` | Generate execution steps |
+| POST | `/api/developer/workflows/{id}/complete` | Mark workflow as complete |
+| POST | `/api/developer/workflows/{id}/cancel` | Cancel workflow |
+| POST | `/api/developer/workflows/{id}/chat` | Chat to modify workflow plan |
 | POST | `/api/developer/workflows/{id}/steps/{stepId}/execute` | Execute a step |
+| POST | `/api/developer/workflows/{id}/steps/{stepId}/approve` | Approve step output |
+| POST | `/api/developer/workflows/{id}/steps/{stepId}/reject` | Reject step output (with feedback) |
+| POST | `/api/developer/workflows/{id}/steps/{stepId}/skip` | Skip a step (with optional reason) |
+| POST | `/api/developer/workflows/{id}/steps/{stepId}/chat` | Chat with agent about a step |
+| POST | `/api/developer/workflows/{id}/steps/{stepId}/reassign` | Reassign step to different agent |
+| PUT | `/api/developer/workflows/{id}/steps/{stepId}/description` | Update step description |
 
 ### RAG Endpoints (`/api/rag`)
 

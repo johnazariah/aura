@@ -1,8 +1,8 @@
 # Implementation Plan Overview
 
-**Version:** 2.0
-**Status:** In Progress
-**Last Updated:** 2025-12-03
+**Version:** 2.1
+**Status:** Complete (Core Features)
+**Last Updated:** 2025-12-05
 
 ## Summary
 
@@ -16,11 +16,11 @@ This document outlines the implementation plan for the Aura rewrite. The goal is
 | Component | Status | Notes |
 |-----------|--------|-------|
 | **Aura.Foundation** | ✅ Complete | Agents, LLM, RAG, Data, Tools, Git, Shell, Prompts, Conversations |
-| **Aura.Module.Developer** | ✅ Backend Complete | Workflows, Roslyn tools, Graph RAG, ReAct executor |
-| **Aura.Api** | ✅ Complete | All endpoints for Foundation + Developer |
+| **Aura.Module.Developer** | ✅ Complete | Workflows, Roslyn tools, Graph RAG, ReAct executor, TreeSitter ingesters |
+| **Aura.Api** | ✅ Complete | All endpoints for Foundation + Developer + Assisted Workflow |
 | **Aura.AppHost** | ✅ Complete | Aspire orchestration with PostgreSQL + Ollama |
-| **VS Code Extension** | ⚠️ Backend wired | UI needs completion (Phase 4 of Developer Module) |
-| **Tests** | ✅ 205 passing | 188 unit + 17 integration (Testcontainers) |
+| **VS Code Extension** | ✅ Complete | Full workflow UI with assisted collaboration |
+| **Tests** | ✅ 205+ passing | Unit + integration (Testcontainers) |
 
 ### Developer Module Silver Thread
 
@@ -32,7 +32,10 @@ This document outlines the implementation plan for the Aura rewrite. The goal is
 | RAG auto-indexing of worktrees | ✅ |
 | Chat-based plan modification | ✅ |
 | Prompt externalization (Handlebars) | ✅ |
-| **Extension UI for workflows** | ⏳ In Progress |
+| **Extension UI for workflows** | ✅ Complete |
+| **Assisted Workflow UI** | ✅ Complete |
+| **Step Management (approve/reject/skip/chat)** | ✅ Complete |
+| **Iterative Refinement with Cascade Rework** | ✅ Complete |
 
 ### Additional Features Implemented
 
@@ -43,6 +46,12 @@ This document outlines the implementation plan for the Aura rewrite. The goal is
 | Strongly-typed Agent Contracts | ADR-013 | ✅ |
 | Roslyn Tools (6 tools) | ADR-014 | ✅ |
 | Graph RAG for Code | ADR-015 | ✅ |
+| Configurable RAG Queries | ADR-016 | ✅ |
+| Case-Insensitive Paths | ADR-017 | ✅ |
+| Prompt Template Architecture | ADR-018 | ✅ |
+| TreeSitter Multi-Language Ingesters | Spec-22 | ✅ |
+| Semantic Enrichment (docstrings, imports, types) | Task | ✅ |
+| Cloud LLM Providers (Azure OpenAI, OpenAI) | - | ✅ (needs spec) |
 
 ## Architecture Vision
 
