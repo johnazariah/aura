@@ -28,15 +28,13 @@ public class SilverThreadTests
         BuiltInTools.RegisterBuiltInTools(registry, fileSystem, processRunner, builtinLogger);
 
         // Act - execute a real shell command
-        var isWindows = OperatingSystem.IsWindows();
         var input = new ToolInput
         {
             ToolId = "shell.execute",
             Parameters = new Dictionary<string, object?>
             {
-                ["command"] = isWindows ? "cmd.exe" : "echo",
-                ["args"] = isWindows ? new[] { "/c", "echo", "silver-thread-test" } : new[] { "silver-thread-test" },
-                ["timeout"] = 10
+                ["command"] = "echo silver-thread-test",
+                ["timeoutSeconds"] = 10
             }
         };
         

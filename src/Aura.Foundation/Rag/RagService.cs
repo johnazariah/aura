@@ -263,11 +263,55 @@ public sealed class RagService : IRagService
                 Metadata = ParseMetadata(r.MetadataJson),
             })
             .Where(r => r.Score >= minScore)
-            .Take(topK)
             .ToList();
 
-        _logger.LogDebug("RAG query returned {Count} results", ragResults.Count);
-        return ragResults;
+        // Prioritize results from specific files if requested
+        if (options.PrioritizeFiles?.Count > 0)
+        {
+            // Separate results into prioritized and non-prioritized
+            var prioritized = new List<RagResult>();
+            var nonPrioritized = new List<RagResult>();
+
+            foreach (var r in ragResults)
+            {
+                var fileName = Path.GetFileName(r.SourcePath ?? string.Empty);
+                var isPrioritized = options.PrioritizeFiles.Any(p =>
+                    fileName.Equals(p, StringComparison.OrdinalIgnoreCase) ||
+                    (r.SourcePath?.EndsWith(p, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                    (r.SourcePath?.Contains($"/{p}", StringComparison.OrdinalIgnoreCase) ?? false) ||
+                    (r.SourcePath?.Contains($"\\{p}", StringComparison.OrdinalIgnoreCase) ?? false));
+
+                if (isPrioritized)
+                {
+                    prioritized.Add(r);
+                }
+                else
+                {
+                    nonPrioritized.Add(r);
+                }
+            }
+
+            // Ensure prioritized files get prominent placement:
+            // Take up to half of topK from prioritized files, then fill with others
+            var prioritizedCount = Math.Min(prioritized.Count, Math.Max(topK / 2, 3));
+            var remainingSlots = topK - prioritizedCount;
+
+            ragResults = prioritized
+                .OrderByDescending(r => r.Score)
+                .Take(prioritizedCount)
+                .Concat(nonPrioritized.OrderByDescending(r => r.Score).Take(remainingSlots))
+                .ToList();
+
+            _logger.LogDebug(
+                "Applied file prioritization: {PrioritizedCount} from prioritized files, {OtherCount} from others",
+                Math.Min(prioritizedCount, prioritized.Count),
+                Math.Min(remainingSlots, nonPrioritized.Count));
+        }
+
+        var finalResults = ragResults.Take(topK).ToList();
+
+        _logger.LogDebug("RAG query returned {Count} results", finalResults.Count);
+        return finalResults;
     }
 
     /// <inheritdoc/>

@@ -21,7 +21,7 @@ public class BuiltInToolsTests
         _processRunner = Substitute.For<IProcessRunner>();
         _logger = Substitute.For<ILogger>();
         _registry = new ToolRegistry(Substitute.For<ILogger<ToolRegistry>>());
-        
+
         BuiltInTools.RegisterBuiltInTools(_registry, _fileSystem, _processRunner, _logger);
     }
 
@@ -31,6 +31,7 @@ public class BuiltInToolsTests
         // Assert
         Assert.True(_registry.HasTool("file.read"));
         Assert.True(_registry.HasTool("file.write"));
+        Assert.True(_registry.HasTool("file.modify"));
         Assert.True(_registry.HasTool("file.list"));
         Assert.True(_registry.HasTool("file.exists"));
         Assert.True(_registry.HasTool("file.delete"));
@@ -75,6 +76,35 @@ public class BuiltInToolsTests
     }
 
     [Fact]
+    public async Task FileRead_WithLineRange_ReturnsSelectedLines()
+    {
+        // Arrange
+        _fileSystem.AddFile("/test/lines.txt", new MockFileData("Line 1\nLine 2\nLine 3\nLine 4\nLine 5"));
+        var input = new ToolInput
+        {
+            ToolId = "file.read",
+            Parameters = new Dictionary<string, object?>
+            {
+                ["path"] = "/test/lines.txt",
+                ["startLine"] = 2,
+                ["endLine"] = 4
+            }
+        };
+
+        // Act
+        var result = await _registry.ExecuteAsync(input);
+
+        // Assert
+        Assert.True(result.Success);
+        var output = result.Output?.ToString() ?? "";
+        Assert.Contains("Line 2", output);
+        Assert.Contains("Line 3", output);
+        Assert.Contains("Line 4", output);
+        Assert.DoesNotContain("Line 1", output);
+        Assert.DoesNotContain("Line 5", output);
+    }
+
+    [Fact]
     public async Task FileWrite_CreatesFile()
     {
         // Arrange
@@ -98,18 +128,18 @@ public class BuiltInToolsTests
     }
 
     [Fact]
-    public async Task FileWrite_AppendsContent()
+    public async Task FileWrite_OverwritesExistingFile()
     {
         // Arrange
-        _fileSystem.AddFile("/test/append.txt", new MockFileData("Line 1\n"));
+        _fileSystem.AddFile("/test/existing.txt", new MockFileData("Original content"));
         var input = new ToolInput
         {
             ToolId = "file.write",
             Parameters = new Dictionary<string, object?>
             {
-                ["path"] = "/test/append.txt",
-                ["content"] = "Line 2",
-                ["append"] = true
+                ["path"] = "/test/existing.txt",
+                ["content"] = "New content",
+                ["overwrite"] = true
             }
         };
 
@@ -118,9 +148,79 @@ public class BuiltInToolsTests
 
         // Assert
         Assert.True(result.Success);
-        var content = _fileSystem.File.ReadAllText("/test/append.txt");
-        Assert.Contains("Line 1", content);
-        Assert.Contains("Line 2", content);
+        Assert.Equal("New content", _fileSystem.File.ReadAllText("/test/existing.txt"));
+    }
+
+    [Fact]
+    public async Task FileWrite_FailsWhenOverwriteFalse()
+    {
+        // Arrange
+        _fileSystem.AddFile("/test/existing.txt", new MockFileData("Original content"));
+        var input = new ToolInput
+        {
+            ToolId = "file.write",
+            Parameters = new Dictionary<string, object?>
+            {
+                ["path"] = "/test/existing.txt",
+                ["content"] = "New content",
+                ["overwrite"] = false
+            }
+        };
+
+        // Act
+        var result = await _registry.ExecuteAsync(input);
+
+        // Assert
+        Assert.False(result.Success);
+        Assert.Contains("already exists", result.Error);
+    }
+
+    [Fact]
+    public async Task FileModify_ReplacesText()
+    {
+        // Arrange
+        _fileSystem.AddFile("/test/modify.txt", new MockFileData("Hello World!"));
+        var input = new ToolInput
+        {
+            ToolId = "file.modify",
+            Parameters = new Dictionary<string, object?>
+            {
+                ["path"] = "/test/modify.txt",
+                ["oldText"] = "World",
+                ["newText"] = "Universe"
+            }
+        };
+
+        // Act
+        var result = await _registry.ExecuteAsync(input);
+
+        // Assert
+        Assert.True(result.Success);
+        Assert.Equal("Hello Universe!", _fileSystem.File.ReadAllText("/test/modify.txt"));
+    }
+
+    [Fact]
+    public async Task FileModify_FailsWhenTextNotFound()
+    {
+        // Arrange
+        _fileSystem.AddFile("/test/modify.txt", new MockFileData("Hello World!"));
+        var input = new ToolInput
+        {
+            ToolId = "file.modify",
+            Parameters = new Dictionary<string, object?>
+            {
+                ["path"] = "/test/modify.txt",
+                ["oldText"] = "NotFound",
+                ["newText"] = "Replacement"
+            }
+        };
+
+        // Act
+        var result = await _registry.ExecuteAsync(input);
+
+        // Assert
+        Assert.False(result.Success);
+        Assert.Contains("not found", result.Error);
     }
 
     [Fact]
@@ -130,7 +230,7 @@ public class BuiltInToolsTests
         _fileSystem.AddFile("/mydir/file1.txt", new MockFileData(""));
         _fileSystem.AddFile("/mydir/file2.txt", new MockFileData(""));
         _fileSystem.AddDirectory("/mydir/subdir");
-        
+
         var input = new ToolInput
         {
             ToolId = "file.list",
@@ -142,9 +242,10 @@ public class BuiltInToolsTests
 
         // Assert
         Assert.True(result.Success);
-        var entries = result.Output as IEnumerable<object>;
-        Assert.NotNull(entries);
-        Assert.Equal(3, entries.Count());
+        var output = result.Output?.ToString() ?? "";
+        Assert.Contains("file1.txt", output);
+        Assert.Contains("file2.txt", output);
+        Assert.Contains("subdir/", output);
     }
 
     [Fact]
@@ -164,10 +265,8 @@ public class BuiltInToolsTests
         // Assert
         Assert.True(result.Success);
         Assert.NotNull(result.Output);
-        // The output is an anonymous type, check via reflection or string representation
-        var outputStr = result.Output.ToString();
-        Assert.Contains("exists = True", outputStr);
-        Assert.Contains("isFile = True", outputStr);
+        var outputStr = result.Output.ToString() ?? "";
+        Assert.Contains("File exists", outputStr);
     }
 
     [Fact]
@@ -186,8 +285,8 @@ public class BuiltInToolsTests
         // Assert
         Assert.True(result.Success);
         Assert.NotNull(result.Output);
-        var outputStr = result.Output.ToString();
-        Assert.Contains("exists = False", outputStr);
+        var outputStr = result.Output.ToString() ?? "";
+        Assert.Contains("Does not exist", outputStr);
     }
 
     [Fact]
@@ -213,9 +312,8 @@ public class BuiltInToolsTests
     public async Task ShellExecute_CallsProcessRunner()
     {
         // Arrange
-        _processRunner.RunAsync(
+        _processRunner.RunShellAsync(
             Arg.Any<string>(),
-            Arg.Any<string[]>(),
             Arg.Any<ProcessOptions>(),
             Arg.Any<CancellationToken>())
             .Returns(new ProcessResult
@@ -230,8 +328,7 @@ public class BuiltInToolsTests
             ToolId = "shell.execute",
             Parameters = new Dictionary<string, object?>
             {
-                ["command"] = "echo",
-                ["args"] = new[] { "hello" }
+                ["command"] = "echo hello"
             }
         };
 
@@ -239,10 +336,9 @@ public class BuiltInToolsTests
         var result = await _registry.ExecuteAsync(input);
 
         // Assert
-        Assert.True(result.Success);
-        await _processRunner.Received(1).RunAsync(
-            "echo",
-            Arg.Is<string[]>(a => a.Contains("hello")),
+        Assert.True(result.Success, $"Expected success but got error: {result.Error}");
+        await _processRunner.Received(1).RunShellAsync(
+            "echo hello",
             Arg.Any<ProcessOptions>(),
             Arg.Any<CancellationToken>());
     }
@@ -251,9 +347,8 @@ public class BuiltInToolsTests
     public async Task ShellExecute_ReturnsFailureOnNonZeroExit()
     {
         // Arrange
-        _processRunner.RunAsync(
+        _processRunner.RunShellAsync(
             Arg.Any<string>(),
-            Arg.Any<string[]>(),
             Arg.Any<ProcessOptions>(),
             Arg.Any<CancellationToken>())
             .Returns(new ProcessResult
@@ -275,5 +370,49 @@ public class BuiltInToolsTests
         // Assert
         Assert.False(result.Success);
         Assert.Contains("failed", result.Error);
+    }
+
+    [Fact]
+    public async Task FileRead_UsesWorkingDirectory()
+    {
+        // Arrange
+        _fileSystem.AddFile("/workspace/README.md", new MockFileData("# My Project"));
+        var input = new ToolInput
+        {
+            ToolId = "file.read",
+            WorkingDirectory = "/workspace",
+            Parameters = new Dictionary<string, object?> { ["path"] = "README.md" }
+        };
+
+        // Act
+        var result = await _registry.ExecuteAsync(input);
+
+        // Assert
+        Assert.True(result.Success, $"Expected success but got: {result.Error}");
+        Assert.Equal("# My Project", result.Output);
+    }
+
+    [Fact]
+    public async Task FileWrite_UsesWorkingDirectory()
+    {
+        // Arrange
+        _fileSystem.AddDirectory("/workspace");
+        var input = new ToolInput
+        {
+            ToolId = "file.write",
+            WorkingDirectory = "/workspace",
+            Parameters = new Dictionary<string, object?>
+            {
+                ["path"] = "output.txt",
+                ["content"] = "Written via relative path"
+            }
+        };
+
+        // Act
+        var result = await _registry.ExecuteAsync(input);
+
+        // Assert
+        Assert.True(result.Success, $"Expected success but got: {result.Error}");
+        Assert.True(_fileSystem.File.Exists("/workspace/output.txt"));
     }
 }

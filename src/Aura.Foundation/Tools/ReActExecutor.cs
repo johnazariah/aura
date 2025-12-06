@@ -202,7 +202,8 @@ public partial class ReActExecutor : IReActExecutor
 
             if (tool is null)
             {
-                observation = $"Error: Tool '{parsed.Action}' not found. Available tools: {string.Join(", ", availableTools.Select(t => t.ToolId))}";
+                var validToolIds = string.Join(", ", availableTools.Select(t => t.ToolId));
+                observation = $"Error: Tool '{parsed.Action}' not found. Valid tools are: {validToolIds}. When the task is complete, use Action: finish";
                 _logger.LogWarning("Tool not found: {ToolId}", parsed.Action);
             }
             else
@@ -324,24 +325,50 @@ public partial class ReActExecutor : IReActExecutor
             }
         }
 
-        var prompt = $"""
+        var toolIds = string.Join(", ", tools.Select(t => t.ToolId));
+
+        var jsonExamples = $$"""
+              EXAMPLES of correct format:
+
+              Example 1 - Using file.read:
+              Thought: I need to read the README file to understand the project.
+              Action: file.read
+              Action Input: {"path": "README.md"}
+
+              Example 2 - Using file.write:
+              Thought: I will write the updated content to the file.
+              Action: file.write
+              Action Input: {"path": "output.txt", "content": "Hello World"}
+
+              Example 3 - Completing the task (IMPORTANT):
+              Thought: I have finished reading and updating the file. The task is complete.
+              Action: finish
+              Action Input: {"result": "Successfully updated the README with new content."}
+
+              CRITICAL RULES:
+              1. Action MUST be EXACTLY one of: {{toolIds}}, finish
+              2. Do NOT invent tool names like "Review", "Manually", "Validate", etc.
+              3. Action Input MUST be a valid JSON object - never prose or markdown
+              4. When you have completed all necessary tool operations, use "finish"
+              5. If you cannot proceed with available tools, use "finish" to explain why
+
+              WRONG (will cause errors):
+              - Action: Review  ← ERROR: Not a valid tool
+              - Action: Manually  ← ERROR: Not a valid tool
+              - Action Input: README.md  ← ERROR: Must be JSON object
+              """;var prompt = $"""
             You are an AI assistant that can use tools to accomplish tasks.
             You should think step by step and use tools when needed.
 
             Available tools:
             {toolDescriptions}
 
-            To use a tool, respond in this exact format:
+            CRITICAL: You MUST respond in this EXACT format:
             Thought: [your reasoning about what to do next]
             Action: [tool_id to use, or "finish" when done]
-            Action Input: [JSON input for the tool, or final answer if finishing]
+            Action Input: [MUST be valid JSON object for tools]
 
-            Important:
-            - Always start with a Thought explaining your reasoning
-            - Action must be exactly one of the tool IDs listed above, or "finish"
-            - Action Input must be valid JSON for tools, or your final answer for "finish"
-            - After receiving an Observation, continue with the next Thought
-            - When the task is complete, use Action: finish
+            {jsonExamples}
 
             {(additionalContext is not null ? $"\nAdditional context:\n{additionalContext}" : "")}
             """;
@@ -401,9 +428,14 @@ public partial class ReActExecutor : IReActExecutor
             var dict = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(actionInput);
             if (dict is not null)
             {
-                return dict.ToDictionary(
-                    kvp => kvp.Key,
-                    kvp => ConvertJsonElement(kvp.Value));
+                // Normalize common parameter name variations
+                var result = new Dictionary<string, object?>();
+                foreach (var kvp in dict)
+                {
+                    var key = NormalizeParameterName(kvp.Key);
+                    result[key] = ConvertJsonElement(kvp.Value);
+                }
+                return result;
             }
         }
         catch
@@ -411,8 +443,29 @@ public partial class ReActExecutor : IReActExecutor
             // Not JSON, might be a simple string value
         }
 
-        // Return as a single "input" parameter
-        return new Dictionary<string, object?> { ["input"] = actionInput };
+        // For non-JSON input, assume it's a file path (most common case for file tools)
+        // Provide both "filePath" and "path" for compatibility
+        return new Dictionary<string, object?>
+        {
+            ["filePath"] = actionInput,
+            ["path"] = actionInput,
+            ["input"] = actionInput
+        };
+    }
+
+    private static string NormalizeParameterName(string name)
+    {
+        // Map common parameter name variations to expected names
+        // NOTE: Keep "path" as-is since BuiltInTools expects it
+        return name.ToLowerInvariant() switch
+        {
+            "file" or "file_path" => "path",  // Normalize to "path" for BuiltInTools
+            "filepath" => "filePath",  // Keep filePath for typed tools
+            "content" or "text" or "contents" => "content",
+            "old_text" or "oldtext" or "old" or "search" or "find" => "oldText",
+            "new_text" or "newtext" or "new" or "replace" or "replacement" => "newText",
+            _ => name // Keep original if no mapping
+        };
     }
 
     private static object? ConvertJsonElement(JsonElement element)

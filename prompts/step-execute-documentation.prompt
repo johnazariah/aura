@@ -48,11 +48,12 @@ If the step says **"Review"** or **"Analyze"** or **"Examine"**:
   - **Recommendations**: What should be added/changed
 - Do NOT write the final README/documentation yet
 
-If the step says **"Draft"** or **"Create"** or **"Write"** or **"Update"**:
+If the step says **"Draft"** or **"Create"** or **"Write"** or **"Update"** or **"Add"** or **"Integrate"** or **"Insert"**:
 - First use **file.read** to read the current file content
 - Produce the actual documentation content based on analysis
-- Use **file.write** or **file.modify** to ACTUALLY SAVE the changes to the file
+- **CRITICAL: You MUST call file.write or file.modify to save changes**
 - Do not just output markdown - you MUST use the file tools to write it
+- The step is NOT complete until the file is actually modified on disk
 
 If the step says **"Validate"** or **"Review draft"**:
 - Use **file.read** to read the current file
@@ -63,8 +64,8 @@ If the step says **"Validate"** or **"Review draft"**:
 If the step says **"Finalize"** or **"Commit"** or **"Save"**:
 - Use **file.read** to review the current state
 - Apply all feedback and formatting best practices
-- Use **file.write** or **file.modify** to save the final polished version
-- You MUST write the file, not just describe what to write
+- **CRITICAL: You MUST call file.write or file.modify to save the final version**
+- The step is NOT complete until the file is actually modified on disk
 
 ## Documentation Quality Requirements
 

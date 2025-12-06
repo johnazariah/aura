@@ -66,6 +66,7 @@ public class CodebaseContextService : ICodebaseContextService
                 workspacePath,
                 options.RagQueries,
                 options.MaxRagResults,
+                options.PrioritizeFiles,
                 ct);
         }
 
@@ -217,6 +218,7 @@ public class CodebaseContextService : ICodebaseContextService
         string workspacePath,
         IReadOnlyList<string> queries,
         int maxResults,
+        IReadOnlyList<string>? prioritizeFiles,
         CancellationToken ct)
     {
         var allResults = new List<(string FilePath, string Content, double Score)>();
@@ -231,6 +233,7 @@ public class CodebaseContextService : ICodebaseContextService
                     TopK = Math.Max(1, maxResults / queries.Count + 1),
                     MinScore = 0.35f,
                     SourcePathPrefix = workspacePath,
+                    PrioritizeFiles = prioritizeFiles,
                 };
 
                 var results = await _ragService.QueryAsync(query, queryOptions, ct);

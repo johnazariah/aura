@@ -96,8 +96,19 @@ public abstract class TypedToolBase<TInput, TOutput> : ITool<TInput, TOutput>
             InputSchema = GenerateInputSchema(),
             Handler = async (input, ct) =>
             {
+                // Inject WorkingDirectory into parameters if not already present
+                var parameters = input.Parameters;
+                if (!string.IsNullOrEmpty(input.WorkingDirectory) && !parameters.ContainsKey("workingDirectory"))
+                {
+                    var mutableParams = new Dictionary<string, object?>(parameters)
+                    {
+                        ["workingDirectory"] = input.WorkingDirectory
+                    };
+                    parameters = mutableParams;
+                }
+
                 // Deserialize from dictionary to typed input
-                var typedInput = DeserializeInput(input.Parameters);
+                var typedInput = DeserializeInput(parameters);
                 var result = await ExecuteAsync(typedInput, ct);
                 return result.ToUntyped();
             }

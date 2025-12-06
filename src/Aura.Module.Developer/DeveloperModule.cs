@@ -74,10 +74,8 @@ public sealed class DeveloperModule : IAuraModule
         services.AddSingleton<FindUsagesTool>();
         services.AddSingleton<GetProjectReferencesTool>();
 
-        // Register file tools
-        services.AddSingleton<ReadFileTool>();
-        services.AddSingleton<WriteFileTool>();
-        services.AddSingleton<ModifyFileTool>();
+        // Note: File tools (file.read, file.write, file.modify) are provided by Foundation
+        // via BuiltInTools - do not duplicate registration here
 
         // Register dotnet tools
         services.AddSingleton<RunTestsTool>();
@@ -128,15 +126,8 @@ public sealed class DeveloperModule : IAuraModule
         var getProjectReferences = services.GetRequiredService<GetProjectReferencesTool>();
         toolRegistry.RegisterTool<GetProjectReferencesInput, GetProjectReferencesOutput>(getProjectReferences);
 
-        // File tools
-        var readFile = services.GetRequiredService<ReadFileTool>();
-        toolRegistry.RegisterTool<ReadFileInput, ReadFileOutput>(readFile);
-
-        var writeFile = services.GetRequiredService<WriteFileTool>();
-        toolRegistry.RegisterTool<WriteFileInput, WriteFileOutput>(writeFile);
-
-        var modifyFile = services.GetRequiredService<ModifyFileTool>();
-        toolRegistry.RegisterTool<ModifyFileInput, ModifyFileOutput>(modifyFile);
+        // Note: File tools (file.read, file.write, file.modify) are provided by Foundation
+        // via BuiltInTools - do not duplicate registration here
 
         // Dotnet tools
         var runTests = services.GetRequiredService<RunTestsTool>();

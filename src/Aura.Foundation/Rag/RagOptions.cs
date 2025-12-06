@@ -70,6 +70,14 @@ public sealed record RagQueryOptions
     /// Gets or sets a source path prefix to filter by.
     /// </summary>
     public string? SourcePathPrefix { get; init; }
+
+    /// <summary>
+    /// Gets or sets file name patterns to prioritize in results.
+    /// Results from files matching these patterns will be boosted/prioritized.
+    /// Patterns are matched case-insensitively against the file name portion of the source path.
+    /// Example: ["README.md", "build.proj"] to prioritize specific files.
+    /// </summary>
+    public IReadOnlyList<string>? PrioritizeFiles { get; init; }
 }
 
 /// <summary>

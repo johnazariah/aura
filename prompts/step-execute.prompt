@@ -29,9 +29,11 @@ If the step says **"Review"** or **"Analyze"** or **"Examine"**:
 → List what you found: gaps, issues, outdated content, missing sections
 → Do NOT produce the final deliverable yet
 
-If the step says **"Draft"** or **"Create"** or **"Write"**:
+If the step says **"Draft"** or **"Create"** or **"Write"** or **"Add"** or **"Integrate"** or **"Insert"**:
 → Output the actual content/code as requested
 → Use information gathered from previous steps
+→ **CRITICAL: If modifying a file, you MUST call file.write or file.modify**
+→ The step is NOT complete until changes are saved to disk
 
 If the step says **"Validate"** or **"Review draft"**:
 → Output a review with specific feedback
@@ -40,10 +42,12 @@ If the step says **"Validate"** or **"Review draft"**:
 If the step says **"Incorporate feedback"** or **"Finalize"**:
 → Apply the changes from the review step
 → Output the improved version
+→ **CRITICAL: You MUST call file.write or file.modify to save changes**
 
 If the step says **"Commit"** or **"Apply"**:
 → Output the final artifact ready for commit
 → Include the exact file path and complete content
+→ **CRITICAL: You MUST call file.write or file.modify to save changes**
 
 ## General Instructions
 

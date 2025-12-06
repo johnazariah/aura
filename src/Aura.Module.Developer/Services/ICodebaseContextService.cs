@@ -67,26 +67,36 @@ public record CodebaseContextOptions
     public int MaxRagResults { get; init; } = 10;
 
     /// <summary>
-    /// Gets the default options (project structure + dependencies, no RAG).
+    /// Gets file names to prioritize in RAG results.
+    /// Results from files matching these names will be boosted in ranking.
     /// </summary>
-    public static CodebaseContextOptions Default => new();
+    public IReadOnlyList<string>? PrioritizeFiles { get; init; }
 
     /// <summary>
+    /// Gets the default options (project structure + dependencies, no RAG).
+    /// </summary>
+    public static CodebaseContextOptions Default => new();    /// <summary>
     /// Creates options for documentation tasks (structure + RAG).
     /// </summary>
-    public static CodebaseContextOptions ForDocumentation(IReadOnlyList<string> ragQueries) =>
+    public static CodebaseContextOptions ForDocumentation(
+        IReadOnlyList<string> ragQueries,
+        IReadOnlyList<string>? prioritizeFiles = null) =>
         new()
         {
             RagQueries = ragQueries,
             IncludeProjectStructure = true,
             IncludeDependencies = true,
-            MaxRagResults = 15,
+            MaxRagResults = 20, // Increased for richer documentation context
+            PrioritizeFiles = prioritizeFiles,
         };
 
     /// <summary>
     /// Creates options for coding tasks (structure + types + RAG).
     /// </summary>
-    public static CodebaseContextOptions ForCoding(IReadOnlyList<string> ragQueries, IReadOnlyList<string>? focusTypes = null) =>
+    public static CodebaseContextOptions ForCoding(
+        IReadOnlyList<string> ragQueries,
+        IReadOnlyList<string>? focusTypes = null,
+        IReadOnlyList<string>? prioritizeFiles = null) =>
         new()
         {
             RagQueries = ragQueries,
@@ -95,6 +105,7 @@ public record CodebaseContextOptions
             IncludeNamespaces = true,
             FocusTypes = focusTypes,
             MaxRagResults = 20,
+            PrioritizeFiles = prioritizeFiles,
         };
 }
 

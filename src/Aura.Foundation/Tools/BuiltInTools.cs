@@ -1,265 +1,470 @@
 using System.IO.Abstractions;
+using System.Text;
 using System.Text.Json;
+using Aura.Foundation.Shell;
 using Microsoft.Extensions.Logging;
 
 namespace Aura.Foundation.Tools;
 
 /// <summary>
-/// Provides built-in tools for file operations, shell commands, etc.
+/// Registers built-in tools for file operations and shell commands.
+/// These are the canonical implementations used across all modules.
 /// </summary>
 public static class BuiltInTools
 {
     /// <summary>
-    /// Register all built-in tools with the registry.
+    /// Registers all built-in tools with the tool registry.
     /// </summary>
-    public static void RegisterBuiltInTools(
-        IToolRegistry registry, 
-        IFileSystem fileSystem,
-        Shell.IProcessRunner processRunner,
-        ILogger logger)
+    public static void RegisterBuiltInTools(IToolRegistry registry, IFileSystem fileSystem, IProcessRunner processRunner, ILogger logger)
     {
-        // File tools
-        registry.RegisterTool(CreateFileReadTool(fileSystem, logger));
-        registry.RegisterTool(CreateFileWriteTool(fileSystem, logger));
-        registry.RegisterTool(CreateFileListTool(fileSystem, logger));
-        registry.RegisterTool(CreateFileExistsTool(fileSystem, logger));
-        registry.RegisterTool(CreateFileDeleteTool(fileSystem, logger));
-        
-        // Shell tools
-        registry.RegisterTool(CreateShellExecuteTool(processRunner, logger));
-        
-        logger.LogInformation("Registered {Count} built-in tools", 6);
+        RegisterFileTools(registry, fileSystem, logger);
+        RegisterShellTools(registry, processRunner, logger);
     }
-    
-    private static ToolDefinition CreateFileReadTool(IFileSystem fs, ILogger logger) => new()
+
+    private static void RegisterFileTools(IToolRegistry registry, IFileSystem fileSystem, ILogger logger)
     {
-        ToolId = "file.read",
-        Name = "Read File",
-        Description = "Read the contents of a file",
-        Categories = ["file", "io"],
-        InputSchema = """
+        // file.read - Read file contents with optional line range
+        registry.RegisterTool(new ToolDefinition
         {
-            "type": "object",
-            "properties": {
-                "path": { "type": "string", "description": "Path to the file to read" }
-            },
-            "required": ["path"]
-        }
-        """,
-        Handler = async (input, ct) =>
-        {
-            var path = input.GetRequiredParameter<string>("path");
-            
-            if (!fs.File.Exists(path))
-                return ToolResult.Fail($"File not found: {path}");
-            
-            var content = await fs.File.ReadAllTextAsync(path, ct);
-            logger.LogDebug("Read {Length} chars from {Path}", content.Length, path);
-            
-            return ToolResult.Ok(content);
-        }
-    };
-    
-    private static ToolDefinition CreateFileWriteTool(IFileSystem fs, ILogger logger) => new()
-    {
-        ToolId = "file.write",
-        Name = "Write File",
-        Description = "Write content to a file",
-        Categories = ["file", "io"],
-        RequiresConfirmation = true,
-        InputSchema = """
-        {
-            "type": "object",
-            "properties": {
-                "path": { "type": "string", "description": "Path to the file to write" },
-                "content": { "type": "string", "description": "Content to write" },
-                "append": { "type": "boolean", "description": "Append instead of overwrite", "default": false }
-            },
-            "required": ["path", "content"]
-        }
-        """,
-        Handler = async (input, ct) =>
-        {
-            var path = input.GetRequiredParameter<string>("path");
-            var content = input.GetRequiredParameter<string>("content");
-            var append = input.GetParameter("append", false);
-            
-            // Ensure directory exists
-            var dir = fs.Path.GetDirectoryName(path);
-            if (!string.IsNullOrEmpty(dir) && !fs.Directory.Exists(dir))
-                fs.Directory.CreateDirectory(dir);
-            
-            if (append)
-                await fs.File.AppendAllTextAsync(path, content, ct);
-            else
-                await fs.File.WriteAllTextAsync(path, content, ct);
-            
-            logger.LogDebug("Wrote {Length} chars to {Path}", content.Length, path);
-            
-            return ToolResult.Ok(new { path, bytesWritten = content.Length });
-        }
-    };
-    
-    private static ToolDefinition CreateFileListTool(IFileSystem fs, ILogger logger) => new()
-    {
-        ToolId = "file.list",
-        Name = "List Directory",
-        Description = "List files and directories in a path",
-        Categories = ["file", "io"],
-        InputSchema = """
-        {
-            "type": "object",
-            "properties": {
-                "path": { "type": "string", "description": "Directory path to list" },
-                "pattern": { "type": "string", "description": "Search pattern (e.g., *.cs)", "default": "*" },
-                "recursive": { "type": "boolean", "description": "Include subdirectories", "default": false }
-            },
-            "required": ["path"]
-        }
-        """,
-        Handler = (input, ct) =>
-        {
-            var path = input.GetRequiredParameter<string>("path");
-            var pattern = input.GetParameter("pattern", "*")!;
-            var recursive = input.GetParameter("recursive", false);
-            
-            if (!fs.Directory.Exists(path))
-                return Task.FromResult(ToolResult.Fail($"Directory not found: {path}"));
-            
-            var searchOption = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
-            
-            var entries = fs.Directory.GetFileSystemEntries(path, pattern, searchOption)
-                .Select(e => new 
+            ToolId = "file.read",
+            Name = "Read File",
+            Description = "Read the contents of a file. Supports optional line range selection.",
+            InputSchema = """
                 {
-                    path = e,
-                    name = fs.Path.GetFileName(e),
-                    isDirectory = fs.Directory.Exists(e)
-                })
-                .ToList();
-            
-            logger.LogDebug("Listed {Count} entries in {Path}", entries.Count, path);
-            
-            return Task.FromResult(ToolResult.Ok(entries));
-        }
-    };
-    
-    private static ToolDefinition CreateFileExistsTool(IFileSystem fs, ILogger logger) => new()
-    {
-        ToolId = "file.exists",
-        Name = "File Exists",
-        Description = "Check if a file or directory exists",
-        Categories = ["file", "io"],
-        InputSchema = """
-        {
-            "type": "object",
-            "properties": {
-                "path": { "type": "string", "description": "Path to check" }
-            },
-            "required": ["path"]
-        }
-        """,
-        Handler = (input, ct) =>
-        {
-            var path = input.GetRequiredParameter<string>("path");
-            var fileExists = fs.File.Exists(path);
-            var dirExists = fs.Directory.Exists(path);
-            
-            return Task.FromResult(ToolResult.Ok(new 
-            { 
-                exists = fileExists || dirExists,
-                isFile = fileExists,
-                isDirectory = dirExists
-            }));
-        }
-    };
-    
-    private static ToolDefinition CreateFileDeleteTool(IFileSystem fs, ILogger logger) => new()
-    {
-        ToolId = "file.delete",
-        Name = "Delete File",
-        Description = "Delete a file or directory",
-        Categories = ["file", "io"],
-        RequiresConfirmation = true,
-        InputSchema = """
-        {
-            "type": "object",
-            "properties": {
-                "path": { "type": "string", "description": "Path to delete" },
-                "recursive": { "type": "boolean", "description": "Delete directory recursively", "default": false }
-            },
-            "required": ["path"]
-        }
-        """,
-        Handler = (input, ct) =>
-        {
-            var path = input.GetRequiredParameter<string>("path");
-            var recursive = input.GetParameter("recursive", false);
-            
-            if (fs.File.Exists(path))
+                    "type": "object",
+                    "properties": {
+                        "path": { "type": "string", "description": "Path to the file (relative or absolute)" },
+                        "startLine": { "type": "integer", "description": "Optional starting line number (1-based, inclusive)" },
+                        "endLine": { "type": "integer", "description": "Optional ending line number (1-based, inclusive)" },
+                        "includeLineNumbers": { "type": "boolean", "description": "If true, prefix each line with its line number" }
+                    },
+                    "required": ["path"]
+                }
+                """,
+            Categories = ["file"],
+            Handler = async (input, ct) =>
             {
-                fs.File.Delete(path);
-                logger.LogDebug("Deleted file: {Path}", path);
-                return Task.FromResult(ToolResult.Ok(new { deleted = path, type = "file" }));
-            }
-            
-            if (fs.Directory.Exists(path))
-            {
-                fs.Directory.Delete(path, recursive);
-                logger.LogDebug("Deleted directory: {Path}", path);
-                return Task.FromResult(ToolResult.Ok(new { deleted = path, type = "directory" }));
-            }
-            
-            return Task.FromResult(ToolResult.Fail($"Path not found: {path}"));
-        }
-    };
-    
-    private static ToolDefinition CreateShellExecuteTool(Shell.IProcessRunner runner, ILogger logger) => new()
-    {
-        ToolId = "shell.execute",
-        Name = "Execute Shell Command",
-        Description = "Run a shell command and return output",
-        Categories = ["shell", "system"],
-        RequiresConfirmation = true,
-        InputSchema = """
-        {
-            "type": "object",
-            "properties": {
-                "command": { "type": "string", "description": "Command to execute" },
-                "args": { "type": "array", "items": { "type": "string" }, "description": "Command arguments" },
-                "workingDirectory": { "type": "string", "description": "Working directory" },
-                "timeout": { "type": "integer", "description": "Timeout in seconds", "default": 60 }
-            },
-            "required": ["command"]
-        }
-        """,
-        Handler = async (input, ct) =>
-        {
-            var command = input.GetRequiredParameter<string>("command");
-            var args = input.GetParameter<string[]>("args", []) ?? [];
-            var workingDir = input.GetParameter<string?>("workingDirectory", input.WorkingDirectory);
-            var timeout = input.GetParameter("timeout", 60);
-            
-            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            cts.CancelAfter(TimeSpan.FromSeconds(timeout));
-            
-            var result = await runner.RunAsync(command, args, new Shell.ProcessOptions
-            {
-                WorkingDirectory = workingDir
-            }, cts.Token);
-            
-            logger.LogDebug("Shell command completed: {Command}, exit={ExitCode}", command, result.ExitCode);
-            
-            if (result.ExitCode == 0)
-            {
-                return ToolResult.Ok(new
+                var path = input.GetRequiredParameter<string>("path");
+                var startLine = input.GetParameter<int?>("startLine");
+                var endLine = input.GetParameter<int?>("endLine");
+                var includeLineNumbers = input.GetParameter<bool>("includeLineNumbers");
+
+                // Resolve relative paths against WorkingDirectory
+                var resolvedPath = ResolvePath(path, input.WorkingDirectory);
+
+                if (!fileSystem.File.Exists(resolvedPath))
                 {
-                    exitCode = result.ExitCode,
-                    stdout = result.StandardOutput,
-                    stderr = result.StandardError
-                });
+                    return ToolResult.Fail($"File not found: {path}");
+                }
+
+                var content = await fileSystem.File.ReadAllTextAsync(resolvedPath, ct);
+
+                // Apply line range if specified
+                if (startLine.HasValue || endLine.HasValue)
+                {
+                    var lines = content.Split('\n');
+                    var start = Math.Max(1, startLine ?? 1) - 1; // Convert to 0-based
+                    var end = Math.Min(lines.Length, endLine ?? lines.Length);
+
+                    if (start >= lines.Length)
+                    {
+                        return ToolResult.Fail($"Start line {startLine} is beyond file length ({lines.Length} lines)");
+                    }
+
+                    var selectedLines = lines.Skip(start).Take(end - start).ToArray();
+
+                    if (includeLineNumbers)
+                    {
+                        var sb = new StringBuilder();
+                        for (int i = 0; i < selectedLines.Length; i++)
+                        {
+                            sb.AppendLine($"{start + i + 1}: {selectedLines[i].TrimEnd('\r')}");
+                        }
+                        content = sb.ToString();
+                    }
+                    else
+                    {
+                        content = string.Join("\n", selectedLines);
+                    }
+                }
+                else if (includeLineNumbers)
+                {
+                    var lines = content.Split('\n');
+                    var sb = new StringBuilder();
+                    for (int i = 0; i < lines.Length; i++)
+                    {
+                        sb.AppendLine($"{i + 1}: {lines[i].TrimEnd('\r')}");
+                    }
+                    content = sb.ToString();
+                }
+
+                return ToolResult.Ok(content);
             }
-            
-            return ToolResult.Fail($"Command failed with exit code {result.ExitCode}: {result.StandardError}");
+        });
+
+        // file.write - Write content to a file with overwrite protection
+        registry.RegisterTool(new ToolDefinition
+        {
+            ToolId = "file.write",
+            Name = "Write File",
+            Description = "Write content to a file. Creates parent directories if needed.",
+            InputSchema = """
+                {
+                    "type": "object",
+                    "properties": {
+                        "path": { "type": "string", "description": "Path to the file (relative or absolute)" },
+                        "content": { "type": "string", "description": "Content to write to the file" },
+                        "overwrite": { "type": "boolean", "description": "If false, fails when file exists. Default is true." },
+                        "createDirectories": { "type": "boolean", "description": "If true, create parent directories. Default is true." }
+                    },
+                    "required": ["path", "content"]
+                }
+                """,
+            Categories = ["file"],
+            Handler = async (input, ct) =>
+            {
+                var path = input.GetRequiredParameter<string>("path");
+                var content = input.GetRequiredParameter<string>("content");
+                var overwrite = input.GetParameter("overwrite", true);
+                var createDirectories = input.GetParameter("createDirectories", true);
+
+                // Resolve relative paths against WorkingDirectory
+                var resolvedPath = ResolvePath(path, input.WorkingDirectory);
+
+                // Check overwrite protection
+                if (!overwrite && fileSystem.File.Exists(resolvedPath))
+                {
+                    return ToolResult.Fail($"File already exists and overwrite is false: {path}");
+                }
+
+                // Create parent directories if needed
+                if (createDirectories)
+                {
+                    var directory = fileSystem.Path.GetDirectoryName(resolvedPath);
+                    if (!string.IsNullOrEmpty(directory) && !fileSystem.Directory.Exists(directory))
+                    {
+                        fileSystem.Directory.CreateDirectory(directory);
+                    }
+                }
+
+                await fileSystem.File.WriteAllTextAsync(resolvedPath, content ?? string.Empty, ct);
+                return ToolResult.Ok($"File written: {path}");
+            }
+        });
+
+        // file.modify - Find and replace text in a file
+        registry.RegisterTool(new ToolDefinition
+        {
+            ToolId = "file.modify",
+            Name = "Modify File",
+            Description = "Modify a file by replacing text. Use for targeted edits to existing files.",
+            InputSchema = """
+                {
+                    "type": "object",
+                    "properties": {
+                        "path": { "type": "string", "description": "Path to the file (relative or absolute)" },
+                        "oldText": { "type": "string", "description": "The exact text to find and replace" },
+                        "newText": { "type": "string", "description": "The text to replace with" },
+                        "replaceAll": { "type": "boolean", "description": "If true, replace all occurrences. Default is false (first only)." },
+                        "createBackup": { "type": "boolean", "description": "If true, create a .bak backup before modifying. Default is false." }
+                    },
+                    "required": ["path", "oldText", "newText"]
+                }
+                """,
+            Categories = ["file"],
+            Handler = async (input, ct) =>
+            {
+                var path = input.GetRequiredParameter<string>("path");
+                var oldText = input.GetRequiredParameter<string>("oldText");
+                var newText = input.GetRequiredParameter<string>("newText");
+                var replaceAll = input.GetParameter("replaceAll", false);
+                var createBackup = input.GetParameter("createBackup", false);
+
+                // Resolve relative paths against WorkingDirectory
+                var resolvedPath = ResolvePath(path, input.WorkingDirectory);
+
+                if (!fileSystem.File.Exists(resolvedPath))
+                {
+                    return ToolResult.Fail($"File not found: {path}");
+                }
+
+                if (string.IsNullOrEmpty(oldText))
+                {
+                    return ToolResult.Fail("oldText cannot be empty");
+                }
+
+                var content = await fileSystem.File.ReadAllTextAsync(resolvedPath, ct);
+
+                if (!content.Contains(oldText))
+                {
+                    var preview = oldText.Length > 50 ? oldText.Substring(0, 50) + "..." : oldText;
+                    return ToolResult.Fail($"Text not found in file: {preview}");
+                }
+
+                // Create backup if requested
+                if (createBackup)
+                {
+                    await fileSystem.File.WriteAllTextAsync(resolvedPath + ".bak", content, ct);
+                }
+
+                // Perform replacement
+                string modifiedContent;
+                int replacementCount;
+
+                if (replaceAll)
+                {
+                    replacementCount = CountOccurrences(content, oldText);
+                    modifiedContent = content.Replace(oldText, newText);
+                }
+                else
+                {
+                    replacementCount = 1;
+                    var index = content.IndexOf(oldText, StringComparison.Ordinal);
+                    modifiedContent = content.Substring(0, index) + newText + content.Substring(index + oldText.Length);
+                }
+
+                await fileSystem.File.WriteAllTextAsync(resolvedPath, modifiedContent, ct);
+                return ToolResult.Ok($"Modified {path}: replaced {replacementCount} occurrence(s)");
+            }
+        });
+
+        // file.list - List directory contents
+        registry.RegisterTool(new ToolDefinition
+        {
+            ToolId = "file.list",
+            Name = "List Files",
+            Description = "List files and directories in a path. Returns names with / suffix for directories.",
+            InputSchema = """
+                {
+                    "type": "object",
+                    "properties": {
+                        "path": { "type": "string", "description": "Path to the directory (relative or absolute)" },
+                        "recursive": { "type": "boolean", "description": "If true, list recursively. Default is false." },
+                        "pattern": { "type": "string", "description": "Optional glob pattern to filter results (e.g., '*.cs')" }
+                    },
+                    "required": ["path"]
+                }
+                """,
+            Categories = ["file"],
+            Handler = (input, ct) =>
+            {
+                var path = input.GetRequiredParameter<string>("path");
+                var recursive = input.GetParameter("recursive", false);
+                var pattern = input.GetParameter("pattern", "*") ?? "*";
+
+                // Resolve relative paths against WorkingDirectory
+                var resolvedPath = ResolvePath(path, input.WorkingDirectory);
+
+                if (!fileSystem.Directory.Exists(resolvedPath))
+                {
+                    return Task.FromResult(ToolResult.Fail($"Directory not found: {path}"));
+                }
+
+                var searchOption = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
+                var entries = new List<string>();
+
+                // Get directories
+                foreach (var dir in fileSystem.Directory.GetDirectories(resolvedPath, "*", searchOption))
+                {
+                    var relativePath = fileSystem.Path.GetRelativePath(resolvedPath, dir);
+                    entries.Add(relativePath.Replace('\\', '/') + "/");
+                }
+
+                // Get files matching pattern
+                foreach (var file in fileSystem.Directory.GetFiles(resolvedPath, pattern, searchOption))
+                {
+                    var relativePath = fileSystem.Path.GetRelativePath(resolvedPath, file);
+                    entries.Add(relativePath.Replace('\\', '/'));
+                }
+
+                entries.Sort();
+                return Task.FromResult(ToolResult.Ok(string.Join("\n", entries)));
+            }
+        });
+
+        // file.exists - Check if a file or directory exists
+        registry.RegisterTool(new ToolDefinition
+        {
+            ToolId = "file.exists",
+            Name = "Check File Exists",
+            Description = "Check if a file or directory exists at the given path.",
+            InputSchema = """
+                {
+                    "type": "object",
+                    "properties": {
+                        "path": { "type": "string", "description": "Path to check (relative or absolute)" }
+                    },
+                    "required": ["path"]
+                }
+                """,
+            Categories = ["file"],
+            Handler = (input, ct) =>
+            {
+                var path = input.GetRequiredParameter<string>("path");
+
+                // Resolve relative paths against WorkingDirectory
+                var resolvedPath = ResolvePath(path, input.WorkingDirectory);
+
+                var fileExists = fileSystem.File.Exists(resolvedPath);
+                var dirExists = fileSystem.Directory.Exists(resolvedPath);
+
+                if (fileExists)
+                {
+                    return Task.FromResult(ToolResult.Ok($"File exists: {path}"));
+                }
+                else if (dirExists)
+                {
+                    return Task.FromResult(ToolResult.Ok($"Directory exists: {path}"));
+                }
+                else
+                {
+                    return Task.FromResult(ToolResult.Ok($"Does not exist: {path}"));
+                }
+            }
+        });
+
+        // file.delete - Delete a file
+        registry.RegisterTool(new ToolDefinition
+        {
+            ToolId = "file.delete",
+            Name = "Delete File",
+            Description = "Delete a file. Does not delete directories.",
+            InputSchema = """
+                {
+                    "type": "object",
+                    "properties": {
+                        "path": { "type": "string", "description": "Path to the file to delete (relative or absolute)" }
+                    },
+                    "required": ["path"]
+                }
+                """,
+            Categories = ["file"],
+            Handler = (input, ct) =>
+            {
+                var path = input.GetRequiredParameter<string>("path");
+
+                // Resolve relative paths against WorkingDirectory
+                var resolvedPath = ResolvePath(path, input.WorkingDirectory);
+
+                if (!fileSystem.File.Exists(resolvedPath))
+                {
+                    return Task.FromResult(ToolResult.Fail($"File not found: {path}"));
+                }
+
+                fileSystem.File.Delete(resolvedPath);
+                return Task.FromResult(ToolResult.Ok($"File deleted: {path}"));
+            }
+        });
+    }
+
+    private static void RegisterShellTools(IToolRegistry registry, IProcessRunner processRunner, ILogger logger)
+    {
+        // shell.execute - Run a shell command
+        registry.RegisterTool(new ToolDefinition
+        {
+            ToolId = "shell.execute",
+            Name = "Execute Shell Command",
+            Description = "Execute a shell command and return the output. Use for builds, tests, git, etc.",
+            InputSchema = """
+                {
+                    "type": "object",
+                    "properties": {
+                        "command": { "type": "string", "description": "The command to execute" },
+                        "workingDirectory": { "type": "string", "description": "Optional working directory for the command" },
+                        "timeoutSeconds": { "type": "integer", "description": "Timeout in seconds. Default is 60." }
+                    },
+                    "required": ["command"]
+                }
+                """,
+            Categories = ["shell"],
+            Handler = async (input, ct) =>
+            {
+                var command = input.GetRequiredParameter<string>("command");
+                var workingDirectory = input.GetParameter<string?>("workingDirectory");
+                var timeoutSeconds = input.GetParameter("timeoutSeconds", 60);
+
+                // Use input.WorkingDirectory if no explicit workingDirectory provided
+                if (string.IsNullOrEmpty(workingDirectory) && !string.IsNullOrEmpty(input.WorkingDirectory))
+                {
+                    workingDirectory = input.WorkingDirectory;
+                }
+
+                if (string.IsNullOrEmpty(command))
+                {
+                    return ToolResult.Fail("Command cannot be empty");
+                }
+
+                var options = new ProcessOptions
+                {
+                    WorkingDirectory = workingDirectory,
+                    Timeout = TimeSpan.FromSeconds(timeoutSeconds)
+                };
+
+                var result = await processRunner.RunShellAsync(command, options, ct);
+
+                var output = new StringBuilder();
+                if (!string.IsNullOrWhiteSpace(result.StandardOutput))
+                {
+                    output.AppendLine(result.StandardOutput);
+                }
+                if (!string.IsNullOrWhiteSpace(result.StandardError))
+                {
+                    output.AppendLine("STDERR:");
+                    output.AppendLine(result.StandardError);
+                }
+
+                if (result.Success)
+                {
+                    return ToolResult.Ok(output.ToString().Trim());
+                }
+                else if (result.TimedOut)
+                {
+                    return ToolResult.Fail($"Command timed out after {timeoutSeconds} seconds");
+                }
+                else
+                {
+                    return ToolResult.Fail($"Command exited with code {result.ExitCode}:\n{output}".Trim());
+                }
+            }
+        });
+    }
+
+    /// <summary>
+    /// Resolves a path against a working directory. If path is absolute, returns it as-is.
+    /// If path is relative and workingDirectory is provided, combines them.
+    /// </summary>
+    private static string ResolvePath(string? path, string? workingDirectory)
+    {
+        if (string.IsNullOrEmpty(path))
+        {
+            return path ?? string.Empty;
         }
-    };
+
+        // If path is already absolute, return as-is
+        if (Path.IsPathRooted(path))
+        {
+            return path;
+        }
+
+        // If we have a working directory, combine with relative path
+        if (!string.IsNullOrEmpty(workingDirectory))
+        {
+            return Path.Combine(workingDirectory, path);
+        }
+
+        // Fall back to resolving against current directory
+        return Path.GetFullPath(path);
+    }
+
+    private static int CountOccurrences(string text, string pattern)
+    {
+        int count = 0;
+        int index = 0;
+        while ((index = text.IndexOf(pattern, index, StringComparison.Ordinal)) != -1)
+        {
+            count++;
+            index += pattern.Length;
+        }
+        return count;
+    }
 }
