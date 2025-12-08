@@ -82,7 +82,6 @@ If the step says **"Commit"** or **"Apply"**:
 **For coding tasks:**
 - **CRITICAL: Before writing any code, use file.read to read the source file(s) you're testing or modifying**
 - If the step mentions a specific file path, READ IT FIRST with file.read
-- **For test writing: Read an existing test file in the same test project to learn the testing framework (xUnit vs NUnit), assertion library (FluentAssertions vs Assert), and mocking library (NSubstitute vs Moq)**
 - Output complete file contents, not snippets
 - Follow existing code patterns and conventions from the codebase
 - Include necessary imports and dependencies
@@ -91,6 +90,15 @@ If the step says **"Commit"** or **"Apply"**:
 - If roslyn.validate_compilation returns ANY errors, you MUST fix the code with file.modify and validate again
 - Do NOT call git.commit or finish until roslyn.validate_compilation returns success with ZERO errors
 - If roslyn.validate_compilation fails with "No solution file found", provide the full project path
+
+**For test file creation (ANY step that creates a *Tests.cs file):**
+- **MANDATORY FIRST STEP: Read an existing test file in the same test project BEFORE writing any code**
+  - Use `file.list` with path="tests" recursive=true pattern="*Tests.cs" to find existing tests
+  - Use `file.read` to read at least one existing test file
+  - Learn: testing framework (xUnit vs NUnit), assertion style, mocking library (NSubstitute vs Moq)
+- The source class you're testing (e.g., GitTools) is likely STATIC - check the actual source code first
+- Write REAL test implementations, not placeholder stubs like "// Add assertions here"
+- Mock dependencies using the SAME mocking library as existing tests (usually NSubstitute: `Substitute.For<IInterface>()`)
 
 **If information is missing:**
 - Say "information not available in context" rather than guessing

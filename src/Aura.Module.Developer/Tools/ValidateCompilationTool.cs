@@ -99,11 +99,12 @@ public class ValidateCompilationTool : TypedToolBase<ValidateCompilationInput, V
     public override string Name => "Validate Compilation";
 
     /// <inheritdoc/>
-    public override string Description =>
-        "Validates that a project compiles without errors. Returns compilation diagnostics " +
-        "including error messages and file locations. Use this after modifying code to " +
-        "verify there are no syntax or type errors. The working directory is set automatically " +
-        "to the workflow's repository path.";
+    public override string Description => """
+        Validates that a project compiles without errors. Returns compilation diagnostics
+        including error messages and file locations. Use this after modifying code to
+        verify there are no syntax or type errors. The working directory is set automatically
+        to the workflow's repository path.
+        """;
 
     /// <inheritdoc/>
     public override IReadOnlyList<string> Categories => ["roslyn", "validation"];
@@ -123,8 +124,14 @@ public class ValidateCompilationTool : TypedToolBase<ValidateCompilationInput, V
             // First, clear the workspace cache to ensure we get fresh compilation
             _workspace.ClearCache();
 
-            // Find the project
-            var searchDirectory = input.WorkingDirectory ?? Environment.CurrentDirectory;
+            // Find the project - resolve relative paths against current directory
+            var workingDir = input.WorkingDirectory ?? Environment.CurrentDirectory;
+            var searchDirectory = Path.IsPathRooted(workingDir)
+                ? workingDir
+                : Path.GetFullPath(Path.Combine(Environment.CurrentDirectory, workingDir));
+
+            _logger.LogInformation("Searching for solution in: {SearchDirectory}", searchDirectory);
+
             var solutionPath = _workspace.FindSolutionFile(searchDirectory);
             if (solutionPath is null)
             {
