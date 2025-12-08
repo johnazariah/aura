@@ -15,87 +15,58 @@ using Microsoft.Extensions.Options;
 public sealed class ConfigurableAgentFactory : IAgentFactory
 {
     private readonly ILlmProviderRegistry _providerRegistry;
+    private readonly LlmOptions _llmOptions;
     private readonly IHandlebars _handlebars;
     private readonly ILoggerFactory _loggerFactory;
-    private readonly AgentOptions _options;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ConfigurableAgentFactory"/> class.
     /// </summary>
     /// <param name="providerRegistry">LLM provider registry.</param>
+    /// <param name="llmOptions">LLM configuration options.</param>
     /// <param name="handlebars">Handlebars template engine.</param>
     /// <param name="loggerFactory">Logger factory.</param>
-    /// <param name="options">Agent options with configuration overrides.</param>
     public ConfigurableAgentFactory(
         ILlmProviderRegistry providerRegistry,
+        IOptions<LlmOptions> llmOptions,
         IHandlebars handlebars,
-        ILoggerFactory loggerFactory,
-        IOptions<AgentOptions> options)
+        ILoggerFactory loggerFactory)
     {
         _providerRegistry = providerRegistry;
+        _llmOptions = llmOptions.Value;
         _handlebars = handlebars;
         _loggerFactory = loggerFactory;
-        _options = options.Value;
     }
 
     /// <inheritdoc/>
     public IAgent CreateAgent(AgentDefinition definition)
     {
-        var originalProvider = definition.Provider;
-        var originalModel = definition.Model;
-        var configSource = "default";
-
-        // Always start with Ollama as the base default (local-first principle)
-        definition = definition with
-        {
-            Provider = "ollama",
-        };
-
-        // First: Apply default LLM provider if configured (overrides Ollama default)
-        if (_options.LlmProviders.TryGetValue("default", out var defaultConfig))
-        {
-            definition = definition with
-            {
-                Provider = defaultConfig.Provider ?? definition.Provider,
-                Model = defaultConfig.Model ?? definition.Model,
-                Temperature = defaultConfig.Temperature ?? definition.Temperature,
-            };
-            configSource = "config:default";
-        }
-
-        // Second: Apply per-agent LLM provider if configured (overrides default)
-        if (_options.LlmProviders.TryGetValue(definition.AgentId, out var agentConfig))
-        {
-            definition = definition with
-            {
-                Provider = agentConfig.Provider ?? definition.Provider,
-                Model = agentConfig.Model ?? definition.Model,
-                Temperature = agentConfig.Temperature ?? definition.Temperature,
-            };
-            configSource = "config:agent";
-        }
-
-        // Log provider info
         var factoryLogger = _loggerFactory.CreateLogger<ConfigurableAgentFactory>();
-        if (definition.Provider != originalProvider || definition.Model != originalModel)
-        {
-            factoryLogger.LogInformation(
-                "Agent {AgentId}: Using {Provider}/{Model} ({ConfigSource}, markdown had {OriginalProvider}/{OriginalModel})",
-                definition.AgentId,
-                definition.Provider,
-                definition.Model,
-                configSource,
-                originalProvider,
-                originalModel);
-        }
-        else
+
+        // Use the global default provider from Aura:Llm configuration
+        var effectiveProvider = _llmOptions.DefaultProvider;
+
+        // Log if overriding the agent's markdown-defined provider
+        if (!string.IsNullOrEmpty(definition.Provider) && definition.Provider != effectiveProvider)
         {
             factoryLogger.LogDebug(
-                "Agent {AgentId}: Using {Provider}/{Model}",
+                "Agent {AgentId}: Using configured default provider '{EffectiveProvider}' (markdown specified '{MarkdownProvider}')",
                 definition.AgentId,
-                definition.Provider,
-                definition.Model);
+                effectiveProvider,
+                definition.Provider);
         }
+
+        // Update definition with effective provider
+        definition = definition with
+        {
+            Provider = effectiveProvider,
+        };
+
+        factoryLogger.LogDebug(
+            "Agent {AgentId}: Using {Provider}/{Model}",
+            definition.AgentId,
+            definition.Provider,
+            definition.Model ?? _llmOptions.DefaultModel);
 
         var logger = _loggerFactory.CreateLogger<ConfigurableAgent>();
         return new ConfigurableAgent(definition, _providerRegistry, _handlebars, logger);

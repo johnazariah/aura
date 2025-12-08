@@ -461,8 +461,9 @@ public sealed class WorkflowService : IWorkflowService
                 promptName = "step-review";
                 // For review capability, gather outputs from previous coding steps
                 var codeToReview = new System.Text.StringBuilder();
+                // Include both coding and documentation steps in review
                 var codingSteps = workflow.Steps
-                    .Where(s => s.Capability == "coding" && s.Status == StepStatus.Completed && s.Output is not null)
+                    .Where(s => (s.Capability == "coding" || s.Capability == "documentation") && s.Status == StepStatus.Completed && s.Output is not null)
                     .OrderBy(s => s.Order)
                     .ToList();
 

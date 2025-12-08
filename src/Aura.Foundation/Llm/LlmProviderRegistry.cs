@@ -68,12 +68,12 @@ public sealed class LlmOptions
     /// <summary>
     /// Configuration section name.
     /// </summary>
-    public const string SectionName = "LlmProviders";
+    public const string SectionName = "Aura:Llm";
 
     /// <summary>
     /// Gets or sets the default provider ID.
     /// </summary>
-    public string DefaultProvider { get; set; } = "ollama";
+    public string DefaultProvider { get; set; } = "azureopenai";
 
     /// <summary>
     /// Gets or sets the default model.

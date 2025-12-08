@@ -290,39 +290,4 @@ public sealed class AgentOptions
     /// Gets or sets whether hot-reload is enabled.
     /// </summary>
     public bool EnableHotReload { get; set; } = true;
-
-    /// <summary>
-    /// Gets or sets per-agent LLM provider configuration.
-    /// Use "default" key to set the provider for all agents.
-    /// Use specific agent IDs to override individual agents.
-    /// </summary>
-    /// <example>
-    /// "LlmProviders": {
-    ///   "default": { "Provider": "azureopenai" },
-    ///   "chat-agent": { "Provider": "ollama" }
-    /// }
-    /// </example>
-    public Dictionary<string, AgentLlmConfig> LlmProviders { get; set; } = [];
-}
-
-/// <summary>
-/// Per-agent LLM provider configuration.
-/// </summary>
-public sealed class AgentLlmConfig
-{
-    /// <summary>
-    /// Gets or sets the provider name (e.g., "azureopenai", "openai", "ollama").
-    /// References the provider configuration section (e.g., "AzureOpenAI" section in appsettings).
-    /// </summary>
-    public string? Provider { get; set; }
-
-    /// <summary>
-    /// Gets or sets the model to use. If not specified, uses the provider's default model.
-    /// </summary>
-    public string? Model { get; set; }
-
-    /// <summary>
-    /// Gets or sets the temperature. If not specified, uses the agent's default temperature.
-    /// </summary>
-    public double? Temperature { get; set; }
 }

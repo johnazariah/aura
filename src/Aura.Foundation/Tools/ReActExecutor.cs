@@ -196,14 +196,15 @@ public partial class ReActExecutor : IReActExecutor
             }
 
             // Find and execute the tool
+            var normalizedAction = NormalizeToolName(parsed.Action);
             var tool = availableTools.FirstOrDefault(t =>
-                t.ToolId.Equals(parsed.Action, StringComparison.OrdinalIgnoreCase) ||
-                t.Name.Equals(parsed.Action, StringComparison.OrdinalIgnoreCase));
+                t.ToolId.Equals(normalizedAction, StringComparison.OrdinalIgnoreCase) ||
+                t.Name.Equals(normalizedAction, StringComparison.OrdinalIgnoreCase));
 
             if (tool is null)
             {
                 var validToolIds = string.Join(", ", availableTools.Select(t => t.ToolId));
-                observation = $"Error: Tool '{parsed.Action}' not found. Valid tools are: {validToolIds}. When the task is complete, use Action: finish";
+                observation = $"Error: Tool '{parsed.Action}' not found. Valid tools are: {validToolIds}. Use 'file.modify' (not 'Modify'), 'file.write' (not 'Write'). When done, use Action: finish";
                 _logger.LogWarning("Tool not found: {ToolId}", parsed.Action);
             }
             else
@@ -335,15 +336,24 @@ public partial class ReActExecutor : IReActExecutor
               Action: file.read
               Action Input: {"path": "README.md"}
 
-              Example 2 - Using file.write:
-              Thought: I will write the updated content to the file.
+              Example 2 - Using file.write to CREATE a new file:
+              Thought: The file does not exist, so I will create it with the required content.
               Action: file.write
-              Action Input: {"path": "output.txt", "content": "Hello World"}
+              Action Input: {"path": "CONTRIBUTING.md", "content": "# Contributing\n\nWelcome to the project..."}
 
               Example 3 - Completing the task (IMPORTANT):
               Thought: I have finished reading and updating the file. The task is complete.
               Action: finish
               Action Input: {"result": "Successfully updated the README with new content."}
+
+              IMPORTANT - HANDLING FILE NOT FOUND:
+              If file.read returns "Error: File not found", this means you need to CREATE the file.
+              Do NOT give up or finish with an error. Instead, use file.write to create the file.
+              Example:
+              - Observation: Error: File not found: CONTRIBUTING.md
+              - Thought: The file does not exist, so I will create it with the appropriate content.
+              - Action: file.write
+              - Action Input: {"path": "CONTRIBUTING.md", "content": "..."}
 
               CRITICAL RULES:
               1. Action MUST be EXACTLY one of: {{toolIds}}, finish
@@ -351,11 +361,18 @@ public partial class ReActExecutor : IReActExecutor
               3. Action Input MUST be a valid JSON object - never prose or markdown
               4. When you have completed all necessary tool operations, use "finish"
               5. If you cannot proceed with available tools, use "finish" to explain why
+              6. If your task is to CREATE or DRAFT a file, you MUST call file.write before finishing
+              7. Do NOT finish with "file will need to be created" - actually CREATE it with file.write
 
               WRONG (will cause errors):
-              - Action: Review  ← ERROR: Not a valid tool
+              - Action: Review  ← ERROR: Not a valid tool. Use "finish" to complete the task
+              - Action: Modify  ← ERROR: Not a valid tool. Use "file.modify" instead
               - Action: Manually  ← ERROR: Not a valid tool
+              - Action: Validate  ← ERROR: Not a valid tool. Use "finish" to complete the task
               - Action Input: README.md  ← ERROR: Must be JSON object
+              
+              REMEMBER: The ONLY valid actions are: {{toolIds}}, finish
+              If you want to review/validate, just use "finish" with your analysis in the result.
               """;var prompt = $"""
             You are an AI assistant that can use tools to accomplish tasks.
             You should think step by step and use tools when needed.
@@ -465,6 +482,22 @@ public partial class ReActExecutor : IReActExecutor
             "old_text" or "oldtext" or "old" or "search" or "find" => "oldText",
             "new_text" or "newtext" or "new" or "replace" or "replacement" => "newText",
             _ => name // Keep original if no mapping
+        };
+    }
+
+    private static string NormalizeToolName(string action)
+    {
+        // Map common LLM mistakes to correct tool names
+        return action.ToLowerInvariant() switch
+        {
+            "modify" => "file.modify",
+            "write" => "file.write",
+            "read" => "file.read",
+            "list" => "file.list",
+            "exists" => "file.exists",
+            "delete" => "file.delete",
+            "review" or "validate" or "check" => "finish",  // These should just finish
+            _ => action // Keep original if no mapping
         };
     }
 

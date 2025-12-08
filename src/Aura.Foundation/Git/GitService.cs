@@ -91,21 +91,32 @@ public class GitService : IGitService
         var stageResult = await RunGitAsync(repoPath, ["add", "-A"], ct);
         if (!stageResult.Success)
             return GitResult<string>.Fail($"Failed to stage: {stageResult.StandardError}");
-        
+
         // Commit
         var commitResult = await RunGitAsync(repoPath, ["commit", "-m", message], ct);
         if (!commitResult.Success)
-            return GitResult<string>.Fail(commitResult.StandardError);
-        
+        {
+            // git commit returns exit code 1 with message in stdout when nothing to commit
+            var error = !string.IsNullOrWhiteSpace(commitResult.StandardError)
+                ? commitResult.StandardError
+                : commitResult.StandardOutput;
+
+            // Check for "nothing to commit" which is a common non-error case
+            if (error.Contains("nothing to commit", StringComparison.OrdinalIgnoreCase))
+            {
+                return GitResult<string>.Fail("Nothing to commit - working tree is clean");
+            }
+
+            return GitResult<string>.Fail(string.IsNullOrWhiteSpace(error) ? "Commit failed" : error);
+        }
+
         // Get the commit SHA
         var shaResult = await RunGitAsync(repoPath, ["rev-parse", "HEAD"], ct);
         var sha = shaResult.Success ? shaResult.StandardOutput.Trim() : "unknown";
-        
+
         _logger.LogInformation("Committed: {Sha}", sha[..Math.Min(7, sha.Length)]);
         return GitResult<string>.Ok(sha);
-    }
-
-    public async Task<GitResult<Unit>> PushAsync(string repoPath, bool setUpstream = false, CancellationToken ct = default)
+    }    public async Task<GitResult<Unit>> PushAsync(string repoPath, bool setUpstream = false, CancellationToken ct = default)
     {
         var args = setUpstream 
             ? new[] { "push", "-u", "origin", "HEAD" }

@@ -14,6 +14,9 @@ tools:
   - file.read
   - file.write
   - file.modify
+  - git.status
+  - git.commit
+  - git.branch
 ---
 Execute this documentation step:
 
@@ -49,11 +52,14 @@ If the step says **"Review"** or **"Analyze"** or **"Examine"**:
 - Do NOT write the final README/documentation yet
 
 If the step says **"Draft"** or **"Create"** or **"Write"** or **"Update"** or **"Add"** or **"Integrate"** or **"Insert"**:
-- First use **file.read** to read the current file content
-- Produce the actual documentation content based on analysis
-- **CRITICAL: You MUST call file.write or file.modify to save changes**
-- Do not just output markdown - you MUST use the file tools to write it
-- The step is NOT complete until the file is actually modified on disk
+- If updating an existing file, first use **file.read** to read the current content
+- If creating a NEW file, go straight to writing - don't try to read a file that doesn't exist
+- Produce the actual documentation content and **WRITE IT TO DISK**
+- **CRITICAL: You MUST call file.write to create new files or file.modify to update existing files**
+- Do NOT just output markdown in your response - you MUST use the file tools to write it
+- Do NOT call "finish" until you have actually called file.write or file.modify
+- The step is NOT complete until the file exists on disk with the content you created
+- If file.read returns "file not found", that means you should CREATE the file with file.write
 
 If the step says **"Validate"** or **"Review draft"**:
 - Use **file.read** to read the current file

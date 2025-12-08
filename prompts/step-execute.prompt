@@ -6,6 +6,9 @@ tools:
   - file.read
   - file.write
   - file.modify
+  - git.status
+  - git.commit
+  - git.branch
   - roslyn.validate_compilation
 ---
 Execute this development step:
@@ -25,36 +28,40 @@ Issue: {{issueTitle}}
 ### Step Type Guidelines
 
 If the step says **"Review"** or **"Analyze"** or **"Examine"**:
-→ Output an ANALYSIS with findings, not a finished product
-→ List what you found: gaps, issues, outdated content, missing sections
-→ Do NOT produce the final deliverable yet
+- Output an ANALYSIS with findings, not a finished product
+- List what you found: gaps, issues, outdated content, missing sections
+- Do NOT produce the final deliverable yet
 
 If the step says **"Draft"** or **"Create"** or **"Write"** or **"Add"** or **"Integrate"** or **"Insert"**:
-→ Output the actual content/code as requested
-→ Use information gathered from previous steps
-→ **CRITICAL: If modifying a file, you MUST call file.write or file.modify**
-→ The step is NOT complete until changes are saved to disk
+- If updating an existing file, first use **file.read** to read the current content
+- If creating a NEW file, go straight to writing - don't try to read a file that doesn't exist
+- Produce the actual content/code and **WRITE IT TO DISK**
+- **CRITICAL: You MUST call file.write to create new files or file.modify to update existing files**
+- Do NOT just output content in your response - you MUST use the file tools to write it
+- Do NOT call "finish" until you have actually called file.write or file.modify
+- The step is NOT complete until the file exists on disk with the content you created
+- If file.read returns "file not found", that means you should CREATE the file with file.write
 
 If the step says **"Validate"** or **"Review draft"**:
-→ Output a review with specific feedback
-→ List what's good, what needs improvement, specific suggestions
+- Output a review with specific feedback
+- List what's good, what needs improvement, specific suggestions
 
 If the step says **"Incorporate feedback"** or **"Finalize"**:
-→ Apply the changes from the review step
-→ Output the improved version
-→ **CRITICAL: You MUST call file.write or file.modify to save changes**
+- Apply the changes from the review step
+- Output the improved version
+- **CRITICAL: You MUST call file.write or file.modify to save changes**
 
 If the step says **"Commit"** or **"Apply"**:
-→ Output the final artifact ready for commit
-→ Include the exact file path and complete content
-→ **CRITICAL: You MUST call file.write or file.modify to save changes**
+- Output the final artifact ready for commit
+- Include the exact file path and complete content
+- **CRITICAL: You MUST call file.write or file.modify to save changes**
 
 ## General Instructions
 
 **For analysis/review steps:**
 - Use ONLY information from the provided RAG context
 - Be specific: cite file names, line numbers, exact issues found
-- Structure as: "Current state → Issues found → Recommendations"
+- Structure as: Current state - Issues found - Recommendations
 
 **For documentation tasks:**
 - Use ONLY information from the provided RAG context - do not invent file names, classes, or features

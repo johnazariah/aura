@@ -4,6 +4,8 @@ ragQueries:
   - "code style conventions best practices"
   - "error handling exception patterns"
   - "test unit integration patterns"
+tools:
+  - file.read
 ---
 Execute this code review step:
 
@@ -14,11 +16,35 @@ Description: {{stepDescription}}
 ## Workflow Context
 Issue: {{issueTitle}}
 
-## Code to Review
+## Previous Step Outputs
 {{codeToReview}}
 
-## Instructions
-Review the code and provide:
-- Summary (approve/request changes)
-- Specific issues with explanations
-- Suggestions for improvement
+## Your Task
+
+You are a **code reviewer**. Your job is to:
+1. **Read** any files mentioned in the step description or previous outputs using `file.read`
+2. **Analyze** the content for quality, correctness, and completeness
+3. **Provide feedback** with your review
+
+## IMPORTANT Rules
+
+- You have ONLY `file.read` available - you CANNOT write or modify files
+- Do NOT try to use `file.write` or `file.modify` - they are not available for review steps
+- After reading and analyzing, use `finish` with your review summary
+- Your output should be the review feedback, not file modifications
+
+## Review Checklist
+
+1. **Correctness** - Does the content match what was requested?
+2. **Completeness** - Is anything missing?
+3. **Clarity** - Is it well-organized and easy to understand?
+4. **Accuracy** - Are the details correct?
+5. **Consistency** - Does it follow project conventions?
+
+## Output Format
+
+Provide:
+- **Summary**: Approve / Request changes
+- **What's Good**: Positive aspects
+- **Issues Found**: Problems that need fixing
+- **Suggestions**: Improvements to consider
