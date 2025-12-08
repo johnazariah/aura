@@ -24,7 +24,7 @@ public sealed record AgentDefinition(
     string Name,
     string Description,
     string Provider,
-    string Model,
+    string? Model,
     double Temperature,
     string SystemPrompt,
     IReadOnlyList<string> Capabilities,
@@ -39,9 +39,9 @@ public sealed record AgentDefinition(
     public const string DefaultProvider = "ollama";
 
     /// <summary>
-    /// Gets the default model.
+    /// Gets the default model. Null means use provider's configured default.
     /// </summary>
-    public const string DefaultModel = "qwen2.5-coder:7b";
+    public const string? DefaultModel = null;
 
     /// <summary>
     /// Gets the default temperature.

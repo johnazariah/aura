@@ -44,7 +44,7 @@ public sealed class OpenAiProvider : ILlmProvider
 
     /// <inheritdoc/>
     public async Task<LlmResponse> GenerateAsync(
-        string model,
+        string? model,
         string prompt,
         double temperature = 0.7,
         CancellationToken cancellationToken = default)
@@ -56,7 +56,7 @@ public sealed class OpenAiProvider : ILlmProvider
 
     /// <inheritdoc/>
     public async Task<LlmResponse> ChatAsync(
-        string model,
+        string? model,
         IReadOnlyList<Agents.ChatMessage> messages,
         double temperature = 0.7,
         CancellationToken cancellationToken = default)
@@ -176,16 +176,22 @@ public sealed class OpenAiProvider : ILlmProvider
     /// <summary>
     /// Resolves a model name to an OpenAI model identifier.
     /// </summary>
-    private string ResolveModelName(string model)
+    private string ResolveModelName(string? model)
     {
+        // Use default if null or empty
+        if (string.IsNullOrEmpty(model))
+        {
+            return _options.DefaultModel;
+        }
+
         // Check if there's a mapping
         if (_options.ModelMappings.TryGetValue(model, out var mappedModel))
         {
             return mappedModel;
         }
 
-        // Use the model name as-is, or fall back to default
-        return string.IsNullOrEmpty(model) ? _options.DefaultModel : model;
+        // Use the model name as-is
+        return model;
     }
 
     /// <summary>

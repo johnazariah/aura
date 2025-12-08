@@ -35,21 +35,22 @@ public sealed class StubLlmProvider : ILlmProvider
 
     /// <inheritdoc/>
     public Task<LlmResponse> GenerateAsync(
-        string model,
+        string? model,
         string prompt,
         double temperature = 0.7,
         CancellationToken cancellationToken = default)
     {
+        var effectiveModel = model ?? "stub-model";
         _logger.LogDebug(
             "Stub generate: model={Model}, prompt_length={PromptLength}, temp={Temperature}",
-            model, prompt.Length, temperature);
+            effectiveModel, prompt.Length, temperature);
 
         cancellationToken.ThrowIfCancellationRequested();
 
         var response = new LlmResponse(
             Content: $"[Stub response to: {TruncatePrompt(prompt)}]",
             TokensUsed: prompt.Length / 4, // Rough token estimate
-            Model: model,
+            Model: effectiveModel,
             FinishReason: "stop");
 
         return Task.FromResult(response);
@@ -57,14 +58,15 @@ public sealed class StubLlmProvider : ILlmProvider
 
     /// <inheritdoc/>
     public Task<LlmResponse> ChatAsync(
-        string model,
+        string? model,
         IReadOnlyList<ChatMessage> messages,
         double temperature = 0.7,
         CancellationToken cancellationToken = default)
     {
+        var effectiveModel = model ?? "stub-model";
         _logger.LogDebug(
             "Stub chat: model={Model}, messages={MessageCount}, temp={Temperature}",
-            model, messages.Count, temperature);
+            effectiveModel, messages.Count, temperature);
 
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -74,7 +76,7 @@ public sealed class StubLlmProvider : ILlmProvider
         var response = new LlmResponse(
             Content: $"[Stub chat response to: {TruncatePrompt(lastUserMessage)}]",
             TokensUsed: tokenCount,
-            Model: model,
+            Model: effectiveModel,
             FinishReason: "stop");
 
         return Task.FromResult(response);

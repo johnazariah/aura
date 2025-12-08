@@ -86,7 +86,7 @@ public sealed partial class MarkdownAgentLoader : IAgentLoader
             var name = metadata.GetValueOrDefault("name", agentId);
             var description = metadata.GetValueOrDefault("description", string.Empty);
             var provider = metadata.GetValueOrDefault("provider", AgentDefinition.DefaultProvider);
-            var model = metadata.GetValueOrDefault("model", AgentDefinition.DefaultModel);
+            var model = metadata.TryGetValue("model", out var m) ? m : AgentDefinition.DefaultModel;
             var temperatureStr = metadata.GetValueOrDefault("temperature", AgentDefinition.DefaultTemperature.ToString(CultureInfo.InvariantCulture));
             var priorityStr = metadata.GetValueOrDefault("priority", AgentDefinition.DefaultPriority.ToString(CultureInfo.InvariantCulture));
 

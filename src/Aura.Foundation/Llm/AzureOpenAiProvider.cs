@@ -52,7 +52,7 @@ public sealed class AzureOpenAiProvider : ILlmProvider
 
     /// <inheritdoc/>
     public async Task<LlmResponse> GenerateAsync(
-        string model,
+        string? model,
         string prompt,
         double temperature = 0.7,
         CancellationToken cancellationToken = default)
@@ -64,7 +64,7 @@ public sealed class AzureOpenAiProvider : ILlmProvider
 
     /// <inheritdoc/>
     public async Task<LlmResponse> ChatAsync(
-        string model,
+        string? model,
         IReadOnlyList<Agents.ChatMessage> messages,
         double temperature = 0.7,
         CancellationToken cancellationToken = default)
@@ -207,8 +207,14 @@ public sealed class AzureOpenAiProvider : ILlmProvider
     /// <summary>
     /// Resolves a model name to an Azure deployment name.
     /// </summary>
-    private string ResolveDeploymentName(string model)
+    private string ResolveDeploymentName(string? model)
     {
+        // If model is null, use default deployment
+        if (string.IsNullOrEmpty(model))
+        {
+            return _options.DefaultDeployment ?? throw new InvalidOperationException("No default deployment configured");
+        }
+
         // Check if there's a direct mapping
         if (_options.ModelDeployments.TryGetValue(model, out var deployment))
         {

@@ -47,20 +47,21 @@ public sealed class OllamaProvider : ILlmProvider, IEmbeddingProvider
 
     /// <inheritdoc/>
     public async Task<LlmResponse> GenerateAsync(
-        string model,
+        string? model,
         string prompt,
         double temperature = 0.7,
         CancellationToken cancellationToken = default)
     {
+        var effectiveModel = model ?? _options.DefaultModel;
         _logger.LogDebug(
             "Ollama generate: model={Model}, prompt_length={PromptLength}, temp={Temperature}",
-            model, prompt.Length, temperature);
+            effectiveModel, prompt.Length, temperature);
 
         try
         {
             var request = new OllamaGenerateRequest
             {
-                Model = model,
+                Model = effectiveModel,
                 Prompt = prompt,
                 Stream = false,
                 Options = new OllamaModelOptions { Temperature = temperature },
@@ -110,18 +111,19 @@ public sealed class OllamaProvider : ILlmProvider, IEmbeddingProvider
 
     /// <inheritdoc/>
     public async Task<LlmResponse> ChatAsync(
-        string model,
+        string? model,
         IReadOnlyList<ChatMessage> messages,
         double temperature = 0.7,
         CancellationToken cancellationToken = default)
     {
-        _logger.LogDebug("Ollama chat: model={Model}, messages={MessageCount}, temp={Temperature}", model, messages.Count, temperature);
+        var effectiveModel = model ?? _options.DefaultModel;
+        _logger.LogDebug("Ollama chat: model={Model}, messages={MessageCount}, temp={Temperature}", effectiveModel, messages.Count, temperature);
 
         try
         {
             var request = new OllamaChatRequest
             {
-                Model = model,
+                Model = effectiveModel,
                 Messages = messages.Select(m => new OllamaChatMessage
                 {
                     Role = m.Role.ToString().ToLowerInvariant(),

@@ -24,7 +24,7 @@ public sealed record AgentMetadata(
     int Priority = 50,
     IReadOnlyList<string>? Languages = null,
     string Provider = "ollama",
-    string Model = "qwen2.5-coder:7b",
+    string? Model = null,
     double Temperature = 0.7,
     IReadOnlyList<string>? Tools = null,
     IReadOnlyList<string>? Tags = null)

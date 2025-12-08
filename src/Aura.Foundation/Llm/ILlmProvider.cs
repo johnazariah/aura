@@ -19,7 +19,7 @@ public interface ILlmProvider
     /// <summary>
     /// Generates a completion from a prompt.
     /// </summary>
-    /// <param name="model">The model to use.</param>
+    /// <param name="model">The model to use. If null, uses provider's default.</param>
     /// <param name="prompt">The prompt text.</param>
     /// <param name="temperature">Temperature for sampling.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
@@ -27,7 +27,7 @@ public interface ILlmProvider
     /// <exception cref="LlmException">Thrown when generation fails.</exception>
     /// <exception cref="OperationCanceledException">Thrown when cancelled.</exception>
     Task<LlmResponse> GenerateAsync(
-        string model,
+        string? model,
         string prompt,
         double temperature = 0.7,
         CancellationToken cancellationToken = default);
@@ -35,7 +35,7 @@ public interface ILlmProvider
     /// <summary>
     /// Generates a completion from a chat conversation.
     /// </summary>
-    /// <param name="model">The model to use.</param>
+    /// <param name="model">The model to use. If null, uses provider's default.</param>
     /// <param name="messages">The conversation messages.</param>
     /// <param name="temperature">Temperature for sampling.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
@@ -43,7 +43,7 @@ public interface ILlmProvider
     /// <exception cref="LlmException">Thrown when generation fails.</exception>
     /// <exception cref="OperationCanceledException">Thrown when cancelled.</exception>
     Task<LlmResponse> ChatAsync(
-        string model,
+        string? model,
         IReadOnlyList<ChatMessage> messages,
         double temperature = 0.7,
         CancellationToken cancellationToken = default);
