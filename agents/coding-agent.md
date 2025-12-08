@@ -9,6 +9,7 @@ A polyglot coding agent that handles implementation, tests, refactoring, and doc
 ## Capabilities
 
 - coding
+- testing
 
 ## Languages
 

@@ -8,7 +8,7 @@ Simple test agent for integration testing. Uses the stub provider for predictabl
 
 ## Capabilities
 
-- testing
+- echo
 
 ## Tags
 
