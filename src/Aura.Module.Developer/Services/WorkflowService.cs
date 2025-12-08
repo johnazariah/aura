@@ -713,7 +713,8 @@ public sealed class WorkflowService : IWorkflowService
                 workflow.Status = WorkflowStatus.Executing;
             }
 
-            await _db.SaveChangesAsync(ct);
+            // Use CancellationToken.None to ensure completion is saved even if HTTP request is cancelled
+            await _db.SaveChangesAsync(CancellationToken.None);
 
             _logger.LogInformation("Executed step {StepId} in workflow {WorkflowId} ({DurationMs}ms)",
                 stepId, workflowId, stopwatch.ElapsedMilliseconds);
@@ -728,7 +729,18 @@ public sealed class WorkflowService : IWorkflowService
             step.CompletedAt = DateTimeOffset.UtcNow;
             step.Error = ex.Message;
             workflow.UpdatedAt = DateTimeOffset.UtcNow;
-            await _db.SaveChangesAsync(ct);
+
+            // CRITICAL: Use CancellationToken.None here to ensure the status update
+            // is saved even when the original token is cancelled. Without this,
+            // a cancelled HTTP request would leave the step stuck in "Running" status.
+            try
+            {
+                await _db.SaveChangesAsync(CancellationToken.None);
+            }
+            catch (Exception saveEx)
+            {
+                _logger.LogError(saveEx, "Failed to save step failure status for step {StepId}", stepId);
+            }
 
             _logger.LogError(ex, "Failed to execute step {StepId} in workflow {WorkflowId}", stepId, workflowId);
             throw;
