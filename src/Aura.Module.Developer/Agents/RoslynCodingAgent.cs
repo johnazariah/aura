@@ -185,6 +185,14 @@ public sealed class RoslynCodingAgent : IAgent
             - Follow .NET naming conventions (PascalCase for public, _camelCase for private fields)
             - Use modern C# features (records, pattern matching, nullable reference types)
             - Include XML documentation for public APIs
+
+            When writing tests:
+            - **CRITICAL: BEFORE writing any test file, use file.list to find existing *Tests.cs files**
+            - **Read at least one existing test file to learn the testing framework and conventions**
+            - Match the project's framework: xUnit uses [Fact]/[Theory], NUnit uses [Test]/[TestFixture]
+            - Use the same assertion style and mocking library as existing tests
+            - If you see [Fact] in existing tests, use [Fact] not [Test]
+            - If you see Assert.Equal(), don't use Assert.AreEqual()
             
             When modifying files:
             - Read the file first to understand its structure
