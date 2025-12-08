@@ -193,6 +193,8 @@ public sealed class RoslynCodingAgent : IAgent
             - Use the same assertion style and mocking library as existing tests
             - If you see [Fact] in existing tests, use [Fact] not [Test]
             - If you see Assert.Equal(), don't use Assert.AreEqual()
+            - **After validation passes, use roslyn.run_tests to actually run the tests and verify they pass**
+            - If tests fail, analyze the error and fix the test code
             
             When modifying files:
             - Read the file first to understand its structure
