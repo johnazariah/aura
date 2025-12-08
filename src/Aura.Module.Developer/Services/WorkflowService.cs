@@ -113,16 +113,30 @@ public sealed class WorkflowService : IWorkflowService
                 _logger.LogInformation("Created worktree at {Path} for workflow {WorkflowId}",
                     workflow.WorkspacePath, workflow.Id);
 
-                // Queue the worktree for background RAG indexing (non-blocking)
-                // Step execution will wait for indexing to complete if needed
-                var jobId = _backgroundIndexer.QueueDirectory(workflow.WorkspacePath, new RagIndexOptions
+                // Check if the repository is already indexed - if so, skip worktree indexing.
+                // This is safe because:
+                //   1. RAG queries use RepositoryPath (not WorkspacePath) as the source filter
+                //   2. Agents use direct file tools to read/write in the worktree
+                //   3. Step outputs are passed to subsequent steps via the prompt
+                var repoStats = await _ragService.GetDirectoryStatsAsync(repositoryPath, ct);
+                if (repoStats is not null && repoStats.FileCount > 0)
                 {
-                    IncludePatterns = new[] { "*.cs", "*.md", "*.json", "*.yaml", "*.yml", "*.ts", "*.tsx", "*.js", "*.jsx" },
-                    ExcludePatterns = new[] { "**/bin/**", "**/obj/**", "**/node_modules/**", "**/.git/**" },
-                    Recursive = true,
-                });
-                _logger.LogInformation("Queued worktree indexing job {JobId} for workflow {WorkflowId}",
-                    jobId, workflow.Id);
+                    _logger.LogInformation(
+                        "Repository {RepoPath} already indexed ({FileCount} files, {ChunkCount} chunks). Skipping worktree indexing.",
+                        repositoryPath, repoStats.FileCount, repoStats.ChunkCount);
+                }
+                else
+                {
+                    // Repository not indexed - queue worktree for background RAG indexing (non-blocking)
+                    var jobId = _backgroundIndexer.QueueDirectory(workflow.WorkspacePath, new RagIndexOptions
+                    {
+                        IncludePatterns = new[] { "*.cs", "*.md", "*.json", "*.yaml", "*.yml", "*.ts", "*.tsx", "*.js", "*.jsx" },
+                        ExcludePatterns = new[] { "**/bin/**", "**/obj/**", "**/node_modules/**", "**/.git/**" },
+                        Recursive = true,
+                    });
+                    _logger.LogInformation("Queued worktree indexing job {JobId} for workflow {WorkflowId}",
+                        jobId, workflow.Id);
+                }
             }
             else
             {
