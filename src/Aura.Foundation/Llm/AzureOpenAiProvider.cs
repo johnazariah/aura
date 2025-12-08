@@ -70,10 +70,11 @@ public sealed class AzureOpenAiProvider : ILlmProvider
         CancellationToken cancellationToken = default)
     {
         var deploymentName = ResolveDeploymentName(model);
+        var callStart = DateTime.UtcNow;
 
-        _logger.LogDebug(
-            "Azure OpenAI chat: deployment={Deployment}, messages={MessageCount}, temp={Temperature}",
-            deploymentName, messages.Count, temperature);
+        _logger.LogWarning(
+            "[LLM-DEBUG] Azure OpenAI call starting: deployment={Deployment}, messages={MessageCount}, timeout={Timeout}s",
+            deploymentName, messages.Count, _options.TimeoutSeconds);
 
         try
         {
@@ -95,10 +96,11 @@ public sealed class AzureOpenAiProvider : ILlmProvider
 
             var content = string.Join(string.Empty, completion.Content.Select(c => c.Text));
             var tokensUsed = (completion.Usage?.InputTokenCount ?? 0) + (completion.Usage?.OutputTokenCount ?? 0);
+            var callDuration = DateTime.UtcNow - callStart;
 
-            _logger.LogDebug(
-                "Azure OpenAI response: tokens={Tokens}, finish_reason={FinishReason}",
-                tokensUsed, completion.FinishReason);
+            _logger.LogWarning(
+                "[LLM-DEBUG] Azure OpenAI call completed in {Duration:F1}s: tokens={Tokens}, finish_reason={FinishReason}",
+                callDuration.TotalSeconds, tokensUsed, completion.FinishReason);
 
             return new LlmResponse(
                 Content: content,
@@ -106,7 +108,12 @@ public sealed class AzureOpenAiProvider : ILlmProvider
                 Model: deploymentName,
                 FinishReason: completion.FinishReason.ToString());
         }
-        catch (OperationCanceledException) { throw; }
+        catch (OperationCanceledException ex)
+        {
+            var callDuration = DateTime.UtcNow - callStart;
+            _logger.LogError("[LLM-DEBUG] Azure OpenAI call CANCELLED after {Duration:F1}s: {Message}", callDuration.TotalSeconds, ex.Message);
+            throw;
+        }
         catch (RequestFailedException ex) when (ex.Status == 401 || ex.Status == 403)
         {
             _logger.LogError(ex, "Azure OpenAI authentication failed");

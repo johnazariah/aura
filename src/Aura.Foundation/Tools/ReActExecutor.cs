@@ -129,12 +129,16 @@ public partial class ReActExecutor : IReActExecutor
         conversationHistory.AppendLine($"Task: {task}");
         conversationHistory.AppendLine();
 
+        _logger.LogWarning("[REACT-DEBUG] Starting ReAct loop with MaxSteps={MaxSteps}", options.MaxSteps);
+        var loopStartTime = DateTime.UtcNow;
+
         for (int step = 1; step <= options.MaxSteps; step++)
         {
             ct.ThrowIfCancellationRequested();
 
             var stepStart = DateTime.UtcNow;
-            _logger.LogDebug("ReAct step {Step}/{MaxSteps}", step, options.MaxSteps);
+            var elapsedSinceStart = DateTime.UtcNow - loopStartTime;
+            _logger.LogWarning("[REACT-DEBUG] Step {Step}/{MaxSteps} starting at {Elapsed:F1}s elapsed", step, options.MaxSteps, elapsedSinceStart.TotalSeconds);
 
             // Build prompt with conversation history
             var prompt = $"{systemPrompt}\n\n{conversationHistory}\nStep {step}:";
@@ -161,12 +165,14 @@ public partial class ReActExecutor : IReActExecutor
             }
 
             totalTokens += llmResponse.TokensUsed;
+            var llmDuration = DateTime.UtcNow - stepStart;
+            _logger.LogWarning("[REACT-DEBUG] Step {Step}: LLM call completed in {Duration:F1}s, tokens={Tokens}", step, llmDuration.TotalSeconds, llmResponse.TokensUsed);
 
             // Parse the response
             var parsed = ParseResponse(llmResponse.Content);
 
+            _logger.LogWarning("[REACT-DEBUG] Step {Step}: Action={Action}", step, parsed.Action);
             _logger.LogDebug("Thought: {Thought}", parsed.Thought);
-            _logger.LogDebug("Action: {Action}", parsed.Action);
             _logger.LogDebug("Action Input: {ActionInput}", parsed.ActionInput);
 
             string observation;
@@ -175,6 +181,8 @@ public partial class ReActExecutor : IReActExecutor
             if (parsed.Action.Equals("finish", StringComparison.OrdinalIgnoreCase) ||
                 parsed.Action.Equals("final_answer", StringComparison.OrdinalIgnoreCase))
             {
+                var totalElapsed = DateTime.UtcNow - loopStartTime;
+                _logger.LogWarning("[REACT-DEBUG] Agent finished at step {Step} after {Elapsed:F1}s total", step, totalElapsed.TotalSeconds);
                 steps.Add(new ReActStep
                 {
                     StepNumber = step,
@@ -269,7 +277,8 @@ public partial class ReActExecutor : IReActExecutor
         }
 
         // Max steps reached
-        _logger.LogWarning("ReAct reached max steps ({MaxSteps})", options.MaxSteps);
+        var totalDuration = DateTime.UtcNow - loopStartTime;
+        _logger.LogWarning("[REACT-DEBUG] ReAct reached max steps ({MaxSteps}) after {Elapsed:F1}s total", options.MaxSteps, totalDuration.TotalSeconds);
         return new ReActResult
         {
             Success = false,
@@ -283,10 +292,13 @@ public partial class ReActExecutor : IReActExecutor
 
     private async Task<string> ExecuteToolAsync(ToolDefinition tool, ToolInput input, CancellationToken ct)
     {
+        var toolStart = DateTime.UtcNow;
         try
         {
-            _logger.LogInformation("Executing tool: {ToolId}", tool.ToolId);
+            _logger.LogWarning("[REACT-DEBUG] Executing tool: {ToolId}", tool.ToolId);
             var result = await _toolRegistry.ExecuteAsync(input, ct);
+            var toolDuration = DateTime.UtcNow - toolStart;
+            _logger.LogWarning("[REACT-DEBUG] Tool {ToolId} completed in {Duration:F1}s, success={Success}", tool.ToolId, toolDuration.TotalSeconds, result.Success);
 
             if (result.Success)
             {

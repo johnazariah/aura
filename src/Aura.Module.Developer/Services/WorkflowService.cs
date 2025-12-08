@@ -627,12 +627,33 @@ public sealed class WorkflowService : IWorkflowService
                     RequireConfirmation = false, // Auto-approve for now (human reviews step output)
                 };
 
-                var reactResult = await _reactExecutor.ExecuteAsync(
-                    taskWithContext,
-                    availableTools,
-                    llmProvider,
-                    reactOptions,
-                    ct);
+                // Add overall timeout for step execution (10 minutes max)
+                const int StepTimeoutMinutes = 10;
+                using var stepTimeoutCts = new CancellationTokenSource(TimeSpan.FromMinutes(StepTimeoutMinutes));
+                using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, stepTimeoutCts.Token);
+
+                _logger.LogWarning("[STEP-DEBUG] Starting ReAct execution with {Timeout}min timeout", StepTimeoutMinutes);
+                var stepExecutionStart = DateTime.UtcNow;
+
+                ReActResult reactResult;
+                try
+                {
+                    reactResult = await _reactExecutor.ExecuteAsync(
+                        taskWithContext,
+                        availableTools,
+                        llmProvider,
+                        reactOptions,
+                        linkedCts.Token);
+                }
+                catch (OperationCanceledException) when (stepTimeoutCts.IsCancellationRequested)
+                {
+                    var elapsed = DateTime.UtcNow - stepExecutionStart;
+                    _logger.LogError("[STEP-DEBUG] Step execution TIMED OUT after {Elapsed:F1} minutes", elapsed.TotalMinutes);
+                    throw new TimeoutException($"Step execution timed out after {StepTimeoutMinutes} minutes");
+                }
+
+                var stepDuration = DateTime.UtcNow - stepExecutionStart;
+                _logger.LogWarning("[STEP-DEBUG] ReAct execution completed in {Duration:F1}s", stepDuration.TotalSeconds);
 
                 output = new AgentOutput(
                     Content: reactResult.FinalAnswer,
