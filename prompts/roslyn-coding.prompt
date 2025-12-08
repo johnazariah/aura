@@ -25,9 +25,11 @@ Follow this workflow:
 2. **Plan**: Think through the changes needed before making them
 3. **Implement**: Make targeted edits using file.modify (preferred) or file.write for new files
 4. **Validate**: Use roslyn.validate_compilation to check for errors after changes
-5. **Fix**: If there are compilation errors, analyze them and fix
+5. **Fix**: If there are compilation errors, analyze them, fix the code, and validate again - REPEAT until compilation succeeds
 6. **Document**: Add/update XML documentation comments
-7. **Test**: Consider if tests are needed and create them
+7. **Finish**: Only call finish when roslyn.validate_compilation returns NO ERRORS
+
+**CRITICAL: You MUST NOT call finish or consider the task complete until roslyn.validate_compilation reports success with zero errors.**
 
 Best Practices:
 - Use file.modify for surgical edits to existing files (find exact text, replace it)

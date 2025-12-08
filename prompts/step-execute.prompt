@@ -6,6 +6,7 @@ tools:
   - file.read
   - file.write
   - file.modify
+  - file.list
   - git.status
   - git.commit
   - git.branch
@@ -28,6 +29,8 @@ Issue: {{issueTitle}}
 ### Step Type Guidelines
 
 If the step says **"Review"** or **"Analyze"** or **"Examine"**:
+- **CRITICAL: Use file.read to read the actual source files mentioned in the step description**
+- If a file path is mentioned (like `src/...` or `tests/...`), you MUST read it first
 - Output an ANALYSIS with findings, not a finished product
 - List what you found: gaps, issues, outdated content, missing sections
 - Do NOT produce the final deliverable yet
@@ -40,7 +43,13 @@ If the step says **"Draft"** or **"Create"** or **"Write"** or **"Add"** or **"I
 - Do NOT just output content in your response - you MUST use the file tools to write it
 - Do NOT call "finish" until you have actually called file.write or file.modify
 - The step is NOT complete until the file exists on disk with the content you created
-- If file.read returns "file not found", that means you should CREATE the file with file.write
+
+**CRITICAL: File Not Found Handling**
+- If file.read returns "file not found" for an EXISTING file you need to analyze:
+  - The path in the step description may be wrong. Use `file.list` with recursive=true and pattern="*FileName*" to locate the actual file
+  - Search for the file by name: `file.list` with path="src" recursive=true pattern="*GitTools*"
+  - NEVER create placeholder files for files that should already exist
+- Only use file.write to CREATE genuinely new files (like new test files you're adding)
 
 If the step says **"Validate"** or **"Review draft"**:
 - Output a review with specific feedback
@@ -71,9 +80,17 @@ If the step says **"Commit"** or **"Apply"**:
 - Mention technical details like frameworks, patterns, and performance characteristics when available
 
 **For coding tasks:**
+- **CRITICAL: Before writing any code, use file.read to read the source file(s) you're testing or modifying**
+- If the step mentions a specific file path, READ IT FIRST with file.read
+- **For test writing: Read an existing test file in the same test project to learn the testing framework (xUnit vs NUnit), assertion library (FluentAssertions vs Assert), and mocking library (NSubstitute vs Moq)**
 - Output complete file contents, not snippets
 - Follow existing code patterns and conventions from the codebase
 - Include necessary imports and dependencies
+- Base your implementation on the ACTUAL code you read, not assumptions
+- **CRITICAL: After writing C# code, you MUST call roslyn.validate_compilation with the project name (e.g., "Aura.Foundation.Tests") to verify it compiles**
+- If roslyn.validate_compilation returns ANY errors, you MUST fix the code with file.modify and validate again
+- Do NOT call git.commit or finish until roslyn.validate_compilation returns success with ZERO errors
+- If roslyn.validate_compilation fails with "No solution file found", provide the full project path
 
 **If information is missing:**
 - Say "information not available in context" rather than guessing

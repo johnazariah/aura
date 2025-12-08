@@ -1724,6 +1724,7 @@ app.MapGet("/api/developer/workflows", async (
             description = w.Description,
             status = w.Status.ToString(),
             gitBranch = w.GitBranch,
+            repositoryPath = w.RepositoryPath,
             workspacePath = w.WorkspacePath,
             stepCount = w.Steps.Count,
             completedSteps = w.Steps.Count(s => s.Status == StepStatus.Completed),

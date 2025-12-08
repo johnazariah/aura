@@ -22,6 +22,7 @@ Create an implementation plan for this development task.
 2. **Combine related analysis into ONE step** - don't split "Review X", "Analyze X", "Examine X"
 3. **Final step must be an ACTION** - "Write README.md", "Apply changes", "Commit code"
 4. **Skip meta-steps** - No "solicit feedback", "validate with team", "implement CI checks"
+5. **Include specific file paths** - If a step analyzes or modifies a file, include the full path (e.g., `src/Aura.Foundation/Tools/GitTools.cs`)
 
 ### Good vs Bad Examples
 
@@ -53,10 +54,16 @@ GOOD (focused):
 - Step 4: Finalize (output the file)
 
 ### For Coding Tasks
-- Step 1: Understand (read relevant code, identify changes)
+- Step 1: Understand (read relevant code, identify changes) - **Include specific file paths to read**
 - Step 2: Implement (write the code)
 - Step 3: Validate (run tests, check compilation)
 - Step 4: Finalize (apply changes)
+
+### For Test Writing Tasks
+- Step 1: Analyze the source file (e.g., "Read and analyze src/Module/Class.cs") - **Use file.read on the exact file**
+- Step 2: Create test infrastructure (test project, mocks)
+- Step 3: Write unit tests (based on actual API from step 1)
+- Step 4: Run and validate tests
 
 ## Available Capabilities
 - coding: Code generation and implementation

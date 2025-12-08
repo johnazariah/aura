@@ -17,6 +17,9 @@ public record ValidateCompilationInput
     /// <summary>Project name to validate</summary>
     public required string ProjectName { get; init; }
 
+    /// <summary>Working directory to find the solution file (defaults to current directory)</summary>
+    public string? WorkingDirectory { get; init; }
+
     /// <summary>Include warnings (not just errors)</summary>
     public bool IncludeWarnings { get; init; }
 
@@ -99,7 +102,8 @@ public class ValidateCompilationTool : TypedToolBase<ValidateCompilationInput, V
     public override string Description =>
         "Validates that a project compiles without errors. Returns compilation diagnostics " +
         "including error messages and file locations. Use this after modifying code to " +
-        "verify there are no syntax or type errors.";
+        "verify there are no syntax or type errors. The working directory is set automatically " +
+        "to the workflow's repository path.";
 
     /// <inheritdoc/>
     public override IReadOnlyList<string> Categories => ["roslyn", "validation"];
@@ -120,11 +124,12 @@ public class ValidateCompilationTool : TypedToolBase<ValidateCompilationInput, V
             _workspace.ClearCache();
 
             // Find the project
-            var solutionPath = _workspace.FindSolutionFile(Environment.CurrentDirectory);
+            var searchDirectory = input.WorkingDirectory ?? Environment.CurrentDirectory;
+            var solutionPath = _workspace.FindSolutionFile(searchDirectory);
             if (solutionPath is null)
             {
                 return ToolResult<ValidateCompilationOutput>.Fail(
-                    "No solution file found in the current directory");
+                    $"No solution file found in '{searchDirectory}'");
             }
 
             var solution = await _workspace.GetSolutionAsync(solutionPath, ct);

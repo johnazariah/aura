@@ -29,6 +29,7 @@ public sealed class WorkflowService : IWorkflowService
     private readonly IPromptRegistry _promptRegistry;
     private readonly IGitWorktreeService _worktreeService;
     private readonly IRagService _ragService;
+    private readonly IBackgroundIndexer _backgroundIndexer;
     private readonly ICodebaseContextService _codebaseContextService;
     private readonly IToolRegistry _toolRegistry;
     private readonly IReActExecutor _reactExecutor;
@@ -45,6 +46,7 @@ public sealed class WorkflowService : IWorkflowService
         IPromptRegistry promptRegistry,
         IGitWorktreeService worktreeService,
         IRagService ragService,
+        IBackgroundIndexer backgroundIndexer,
         ICodebaseContextService codebaseContextService,
         IToolRegistry toolRegistry,
         IReActExecutor reactExecutor,
@@ -57,6 +59,7 @@ public sealed class WorkflowService : IWorkflowService
         _promptRegistry = promptRegistry;
         _worktreeService = worktreeService;
         _ragService = ragService;
+        _backgroundIndexer = backgroundIndexer;
         _codebaseContextService = codebaseContextService;
         _toolRegistry = toolRegistry;
         _reactExecutor = reactExecutor;
@@ -110,9 +113,16 @@ public sealed class WorkflowService : IWorkflowService
                 _logger.LogInformation("Created worktree at {Path} for workflow {WorkflowId}",
                     workflow.WorkspacePath, workflow.Id);
 
-                // TODO: Index asynchronously in background, not blocking workflow creation
-                // For now, indexing happens on-demand during Analyze phase
-                // await IndexWorktreeForRagAsync(workflow.WorkspacePath, ct);
+                // Queue the worktree for background RAG indexing (non-blocking)
+                // Step execution will wait for indexing to complete if needed
+                var jobId = _backgroundIndexer.QueueDirectory(workflow.WorkspacePath, new RagIndexOptions
+                {
+                    IncludePatterns = new[] { "*.cs", "*.md", "*.json", "*.yaml", "*.yml", "*.ts", "*.tsx", "*.js", "*.jsx" },
+                    ExcludePatterns = new[] { "**/bin/**", "**/obj/**", "**/node_modules/**", "**/.git/**" },
+                    Recursive = true,
+                });
+                _logger.LogInformation("Queued worktree indexing job {JobId} for workflow {WorkflowId}",
+                    jobId, workflow.Id);
             }
             else
             {
@@ -156,9 +166,18 @@ public sealed class WorkflowService : IWorkflowService
         if (!string.IsNullOrEmpty(repositoryPath))
         {
             // Normalize path for comparison (handle trailing slashes, case-insensitive on Windows)
-            var normalizedPath = repositoryPath.TrimEnd('\\', '/').Replace('/', '\\').ToLowerInvariant();
+            // Also handle double-escaped backslashes from JSON
+            var normalizedPath = repositoryPath
+                .Replace("\\\\", "\\")  // Handle double-escaped backslashes
+                .TrimEnd('\\', '/')
+                .Replace('/', '\\')
+                .ToLowerInvariant();
             query = query.Where(w => w.RepositoryPath != null &&
-                w.RepositoryPath.Replace("/", "\\").TrimEnd('\\').ToLower() == normalizedPath);
+                w.RepositoryPath
+                    .Replace("\\\\", "\\")  // Handle double-escaped backslashes in DB
+                    .Replace("/", "\\")
+                    .TrimEnd('\\')
+                    .ToLower() == normalizedPath);
         }
 
         return await query
