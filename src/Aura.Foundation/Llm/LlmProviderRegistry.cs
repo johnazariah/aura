@@ -76,9 +76,9 @@ public sealed class LlmOptions
     public string DefaultProvider { get; set; } = "azureopenai";
 
     /// <summary>
-    /// Gets or sets the default model.
+    /// Gets or sets the default model. Null means use provider's configured default.
     /// </summary>
-    public string DefaultModel { get; set; } = "qwen2.5-coder:7b";
+    public string? DefaultModel { get; set; }
 
     /// <summary>
     /// Gets or sets the default temperature.

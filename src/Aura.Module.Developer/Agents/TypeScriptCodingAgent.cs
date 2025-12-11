@@ -21,7 +21,6 @@ using Microsoft.Extensions.Logging;
 /// </summary>
 public sealed class TypeScriptCodingAgent : IAgent
 {
-    private const string DefaultModel = "qwen2.5-coder:7b";
     private const double DefaultTemperature = 0.2;
 
     private readonly IReActExecutor _reactExecutor;
@@ -57,7 +56,6 @@ public sealed class TypeScriptCodingAgent : IAgent
         Priority: 10,  // Specialist priority
         Languages: ["typescript", "javascript"],
         Provider: "ollama",
-        Model: DefaultModel,
         Temperature: DefaultTemperature,
         Tools:
         [

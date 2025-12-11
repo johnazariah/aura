@@ -56,7 +56,7 @@ public sealed class ConfigurableAgent : IAgent
     {
         _logger.LogInformation(
             "Executing agent {AgentId} with provider {Provider}, model {Model}",
-            AgentId, _definition.Provider, _definition.Model);
+            AgentId, _definition.Provider, _definition.Model ?? "(provider default)");
 
         // Get the LLM provider
         if (!_providerRegistry.TryGetProvider(_definition.Provider, out var provider) || provider is null)

@@ -439,9 +439,9 @@ public sealed class OllamaOptions
     /// <summary>Gets or sets the timeout in seconds for requests.</summary>
     public int TimeoutSeconds { get; set; } = 300;
 
-    /// <summary>Gets or sets the default model to use.</summary>
-    public string DefaultModel { get; set; } = "qwen2.5-coder:7b";
+    /// <summary>Gets or sets the default model to use. Required - must be set in configuration.</summary>
+    public required string DefaultModel { get; set; }
 
-    /// <summary>Gets or sets the default embedding model.</summary>
-    public string DefaultEmbeddingModel { get; set; } = "nomic-embed-text";
+    /// <summary>Gets or sets the default embedding model. Required - must be set in configuration.</summary>
+    public required string DefaultEmbeddingModel { get; set; }
 }

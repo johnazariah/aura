@@ -254,14 +254,14 @@ public sealed class AzureOpenAiOptions
     /// <summary>Configuration section name.</summary>
     public const string SectionName = "Aura:Llm:Providers:AzureOpenAI";
 
-    /// <summary>Gets or sets the Azure OpenAI endpoint URL.</summary>
-    public string Endpoint { get; set; } = string.Empty;
+    /// <summary>Gets or sets the Azure OpenAI endpoint URL. Required.</summary>
+    public required string Endpoint { get; set; }
 
-    /// <summary>Gets or sets the Azure OpenAI API key.</summary>
-    public string ApiKey { get; set; } = string.Empty;
+    /// <summary>Gets or sets the Azure OpenAI API key. Required.</summary>
+    public required string ApiKey { get; set; }
 
-    /// <summary>Gets or sets the default deployment name.</summary>
-    public string DefaultDeployment { get; set; } = "gpt-4o";
+    /// <summary>Gets or sets the default deployment name. Required - must be set in configuration.</summary>
+    public required string DefaultDeployment { get; set; }
 
     /// <summary>Gets or sets model-to-deployment mappings.</summary>
     /// <remarks>

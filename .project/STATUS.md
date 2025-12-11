@@ -1,6 +1,6 @@
 # Aura Project Status
 
-> **Last Updated**: 2025-12-05
+> **Last Updated**: 2025-12-11
 > **Branch**: main (up to date with origin)
 > **Overall Status**: ✅ MVP Complete
 
@@ -143,9 +143,30 @@ prompts/                      # Handlebars prompt templates
 | [plan/implementation/00-overview.md](plan/implementation/00-overview.md) | Implementation status and architecture |
 | [spec/12-developer-module.md](spec/12-developer-module.md) | Developer workflow design |
 | [spec/assisted-workflow-ui.md](spec/assisted-workflow-ui.md) | UI collaboration model |
-| [progress/2025-12-05.md](progress/2025-12-05.md) | Latest weekly progress |
+| [progress/2025-12-11.md](progress/2025-12-11.md) | Latest weekly progress |
 
-## Recent Changes (Dec 2-5, 2025)
+## Recent Changes (Dec 6-11, 2025)
+
+1. **Agent Test-Writing Improvements**
+   - Agents read existing tests to match framework and patterns
+   - Explicit test file path instructions
+   - Agents run tests after writing to verify correctness
+   - `roslyn-coding` agent gains `testing-csharp` and `testing` capabilities
+
+2. **LLM Provider Refinements**
+   - Default model fallback when agent doesn't specify a model
+   - Unified LLM configuration across providers
+
+3. **Git Tools for Agents** - Git status, diff, log, branch operations available as tools
+
+4. **Bug Fixes**
+   - Step status stuck in Running when HTTP request cancelled
+   - WorkingDirectory for Roslyn validation
+   - Background RAG indexing for faster workflow creation
+
+5. **Documentation** - Added API Cheat Sheet for quick reference
+
+## Previous Changes (Dec 2-5, 2025)
 
 1. **Assisted Workflow UI** - 5-phase implementation complete
    - Step cards with collapsible output/chat
@@ -174,8 +195,10 @@ prompts/                      # Handlebars prompt templates
 ### Pending Actions
 
 - [x] Push commits to origin ✅
+- [x] Update progress documentation ✅
 - [ ] Create MVP release tag
 - [ ] User testing with real workflows
+- [ ] Review and commit/discard 11 local uncommitted changes
 
 ## Principles
 

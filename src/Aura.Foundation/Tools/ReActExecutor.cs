@@ -147,8 +147,8 @@ public partial class ReActExecutor : IReActExecutor
             LlmResponse llmResponse;
             try
             {
-                var model = options.Model ?? "qwen2.5-coder:7b";
-                llmResponse = await llm.GenerateAsync(model, prompt, options.Temperature, ct);
+                // Pass model as-is (null = use provider's default from config)
+                llmResponse = await llm.GenerateAsync(options.Model, prompt, options.Temperature, ct);
             }
             catch (LlmException ex)
             {

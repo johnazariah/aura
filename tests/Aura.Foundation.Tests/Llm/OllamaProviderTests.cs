@@ -24,7 +24,8 @@ public class OllamaProviderTests
         {
             BaseUrl = "http://localhost:11434",
             TimeoutSeconds = 30,
-            DefaultModel = "test-model"
+            DefaultModel = "test-model",
+            DefaultEmbeddingModel = "test-embedding-model"
         };
     }
 

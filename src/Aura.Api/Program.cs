@@ -1471,7 +1471,7 @@ app.MapPost("/api/tools/react", async (
     var options = new Aura.Foundation.Tools.ReActOptions
     {
         MaxSteps = request.MaxSteps ?? 10,
-        Model = request.Model ?? "qwen2.5-coder:7b",
+        Model = request.Model, // null = use provider's default from config
         Temperature = request.Temperature ?? 0.2,
         WorkingDirectory = request.WorkingDirectory,
         AdditionalContext = request.Context,

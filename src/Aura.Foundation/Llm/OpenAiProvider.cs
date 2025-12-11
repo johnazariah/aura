@@ -217,11 +217,11 @@ public sealed class OpenAiOptions
     /// <summary>Configuration section name.</summary>
     public const string SectionName = "Aura:Llm:Providers:OpenAI";
 
-    /// <summary>Gets or sets the OpenAI API key.</summary>
-    public string ApiKey { get; set; } = string.Empty;
+    /// <summary>Gets or sets the OpenAI API key. Required.</summary>
+    public required string ApiKey { get; set; }
 
-    /// <summary>Gets or sets the default model.</summary>
-    public string DefaultModel { get; set; } = "gpt-4o";
+    /// <summary>Gets or sets the default model. Required - must be set in configuration.</summary>
+    public required string DefaultModel { get; set; }
 
     /// <summary>Gets or sets model name mappings.</summary>
     /// <remarks>
