@@ -6,21 +6,26 @@ This directory contains the architecture decision records for the Aura project.
 
 | ADR | Title | Status | Date |
 |-----|-------|--------|------|
-| [ADR-001](001-local-first-architecture.md) | Local-First, Privacy-Safe Architecture | Accepted | 2025-11-25 |
-| [ADR-002](002-greenfield-rewrite.md) | Greenfield Rewrite from hve-hack | Accepted | 2025-11-25 |
-| [ADR-003](003-composable-modules.md) | Composable Module System | Accepted | 2025-11-25 |
-| [ADR-004](004-markdown-agent-definitions.md) | Markdown Agent Definitions | Accepted | 2025-11-25 |
-| [ADR-005](005-aspire-orchestration.md) | .NET Aspire for Development Orchestration | Accepted | 2025-11-26 |
-| [ADR-006](006-foundation-vs-module-data.md) | Foundation vs Module Data Separation | Accepted | 2025-11-27 |
-| [ADR-007](007-provider-registry-pattern.md) | LLM Provider Registry Pattern | Accepted | 2025-11-26 |
-| [ADR-008](008-local-rag-foundation.md) | Local RAG as Foundation Component | Accepted | 2025-11-27 |
-| [ADR-009](009-lessons-from-previous-attempts.md) | Lessons Learned from Previous Attempts | Accepted | 2025-11-27 |
-| [ADR-010](010-no-external-agent-registration.md) | No External Agent Registration | Accepted | 2025-11-27 |
-| [ADR-011](011-two-tier-capability-model.md) | Two-Tier Capability Model | Accepted | 2025-11-27 |
-| [ADR-012](012-tool-using-agents.md) | Tool-Using Agents with ReAct Loop | Accepted | 2025-12-02 |
-| [ADR-013](013-strongly-typed-agent-contracts.md) | Strongly-Typed Agent Contracts | Accepted | 2025-12-02 |
-| [ADR-014](014-developer-module-roslyn-tools.md) | Developer Module Roslyn Tools | Accepted | 2025-12-02 |
-| [ADR-015](015-graph-rag-for-code.md) | Graph RAG for Code Understanding | Accepted | 2025-12-02 |
+| [ADR-001](001-local-first-architecture.md) | Local-First, Privacy-Safe Architecture | ✅ Accepted | 2025-11-25 |
+| [ADR-002](002-greenfield-rewrite.md) | Greenfield Rewrite from hve-hack | ✅ Accepted | 2025-11-25 |
+| [ADR-003](003-composable-modules.md) | Composable Module System | ✅ Accepted | 2025-11-25 |
+| [ADR-004](004-markdown-agent-definitions.md) | Markdown Agent Definitions | ✅ Accepted | 2025-11-25 |
+| [ADR-005](005-aspire-orchestration.md) | .NET Aspire for Development Orchestration | ✅ Accepted | 2025-11-26 |
+| [ADR-006](006-foundation-vs-module-data.md) | Foundation vs Module Data Separation | ✅ Accepted | 2025-11-27 |
+| [ADR-007](007-provider-registry-pattern.md) | LLM Provider Registry Pattern | ✅ Accepted | 2025-11-26 |
+| [ADR-008](008-local-rag-foundation.md) | Local RAG as Foundation Component | ✅ Accepted | 2025-11-27 |
+| [ADR-009](009-lessons-from-previous-attempts.md) | Lessons Learned from Previous Attempts | ✅ Accepted | 2025-11-27 |
+| [ADR-010](010-no-external-agent-registration.md) | No External Agent Registration | ✅ Accepted | 2025-11-27 |
+| [ADR-011](011-two-tier-capability-model.md) | Two-Tier Capability Model | ✅ Accepted | 2025-11-27 |
+| [ADR-012](012-tool-using-agents.md) | Tool-Using Agents with ReAct Loop | ✅ Accepted | 2025-12-02 |
+| [ADR-013](013-strongly-typed-agent-contracts.md) | Strongly-Typed Agent Contracts | ✅ Accepted | 2025-12-02 |
+| [ADR-014](014-developer-module-roslyn-tools.md) | Developer Module Roslyn Tools | ✅ Accepted | 2025-12-02 |
+| [ADR-015](015-graph-rag-for-code.md) | Graph RAG for Code Understanding | ✅ Accepted | 2025-12-02 |
+| [ADR-016](016-configurable-rag-queries.md) | Configurable RAG Queries | ✅ Accepted | 2025-12-02 |
+| [ADR-017](017-case-insensitive-paths.md) | Case-Insensitive Paths | ✅ Accepted | 2025-12-02 |
+| [ADR-018](018-prompt-template-architecture.md) | Prompt Template Architecture | ✅ Accepted | 2025-12-02 |
+| [ADR-019](019-codebase-context-service.md) | Codebase Context Service | ✅ Accepted | 2025-12-02 |
+| [ADR-020](020-test-project-separation.md) | Test Project Separation | ✅ Accepted | 2025-11-27 |
 
 ## ADR Template
 
