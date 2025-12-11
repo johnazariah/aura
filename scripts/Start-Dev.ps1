@@ -1,19 +1,20 @@
 <#
 .SYNOPSIS
-    Start the complete Aura demo environment.
+    Start the complete Aura development environment.
 
 .DESCRIPTION
-    This script:
+    This script sets up the full development environment:
     1. Checks that Ollama is running (required for LLM)
-    2. Builds the .NET solution
-    3. Starts the Aspire AppHost (PostgreSQL + API) in background
-    4. Builds and installs the VS Code extension
-    5. Opens a new VS Code window for testing
+    2. Checks container runtime (Podman/Docker for PostgreSQL)
+    3. Builds the .NET solution
+    4. Starts the Aspire AppHost (PostgreSQL + API) in background
+    5. Builds and installs the VS Code extension
+    6. Opens a new VS Code window for testing
 
     Press Ctrl+C to stop all services.
 
 .PARAMETER SkipOllamaCheck
-    Skip the Ollama availability check
+    Skip the Ollama availability check (use if using Azure OpenAI)
 
 .PARAMETER SkipBuild
     Skip the .NET build step (use if already built)
@@ -22,13 +23,13 @@
     Path to open in the test VS Code window (default: current project)
 
 .EXAMPLE
-    .\scripts\Start-Demo.ps1
+    .\scripts\Start-Dev.ps1
 
 .EXAMPLE
-    .\scripts\Start-Demo.ps1 -SkipBuild
+    .\scripts\Start-Dev.ps1 -SkipBuild
 
 .EXAMPLE
-    .\scripts\Start-Demo.ps1 -TestWorkspace "C:\my-project"
+    .\scripts\Start-Dev.ps1 -TestWorkspace "C:\my-project"
 #>
 
 [CmdletBinding()]
@@ -145,7 +146,7 @@ try {
     Write-Host ""
     Write-Host "  ╔═══════════════════════════════════════════════════════════╗" -ForegroundColor Magenta
     Write-Host "  ║                                                           ║" -ForegroundColor Magenta
-    Write-Host "  ║              🌟  AURA DEMO ENVIRONMENT  🌟                ║" -ForegroundColor Magenta
+    Write-Host "  ║            🌟  AURA DEV ENVIRONMENT  🌟                   ║" -ForegroundColor Magenta
     Write-Host "  ║                                                           ║" -ForegroundColor Magenta
     Write-Host "  ║   Local-first AI for knowledge work                       ║" -ForegroundColor Magenta
     Write-Host "  ║                                                           ║" -ForegroundColor Magenta

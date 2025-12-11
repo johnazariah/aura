@@ -5,19 +5,73 @@
 .DESCRIPTION
     Runs the Aura API on http://localhost:5300 in a new terminal window.
     The API runs in its own process so you can continue working in this terminal.
+    
+    Prerequisites:
+    - Podman (Windows) or Docker must be running for PostgreSQL
+    - Ollama should be running for LLM inference (optional if using Azure OpenAI)
 
 .EXAMPLE
     .\scripts\Start-Api.ps1
+
+.EXAMPLE
+    .\scripts\Start-Api.ps1 -InProcess  # Run in current terminal
 #>
 
 [CmdletBinding()]
 param(
-    [switch]$InProcess  # Run in current process instead of new window
+    [switch]$InProcess,  # Run in current process instead of new window
+    [switch]$SkipChecks  # Skip prerequisite checks
 )
 
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $appHostProject = Join-Path $projectRoot "src/Aura.AppHost"
+
+function Test-ContainerRuntime {
+    # Check Podman first (preferred on Windows per project guidelines)
+    try {
+        $null = podman info 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            return @{ Available = $true; Runtime = "Podman" }
+        }
+    }
+    catch { }
+    
+    # Fall back to Docker
+    try {
+        $null = docker info 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            return @{ Available = $true; Runtime = "Docker" }
+        }
+    }
+    catch { }
+    
+    return @{ Available = $false; Runtime = $null }
+}
+
+# Check prerequisites unless skipped
+if (-not $SkipChecks) {
+    Write-Host "Checking prerequisites..." -ForegroundColor Gray
+    
+    $containerCheck = Test-ContainerRuntime
+    if (-not $containerCheck.Available) {
+        Write-Host ""
+        Write-Host "ERROR: No container runtime available!" -ForegroundColor Red
+        Write-Host ""
+        Write-Host "Aspire needs Podman or Docker to run PostgreSQL." -ForegroundColor Yellow
+        Write-Host ""
+        Write-Host "For Podman (recommended on Windows):" -ForegroundColor White
+        Write-Host "  podman machine start" -ForegroundColor Cyan
+        Write-Host ""
+        Write-Host "For Docker:" -ForegroundColor White
+        Write-Host "  Start Docker Desktop" -ForegroundColor Cyan
+        Write-Host ""
+        Write-Host "Then run this script again, or use -SkipChecks to bypass." -ForegroundColor Gray
+        exit 1
+    }
+    
+    Write-Host "  Container runtime: $($containerCheck.Runtime)" -ForegroundColor Green
+}
 
 if ($InProcess) {
     # Run in current terminal (blocking)
