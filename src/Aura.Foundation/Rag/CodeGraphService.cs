@@ -18,12 +18,6 @@ public class CodeGraphService : ICodeGraphService
     private readonly ILogger<CodeGraphService> _logger;
 
     /// <summary>
-    /// Normalizes a path for consistent storage and lookup (lowercase, forward slashes).
-    /// </summary>
-    private static string NormalizePath(string path) =>
-        path.Replace('\\', '/').ToLowerInvariant();
-
-    /// <summary>
     /// Initializes a new instance of the <see cref="CodeGraphService"/> class.
     /// </summary>
     /// <param name="dbContext">The database context.</param>
@@ -51,7 +45,7 @@ public class CodeGraphService : ICodeGraphService
 
         if (!string.IsNullOrEmpty(workspacePath))
         {
-            var normalizedPath = NormalizePath(workspacePath);
+            var normalizedPath = PathNormalizer.Normalize(workspacePath);
             query = query.Where(n => EF.Functions.ILike(n.WorkspacePath!, normalizedPath));
         }
 
@@ -75,7 +69,7 @@ public class CodeGraphService : ICodeGraphService
 
         if (!string.IsNullOrEmpty(workspacePath))
         {
-            var normalizedPath = NormalizePath(workspacePath);
+            var normalizedPath = PathNormalizer.Normalize(workspacePath);
             query = query.Where(n => EF.Functions.ILike(n.WorkspacePath!, normalizedPath));
         }
 
@@ -117,7 +111,7 @@ public class CodeGraphService : ICodeGraphService
 
         if (!string.IsNullOrEmpty(workspacePath))
         {
-            var normalizedPath = NormalizePath(workspacePath);
+            var normalizedPath = PathNormalizer.Normalize(workspacePath);
             query = query.Where(n => EF.Functions.ILike(n.WorkspacePath!, normalizedPath));
         }
 
@@ -158,7 +152,7 @@ public class CodeGraphService : ICodeGraphService
 
         if (!string.IsNullOrEmpty(workspacePath))
         {
-            var normalizedPath = NormalizePath(workspacePath);
+            var normalizedPath = PathNormalizer.Normalize(workspacePath);
             query = query.Where(n => EF.Functions.ILike(n.WorkspacePath!, normalizedPath));
         }
 
@@ -187,7 +181,7 @@ public class CodeGraphService : ICodeGraphService
 
         if (!string.IsNullOrEmpty(workspacePath))
         {
-            var normalizedPath = NormalizePath(workspacePath);
+            var normalizedPath = PathNormalizer.Normalize(workspacePath);
             query = query.Where(n => EF.Functions.ILike(n.WorkspacePath!, normalizedPath));
         }
 
@@ -216,7 +210,7 @@ public class CodeGraphService : ICodeGraphService
 
         if (!string.IsNullOrEmpty(workspacePath))
         {
-            var normalizedPath = NormalizePath(workspacePath);
+            var normalizedPath = PathNormalizer.Normalize(workspacePath);
             query = query.Where(n => EF.Functions.ILike(n.WorkspacePath!, normalizedPath));
         }
 
@@ -241,7 +235,7 @@ public class CodeGraphService : ICodeGraphService
 
         if (!string.IsNullOrEmpty(workspacePath))
         {
-            var normalizedPath = NormalizePath(workspacePath);
+            var normalizedPath = PathNormalizer.Normalize(workspacePath);
             query = query.Where(n => EF.Functions.ILike(n.WorkspacePath!, normalizedPath));
         }
 
@@ -272,7 +266,7 @@ public class CodeGraphService : ICodeGraphService
 
         if (!string.IsNullOrEmpty(workspacePath))
         {
-            var normalizedPath = NormalizePath(workspacePath);
+            var normalizedPath = PathNormalizer.Normalize(workspacePath);
             query = query.Where(n => EF.Functions.ILike(n.WorkspacePath!, normalizedPath));
         }
 
@@ -284,7 +278,7 @@ public class CodeGraphService : ICodeGraphService
     {
         _logger.LogInformation("Clearing code graph for workspace {WorkspacePath}", workspacePath);
 
-        var normalizedPath = NormalizePath(workspacePath);
+        var normalizedPath = PathNormalizer.Normalize(workspacePath);
 
         // Delete edges first (foreign key constraints)
         var edgesToDelete = await _dbContext.CodeEdges

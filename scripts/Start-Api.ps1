@@ -28,7 +28,19 @@ $projectRoot = Split-Path -Parent $PSScriptRoot
 $appHostProject = Join-Path $projectRoot "src/Aura.AppHost"
 
 function Test-ContainerRuntime {
-    # Check Podman first (preferred on Windows per project guidelines)
+    # Check if Docker-compatible named pipe exists (Podman or Docker)
+    # This is what Aspire actually uses, so it's the most reliable check
+    $dockerPipe = Get-ChildItem "\\.\pipe\" -ErrorAction SilentlyContinue | Where-Object Name -eq "docker_engine"
+    if ($dockerPipe) {
+        # Determine which runtime provides the pipe
+        $podmanMachine = wsl -l -q 2>$null | Where-Object { $_ -match "podman" }
+        if ($podmanMachine) {
+            return @{ Available = $true; Runtime = "Podman" }
+        }
+        return @{ Available = $true; Runtime = "Docker" }
+    }
+    
+    # Fallback: try CLI commands
     try {
         $null = podman info 2>&1
         if ($LASTEXITCODE -eq 0) {
@@ -37,7 +49,6 @@ function Test-ContainerRuntime {
     }
     catch { }
     
-    # Fall back to Docker
     try {
         $null = docker info 2>&1
         if ($LASTEXITCODE -eq 0) {

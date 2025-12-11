@@ -80,18 +80,31 @@ function Test-OllamaRunning {
 }
 
 function Test-ContainerRuntime {
-    # Check Podman first (preferred on Windows per project guidelines)
+    # Check if Docker-compatible named pipe exists (Podman or Docker)
+    # This is what Aspire actually uses, so it's the most reliable check
+    $dockerPipe = Get-ChildItem "\\.\pipe\" -ErrorAction SilentlyContinue | Where-Object Name -eq "docker_engine"
+    if ($dockerPipe) {
+        # Determine which runtime provides the pipe
+        # Check for Podman machine first
+        $podmanMachine = wsl -l -q 2>$null | Where-Object { $_ -match "podman" }
+        if ($podmanMachine) {
+            return @{ Available = $true; Runtime = "podman" }
+        }
+        # Otherwise assume Docker
+        return @{ Available = $true; Runtime = "docker" }
+    }
+    
+    # Fallback: try CLI commands (may be slow/unreliable)
     try {
-        $podmanResult = podman info 2>&1
+        $null = podman info 2>&1
         if ($LASTEXITCODE -eq 0) {
             return @{ Available = $true; Runtime = "podman" }
         }
     }
     catch { }
     
-    # Fall back to Docker
     try {
-        $dockerResult = docker info 2>&1
+        $null = docker info 2>&1
         if ($LASTEXITCODE -eq 0) {
             return @{ Available = $true; Runtime = "docker" }
         }

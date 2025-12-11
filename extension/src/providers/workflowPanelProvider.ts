@@ -594,15 +594,32 @@ export class WorkflowPanelProvider {
 
             panel.webview.postMessage({ type: 'loading', action: 'index' });
 
-            // Use vscode progress in status bar
+            // Start background indexing and poll for completion
+            const job = await this.apiService.startBackgroundIndex(repoPath);
+
             await vscode.window.withProgress(
                 {
-                    location: vscode.ProgressLocation.Window,
-                    title: '$(sync~spin) Indexing codebase...'
+                    location: vscode.ProgressLocation.Notification,
+                    title: 'Indexing codebase',
+                    cancellable: false
                 },
                 async (progress) => {
-                    progress.report({ message: repoPath });
-                    await this.apiService.indexDirectory(repoPath);
+                    progress.report({ message: `Starting: ${repoPath}` });
+
+                    // Poll for completion
+                    let status = await this.apiService.getBackgroundJobStatus(job.jobId);
+                    while (status.state === 'Queued' || status.state === 'Processing') {
+                        await new Promise(resolve => setTimeout(resolve, 1000)); // Poll every second
+                        status = await this.apiService.getBackgroundJobStatus(job.jobId);
+                        progress.report({
+                            message: `${status.processedItems}/${status.totalItems} files (${status.progressPercent}%)`,
+                            increment: status.progressPercent > 0 ? 1 : 0
+                        });
+                    }
+
+                    if (status.state === 'Failed') {
+                        throw new Error(status.error || 'Indexing failed');
+                    }
                 }
             );
 
@@ -624,16 +641,32 @@ export class WorkflowPanelProvider {
                 return;
             }
 
-            // First index
+            // First index using background indexing
             panel.webview.postMessage({ type: 'loading', action: 'index' });
+            const job = await this.apiService.startBackgroundIndex(repoPath);
+
             await vscode.window.withProgress(
                 {
-                    location: vscode.ProgressLocation.Window,
-                    title: '$(sync~spin) Indexing codebase...'
+                    location: vscode.ProgressLocation.Notification,
+                    title: 'Indexing codebase',
+                    cancellable: false
                 },
                 async (progress) => {
-                    progress.report({ message: repoPath });
-                    await this.apiService.indexDirectory(repoPath);
+                    progress.report({ message: `Starting: ${repoPath}` });
+
+                    let status = await this.apiService.getBackgroundJobStatus(job.jobId);
+                    while (status.state === 'Queued' || status.state === 'Processing') {
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                        status = await this.apiService.getBackgroundJobStatus(job.jobId);
+                        progress.report({
+                            message: `${status.processedItems}/${status.totalItems} files (${status.progressPercent}%)`,
+                            increment: status.progressPercent > 0 ? 1 : 0
+                        });
+                    }
+
+                    if (status.state === 'Failed') {
+                        throw new Error(status.error || 'Indexing failed');
+                    }
                 }
             );
 

@@ -27,12 +27,6 @@ public class CodeGraphIndexer : ICodeGraphIndexer
     private readonly ILogger<CodeGraphIndexer> _logger;
 
     /// <summary>
-    /// Normalizes a path for consistent storage (lowercase, forward slashes).
-    /// </summary>
-    private static string NormalizePath(string path) =>
-        path.Replace('\\', '/').ToLowerInvariant();
-
-    /// <summary>
     /// Initializes a new instance of the <see cref="CodeGraphIndexer"/> class.
     /// </summary>
     public CodeGraphIndexer(
@@ -60,7 +54,7 @@ public class CodeGraphIndexer : ICodeGraphIndexer
         var typeCount = 0;
 
         // Normalize workspace path for consistent storage (lowercase, forward slashes)
-        var normalizedWorkspacePath = NormalizePath(workspacePath);
+        var normalizedWorkspacePath = Aura.Foundation.Rag.PathNormalizer.Normalize(workspacePath);
 
         try
         {
@@ -170,7 +164,7 @@ public class CodeGraphIndexer : ICodeGraphIndexer
         string workspacePath,
         CancellationToken cancellationToken = default)
     {
-        var normalizedPath = NormalizePath(workspacePath);
+        var normalizedPath = Aura.Foundation.Rag.PathNormalizer.Normalize(workspacePath);
         _logger.LogInformation("Re-indexing workspace {WorkspacePath}", normalizedPath);
 
         // Clear existing graph
