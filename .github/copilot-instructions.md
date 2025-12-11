@@ -8,6 +8,7 @@
 2. **Design before coding** - Seek approval before implementing; prefer planning over spontaneous coding
 3. **User controls the server** - Never start/stop the API server; user runs `Start-Api` manually
 4. **Document all decisions** - Update `.project/STATUS.md` after significant changes
+5. **Complete features properly** - Follow the ceremony in `.github/prompts/aura.complete-feature.prompt.md`
 
 ## Quick Context
 
@@ -18,10 +19,10 @@ Aura is a **local-first, privacy-safe AI foundation** for knowledge work. The De
 | Document | Purpose |
 |----------|---------|
 | `.project/STATUS.md` | **Start here** - Current state, feature inventory, open items |
-| `.project/ARCHITECTURE-QUICK-REFERENCE.md` | API endpoints, file locations, debugging |
-| `.project/spec/*.md` | Feature specifications (read before implementing) |
+| `.project/features/README.md` | Feature index with completion dates |
+| `.project/reference/` | API cheat sheet, architecture, coding standards |
 | `.project/adr/*.md` | Architecture decisions |
-| `.project/standards/coding-standards.md` | Code style and patterns |
+| `.github/prompts/aura.complete-feature.prompt.md` | **Ceremony for completing features** |
 
 ## Development Protocol
 
@@ -93,7 +94,20 @@ See `.project/standards/coding-standards.md`. Key rules:
 | API endpoints | `src/Aura.Api/Program.cs` | Single file for all endpoints |
 | Agent behavior | `agents/*.md` or `prompts/*.prompt` | Hot-reloadable |
 | Extension UI | `extension/src/providers/` | Run Build-Extension after |
-| Documentation | `.project/STATUS.md` | Keep current |
+| New feature | `.project/features/upcoming/` | Create spec first |
+| Complete feature | `.project/features/completed/` | **Follow ceremony** (see below) |
+
+## Feature Completion Ceremony
+
+When a feature is complete, you MUST follow the ceremony in `.github/prompts/aura.complete-feature.prompt.md`:
+
+1. Move file from `features/upcoming/` → `features/completed/`
+2. Add header with `**Status:** ✅ Complete` and `**Completed:** YYYY-MM-DD`
+3. Update `features/README.md` index with link and date
+4. Commit with `docs(features): complete {feature-name}`
+
+**Validation**: Run `.\scripts\Validate-Features.ps1` to check conventions.
+This script can be installed as a pre-commit hook: `.\scripts\Validate-Features.ps1 -Install`
 
 ## Container Runtime
 
