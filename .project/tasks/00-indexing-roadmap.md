@@ -5,7 +5,8 @@
 | Task | Status | Priority |
 |------|--------|----------|
 | TreeSitter Basic Extraction | ✅ Complete | - |
-| TreeSitter Semantic Enrichment | 🔄 In Progress | High |
+| TreeSitter Semantic Enrichment | ✅ Complete | - |
+| Dependency Graph Edges | 🔲 Not Started | High |
 | Smart Content (LLM Summaries) | 🔲 Not Started | Medium |
 | Content File Indexing | 🔲 Not Started | Low |
 | Cross-File Enrichment | 🔲 Not Started | Low |
@@ -72,27 +73,35 @@ This enables:
 - Basic chunk extraction (text, symbol, type, lines)
 - Delete redundant regex ingesters
 
-### Phase 2: TreeSitter Semantic Enrichment 🎯 NEXT
+### Phase 2: TreeSitter Semantic Enrichment ✅ DONE
 
-**Goal**: Extract signatures, docstrings, parameters, types
+**Implemented** in commit `52ebe83`:
+
+- Extended `SemanticChunk` with semantic fields
+- Language-specific extractors for:
+  - ✅ Python (docstrings, type hints, decorators, imports)
+  - ✅ TypeScript/JavaScript (JSDoc, type annotations, imports)
+  - ✅ Go (doc comments, parameters, imports)
+  - ✅ Rust (/// comments, attributes, imports)
+  - ✅ Java (Javadoc, annotations, imports)
+- 17 unit tests covering all extraction
+
+**Files modified:**
+
+- `src/Aura.Foundation/Rag/ISemanticIndexer.cs` - Added fields
+- `src/Aura.Module.Developer/Agents/TreeSitterIngesterAgent.cs` - Extractors
+
+### Phase 3: Dependency Graph Edges 🎯 NEXT
+
+**Goal**: Use extracted imports to create graph edges
 
 Tasks:
 
-1. Extend `SemanticChunk` with new fields
-2. Create language-specific extractors for:
-   - Python (docstrings, type hints, decorators)
-   - TypeScript/JavaScript (JSDoc, type annotations)
-   - Go (doc comments, struct tags)
-   - Rust (/// comments, lifetime annotations)
-   - Java (Javadoc, annotations)
-3. Extract imports for dependency graph
+1. Create `Imports` edge type in CodeGraph
+2. Connect files to their imported modules
+3. Enable "find all files that import X" queries
 
-**Files to modify:**
-
-- `src/Aura.Foundation/Rag/SemanticChunk.cs` - Add fields
-- `src/Aura.Module.Developer/Agents/TreeSitterIngesterAgent.cs` - Add extractors
-
-### Phase 3: Smart Content (LLM Summaries)
+### Phase 4: Smart Content (LLM Summaries)
 
 **Goal**: LLM-generated summaries for undocumented code
 
