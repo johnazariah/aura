@@ -85,6 +85,17 @@ public class GitService : IGitService
         return GitResult<Unit>.Ok(Unit.Value);
     }
 
+    public async Task<GitResult<Unit>> DeleteBranchAsync(string repoPath, string branchName, bool force = false, CancellationToken ct = default)
+    {
+        var flag = force ? "-D" : "-d";
+        var result = await RunGitAsync(repoPath, ["branch", flag, branchName], ct);
+        if (!result.Success)
+            return GitResult<Unit>.Fail(result.StandardError);
+        
+        _logger.LogInformation("Deleted branch {Branch} in {Repo}", branchName, repoPath);
+        return GitResult<Unit>.Ok(Unit.Value);
+    }
+
     public async Task<GitResult<string>> CommitAsync(string repoPath, string message, CancellationToken ct = default)
     {
         // Stage all changes
@@ -181,6 +192,118 @@ public class GitService : IGitService
             UntrackedFiles = untracked,
             StagedFiles = staged
         });
+    }
+
+    public async Task<GitResult<string>> GetRemoteUrlAsync(string repoPath, CancellationToken ct = default)
+    {
+        var result = await RunGitAsync(repoPath, ["remote", "get-url", "origin"], ct);
+        if (!result.Success)
+            return GitResult<string>.Fail(result.StandardError);
+        
+        return GitResult<string>.Ok(result.StandardOutput.Trim());
+    }
+
+    public async Task<GitResult<PullRequestInfo>> CreatePullRequestAsync(
+        string repoPath,
+        string title,
+        string? body = null,
+        string? baseBranch = null,
+        bool draft = true,
+        CancellationToken ct = default)
+    {
+        // Build gh pr create command
+        var args = new List<string> { "pr", "create", "--title", title };
+        
+        if (!string.IsNullOrEmpty(body))
+        {
+            args.AddRange(["--body", body]);
+        }
+        
+        if (!string.IsNullOrEmpty(baseBranch))
+        {
+            args.AddRange(["--base", baseBranch]);
+        }
+        
+        if (draft)
+        {
+            args.Add("--draft");
+        }
+        
+        // Run gh command
+        var result = await _process.RunAsync("gh", args.ToArray(), new ProcessOptions
+        {
+            WorkingDirectory = repoPath,
+            Timeout = TimeSpan.FromSeconds(60)
+        }, ct);
+        
+        if (!result.Success)
+        {
+            var error = !string.IsNullOrWhiteSpace(result.StandardError) 
+                ? result.StandardError 
+                : result.StandardOutput;
+            
+            // Check for common errors
+            if (error.Contains("gh auth login", StringComparison.OrdinalIgnoreCase))
+            {
+                return GitResult<PullRequestInfo>.Fail("GitHub CLI not authenticated. Run 'gh auth login' first.");
+            }
+            
+            if (error.Contains("already exists", StringComparison.OrdinalIgnoreCase))
+            {
+                // Try to get existing PR URL
+                var prUrlResult = await GetExistingPullRequestUrlAsync(repoPath, ct);
+                if (prUrlResult.Success && prUrlResult.Value is not null)
+                {
+                    return GitResult<PullRequestInfo>.Ok(new PullRequestInfo
+                    {
+                        Number = ExtractPrNumber(prUrlResult.Value),
+                        Url = prUrlResult.Value,
+                        State = "open",
+                        IsDraft = draft,
+                        Title = title
+                    });
+                }
+                return GitResult<PullRequestInfo>.Fail("A pull request already exists for this branch.");
+            }
+            
+            return GitResult<PullRequestInfo>.Fail(error);
+        }
+        
+        // gh pr create outputs the PR URL on success
+        var prUrl = result.StandardOutput.Trim();
+        _logger.LogInformation("Created PR: {Url}", prUrl);
+        
+        return GitResult<PullRequestInfo>.Ok(new PullRequestInfo
+        {
+            Number = ExtractPrNumber(prUrl),
+            Url = prUrl,
+            State = "open",
+            IsDraft = draft,
+            Title = title
+        });
+    }
+    
+    private async Task<GitResult<string>> GetExistingPullRequestUrlAsync(string repoPath, CancellationToken ct)
+    {
+        var result = await _process.RunAsync("gh", ["pr", "view", "--json", "url", "-q", ".url"], new ProcessOptions
+        {
+            WorkingDirectory = repoPath,
+            Timeout = TimeSpan.FromSeconds(30)
+        }, ct);
+        
+        if (!result.Success)
+            return GitResult<string>.Fail(result.StandardError);
+        
+        return GitResult<string>.Ok(result.StandardOutput.Trim());
+    }
+    
+    private static int ExtractPrNumber(string prUrl)
+    {
+        // URL format: https://github.com/owner/repo/pull/123
+        var parts = prUrl.Split('/');
+        if (parts.Length > 0 && int.TryParse(parts[^1], out var number))
+            return number;
+        return 0;
     }
 
     private async Task<ProcessResult> RunGitAsync(string workDir, string[] args, CancellationToken ct)

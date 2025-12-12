@@ -24,6 +24,9 @@ public interface IGitService
     /// <summary>Switch to an existing branch</summary>
     Task<GitResult<Unit>> CheckoutAsync(string repoPath, string branchName, CancellationToken ct = default);
     
+    /// <summary>Delete a local branch</summary>
+    Task<GitResult<Unit>> DeleteBranchAsync(string repoPath, string branchName, bool force = false, CancellationToken ct = default);
+    
     /// <summary>Stage and commit all changes</summary>
     Task<GitResult<string>> CommitAsync(string repoPath, string message, CancellationToken ct = default);
     
@@ -35,6 +38,18 @@ public interface IGitService
     
     /// <summary>Get repository status</summary>
     Task<GitResult<RepositoryStatus>> GetStatusAsync(string repoPath, CancellationToken ct = default);
+    
+    /// <summary>Create a pull request using GitHub CLI</summary>
+    Task<GitResult<PullRequestInfo>> CreatePullRequestAsync(
+        string repoPath,
+        string title,
+        string? body = null,
+        string? baseBranch = null,
+        bool draft = true,
+        CancellationToken ct = default);
+    
+    /// <summary>Get the remote URL for origin</summary>
+    Task<GitResult<string>> GetRemoteUrlAsync(string repoPath, CancellationToken ct = default);
 }
 
 /// <summary>
@@ -79,4 +94,16 @@ public record RepositoryStatus
     public IReadOnlyList<string> ModifiedFiles { get; init; } = [];
     public IReadOnlyList<string> UntrackedFiles { get; init; } = [];
     public IReadOnlyList<string> StagedFiles { get; init; } = [];
+}
+
+/// <summary>
+/// Information about a created pull request.
+/// </summary>
+public record PullRequestInfo
+{
+    public required int Number { get; init; }
+    public required string Url { get; init; }
+    public required string State { get; init; }
+    public bool IsDraft { get; init; }
+    public string? Title { get; init; }
 }
