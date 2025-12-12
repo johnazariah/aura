@@ -38,6 +38,7 @@ features/
 | [Cloud LLM Providers](completed/cloud-llm-providers.md) | Azure OpenAI, OpenAI support | 2025-12-05 |
 | [Assisted Workflow UI](completed/assisted-workflow-ui.md) | Workflow step UI in extension | 2025-12-08 |
 | [TreeSitter Ingesters](completed/treesitter-ingesters.md) | Multi-language TreeSitter parsing | 2025-12-10 |
+| [Workflow PR Creation](completed/workflow-pr-creation.md) | Finalize workflows with commit/push/PR | 2025-12-12 |
 
 ## Upcoming Features
 
