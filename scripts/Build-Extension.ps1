@@ -55,15 +55,7 @@ try {
         }
     }
 
-    # Compile TypeScript
-    Write-Host "Compiling TypeScript..." -ForegroundColor Yellow
-    npm run compile
-    if ($LASTEXITCODE -ne 0) {
-        throw "TypeScript compilation failed"
-    }
-
-    # Package as VSIX
-    Write-Host ""
+    # Package as VSIX (this also compiles via vscode:prepublish hook)
     Write-Host "Packaging VSIX..." -ForegroundColor Yellow
     
     # Remove old VSIX files
