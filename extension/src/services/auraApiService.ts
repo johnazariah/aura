@@ -112,6 +112,7 @@ export interface Workflow {
     repositoryPath?: string;
     analyzedContext?: string;
     executionPlan?: string;
+    pullRequestUrl?: string;
     steps: WorkflowStep[];
     createdAt: string;
     updatedAt: string;

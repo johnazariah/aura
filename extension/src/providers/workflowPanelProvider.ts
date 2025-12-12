@@ -513,6 +513,11 @@ export class WorkflowPanelProvider {
             case 'finalize':
                 await this.handleFinalize(workflowId, message, panel);
                 break;
+            case 'openUrl':
+                if (message.url) {
+                    vscode.env.openExternal(vscode.Uri.parse(message.url));
+                }
+                break;
             case 'refresh':
                 await this.refreshPanel(workflowId);
                 break;
@@ -1696,6 +1701,13 @@ export class WorkflowPanelProvider {
             background: #d13438;
             color: white;
         }
+        .btn-success {
+            background: #107c10;
+            color: white;
+        }
+        .btn-success:hover {
+            background: #0e6b0e;
+        }
 
         .phase-section {
             margin-bottom: 16px;
@@ -2110,6 +2122,10 @@ export class WorkflowPanelProvider {
 
         function refresh() {
             vscode.postMessage({ type: 'refresh' });
+        }
+
+        function openPullRequest(url) {
+            vscode.postMessage({ type: 'openUrl', url: url });
         }
 
         function showFinalizeDialog() {
@@ -2709,7 +2725,11 @@ export class WorkflowPanelProvider {
                 break;
             case 'Completed':
                 leftButtons.push('<span class="status-text success">✓ Workflow Completed</span>');
-                leftButtons.push('<button class="btn btn-primary" onclick="showFinalizeDialog()">🚀 Finalize & Create PR</button>');
+                if (workflow.pullRequestUrl) {
+                    leftButtons.push(`<a href="${workflow.pullRequestUrl}" class="btn btn-success" style="text-decoration: none;" onclick="openPullRequest('${workflow.pullRequestUrl}'); return false;">🔗 View Pull Request</a>`);
+                } else {
+                    leftButtons.push('<button class="btn btn-primary" onclick="showFinalizeDialog()">🚀 Finalize & Create PR</button>');
+                }
                 break;
             case 'Cancelled':
             case 'Failed':
