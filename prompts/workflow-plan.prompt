@@ -47,6 +47,16 @@ GOOD (focused):
 3. Review and refine (review) - Check accuracy, formatting, completeness
 4. Write final README.md (documentation) - Output the final file content ready to save
 
+### Example JSON Output for C# Codebase
+
+```json
+[
+  {"name": "Analyze source code", "capability": "review", "language": "csharp", "description": "Review the C# source files"},
+  {"name": "Write unit tests", "capability": "testing", "language": "csharp", "description": "Create xUnit tests"},
+  {"name": "Run and validate tests", "capability": "testing", "language": "csharp", "description": "Execute tests and verify"}
+]
+```
+
 ### For Documentation Tasks
 - Step 1: Analyze (what exists, what's missing)
 - Step 2: Draft (write the content)
@@ -72,15 +82,26 @@ GOOD (focused):
 - documentation: README, API docs, comments
 - fixing: Build error and test failure fixing
 
-## Languages (optional)
-- csharp, python, typescript, javascript, go, rust, java, etc.
+## Languages
+Detect the primary language from the Analysis Context above (look for file extensions, frameworks, or explicit mentions):
+- .cs files, C#, .NET, ASP.NET → "csharp"
+- .ts files, TypeScript, Angular, React → "typescript"  
+- .js files, JavaScript, Node.js → "javascript"
+- .py files, Python, Django, Flask → "python"
+- .go files, Go, Golang → "go"
+- .rs files, Rust, Cargo → "rust"
+- .java files, Java, Spring → "java"
+
+**IMPORTANT**: If the codebase uses a specific language, include `language` on ALL coding/testing steps. This ensures the correct language-specialist agent is assigned.
 
 ## Output Format
 
 Return a JSON array with 3-6 steps. Each step:
 - name: Short actionable name (string, required)
 - capability: One of: coding, testing, review, documentation, fixing (required)
-- language: Programming language if relevant (optional)
+- language: Programming language detected from context (REQUIRED for coding/testing steps - e.g., "csharp", "python", "typescript")
 - description: What this step produces/accomplishes (optional)
+
+**FINAL CHECK before responding**: Did you include `"language": "csharp"` (or the detected language) on every coding and testing step? If not, add it now.
 
 Return ONLY a valid JSON array, no markdown code blocks or other text.
