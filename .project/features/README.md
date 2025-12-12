@@ -39,6 +39,7 @@ features/
 | [Assisted Workflow UI](completed/assisted-workflow-ui.md) | Workflow step UI in extension | 2025-12-08 |
 | [TreeSitter Ingesters](completed/treesitter-ingesters.md) | Multi-language TreeSitter parsing | 2025-12-10 |
 | [Workflow PR Creation](completed/workflow-pr-creation.md) | Finalize workflows with commit/push/PR | 2025-12-12 |
+| [Code Graph Status Panel](completed/code-graph-status-panel.md) | Code Graph stats in System Status | 2025-12-12 |
 
 ## Upcoming Features
 
