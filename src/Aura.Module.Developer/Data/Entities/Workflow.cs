@@ -25,10 +25,10 @@ public sealed class Workflow
     /// <summary>Gets or sets the workflow status.</summary>
     public WorkflowStatus Status { get; set; } = WorkflowStatus.Created;
 
-    /// <summary>Gets or sets the workspace path (e.g., git worktree path).</summary>
-    public string? WorkspacePath { get; set; }
+    /// <summary>Gets or sets the worktree path (isolated git worktree for this workflow).</summary>
+    public string? WorktreePath { get; set; }
 
-    /// <summary>Gets or sets the git branch (e.g., "feature/workflow-123").</summary>
+    /// <summary>Gets or sets the git branch (e.g., "feature/workflow-123")..</summary>
     public string? GitBranch { get; set; }
 
     /// <summary>Gets or sets the analyzed context as JSON (from analysis agent).</summary>
@@ -45,6 +45,9 @@ public sealed class Workflow
 
     /// <summary>Gets or sets when the workflow was completed.</summary>
     public DateTimeOffset? CompletedAt { get; set; }
+
+    /// <summary>Gets or sets the URL of the pull request created for this workflow.</summary>
+    public string? PullRequestUrl { get; set; }
 
     /// <summary>Gets or sets the workflow steps.</summary>
     public ICollection<WorkflowStep> Steps { get; set; } = [];

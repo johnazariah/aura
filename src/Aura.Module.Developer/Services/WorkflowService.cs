@@ -5,6 +5,7 @@
 namespace Aura.Module.Developer.Services;
 
 using System.Diagnostics;
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Aura.Foundation.Agents;
@@ -28,6 +29,7 @@ public sealed class WorkflowService : IWorkflowService
     private readonly IAgentRegistry _agentRegistry;
     private readonly IPromptRegistry _promptRegistry;
     private readonly IGitWorktreeService _worktreeService;
+    private readonly IGitService _gitService;
     private readonly IRagService _ragService;
     private readonly IBackgroundIndexer _backgroundIndexer;
     private readonly ICodebaseContextService _codebaseContextService;
@@ -45,6 +47,7 @@ public sealed class WorkflowService : IWorkflowService
         IAgentRegistry agentRegistry,
         IPromptRegistry promptRegistry,
         IGitWorktreeService worktreeService,
+        IGitService gitService,
         IRagService ragService,
         IBackgroundIndexer backgroundIndexer,
         ICodebaseContextService codebaseContextService,
@@ -58,6 +61,7 @@ public sealed class WorkflowService : IWorkflowService
         _agentRegistry = agentRegistry;
         _promptRegistry = promptRegistry;
         _worktreeService = worktreeService;
+        _gitService = gitService;
         _ragService = ragService;
         _backgroundIndexer = backgroundIndexer;
         _codebaseContextService = codebaseContextService;
@@ -109,13 +113,13 @@ public sealed class WorkflowService : IWorkflowService
 
             if (worktreeResult.Success && worktreeResult.Value is not null)
             {
-                workflow.WorkspacePath = worktreeResult.Value.Path;
+                workflow.WorktreePath = worktreeResult.Value.Path;
                 _logger.LogInformation("Created worktree at {Path} for workflow {WorkflowId}",
-                    workflow.WorkspacePath, workflow.Id);
+                    workflow.WorktreePath, workflow.Id);
 
                 // Check if the repository is already indexed - if so, skip worktree indexing.
                 // This is safe because:
-                //   1. RAG queries use RepositoryPath (not WorkspacePath) as the source filter
+                //   1. RAG queries use RepositoryPath (not WorktreePath) as the source filter
                 //   2. Agents use direct file tools to read/write in the worktree
                 //   3. Step outputs are passed to subsequent steps via the prompt
                 var repoStats = await _ragService.GetDirectoryStatsAsync(repositoryPath, ct);
@@ -128,7 +132,7 @@ public sealed class WorkflowService : IWorkflowService
                 else
                 {
                     // Repository not indexed - queue worktree for background RAG indexing (non-blocking)
-                    var jobId = _backgroundIndexer.QueueDirectory(workflow.WorkspacePath, new RagIndexOptions
+                    var jobId = _backgroundIndexer.QueueDirectory(workflow.WorktreePath, new RagIndexOptions
                     {
                         IncludePatterns = new[] { "*.cs", "*.md", "*.json", "*.yaml", "*.yml", "*.ts", "*.tsx", "*.js", "*.jsx" },
                         ExcludePatterns = new[] { "**/bin/**", "**/obj/**", "**/node_modules/**", "**/.git/**" },
@@ -142,7 +146,7 @@ public sealed class WorkflowService : IWorkflowService
             {
                 _logger.LogWarning("Failed to create worktree: {Error}. Using repository path instead.",
                     worktreeResult.Error);
-                workflow.WorkspacePath = repositoryPath;
+                workflow.WorktreePath = repositoryPath;
             }
         }
 
@@ -213,19 +217,36 @@ public sealed class WorkflowService : IWorkflowService
         }
 
         // Clean up worktree if it exists
-        if (!string.IsNullOrEmpty(workflow.WorkspacePath) &&
+        if (!string.IsNullOrEmpty(workflow.WorktreePath) &&
             !string.IsNullOrEmpty(workflow.RepositoryPath) &&
-            workflow.WorkspacePath != workflow.RepositoryPath)
+            workflow.WorktreePath != workflow.RepositoryPath)
         {
             var removeResult = await _worktreeService.RemoveAsync(
-                workflow.WorkspacePath,
+                workflow.WorktreePath,
                 force: true,
                 ct);
 
             if (!removeResult.Success)
             {
                 _logger.LogWarning("Failed to remove worktree {Path}: {Error}",
-                    workflow.WorkspacePath, removeResult.Error);
+                    workflow.WorktreePath, removeResult.Error);
+            }
+        }
+
+        // Clean up the workflow branch if it exists
+        if (!string.IsNullOrEmpty(workflow.GitBranch) && 
+            !string.IsNullOrEmpty(workflow.RepositoryPath))
+        {
+            var deleteBranchResult = await _gitService.DeleteBranchAsync(
+                workflow.RepositoryPath,
+                workflow.GitBranch,
+                force: true,
+                ct);
+
+            if (!deleteBranchResult.Success)
+            {
+                _logger.LogWarning("Failed to delete branch {Branch}: {Error}",
+                    workflow.GitBranch, deleteBranchResult.Error);
             }
         }
 
@@ -260,7 +281,7 @@ public sealed class WorkflowService : IWorkflowService
             {
                 title = workflow.Title,
                 description = workflow.Description ?? "No description provided.",
-                workspacePath = workflow.WorkspacePath ?? workflow.RepositoryPath ?? "Not specified",
+                workspacePath = workflow.WorktreePath ?? workflow.RepositoryPath ?? "Not specified",
             });
 
             // Get codebase context (combines code graph + RAG)
@@ -269,10 +290,12 @@ public sealed class WorkflowService : IWorkflowService
                 ? promptQueries.ToList()
                 : BuildRagQueriesForAnalysis(workflow);
 
+            // Always use RepositoryPath for RAG queries (that's where the index lives)
+            // Paths in context will be relative, and the agent's WorkingDirectory is set to the worktree
             var contextOptions = CodebaseContextOptions.ForDocumentation(ragQueries);
-            var workspaceForContext = workflow.RepositoryPath ?? workflow.WorkspacePath;
-            var codebaseContext = workspaceForContext is not null
-                ? await _codebaseContextService.GetContextAsync(workspaceForContext, contextOptions, ct)
+            var ragSourcePath = workflow.RepositoryPath ?? workflow.WorktreePath;
+            var codebaseContext = ragSourcePath is not null
+                ? await _codebaseContextService.GetContextAsync(ragSourcePath, contextOptions, ct)
                 : null;
             var ragContext = codebaseContext?.ToPromptContext();
 
@@ -282,7 +305,7 @@ public sealed class WorkflowService : IWorkflowService
                 ragQueries.Count,
                 codebaseContext?.ProjectStructure is not null);
 
-            var context = new AgentContext(prompt, WorkspacePath: workflow.WorkspacePath)
+            var context = new AgentContext(prompt, WorkspacePath: workflow.WorktreePath)
             {
                 RagContext = ragContext,
             };
@@ -346,7 +369,7 @@ public sealed class WorkflowService : IWorkflowService
                 enrichedContext = workflow.AnalyzedContext ?? "No analysis available.",
             });
 
-            var context = new AgentContext(prompt, WorkspacePath: workflow.WorkspacePath);
+            var context = new AgentContext(prompt, WorkspacePath: workflow.WorktreePath);
             var output = await planner.ExecuteAsync(context, ct);
 
             // Parse the steps from the response
@@ -590,20 +613,27 @@ public sealed class WorkflowService : IWorkflowService
                 fileReferences = files;
             }
 
-            var contextOptions = CodebaseContextOptions.ForDocumentation(ragQueries, fileReferences);
-            var workspaceForContext = workflow.RepositoryPath ?? workflow.WorkspacePath;
-            var codebaseContext = workspaceForContext is not null
-                ? await _codebaseContextService.GetContextAsync(workspaceForContext, contextOptions, ct)
+            // Always use RepositoryPath for RAG queries (that's where the index lives)
+            // Paths in context will be relative, and the agent's WorkingDirectory is set to the worktree
+            // Use ForCoding for coding/testing tasks to prefer code content over docs
+            var isCodingTask = step.Capability is "coding" or "testing" or "review";
+            var contextOptions = isCodingTask
+                ? CodebaseContextOptions.ForCoding(ragQueries, prioritizeFiles: fileReferences)
+                : CodebaseContextOptions.ForDocumentation(ragQueries, fileReferences);
+            var ragSourcePath = workflow.RepositoryPath ?? workflow.WorktreePath;
+            var codebaseContext = ragSourcePath is not null
+                ? await _codebaseContextService.GetContextAsync(ragSourcePath, contextOptions, ct)
                 : null;
             var ragContext = codebaseContext?.ToPromptContext();
 
             _logger.LogInformation(
-                "Step {StepName} codebase context: {HasContext}, queries: {QueryCount}, prioritizedFiles: {FileCount}, hasProjectStructure: {HasProjectStructure}",
+                "Step {StepName} codebase context: {HasContext}, queries: {QueryCount}, prioritizedFiles: {FileCount}, hasProjectStructure: {HasProjectStructure}, preferCode: {PreferCode}",
                 step.Name,
                 ragContext is not null ? $"{ragContext.Length} chars" : "none",
                 ragQueries.Count,
                 fileReferences?.Count ?? 0,
-                codebaseContext?.ProjectStructure is not null);
+                codebaseContext?.ProjectStructure is not null,
+                isCodingTask);
 
             // Check if tools are defined for this prompt
             var promptToolNames = _promptRegistry.GetTools(promptName);
@@ -635,7 +665,7 @@ public sealed class WorkflowService : IWorkflowService
 
                 var reactOptions = new ReActOptions
                 {
-                    WorkingDirectory = workflow.WorkspacePath,
+                    WorkingDirectory = workflow.WorktreePath,
                     MaxSteps = 15,
                     Temperature = 0.2,
                     RequireConfirmation = false, // Auto-approve for now (human reviews step output)
@@ -683,7 +713,7 @@ public sealed class WorkflowService : IWorkflowService
             else
             {
                 // Standard agent execution without tools
-                var context = new AgentContext(prompt, WorkspacePath: workflow.WorkspacePath)
+                var context = new AgentContext(prompt, WorkspacePath: workflow.WorktreePath)
                 {
                     RagContext = ragContext,
                 };
@@ -866,6 +896,59 @@ public sealed class WorkflowService : IWorkflowService
             throw new InvalidOperationException($"Cannot complete workflow: {pendingSteps.Count} step(s) still pending: {stepNames}");
         }
 
+        // Commit, push, and create PR if there are changes in the worktree
+        if (!string.IsNullOrEmpty(workflow.WorktreePath) && 
+            !string.IsNullOrEmpty(workflow.RepositoryPath) &&
+            workflow.WorktreePath != workflow.RepositoryPath)
+        {
+            var hasChanges = await _gitService.HasUncommittedChangesAsync(workflow.WorktreePath, ct);
+            if (hasChanges.Success && hasChanges.Value)
+            {
+                // Commit changes
+                var commitMessage = $"{workflow.Title}\n\nGenerated by Aura workflow {workflowId}";
+                var commitResult = await _gitService.CommitAsync(workflow.WorktreePath, commitMessage, ct);
+                if (!commitResult.Success)
+                {
+                    _logger.LogWarning("Failed to commit changes: {Error}", commitResult.Error);
+                }
+                else
+                {
+                    _logger.LogInformation("Committed changes: {Sha}", commitResult.Value);
+
+                    // Push the branch
+                    var pushResult = await _gitService.PushAsync(workflow.WorktreePath, setUpstream: true, ct);
+                    if (!pushResult.Success)
+                    {
+                        _logger.LogWarning("Failed to push branch: {Error}", pushResult.Error);
+                    }
+                    else
+                    {
+                        _logger.LogInformation("Pushed branch {Branch}", workflow.GitBranch);
+
+                        // Create draft PR
+                        var prBody = BuildPullRequestBody(workflow);
+                        var prResult = await _gitService.CreatePullRequestAsync(
+                            workflow.WorktreePath,
+                            workflow.Title,
+                            prBody,
+                            baseBranch: null, // Use default branch
+                            draft: true,
+                            ct);
+
+                        if (prResult.Success && prResult.Value is not null)
+                        {
+                            workflow.PullRequestUrl = prResult.Value.Url;
+                            _logger.LogInformation("Created PR: {Url}", prResult.Value.Url);
+                        }
+                        else
+                        {
+                            _logger.LogWarning("Failed to create PR: {Error}", prResult.Error);
+                        }
+                    }
+                }
+            }
+        }
+
         workflow.Status = WorkflowStatus.Completed;
         workflow.CompletedAt = DateTimeOffset.UtcNow;
         workflow.UpdatedAt = DateTimeOffset.UtcNow;
@@ -874,6 +957,31 @@ public sealed class WorkflowService : IWorkflowService
 
         _logger.LogInformation("Completed workflow {WorkflowId}", workflowId);
         return workflow;
+    }
+
+    private static string BuildPullRequestBody(Workflow workflow)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("## Summary");
+        sb.AppendLine();
+        if (!string.IsNullOrEmpty(workflow.Description))
+        {
+            sb.AppendLine(workflow.Description);
+            sb.AppendLine();
+        }
+
+        sb.AppendLine("## Steps Completed");
+        sb.AppendLine();
+        foreach (var step in workflow.Steps.OrderBy(s => s.Order))
+        {
+            var statusIcon = step.Status == StepStatus.Completed ? "✅" :
+                             step.Status == StepStatus.Skipped ? "⏭️" : "❌";
+            sb.AppendLine($"- {statusIcon} {step.Name}");
+        }
+        sb.AppendLine();
+        sb.AppendLine("---");
+        sb.AppendLine($"*Generated by Aura workflow `{workflow.Id}`*");
+        return sb.ToString();
     }
 
     /// <inheritdoc/>
@@ -902,17 +1010,22 @@ public sealed class WorkflowService : IWorkflowService
         var chatAgent = _agentRegistry.GetBestForCapability(Capabilities.Chat)
             ?? throw new InvalidOperationException("No chat agent available");
 
-        // Build context with current plan
-        var stepsDescription = workflow.Steps.Any()
-            ? string.Join("\n", workflow.Steps.Select(s => $"- Step {s.Order}: {s.Name} ({s.Capability}) - {s.Status}"))
-            : "No steps defined yet.";
-
         // Different prompts based on workflow status
         var prompt = workflow.Status == WorkflowStatus.Analyzed
-            ? BuildAnalyzedStatePrompt(workflow, message, stepsDescription)
-            : BuildPlanningStatePrompt(workflow, message, stepsDescription);
+            ? _promptRegistry.Render("workflow-chat-analyzed", new
+            {
+                workflow = new { title = workflow.Title, description = workflow.Description, status = workflow.Status.ToString() },
+                analysisSummary = ExtractAnalysisSummary(workflow.AnalyzedContext),
+                message,
+            })
+            : _promptRegistry.Render("workflow-chat-planning", new
+            {
+                workflow = new { title = workflow.Title, status = workflow.Status.ToString() },
+                steps = workflow.Steps.Select(s => new { s.Order, s.Name, s.Capability, status = s.Status.ToString() }),
+                message,
+            });
 
-        var context = new AgentContext(prompt, WorkspacePath: workflow.WorkspacePath);
+        var context = new AgentContext(prompt, WorkspacePath: workflow.WorktreePath);
         var output = await chatAgent.ExecuteAsync(context, ct);
 
         var response = new WorkflowChatResponse { Response = output.Content };
@@ -959,6 +1072,47 @@ public sealed class WorkflowService : IWorkflowService
                 {
                     stepsRemoved.Add(stepToRemove.Id);
                     await RemoveStepAsync(workflowId, stepToRemove.Id, ct);
+                }
+            }
+        }
+        else if (output.Content.Contains("ACTION: SPLIT_STEP"))
+        {
+            var splitResult = ParseSplitStepAction(output.Content);
+            if (splitResult is not null && splitResult.Value.NewSteps.Count > 0)
+            {
+                var stepToSplit = workflow.Steps.FirstOrDefault(s => s.Order == splitResult.Value.StepNumber);
+                if (stepToSplit is not null)
+                {
+                    var insertAfterOrder = stepToSplit.Order - 1; // Insert at the position of the removed step
+                    
+                    // Remove the original step
+                    stepsRemoved.Add(stepToSplit.Id);
+                    await RemoveStepAsync(workflowId, stepToSplit.Id, ct);
+                    
+                    // Add the new steps in order
+                    foreach (var newStep in splitResult.Value.NewSteps)
+                    {
+                        if (!newStep.Name.Contains("[") && 
+                            !newStep.Capability.Contains("[") &&
+                            IsValidCapability(newStep.Capability))
+                        {
+                            var addedStep = await AddStepAsync(
+                                workflowId, 
+                                newStep.Name, 
+                                newStep.Capability, 
+                                newStep.Description, 
+                                afterOrder: insertAfterOrder,
+                                ct: ct);
+                            stepsAdded.Add(addedStep);
+                            insertAfterOrder = addedStep.Order; // Next step goes after this one
+                        }
+                    }
+                    
+                    _logger.LogInformation(
+                        "Split step {StepNumber} into {NewStepCount} steps in workflow {WorkflowId}",
+                        splitResult.Value.StepNumber,
+                        stepsAdded.Count,
+                        workflowId);
                 }
             }
         }
@@ -1050,6 +1204,47 @@ public sealed class WorkflowService : IWorkflowService
     }
 
     /// <inheritdoc/>
+    public async Task<WorkflowStep> ResetStepAsync(Guid workflowId, Guid stepId, CancellationToken ct = default)
+    {
+        var workflow = await _db.Workflows
+            .Include(w => w.Steps)
+            .FirstOrDefaultAsync(w => w.Id == workflowId, ct)
+            ?? throw new InvalidOperationException($"Workflow {workflowId} not found");
+
+        var step = workflow.Steps.FirstOrDefault(s => s.Id == stepId)
+            ?? throw new InvalidOperationException($"Step {stepId} not found in workflow");
+
+        if (step.Status == StepStatus.Running)
+        {
+            throw new InvalidOperationException("Cannot reset a running step");
+        }
+
+        var previousStatus = step.Status;
+        step.Status = StepStatus.Pending;
+        step.Output = null;
+        step.Error = null;
+        step.CompletedAt = null;
+        step.Attempts = 0;
+        step.Approval = null;
+        step.ApprovalFeedback = null;
+        step.NeedsRework = false;
+
+        // If workflow was completed or failed, set it back to executing
+        if (workflow.Status is WorkflowStatus.Completed or WorkflowStatus.Failed)
+        {
+            workflow.Status = WorkflowStatus.Executing;
+        }
+
+        workflow.UpdatedAt = DateTimeOffset.UtcNow;
+        await _db.SaveChangesAsync(ct);
+
+        _logger.LogInformation(
+            "Step {StepId} reset from {PreviousStatus} to Pending in workflow {WorkflowId}",
+            stepId, previousStatus, workflowId);
+        return step;
+    }
+
+    /// <inheritdoc/>
     public async Task<(WorkflowStep Step, string Response)> ChatWithStepAsync(Guid workflowId, Guid stepId, string message, CancellationToken ct = default)
     {
         var workflow = await _db.Workflows
@@ -1088,7 +1283,7 @@ public sealed class WorkflowService : IWorkflowService
         contextBuilder.AppendLine(message);
 
         // Get agent response
-        var agentContext = new AgentContext(contextBuilder.ToString(), WorkspacePath: workflow.WorkspacePath);
+        var agentContext = new AgentContext(contextBuilder.ToString(), WorkspacePath: workflow.WorktreePath);
         var output = await agent.ExecuteAsync(agentContext, ct);
         var response = output.Content ?? "No response from agent.";
 
@@ -1223,68 +1418,81 @@ public sealed class WorkflowService : IWorkflowService
         return null;
     }
 
-    private static string BuildAnalyzedStatePrompt(Workflow workflow, string message, string stepsDescription)
+    private static (int StepNumber, List<(string Name, string Capability, string? Description)> NewSteps)? ParseSplitStepAction(string response)
     {
-        return $"""
-            You are helping refine the analysis of a development workflow. The workflow has been analyzed but the user wants to provide more context or clarification before creating the plan.
-
-            ## Current Workflow
-            Title: {workflow.Title}
-            Description: {workflow.Description}
-            Status: {workflow.Status}
+        try
+        {
+            var lines = response.Split('\n');
+            int? stepNumber = null;
+            var newSteps = new List<(string Name, string Capability, string? Description)>();
             
-            ## Current Analysis Summary
-            {ExtractAnalysisSummary(workflow.AnalyzedContext)}
+            string? currentName = null;
+            string? currentCapability = null;
+            string? currentDescription = null;
+            var inNewSteps = false;
 
-            ## User Message
-            {message}
+            foreach (var rawLine in lines)
+            {
+                var line = rawLine.Trim();
+                
+                if (line.StartsWith("STEP_NUMBER:", StringComparison.OrdinalIgnoreCase))
+                {
+                    var numberStr = line["STEP_NUMBER:".Length..].Trim();
+                    if (int.TryParse(numberStr, out var number))
+                    {
+                        stepNumber = number;
+                    }
+                }
+                else if (line.StartsWith("NEW_STEPS:", StringComparison.OrdinalIgnoreCase))
+                {
+                    inNewSteps = true;
+                }
+                else if (inNewSteps)
+                {
+                    // Parse YAML-like list items
+                    if (line.StartsWith("- NAME:", StringComparison.OrdinalIgnoreCase) || 
+                        line.StartsWith("-NAME:", StringComparison.OrdinalIgnoreCase))
+                    {
+                        // Save previous step if we have one
+                        if (currentName is not null && currentCapability is not null)
+                        {
+                            newSteps.Add((currentName, currentCapability, currentDescription));
+                        }
+                        
+                        currentName = line.Contains("NAME:") 
+                            ? line[(line.IndexOf("NAME:", StringComparison.OrdinalIgnoreCase) + 5)..].Trim()
+                            : null;
+                        currentCapability = null;
+                        currentDescription = null;
+                    }
+                    else if (line.StartsWith("CAPABILITY:", StringComparison.OrdinalIgnoreCase))
+                    {
+                        currentCapability = line["CAPABILITY:".Length..].Trim();
+                    }
+                    else if (line.StartsWith("DESCRIPTION:", StringComparison.OrdinalIgnoreCase))
+                    {
+                        currentDescription = line["DESCRIPTION:".Length..].Trim();
+                    }
+                }
+            }
+            
+            // Don't forget the last step
+            if (currentName is not null && currentCapability is not null)
+            {
+                newSteps.Add((currentName, currentCapability, currentDescription));
+            }
 
-            ## Your Task
-            The user is providing ADDITIONAL CONTEXT to improve the analysis. You must respond with:
+            if (stepNumber.HasValue && newSteps.Count > 0)
+            {
+                return (stepNumber.Value, newSteps);
+            }
+        }
+        catch
+        {
+            // Ignore parsing errors
+        }
 
-            ACTION: REANALYZE
-            CONTEXT: [Write a 1-2 sentence summary of the new context/requirements the user provided]
-
-            Example response:
-            ACTION: REANALYZE
-            CONTEXT: User clarified that JWT tokens should include refresh tokens and the implementation should focus on API endpoints only, not UI.
-
-            IMPORTANT: 
-            - Do NOT suggest adding steps or use ACTION: ADD_STEP - that comes later after "Create Plan"
-            - Do NOT include placeholder text like [step name] 
-            - Always respond with ACTION: REANALYZE when the user provides clarification
-            - The CONTEXT should summarize what the user said, not repeat instructions
-            """;
-    }
-
-    private static string BuildPlanningStatePrompt(Workflow workflow, string message, string stepsDescription)
-    {
-        return $"""
-            You are helping with a development workflow. The user wants to modify or discuss the plan.
-
-            ## Current Workflow
-            Title: {workflow.Title}
-            Status: {workflow.Status}
-
-            ## Current Steps
-            {stepsDescription}
-
-            ## User Message
-            {message}
-
-            ## Instructions
-            If the user wants to add a step, respond with:
-            ACTION: ADD_STEP
-            NAME: [step name]
-            CAPABILITY: [coding|testing|review|documentation|fixing]
-            DESCRIPTION: [what the step should do]
-
-            If the user wants to remove a step, respond with:
-            ACTION: REMOVE_STEP
-            STEP_NUMBER: [number]
-
-            Otherwise, just respond naturally to their question.
-            """;
+        return null;
     }
 
     private async Task IndexWorktreeForRagAsync(string workspacePath, CancellationToken ct)

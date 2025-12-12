@@ -168,6 +168,16 @@ public interface IWorkflowService
     Task<WorkflowStep> SkipStepAsync(Guid workflowId, Guid stepId, string? reason = null, CancellationToken ct = default);
 
     /// <summary>
+    /// Resets a step to pending status so it can be re-executed.
+    /// Works for any step status (Failed, Completed, Skipped, etc.).
+    /// </summary>
+    /// <param name="workflowId">The workflow ID.</param>
+    /// <param name="stepId">The step ID.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>The reset step.</returns>
+    Task<WorkflowStep> ResetStepAsync(Guid workflowId, Guid stepId, CancellationToken ct = default);
+
+    /// <summary>
     /// Chats with an agent in the context of a specific step.
     /// </summary>
     /// <param name="workflowId">The workflow ID.</param>

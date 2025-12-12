@@ -51,13 +51,14 @@ public sealed class DeveloperDbContext : AuraDbContext
             entity.Property(e => e.Description).HasColumnName("description");
             entity.Property(e => e.RepositoryPath).HasColumnName("repository_path").HasMaxLength(1000);
             entity.Property(e => e.Status).HasColumnName("status").HasConversion<string>().HasMaxLength(20);
-            entity.Property(e => e.WorkspacePath).HasColumnName("workspace_path").HasMaxLength(1000);
+            entity.Property(e => e.WorktreePath).HasColumnName("worktree_path").HasMaxLength(1000);
             entity.Property(e => e.GitBranch).HasColumnName("git_branch").HasMaxLength(500);
             entity.Property(e => e.AnalyzedContext).HasColumnName("analyzed_context").HasColumnType("jsonb");
             entity.Property(e => e.ExecutionPlan).HasColumnName("execution_plan").HasColumnType("jsonb");
             entity.Property(e => e.CreatedAt).HasColumnName("created_at");
             entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
             entity.Property(e => e.CompletedAt).HasColumnName("completed_at");
+            entity.Property(e => e.PullRequestUrl).HasColumnName("pull_request_url").HasMaxLength(1000);
 
             entity.HasIndex(e => e.Status);
             entity.HasIndex(e => e.CreatedAt);
