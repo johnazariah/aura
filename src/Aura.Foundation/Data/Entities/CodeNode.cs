@@ -35,8 +35,8 @@ public class CodeNode
     /// <summary>Gets the modifiers (public, abstract, static, etc.).</summary>
     public string? Modifiers { get; init; }
 
-    /// <summary>Gets the workspace path this node belongs to (for multi-worktree isolation).</summary>
-    public string? WorkspacePath { get; init; }
+    /// <summary>Gets the repository path this node belongs to (for index isolation).</summary>
+    public string? RepositoryPath { get; init; }
 
     /// <summary>Gets additional properties as JSON.</summary>
     public string? PropertiesJson { get; init; }

@@ -76,7 +76,7 @@ public class AuraDbContext : DbContext
             entity.Property(e => e.Id).HasColumnName("id");
             entity.Property(e => e.Title).HasColumnName("title").HasMaxLength(500);
             entity.Property(e => e.AgentId).HasColumnName("agent_id").HasMaxLength(100);
-            entity.Property(e => e.WorkspacePath).HasColumnName("workspace_path").HasMaxLength(1000);
+            entity.Property(e => e.RepositoryPath).HasColumnName("repository_path").HasMaxLength(1000);
             entity.Property(e => e.CreatedAt).HasColumnName("created_at");
             entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
 
@@ -192,7 +192,7 @@ public class AuraDbContext : DbContext
             entity.Property(e => e.LineNumber).HasColumnName("line_number");
             entity.Property(e => e.Signature).HasColumnName("signature").HasMaxLength(2000);
             entity.Property(e => e.Modifiers).HasColumnName("modifiers").HasMaxLength(200);
-            entity.Property(e => e.WorkspacePath).HasColumnName("workspace_path").HasMaxLength(1000);
+            entity.Property(e => e.RepositoryPath).HasColumnName("repository_path").HasMaxLength(1000);
             entity.Property(e => e.PropertiesJson).HasColumnName("properties").HasColumnType("jsonb");
             entity.Property(e => e.Embedding).HasColumnName("embedding").HasColumnType("vector(768)");
             entity.Property(e => e.IndexedAt).HasColumnName("indexed_at");
@@ -200,8 +200,8 @@ public class AuraDbContext : DbContext
             entity.HasIndex(e => e.NodeType);
             entity.HasIndex(e => e.Name);
             entity.HasIndex(e => e.FullName);
-            entity.HasIndex(e => e.WorkspacePath);
-            entity.HasIndex(e => new { e.WorkspacePath, e.NodeType });
+            entity.HasIndex(e => e.RepositoryPath);
+            entity.HasIndex(e => new { e.RepositoryPath, e.NodeType });
         });
 
         // CodeEdge configuration for graph RAG

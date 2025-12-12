@@ -19,8 +19,8 @@ public sealed class Conversation
     /// <summary>Gets or sets the agent ID used in this conversation.</summary>
     public required string AgentId { get; set; }
 
-    /// <summary>Gets or sets the workspace path context.</summary>
-    public string? WorkspacePath { get; set; }
+    /// <summary>Gets or sets the repository path for RAG context.</summary>
+    public string? RepositoryPath { get; set; }
 
     /// <summary>Gets or sets when the conversation was created.</summary>
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;

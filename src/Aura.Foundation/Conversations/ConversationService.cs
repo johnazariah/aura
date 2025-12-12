@@ -39,7 +39,7 @@ public sealed class ConversationService : IConversationService
             Id = Guid.NewGuid(),
             Title = title,
             AgentId = agentId,
-            WorkspacePath = workspacePath,
+            RepositoryPath = workspacePath,
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow,
         };

@@ -11,6 +11,7 @@ using Aura.Foundation.Git;
 using Aura.Foundation.Llm;
 using Aura.Foundation.Rag;
 using Aura.Foundation.Shell;
+using Aura.Foundation.Startup;
 using Aura.Foundation.Tools;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -56,6 +57,9 @@ public static class ServiceCollectionExtensions
 
         // Prompt services
         services.AddPromptServices(configuration);
+
+        // Startup task runner
+        services.AddSingleton<StartupTaskRunner>();
 
         return services;
     }

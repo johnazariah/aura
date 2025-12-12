@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Pgvector;
 
@@ -27,7 +27,7 @@ namespace Aura.Foundation.Data.Migrations
                     line_number = table.Column<int>(type: "integer", nullable: true),
                     signature = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true),
                     modifiers = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true),
-                    workspace_path = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true),
+                    repository_path = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true),
                     properties = table.Column<string>(type: "jsonb", nullable: true),
                     embedding = table.Column<Vector>(type: "vector(768)", nullable: true),
                     indexed_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
@@ -44,7 +44,7 @@ namespace Aura.Foundation.Data.Migrations
                     id = table.Column<Guid>(type: "uuid", nullable: false),
                     title = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false),
                     agent_id = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
-                    workspace_path = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true),
+                    repository_path = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true),
                     created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
                 },
@@ -238,14 +238,14 @@ namespace Aura.Foundation.Data.Migrations
                 column: "node_type");
 
             migrationBuilder.CreateIndex(
-                name: "IX_code_nodes_workspace_path",
+                name: "IX_code_nodes_repository_path",
                 table: "code_nodes",
-                column: "workspace_path");
+                column: "repository_path");
 
             migrationBuilder.CreateIndex(
-                name: "IX_code_nodes_workspace_path_node_type",
+                name: "IX_code_nodes_repository_path_node_type",
                 table: "code_nodes",
-                columns: new[] { "workspace_path", "node_type" });
+                columns: new[] { "repository_path", "node_type" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_conversations_agent_id",

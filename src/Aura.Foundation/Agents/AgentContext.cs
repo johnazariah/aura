@@ -11,7 +11,7 @@ using Aura.Foundation.Rag;
 /// </summary>
 /// <param name="Prompt">The user prompt or task description.</param>
 /// <param name="ConversationHistory">Previous messages in the conversation.</param>
-/// <param name="WorkspacePath">Optional workspace path for file operations.</param>
+/// <param name="WorkspacePath">Optional workspace path for file operations (working directory).</param>
 /// <param name="Properties">Additional properties for agent-specific data.</param>
 public sealed record AgentContext(
     string Prompt,
