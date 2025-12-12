@@ -148,18 +148,18 @@ export class StatusTreeProvider implements vscode.TreeDataProvider<StatusItem> {
     private getRagChildren(status: RagStatus): StatusItem[] {
         const children: StatusItem[] = [];
 
-        // Documents count
+        // Symbols count (each class, method, section is a "document" in RAG terms)
         const docItem = new StatusItem(
-            'Documents',
+            'Symbols',
             { status: 'healthy', details: `${status.totalDocuments || 0}` },
             'info'
         );
-        docItem.iconPath = new vscode.ThemeIcon('file-text');
+        docItem.iconPath = new vscode.ThemeIcon('symbol-class');
         children.push(docItem);
 
-        // Chunks count
+        // Embeddings count (vector representations for similarity search)
         const chunkItem = new StatusItem(
-            'Chunks (embeddings)',
+            'Embeddings',
             { status: 'healthy', details: `${status.totalChunks || 0}` },
             'info'
         );

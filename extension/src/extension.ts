@@ -349,7 +349,7 @@ async function showIndexingProgress(): Promise<void> {
     try {
         const stats = await auraApiService.getRagStats();
         vscode.window.showInformationMessage(
-            `RAG Index: ${stats.totalDocuments} documents, ${stats.totalChunks} chunks`,
+            `RAG Index: ${stats.totalDocuments} symbols, ${stats.totalChunks} embeddings`,
             'Index Workspace'
         ).then(action => {
             if (action === 'Index Workspace') {

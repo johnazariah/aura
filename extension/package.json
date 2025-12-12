@@ -181,8 +181,8 @@
       },
       {
         "command": "aura.indexWorkspace",
-        "key": "ctrl+shift+i",
-        "mac": "cmd+shift+i",
+        "key": "ctrl+alt+i",
+        "mac": "cmd+alt+i",
         "when": "workspaceFolderCount > 0"
       }
     ],

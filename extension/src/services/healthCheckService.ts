@@ -34,6 +34,13 @@ export interface RagStatus extends ServiceStatus {
     totalDocuments?: number;
     totalChunks?: number;
     chunksByType?: Record<string, number>;
+    // Repository-filtered stats (indexing is per-repo, not per-workspace)
+    repoDocuments?: number;
+    repoChunks?: number;
+    repositoryPath?: string;
+    // Code graph stats
+    graphNodes?: number;
+    graphEdges?: number;
 }
 
 export interface HealthStatuses {
@@ -230,16 +237,52 @@ export class HealthCheckService {
             const totalDocuments = response.data?.totalDocuments || 0;
             const totalChunks = response.data?.totalChunks || 0;
 
-            // Also fetch detailed stats
+            // Get current repository path (first workspace folder, which is typically the git root)
+            // This matches how indexing works - we index by repository path, not VS Code workspace
+            const repositoryPath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+
+            // Fetch repository-filtered stats if we have a repository open
+            let repoDocuments = 0;
+            let repoChunks = 0;
+            let graphNodes = 0;
+            let graphEdges = 0;
             let chunksByType: Record<string, number> = {};
+
             try {
+                if (repositoryPath) {
+                    // Get RAG stats filtered by repository path
+                    const dirStatsResponse = await this.httpClient.get(
+                        `${url}/api/rag/stats/directory`,
+                        { params: { path: repositoryPath } }
+                    );
+                    repoChunks = dirStatsResponse.data?.chunkCount || 0;
+                    repoDocuments = dirStatsResponse.data?.fileCount || 0;
+
+                    // Get code graph stats filtered by repository path
+                    const graphStatsResponse = await this.httpClient.get(
+                        `${url}/api/graph/stats`,
+                        { params: { workspacePath: repositoryPath } }
+                    );
+                    graphNodes = graphStatsResponse.data?.totalNodes || 0;
+                    graphEdges = graphStatsResponse.data?.totalEdges || 0;
+                }
+
+                // Also get overall stats
                 const statsResponse = await this.httpClient.get(`${url}/api/rag/stats`);
                 chunksByType = statsResponse.data?.chunksByType || {};
             } catch {
-                // Stats endpoint might fail, continue anyway
+                // Stats endpoints might fail, continue anyway
             }
 
-            let details = `${totalDocuments} doc${totalDocuments !== 1 ? 's' : ''}, ${totalChunks} chunks`;
+            // Build details string based on whether we have repository filtering
+            let details: string;
+            if (repositoryPath && (repoDocuments > 0 || repoChunks > 0 || graphNodes > 0)) {
+                details = `${repoDocuments} files, ${repoChunks} chunks, ${graphNodes} graph nodes`;
+            } else if (repositoryPath) {
+                details = `Not indexed (${totalDocuments} symbols in other repos)`;
+            } else {
+                details = `${totalDocuments} symbols, ${totalChunks} embeddings (all repos)`;
+            }
 
             this.statuses.rag = {
                 status: response.data?.healthy ? 'healthy' : 'unhealthy',
@@ -248,6 +291,11 @@ export class HealthCheckService {
                 totalDocuments,
                 totalChunks,
                 chunksByType,
+                repoDocuments,
+                repoChunks,
+                repositoryPath,
+                graphNodes,
+                graphEdges,
                 lastChecked: new Date()
             };
         } catch (error) {

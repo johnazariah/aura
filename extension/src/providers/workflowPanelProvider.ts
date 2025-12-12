@@ -510,14 +510,20 @@ export class WorkflowPanelProvider {
             case 'cancel':
                 await this.handleCancel(workflowId, panel);
                 break;
+            case 'finalize':
+                await this.handleFinalize(workflowId, message, panel);
+                break;
             case 'refresh':
                 await this.refreshPanel(workflowId);
                 break;
             case 'openWorkspace':
-                await this.handleOpenWorkspace(message.workspacePath, message.gitBranch);
+                await this.handleOpenWorkspace(message.worktreePath, message.gitBranch);
                 break;
             case 'skipStep':
                 await this.handleSkipStep(workflowId, message.stepId, panel);
+                break;
+            case 'resetStep':
+                await this.handleResetStep(workflowId, message.stepId, panel);
                 break;
             case 'stepChat':
                 await this.handleStepChat(workflowId, message.stepId, message.message, panel);
@@ -545,7 +551,7 @@ export class WorkflowPanelProvider {
         try {
             // Get workflow to check repository path
             const workflow = await this.apiService.getWorkflow(workflowId);
-            const repoPath = workflow.repositoryPath || workflow.workspacePath;
+            const repoPath = workflow.repositoryPath || workflow.worktreePath;
             console.log(`[Enrich] Repository path: ${repoPath}`);
 
             if (!repoPath) {
@@ -585,7 +591,7 @@ export class WorkflowPanelProvider {
     private async handleIndexCodebase(workflowId: string, panel: vscode.WebviewPanel): Promise<void> {
         try {
             const workflow = await this.apiService.getWorkflow(workflowId);
-            const repoPath = workflow.repositoryPath || workflow.workspacePath;
+            const repoPath = workflow.repositoryPath || workflow.worktreePath;
 
             if (!repoPath) {
                 panel.webview.postMessage({ type: 'error', message: 'No repository path associated with this workflow' });
@@ -594,13 +600,13 @@ export class WorkflowPanelProvider {
 
             panel.webview.postMessage({ type: 'loading', action: 'index' });
 
-            // Start background indexing and poll for completion
+            // Pass 1: RAG indexing (file-level, for semantic search)
             const job = await this.apiService.startBackgroundIndex(repoPath);
 
             await vscode.window.withProgress(
                 {
                     location: vscode.ProgressLocation.Notification,
-                    title: 'Indexing codebase',
+                    title: 'Indexing codebase (RAG)',
                     cancellable: false
                 },
                 async (progress) => {
@@ -611,17 +617,49 @@ export class WorkflowPanelProvider {
                     while (status.state === 'Queued' || status.state === 'Processing') {
                         await new Promise(resolve => setTimeout(resolve, 1000)); // Poll every second
                         status = await this.apiService.getBackgroundJobStatus(job.jobId);
+                        
+                        // Files are processed one at a time, but each file produces multiple symbols (classes, methods, etc.)
                         progress.report({
-                            message: `${status.processedItems}/${status.totalItems} files (${status.progressPercent}%)`,
+                            message: `Processing file ${status.processedItems}/${status.totalItems}...`,
                             increment: status.progressPercent > 0 ? 1 : 0
                         });
                     }
 
                     if (status.state === 'Failed') {
-                        throw new Error(status.error || 'Indexing failed');
+                        throw new Error(status.error || 'RAG indexing failed');
                     }
                 }
             );
+
+            // Pass 2: Code graph indexing (solution-level, for structural queries)
+            // Find .sln or .csproj file
+            const solutionPath = await this.findSolutionPath(repoPath);
+            if (solutionPath) {
+                await vscode.window.withProgress(
+                    {
+                        location: vscode.ProgressLocation.Notification,
+                        title: 'Building code graph (Roslyn)',
+                        cancellable: false
+                    },
+                    async (progress) => {
+                        progress.report({ message: 'Analyzing C# solution...' });
+                        try {
+                            const graphResult = await this.apiService.indexCodeGraph(solutionPath, repoPath);
+                            if (!graphResult.success) {
+                                vscode.window.showWarningMessage(`Code graph indexing: ${graphResult.error}`);
+                            } else {
+                                progress.report({ 
+                                    message: `Indexed ${graphResult.typesIndexed} types, ${graphResult.filesIndexed} files` 
+                                });
+                            }
+                        } catch (error) {
+                            // Code graph is optional - don't fail the whole operation
+                            const message = error instanceof Error ? error.message : 'Unknown error';
+                            vscode.window.showWarningMessage(`Code graph skipped: ${message}`);
+                        }
+                    }
+                );
+            }
 
             await this.refreshPanel(workflowId);
             panel.webview.postMessage({ type: 'success', message: 'Codebase indexed successfully' });
@@ -631,24 +669,47 @@ export class WorkflowPanelProvider {
         }
     }
 
+    /**
+     * Find a .sln or .csproj file in the repository path.
+     */
+    private async findSolutionPath(repoPath: string): Promise<string | null> {
+        const fs = await import('fs');
+        const path = await import('path');
+        
+        // Look for .sln first
+        const files = fs.readdirSync(repoPath);
+        const slnFile = files.find((f: string) => f.endsWith('.sln'));
+        if (slnFile) {
+            return path.join(repoPath, slnFile);
+        }
+        
+        // Look for .csproj
+        const csprojFile = files.find((f: string) => f.endsWith('.csproj'));
+        if (csprojFile) {
+            return path.join(repoPath, csprojFile);
+        }
+        
+        return null;
+    }
+
     private async handleIndexAndEnrich(workflowId: string, panel: vscode.WebviewPanel): Promise<void> {
         try {
             const workflow = await this.apiService.getWorkflow(workflowId);
-            const repoPath = workflow.repositoryPath || workflow.workspacePath;
+            const repoPath = workflow.repositoryPath || workflow.worktreePath;
 
             if (!repoPath) {
                 panel.webview.postMessage({ type: 'error', message: 'No repository path associated with this workflow' });
                 return;
             }
 
-            // First index using background indexing
+            // Pass 1: RAG indexing
             panel.webview.postMessage({ type: 'loading', action: 'index' });
             const job = await this.apiService.startBackgroundIndex(repoPath);
 
             await vscode.window.withProgress(
                 {
                     location: vscode.ProgressLocation.Notification,
-                    title: 'Indexing codebase',
+                    title: 'Indexing codebase (RAG)',
                     cancellable: false
                 },
                 async (progress) => {
@@ -659,16 +720,38 @@ export class WorkflowPanelProvider {
                         await new Promise(resolve => setTimeout(resolve, 1000));
                         status = await this.apiService.getBackgroundJobStatus(job.jobId);
                         progress.report({
-                            message: `${status.processedItems}/${status.totalItems} files (${status.progressPercent}%)`,
+                            message: `Processing file ${status.processedItems}/${status.totalItems}...`,
                             increment: status.progressPercent > 0 ? 1 : 0
                         });
                     }
 
                     if (status.state === 'Failed') {
-                        throw new Error(status.error || 'Indexing failed');
+                        throw new Error(status.error || 'RAG indexing failed');
                     }
                 }
             );
+
+            // Pass 2: Code graph indexing (optional)
+            const solutionPath = await this.findSolutionPath(repoPath);
+            if (solutionPath) {
+                await vscode.window.withProgress(
+                    {
+                        location: vscode.ProgressLocation.Notification,
+                        title: 'Building code graph (Roslyn)',
+                        cancellable: false
+                    },
+                    async (progress) => {
+                        progress.report({ message: 'Analyzing C# solution...' });
+                        try {
+                            await this.apiService.indexCodeGraph(solutionPath, repoPath);
+                        } catch (error) {
+                            // Code graph is optional
+                            const message = error instanceof Error ? error.message : 'Unknown error';
+                            vscode.window.showWarningMessage(`Code graph skipped: ${message}`);
+                        }
+                    }
+                );
+            }
 
             // Then enrich
             panel.webview.postMessage({ type: 'loading', action: 'enrich' });
@@ -790,6 +873,39 @@ export class WorkflowPanelProvider {
         }
     }
 
+    private async handleFinalize(workflowId: string, message: any, panel: vscode.WebviewPanel): Promise<void> {
+        try {
+            panel.webview.postMessage({ type: 'loading', action: 'finalize' });
+            
+            const result = await this.apiService.finalizeWorkflow(workflowId, {
+                commitMessage: message.commitMessage,
+                createPullRequest: message.createPullRequest ?? true,
+                prTitle: message.prTitle,
+                draft: message.draft ?? true
+            });
+            
+            panel.webview.postMessage({ type: 'loadingDone' });
+            
+            if (result.prUrl) {
+                const openPr = await vscode.window.showInformationMessage(
+                    `✅ ${result.message}`,
+                    'Open PR in Browser'
+                );
+                if (openPr) {
+                    vscode.env.openExternal(vscode.Uri.parse(result.prUrl));
+                }
+            } else {
+                vscode.window.showInformationMessage(`✅ ${result.message}`);
+            }
+            
+            await this.refreshPanel(workflowId);
+        } catch (error) {
+            panel.webview.postMessage({ type: 'loadingDone' });
+            const msg = error instanceof Error ? error.message : 'Failed to finalize workflow';
+            vscode.window.showErrorMessage(`Finalize failed: ${msg}`);
+        }
+    }
+
     private async handleOpenWorkspace(workspacePath: string, gitBranch: string): Promise<void> {
         if (!workspacePath) {
             vscode.window.showErrorMessage('No workspace path available for this workflow');
@@ -837,6 +953,19 @@ export class WorkflowPanelProvider {
             await this.refreshPanel(workflowId);
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Failed to skip step';
+            panel.webview.postMessage({ type: 'error', message });
+        }
+    }
+
+    private async handleResetStep(workflowId: string, stepId: string, panel: vscode.WebviewPanel): Promise<void> {
+        try {
+            panel.webview.postMessage({ type: 'loading', action: 'reset', stepId });
+            await this.apiService.resetStep(workflowId, stepId);
+            vscode.window.showInformationMessage('Step reset to pending 🔄');
+            panel.webview.postMessage({ type: 'loadingDone' });
+            await this.refreshPanel(workflowId);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to reset step';
             panel.webview.postMessage({ type: 'error', message });
         }
     }
@@ -1335,6 +1464,7 @@ export class WorkflowPanelProvider {
             display: flex;
             gap: 4px;
             flex-shrink: 0;
+            position: relative;
         }
         .btn-icon {
             width: 28px;
@@ -1744,7 +1874,7 @@ export class WorkflowPanelProvider {
 
     <div class="meta">
         ${workflow.gitBranch ? `<div class="meta-item">🌿 ${workflow.gitBranch}</div>` : ''}
-        ${workflow.workspacePath ? `<div class="meta-item">📁 ${workflow.workspacePath}</div>` : ''}
+        ${workflow.worktreePath ? `<div class="meta-item">📁 ${workflow.worktreePath}</div>` : ''}
     </div>
 
     <div class="action-bar" id="actionBar">
@@ -1838,7 +1968,11 @@ export class WorkflowPanelProvider {
                     'execute': '▶ Executing step...',
                     'executeAll': '▶▶ Executing all pending steps...',
                     'complete': '✓ Completing workflow...',
-                    'cancel': '🛑 Cancelling...'
+                    'cancel': '🛑 Cancelling...',
+                    'skip': '⏭ Skipping step...',
+                    'reset': '🔃 Resetting step...',
+                    'reassign': '🔄 Reassigning step...',
+                    'finalize': '🚀 Finalizing workflow (commit, push, PR)...'
                 };
                 loadingText.textContent = messages[action] || 'Processing...';
                 loadingOverlay.classList.add('active');
@@ -1879,6 +2013,13 @@ export class WorkflowPanelProvider {
         function skipStep(stepId) {
             if (confirm('Are you sure you want to skip this step?')) {
                 vscode.postMessage({ type: 'skipStep', stepId });
+            }
+        }
+
+        // Reset a step back to pending
+        function resetStep(stepId) {
+            if (confirm('Reset this step to pending? This will clear any output and allow re-execution.')) {
+                vscode.postMessage({ type: 'resetStep', stepId });
             }
         }
 
@@ -1971,6 +2112,89 @@ export class WorkflowPanelProvider {
             vscode.postMessage({ type: 'refresh' });
         }
 
+        function showFinalizeDialog() {
+            // Create finalize dialog if it doesn't exist
+            let dialog = document.getElementById('finalizeDialog');
+            if (!dialog) {
+                dialog = document.createElement('div');
+                dialog.id = 'finalizeDialog';
+                dialog.className = 'modal-overlay';
+                dialog.style.display = 'none';
+                dialog.innerHTML = \`
+                    <div class="modal-dialog" style="max-width: 450px;">
+                        <div class="modal-content">
+                            <div class="modal-icon">🚀</div>
+                            <div class="modal-message" style="font-size: 1.2em; font-weight: bold;">Finalize Workflow</div>
+                        </div>
+                        <div style="margin: 16px 0; text-align: left;">
+                            <label style="display: block; margin-bottom: 12px;">
+                                <div style="margin-bottom: 4px;"><strong>Commit Message</strong></div>
+                                <input type="text" id="finalizeCommitMsg" 
+                                    style="width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid var(--vscode-input-border); background: var(--vscode-input-background); color: var(--vscode-input-foreground); border-radius: 4px;"
+                                    placeholder="feat: workflow changes">
+                            </label>
+                            <label style="display: flex; align-items: center; margin-bottom: 12px; cursor: pointer;">
+                                <input type="checkbox" id="finalizeCreatePr" checked style="margin-right: 8px;">
+                                <span>Create Pull Request</span>
+                            </label>
+                            <label style="display: block; margin-bottom: 12px;">
+                                <div style="margin-bottom: 4px;"><strong>PR Title</strong></div>
+                                <input type="text" id="finalizePrTitle" 
+                                    style="width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid var(--vscode-input-border); background: var(--vscode-input-background); color: var(--vscode-input-foreground); border-radius: 4px;"
+                                    placeholder="Workflow title">
+                            </label>
+                            <label style="display: flex; align-items: center; cursor: pointer;">
+                                <input type="checkbox" id="finalizeDraft" checked style="margin-right: 8px;">
+                                <span>Create as Draft PR</span>
+                            </label>
+                        </div>
+                        <div class="modal-buttons" id="finalizeButtons"></div>
+                    </div>
+                \`;
+                document.body.appendChild(dialog);
+            }
+            
+            // Pre-fill with workflow title
+            document.getElementById('finalizeCommitMsg').value = 'feat: ' + workflow.title;
+            document.getElementById('finalizePrTitle').value = workflow.title;
+            
+            // Set up buttons
+            const buttonsDiv = document.getElementById('finalizeButtons');
+            buttonsDiv.innerHTML = '';
+            
+            const submitBtn = document.createElement('button');
+            submitBtn.className = 'btn btn-primary';
+            submitBtn.textContent = '🚀 Finalize';
+            submitBtn.onclick = () => {
+                const commitMessage = document.getElementById('finalizeCommitMsg').value;
+                const createPr = document.getElementById('finalizeCreatePr').checked;
+                const prTitle = document.getElementById('finalizePrTitle').value;
+                const draft = document.getElementById('finalizeDraft').checked;
+                
+                dialog.style.display = 'none';
+                setLoading('finalize', true);
+                vscode.postMessage({ 
+                    type: 'finalize',
+                    commitMessage,
+                    createPullRequest: createPr,
+                    prTitle,
+                    draft
+                });
+            };
+            
+            const cancelBtn = document.createElement('button');
+            cancelBtn.className = 'btn btn-secondary';
+            cancelBtn.textContent = 'Cancel';
+            cancelBtn.onclick = () => {
+                dialog.style.display = 'none';
+            };
+            
+            buttonsDiv.appendChild(submitBtn);
+            buttonsDiv.appendChild(cancelBtn);
+            
+            dialog.style.display = 'flex';
+        }
+
         // Modal dialog functions (replace confirm/alert which are blocked in sandboxed webviews)
         function showModal(icon, message, buttons) {
             document.getElementById('modalIcon').textContent = icon;
@@ -1989,12 +2213,73 @@ export class WorkflowPanelProvider {
 
         function hideModal() {
             document.getElementById('modalOverlay').style.display = 'none';
+            // Also hide input modal if open
+            const inputModal = document.getElementById('inputModalOverlay');
+            if (inputModal) inputModal.style.display = 'none';
+        }
+
+        // Input modal for prompts (replaces prompt() which is blocked)
+        function showInputModal(icon, message, defaultValue, onSubmit) {
+            // Check if input modal exists, create if not
+            let inputModal = document.getElementById('inputModalOverlay');
+            if (!inputModal) {
+                inputModal = document.createElement('div');
+                inputModal.id = 'inputModalOverlay';
+                inputModal.className = 'modal-overlay';
+                inputModal.innerHTML = \`
+                    <div class="modal">
+                        <div class="modal-icon" id="inputModalIcon"></div>
+                        <div class="modal-message" id="inputModalMessage"></div>
+                        <input type="text" id="inputModalInput" class="modal-input" style="width: 100%; padding: 8px; margin: 12px 0; border: 1px solid var(--vscode-input-border); background: var(--vscode-input-background); color: var(--vscode-input-foreground); border-radius: 4px;">
+                        <div class="modal-buttons" id="inputModalButtons"></div>
+                    </div>
+                \`;
+                document.body.appendChild(inputModal);
+            }
+            
+            document.getElementById('inputModalIcon').textContent = icon;
+            document.getElementById('inputModalMessage').textContent = message;
+            const input = document.getElementById('inputModalInput');
+            input.value = defaultValue || '';
+            
+            const buttonsDiv = document.getElementById('inputModalButtons');
+            buttonsDiv.innerHTML = '';
+            
+            const submitBtn = document.createElement('button');
+            submitBtn.className = 'btn btn-primary';
+            submitBtn.textContent = 'OK';
+            submitBtn.onclick = () => {
+                const value = input.value;
+                inputModal.style.display = 'none';
+                onSubmit(value);
+            };
+            
+            const cancelBtn = document.createElement('button');
+            cancelBtn.className = 'btn btn-secondary';
+            cancelBtn.textContent = 'Cancel';
+            cancelBtn.onclick = () => {
+                inputModal.style.display = 'none';
+            };
+            
+            buttonsDiv.appendChild(submitBtn);
+            buttonsDiv.appendChild(cancelBtn);
+            
+            inputModal.style.display = 'flex';
+            input.focus();
+            input.select();
+            
+            // Handle Enter key
+            input.onkeypress = (e) => {
+                if (e.key === 'Enter') {
+                    submitBtn.click();
+                }
+            };
         }
 
         function openWorkspace() {
             vscode.postMessage({
                 type: 'openWorkspace',
-                workspacePath: workflow.workspacePath,
+                worktreePath: workflow.worktreePath,
                 gitBranch: workflow.gitBranch
             });
         }
@@ -2028,6 +2313,12 @@ export class WorkflowPanelProvider {
         function skipStep(stepId) {
             if (confirm('Are you sure you want to skip this step?')) {
                 vscode.postMessage({ type: 'skipStep', stepId });
+            }
+        }
+
+        function resetStep(stepId) {
+            if (confirm('Reset this step to pending? This will clear any output and allow re-execution.')) {
+                vscode.postMessage({ type: 'resetStep', stepId });
             }
         }
 
@@ -2080,6 +2371,80 @@ export class WorkflowPanelProvider {
                 vscode.postMessage({ type: 'stepChat', stepId, message });
             }
         }
+
+        // Handle menu button clicks via event delegation
+        document.addEventListener('click', (e) => {
+            const target = e.target;
+            if (!target || !target.closest) return;
+            
+            // Check if clicking a menu action button
+            const menuButton = target.closest('.step-menu button[data-action]');
+            if (menuButton) {
+                const action = menuButton.getAttribute('data-action');
+                const stepId = menuButton.getAttribute('data-step-id');
+                const menu = menuButton.closest('.step-menu');
+                
+                // Close menu immediately
+                if (menu) menu.style.display = 'none';
+                
+                if (action && stepId) {
+                    switch (action) {
+                        case 'skip':
+                            showModal('⏭', 'Are you sure you want to skip this step?', [
+                                { text: 'Skip', primary: true, action: () => {
+                                    hideModal();
+                                    setLoading('skip', true, stepId);
+                                    vscode.postMessage({ type: 'skipStep', stepId: stepId });
+                                }},
+                                { text: 'Cancel', primary: false, action: hideModal }
+                            ]);
+                            break;
+                        case 'reset':
+                            showModal('🔃', 'Reset this step to pending? This will clear any output and allow re-execution.', [
+                                { text: 'Reset', primary: true, action: () => {
+                                    hideModal();
+                                    setLoading('reset', true, stepId);
+                                    vscode.postMessage({ type: 'resetStep', stepId: stepId });
+                                }},
+                                { text: 'Cancel', primary: false, action: hideModal }
+                            ]);
+                            break;
+                        case 'reassign':
+                            showInputModal('🔄', 'Enter agent ID:', 'e.g., coding-agent, documentation-agent', (agent) => {
+                                if (agent && agent.trim()) {
+                                    setLoading('reassign', true, stepId);
+                                    vscode.postMessage({ type: 'reassignStep', stepId: stepId, agentId: agent.trim() });
+                                }
+                            });
+                            break;
+                        case 'edit':
+                            const stepCard = document.querySelector('[data-step-id="' + stepId + '"]');
+                            const descEl = stepCard?.querySelector('.step-description');
+                            const currentDesc = descEl?.textContent || '';
+                            showInputModal('✏️', 'Edit step description:', currentDesc, (newDesc) => {
+                                if (newDesc !== null && newDesc !== currentDesc) {
+                                    vscode.postMessage({ type: 'updateStepDescription', stepId: stepId, description: newDesc });
+                                }
+                            });
+                            break;
+                        case 'view':
+                            vscode.postMessage({ type: 'viewStepContext', stepId: stepId });
+                            break;
+                    }
+                }
+                return;
+            }
+            
+            // Don't close if clicking on the menu toggle button (⋮) or inside a menu
+            const isMenuToggle = target.closest('button[title="More options"]');
+            const isInsideMenu = target.closest('.step-menu');
+            
+            if (!isMenuToggle && !isInsideMenu) {
+                document.querySelectorAll('.step-menu').forEach(menu => {
+                    menu.style.display = 'none';
+                });
+            }
+        });
 
         window.addEventListener('message', (event) => {
             const message = event.data;
@@ -2257,13 +2622,14 @@ export class WorkflowPanelProvider {
             
             actionButtons.push(`<button class="btn-icon" onclick="toggleStepMenu('${step.id}')" title="More options">⋮</button>`);
 
-            // Step menu (hidden by default)
+            // Step menu (hidden by default) - using data attributes for event delegation
             const menuHtml = `
             <div class="step-menu" id="menu-${step.id}" style="display: none;">
-                <button onclick="editDescription('${step.id}')">✏️ Edit description</button>
-                <button onclick="reassignStep('${step.id}')">🔄 Reassign agent</button>
-                <button onclick="skipStep('${step.id}')">⏭ Skip step</button>
-                <button onclick="viewContext('${step.id}')">🔍 View context</button>
+                <button data-action="edit" data-step-id="${step.id}">✏️ Edit description</button>
+                <button data-action="reassign" data-step-id="${step.id}">🔄 Reassign agent</button>
+                <button data-action="skip" data-step-id="${step.id}">⏭ Skip step</button>
+                <button data-action="reset" data-step-id="${step.id}">🔃 Reset step</button>
+                <button data-action="view" data-step-id="${step.id}">🔍 View context</button>
             </div>`;
 
             // Build CSS classes for the step card
@@ -2292,8 +2658,8 @@ export class WorkflowPanelProvider {
                     </div>
                     <div class="step-actions">
                         ${actionButtons.join('')}
+                        ${menuHtml}
                     </div>
-                    ${menuHtml}
                 </div>
                 ${step.status === 'Running' ? '<div class="step-progress"><div class="progress-bar"></div></div>' : ''}
                 ${step.error ? `<div class="step-error">Error: ${this.escapeHtml(step.error)}</div>` : ''}
@@ -2343,6 +2709,7 @@ export class WorkflowPanelProvider {
                 break;
             case 'Completed':
                 leftButtons.push('<span class="status-text success">✓ Workflow Completed</span>');
+                leftButtons.push('<button class="btn btn-primary" onclick="showFinalizeDialog()">🚀 Finalize & Create PR</button>');
                 break;
             case 'Cancelled':
             case 'Failed':
@@ -2351,7 +2718,7 @@ export class WorkflowPanelProvider {
         }
 
         // Utility buttons (left side, after primary actions)
-        if (workflow.workspacePath && workflow.status !== 'Completed' && workflow.status !== 'Cancelled' && workflow.status !== 'Failed') {
+        if (workflow.worktreePath && workflow.status !== 'Completed' && workflow.status !== 'Cancelled' && workflow.status !== 'Failed') {
             leftButtons.push('<button class="btn btn-primary" onclick="openWorkspace()">📂 Open Workspace</button>');
         }
         leftButtons.push('<button class="btn btn-primary" onclick="refresh()">🔄 Refresh</button>');

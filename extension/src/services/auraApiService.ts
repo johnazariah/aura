@@ -52,6 +52,18 @@ export interface BackgroundJobStatus {
     error?: string;
 }
 
+export interface CodeGraphIndexResult {
+    success: boolean;
+    nodesCreated: number;
+    edgesCreated: number;
+    projectsIndexed: number;
+    filesIndexed: number;
+    typesIndexed: number;
+    durationMs: number;
+    warnings: string[];
+    error?: string;
+}
+
 export interface RagQueryResult {
     contentId: string;
     chunkIndex: number;
@@ -96,7 +108,7 @@ export interface Workflow {
     description?: string;
     status: string;
     gitBranch?: string;
-    workspacePath?: string;
+    worktreePath?: string;
     repositoryPath?: string;
     analyzedContext?: string;
     executionPlan?: string;
@@ -296,6 +308,45 @@ export class AuraApiService {
     }
 
     // =====================
+    // Code Graph Methods
+    // =====================
+
+    /**
+     * Get code graph statistics, optionally filtered by repository.
+     */
+    async getCodeGraphStats(repositoryPath?: string): Promise<{
+        totalNodes: number;
+        totalEdges: number;
+        nodesByType: Record<string, number>;
+        edgesByType: Record<string, number>;
+        repositoryPath?: string;
+    }> {
+        const params = repositoryPath ? { repositoryPath } : {};
+        const response = await this.httpClient.get(
+            `${this.getBaseUrl()}/api/graph/stats`,
+            { params, timeout: 5000 }
+        );
+        return response.data;
+    }
+
+    /**
+     * Index a solution/project into the code graph using Roslyn semantic analysis.
+     * This provides structural queries (implementations, callers, etc.).
+     */
+    async indexCodeGraph(
+        solutionPath: string,
+        repositoryPath: string,
+        reindex: boolean = false
+    ): Promise<CodeGraphIndexResult> {
+        const response = await this.httpClient.post(
+            `${this.getBaseUrl()}/api/graph/index`,
+            { solutionPath, repositoryPath, reindex },
+            { timeout: this.getIndexingTimeout() }
+        );
+        return response.data;
+    }
+
+    // =====================
     // Developer Module Methods
     // =====================
 
@@ -420,6 +471,14 @@ export class AuraApiService {
         return response.data;
     }
 
+    async resetStep(workflowId: string, stepId: string): Promise<WorkflowStep> {
+        const response = await this.httpClient.post(
+            `${this.getBaseUrl()}/api/developer/workflows/${workflowId}/steps/${stepId}/reset`,
+            {}
+        );
+        return response.data;
+    }
+
     async chatWithStep(workflowId: string, stepId: string, message: string): Promise<StepChatResponse> {
         const response = await this.httpClient.post(
             `${this.getBaseUrl()}/api/developer/workflows/${workflowId}/steps/${stepId}/chat`,
@@ -444,4 +503,36 @@ export class AuraApiService {
         );
         return response.data;
     }
+
+    async finalizeWorkflow(workflowId: string, options: {
+        commitMessage?: string;
+        createPullRequest?: boolean;
+        prTitle?: string;
+        prBody?: string;
+        baseBranch?: string;
+        draft?: boolean;
+    } = {}): Promise<FinalizeResult> {
+        const response = await this.httpClient.post(
+            `${this.getBaseUrl()}/api/developer/workflows/${workflowId}/finalize`,
+            {
+                commitMessage: options.commitMessage,
+                createPullRequest: options.createPullRequest ?? true,
+                prTitle: options.prTitle,
+                prBody: options.prBody,
+                baseBranch: options.baseBranch,
+                draft: options.draft ?? true
+            },
+            { timeout: 120000 } // 2 minute timeout for git operations
+        );
+        return response.data;
+    }
+}
+
+export interface FinalizeResult {
+    workflowId: string;
+    commitSha?: string;
+    pushed: boolean;
+    prNumber?: number;
+    prUrl?: string;
+    message: string;
 }
