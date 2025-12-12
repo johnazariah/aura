@@ -183,6 +183,13 @@ prompts/                      # Handlebars prompt templates
 
 ## Open Items
 
+### Technical Debt
+
+| Item | Impact | Notes |
+|------|--------|-------|
+| Duplicate language coding agents | Low | `PythonCodingAgent.cs`, `GoCodingAgent.cs`, `TypeScriptCodingAgent.cs`, `FSharpCodingAgent.cs` duplicate YAML configs in `agents/languages/*.yaml`. Remove hardcoded agents after implementing `LanguageSpecialistAgent` that loads YAML configs. |
+| ReActExecutor inline prompt | Low | Core ReAct prompt is inline in `ReActExecutor.cs` - tightly coupled to parsing logic, consider externalizing with care. |
+
 ### Not Yet Implemented
 
 | Item | Priority | Notes |

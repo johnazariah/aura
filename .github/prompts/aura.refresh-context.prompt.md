@@ -17,18 +17,27 @@ git status
 git log --oneline -10
 ```
 
-## 3. If Needed, Read Architecture Reference
+## 3. Read API Cheat Sheet
 
-For API endpoints, file locations, and debugging: `.project/ARCHITECTURE-QUICK-REFERENCE.md`
+For canonical endpoints and usage patterns: `.project/reference/api-cheat-sheet.md`
 
-## 4. Remember the Core Principles
+**Key notes:**
+- **Prefer background indexing** (`POST /api/index/background`) over synchronous endpoints
+- Check job status with `GET /api/index/jobs/{jobId}`
+- Workflow creation uses `repositoryPath` (git repo root)
+
+## 4. If Needed, Read Architecture Reference
+
+For file locations and debugging: `.project/reference/architecture-quick-reference.md`
+
+## 5. Remember the Core Principles
 
 1. **NEVER implement without a spec** - All changes require documented requirements
 2. **Design before coding** - Seek approval before implementing
 3. **User controls the server** - Never run `Start-Api.ps1`; ask user to restart if needed
 4. **Document all decisions** - Update STATUS.md after significant changes
 
-## 5. Development Commands
+## 6. Development Commands
 
 ```powershell
 # Test API (user must have server running)
