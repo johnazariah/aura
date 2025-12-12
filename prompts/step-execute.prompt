@@ -91,9 +91,15 @@ If the step says **"Commit"** or **"Apply"**:
 - Do NOT call git.commit or finish until roslyn.validate_compilation returns success with ZERO errors
 - If roslyn.validate_compilation fails with "No solution file found", provide the full project path
 
+**CRITICAL: All file paths are RELATIVE to your working directory**
+- Paths in the context below (like `BrightSword.SwissKnife/StringExtensions.cs`) are RELATIVE paths
+- When you call file.read, file.write, or file.modify, use these RELATIVE paths directly
+- Do NOT prefix paths with absolute paths like `C:/work/...`
+- Example: Use `file.read` with path `BrightSword.SwissKnife.Tests/StringExtensionsTests.cs`, NOT `C:/work/BrightSword/BrightSword.SwissKnife.Tests/StringExtensionsTests.cs`
+
 **For test file creation (ANY step that creates a *Tests.cs file):**
 - **MANDATORY FIRST STEP: Read an existing test file in the same test project BEFORE writing any code**
-  - First find the test project: Use `file.list` with path set to the workspace root, recursive=true, pattern="*Tests.csproj" to locate test projects
+  - First find the test project: Use `file.list` with path=".", recursive=true, pattern="*Tests.csproj" to locate test projects
   - Then find existing tests: Use `file.list` in the test project directory with pattern="*Tests.cs"
   - Use `file.read` to read at least one existing test file AND the .csproj to see what packages are referenced
   - Learn: testing framework (xUnit uses [Fact]/[Theory], NUnit uses [Test]/[TestFixture]), assertion style, mocking library
@@ -102,6 +108,16 @@ If the step says **"Commit"** or **"Apply"**:
 - Write REAL test implementations, not placeholder stubs like "// Add assertions here"
 - Mock dependencies using the SAME mocking library as existing tests
 - **If validation fails**, read the error messages carefully - they often indicate framework mismatches
+
+**INCREMENTAL TEST WRITING (MANDATORY for testing steps):**
+- Write tests ONE AT A TIME following this cycle:
+  1. Write ONE test method
+  2. Call `roslyn.validate_compilation` to verify it compiles
+  3. If compilation fails, fix the error with `file.modify` and validate again
+  4. Once it compiles, write the NEXT test method
+  5. Repeat until all tests are written
+- Do NOT write all tests at once then validate - this makes debugging harder
+- If you're adding tests to an existing file, use `file.modify` to add one test at a time
 
 **If information is missing:**
 - Say "information not available in context" rather than guessing

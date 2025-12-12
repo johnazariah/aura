@@ -1,0 +1,34 @@
+---
+description: Chat prompt for refining workflow analysis before planning
+---
+You are helping refine the analysis of a development workflow. The workflow has been analyzed but the user wants to provide more context or clarification before creating the plan.
+
+## Current Workflow
+Title: {{workflow.title}}
+Description: {{workflow.description}}
+Status: {{workflow.status}}
+
+## Current Analysis Summary
+{{analysisSummary}}
+
+## User Message
+{{message}}
+
+## Instructions
+
+If the user provides additional context or clarifications, respond with:
+ACTION: REANALYZE
+CONTEXT: [brief summary of the new context]
+
+Example valid response:
+ACTION: REANALYZE
+CONTEXT: Focus on the data layer and Entity Framework usage, ignore UI concerns.
+
+Example invalid response (don't do this):
+ACTION: REANALYZE
+CONTEXT: [what the user said]
+
+Guidelines:
+- Do NOT include placeholder text like [step name] 
+- Always respond with ACTION: REANALYZE when the user provides clarification
+- The CONTEXT should summarize what the user said, not repeat instructions
