@@ -48,6 +48,7 @@ features/
 
 | Feature | Description |
 |---------|-------------|
+| [Code-Aware Chat](upcoming/code-aware-chat.md) | Chat with RAG + Code Graph context |
 | [Unified Indexing Backend](upcoming/unified-indexing-backend.md) | Single pipeline for RAG + Code Graph |
 | [Indexing UX](upcoming/indexing-ux.md) | Progress UI, prompts, query commands |
 
