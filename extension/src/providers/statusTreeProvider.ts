@@ -148,6 +148,25 @@ export class StatusTreeProvider implements vscode.TreeDataProvider<StatusItem> {
     private getRagChildren(status: RagStatus): StatusItem[] {
         const children: StatusItem[] = [];
 
+        // Code Graph stats (Roslyn semantic index)
+        if (status.graphNodes !== undefined && status.graphNodes > 0) {
+            const graphItem = new StatusItem(
+                'Code Graph',
+                { status: 'healthy', details: `${status.graphNodes} nodes, ${status.graphEdges || 0} edges` },
+                'info'
+            );
+            graphItem.iconPath = new vscode.ThemeIcon('type-hierarchy', new vscode.ThemeColor('charts.blue'));
+            children.push(graphItem);
+        } else {
+            const noGraphItem = new StatusItem(
+                'Code Graph',
+                { status: 'unknown', details: 'Not indexed' },
+                'info'
+            );
+            noGraphItem.iconPath = new vscode.ThemeIcon('type-hierarchy');
+            children.push(noGraphItem);
+        }
+
         // Symbols count (each class, method, section is a "document" in RAG terms)
         const docItem = new StatusItem(
             'Symbols',
