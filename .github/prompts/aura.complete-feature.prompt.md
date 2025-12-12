@@ -57,15 +57,51 @@ Check that:
 - [ ] README.md index includes the feature with correct link and date
 - [ ] No broken links (old numbered filenames)
 
-### Step 5: Commit with Conventional Message
+### Step 5: Batch Commit All Related Changes
 
-Stage and commit with message format:
-```
-docs(features): complete {feature-name}
+Before committing the documentation, commit all code changes in logical batches:
 
-- Move to features/completed/
-- Update status and completion date
-- Update README index
+1. **Run `git status --short`** to see all modified/new files
+2. **Group related files by feature/area** using this priority:
+   - Core functionality changes (single feature = single commit)
+   - API/endpoint changes
+   - Database/schema changes  
+   - Prompts/agent changes
+   - Extension/UI changes
+   - Tests
+   - Documentation and samples
+
+3. **For each group, create an atomic commit:**
+   ```powershell
+   git add <related-files>
+   git commit -m "<type>(<scope>): <description>"
+   ```
+
+4. **Use conventional commit types:**
+   - `feat` - New feature
+   - `fix` - Bug fix
+   - `refactor` - Code restructuring (no behavior change)
+   - `chore` - Maintenance, config, dependencies
+   - `docs` - Documentation only
+   - `test` - Tests only
+
+5. **Common scopes for Aura:**
+   - `git`, `rag`, `workflow`, `api`, `extension`, `prompts`, `db`, `foundation`, `developer`
+
+6. **Finally, commit the feature documentation:**
+   ```
+   docs(features): complete {feature-name}
+
+   - Move to features/completed/
+   - Update status and completion date
+   - Update README index
+   ```
+
+### Step 6: Push All Commits
+
+After all commits are made:
+```powershell
+git push
 ```
 
 ## Validation
