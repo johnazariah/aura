@@ -5,6 +5,7 @@ using Aura.Foundation;
 using Aura.Foundation.Agents;
 using Aura.Foundation.Data;
 using Aura.Foundation.Data.Entities;
+using Aura.Foundation.Git;
 using Aura.Foundation.Llm;
 using Aura.Foundation.Rag;
 using Aura.Module.Developer;
@@ -53,7 +54,8 @@ builder.AddServiceDefaults();
 // Connection string comes from Aspire AppHost via configuration
 var connectionString = builder.Configuration.GetConnectionString("auradb");
 builder.Services.AddDbContext<AuraDbContext>(options =>
-    options.UseNpgsql(connectionString, o => o.UseVector()));
+    options.UseNpgsql(connectionString, o => o.UseVector())
+           .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning)));
 
 // Add Aura Foundation services
 builder.Services.AddAuraFoundation(builder.Configuration);
@@ -88,59 +90,6 @@ if (!app.Environment.IsEnvironment("Testing"))
         logger.LogInformation("Applying database migrations...");
         db.Database.Migrate();
         logger.LogInformation("Database migrations applied successfully");
-
-        // Ensure Developer module tables exist (EnsureCreated doesn't work after Migrate)
-        // Use raw SQL to create tables if they don't exist
-        var developerDb = scope.ServiceProvider.GetRequiredService<DeveloperDbContext>();
-        await developerDb.Database.ExecuteSqlRawAsync("""
-            CREATE TABLE IF NOT EXISTS workflows (
-                id UUID PRIMARY KEY,
-                title VARCHAR(1000) NOT NULL,
-                description TEXT,
-                repository_path VARCHAR(1000),
-                status VARCHAR(20) NOT NULL,
-                workspace_path VARCHAR(1000),
-                git_branch VARCHAR(500),
-                analyzed_context JSONB,
-                execution_plan JSONB,
-                created_at TIMESTAMPTZ NOT NULL,
-                updated_at TIMESTAMPTZ NOT NULL,
-                completed_at TIMESTAMPTZ
-            );
-            
-            CREATE INDEX IF NOT EXISTS ix_workflows_status ON workflows(status);
-            CREATE INDEX IF NOT EXISTS ix_workflows_created_at ON workflows(created_at);
-            
-            CREATE TABLE IF NOT EXISTS workflow_steps (
-                id UUID PRIMARY KEY,
-                workflow_id UUID NOT NULL REFERENCES workflows(id) ON DELETE CASCADE,
-                "order" INTEGER NOT NULL,
-                name VARCHAR(500) NOT NULL,
-                capability VARCHAR(100) NOT NULL,
-                language VARCHAR(50),
-                description TEXT,
-                status VARCHAR(20) NOT NULL,
-                assigned_agent_id VARCHAR(100),
-                input JSONB,
-                output JSONB,
-                error TEXT,
-                attempts INTEGER NOT NULL DEFAULT 0,
-                started_at TIMESTAMPTZ,
-                completed_at TIMESTAMPTZ
-            );
-            
-            CREATE INDEX IF NOT EXISTS ix_workflow_steps_workflow_order ON workflow_steps(workflow_id, "order");
-            CREATE INDEX IF NOT EXISTS ix_workflow_steps_status ON workflow_steps(status);
-            
-            -- Add new columns for assisted workflow UI (idempotent)
-            ALTER TABLE workflow_steps ADD COLUMN IF NOT EXISTS approval INTEGER;
-            ALTER TABLE workflow_steps ADD COLUMN IF NOT EXISTS approval_feedback TEXT;
-            ALTER TABLE workflow_steps ADD COLUMN IF NOT EXISTS skip_reason TEXT;
-            ALTER TABLE workflow_steps ADD COLUMN IF NOT EXISTS chat_history JSONB;
-            ALTER TABLE workflow_steps ADD COLUMN IF NOT EXISTS needs_rework BOOLEAN NOT NULL DEFAULT false;
-            ALTER TABLE workflow_steps ADD COLUMN IF NOT EXISTS previous_output JSONB;
-            """);
-        logger.LogInformation("Developer module tables ensured");
     }
     catch (Exception ex)
     {
@@ -579,7 +528,7 @@ app.MapGet("/api/conversations/{id:guid}", async (Guid id, AuraDbContext db) =>
         id = conversation.Id,
         title = conversation.Title,
         agentId = conversation.AgentId,
-        workspacePath = conversation.WorkspacePath,
+        workspacePath = conversation.RepositoryPath,
         createdAt = conversation.CreatedAt,
         updatedAt = conversation.UpdatedAt,
         messages = conversation.Messages.Select(m => new
@@ -601,7 +550,7 @@ app.MapPost("/api/conversations", async (CreateConversationRequest request, Aura
         Id = Guid.NewGuid(),
         Title = request.Title ?? "New Conversation",
         AgentId = request.AgentId,
-        WorkspacePath = request.WorkspacePath,
+        RepositoryPath = request.WorkspacePath,
         CreatedAt = DateTimeOffset.UtcNow,
         UpdatedAt = DateTimeOffset.UtcNow,
     };
@@ -650,7 +599,7 @@ app.MapPost("/api/conversations/{id:guid}/messages", async (
 
     var context = new AgentContext(
         Prompt: request.Content,
-        WorkspacePath: conversation.WorkspacePath);
+        WorkspacePath: conversation.RepositoryPath);
 
     try
     {
@@ -985,6 +934,31 @@ app.MapDelete("/api/rag", async (IRagService ragService, CancellationToken cance
 
 // ==== Graph RAG Endpoints ====
 
+// Get code graph statistics
+app.MapGet("/api/graph/stats", async (
+    string? repositoryPath,
+    Aura.Foundation.Rag.ICodeGraphService graphService,
+    CancellationToken ct) =>
+{
+    try
+    {
+        var stats = await graphService.GetStatsAsync(repositoryPath, ct);
+
+        return Results.Ok(new
+        {
+            totalNodes = stats.TotalNodes,
+            totalEdges = stats.TotalEdges,
+            nodesByType = stats.NodesByType.ToDictionary(kv => kv.Key.ToString(), kv => kv.Value),
+            edgesByType = stats.EdgesByType.ToDictionary(kv => kv.Key.ToString(), kv => kv.Value),
+            repositoryPath = stats.RepositoryPath
+        });
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+});
+
 // Index a solution/project into the code graph
 app.MapPost("/api/graph/index", async (
     IndexCodeGraphRequest request,
@@ -999,11 +973,11 @@ app.MapPost("/api/graph/index", async (
         Aura.Module.Developer.Services.CodeGraphIndexResult result;
         if (request.Reindex)
         {
-            result = await indexer.ReindexAsync(request.SolutionPath, request.WorkspacePath, ct);
+            result = await indexer.ReindexAsync(request.SolutionPath, request.RepositoryPath, ct);
         }
         else
         {
-            result = await indexer.IndexAsync(request.SolutionPath, request.WorkspacePath, ct);
+            result = await indexer.IndexAsync(request.SolutionPath, request.RepositoryPath, ct);
         }
 
         if (!result.Success)
@@ -1040,7 +1014,7 @@ app.MapPost("/api/graph/index", async (
 // Find implementations of an interface
 app.MapGet("/api/graph/implementations/{interfaceName}", async (
     string interfaceName,
-    string? workspacePath,
+    string? repositoryPath,
     Aura.Foundation.Rag.ICodeGraphService graphService,
     CancellationToken ct) =>
 {
@@ -1048,7 +1022,7 @@ app.MapGet("/api/graph/implementations/{interfaceName}", async (
     {
         var implementations = await graphService.FindImplementationsAsync(
             Uri.UnescapeDataString(interfaceName),
-            workspacePath,
+            repositoryPath,
             ct);
 
         return Results.Ok(new
@@ -1074,7 +1048,7 @@ app.MapGet("/api/graph/implementations/{interfaceName}", async (
 app.MapGet("/api/graph/callers/{methodName}", async (
     string methodName,
     string? containingType,
-    string? workspacePath,
+    string? repositoryPath,
     Aura.Foundation.Rag.ICodeGraphService graphService,
     CancellationToken ct) =>
 {
@@ -1083,7 +1057,7 @@ app.MapGet("/api/graph/callers/{methodName}", async (
         var callers = await graphService.FindCallersAsync(
             Uri.UnescapeDataString(methodName),
             containingType,
-            workspacePath,
+            repositoryPath,
             ct);
 
         return Results.Ok(new
@@ -1110,7 +1084,7 @@ app.MapGet("/api/graph/callers/{methodName}", async (
 // Get members of a type
 app.MapGet("/api/graph/members/{typeName}", async (
     string typeName,
-    string? workspacePath,
+    string? repositoryPath,
     Aura.Foundation.Rag.ICodeGraphService graphService,
     CancellationToken ct) =>
 {
@@ -1118,7 +1092,7 @@ app.MapGet("/api/graph/members/{typeName}", async (
     {
         var members = await graphService.GetTypeMembersAsync(
             Uri.UnescapeDataString(typeName),
-            workspacePath,
+            repositoryPath,
             ct);
 
         return Results.Ok(new
@@ -1146,7 +1120,7 @@ app.MapGet("/api/graph/members/{typeName}", async (
 // Find types in a namespace
 app.MapGet("/api/graph/namespace/{namespaceName}", async (
     string namespaceName,
-    string? workspacePath,
+    string? repositoryPath,
     Aura.Foundation.Rag.ICodeGraphService graphService,
     CancellationToken ct) =>
 {
@@ -1154,7 +1128,7 @@ app.MapGet("/api/graph/namespace/{namespaceName}", async (
     {
         var types = await graphService.GetTypesInNamespaceAsync(
             Uri.UnescapeDataString(namespaceName),
-            workspacePath,
+            repositoryPath,
             ct);
 
         return Results.Ok(new
@@ -1181,7 +1155,7 @@ app.MapGet("/api/graph/namespace/{namespaceName}", async (
 app.MapGet("/api/graph/find/{name}", async (
     string name,
     string? nodeType,
-    string? workspacePath,
+    string? repositoryPath,
     Aura.Foundation.Rag.ICodeGraphService graphService,
     CancellationToken ct) =>
 {
@@ -1197,7 +1171,7 @@ app.MapGet("/api/graph/find/{name}", async (
         var nodes = await graphService.FindNodesAsync(
             Uri.UnescapeDataString(name),
             parsedNodeType,
-            workspacePath,
+            repositoryPath,
             ct);
 
         return Results.Ok(new
@@ -1224,20 +1198,20 @@ app.MapGet("/api/graph/find/{name}", async (
     }
 });
 
-// Clear graph for a workspace
-app.MapDelete("/api/graph/{workspacePath}", async (
-    string workspacePath,
+// Clear graph for a repository
+app.MapDelete("/api/graph/{repositoryPath}", async (
+    string repositoryPath,
     Aura.Foundation.Rag.ICodeGraphService graphService,
     CancellationToken ct) =>
 {
     try
     {
-        await graphService.ClearWorkspaceGraphAsync(Uri.UnescapeDataString(workspacePath), ct);
+        await graphService.ClearRepositoryGraphAsync(Uri.UnescapeDataString(repositoryPath), ct);
 
         return Results.Ok(new
         {
             success = true,
-            message = $"Graph cleared for workspace: {workspacePath}"
+            message = $"Graph cleared for repository: {repositoryPath}"
         });
     }
     catch (Exception ex)
@@ -1689,7 +1663,7 @@ app.MapPost("/api/developer/workflows", async (
             description = workflow.Description,
             status = workflow.Status.ToString(),
             gitBranch = workflow.GitBranch,
-            workspacePath = workflow.WorkspacePath,
+            worktreePath = workflow.WorktreePath,
             repositoryPath = workflow.RepositoryPath,
             createdAt = workflow.CreatedAt
         });
@@ -1725,7 +1699,7 @@ app.MapGet("/api/developer/workflows", async (
             status = w.Status.ToString(),
             gitBranch = w.GitBranch,
             repositoryPath = w.RepositoryPath,
-            workspacePath = w.WorkspacePath,
+            worktreePath = w.WorktreePath,
             stepCount = w.Steps.Count,
             completedSteps = w.Steps.Count(s => s.Status == StepStatus.Completed),
             createdAt = w.CreatedAt,
@@ -1752,7 +1726,7 @@ app.MapGet("/api/developer/workflows/{id:guid}", async (
         description = workflow.Description,
         status = workflow.Status.ToString(),
         gitBranch = workflow.GitBranch,
-        workspacePath = workflow.WorkspacePath,
+        worktreePath = workflow.WorktreePath,
         repositoryPath = workflow.RepositoryPath,
         analyzedContext = workflow.AnalyzedContext,
         executionPlan = workflow.ExecutionPlan,
@@ -1762,6 +1736,7 @@ app.MapGet("/api/developer/workflows/{id:guid}", async (
             order = s.Order,
             name = s.Name,
             capability = s.Capability,
+            language = s.Language,
             description = s.Description,
             status = s.Status.ToString(),
             assignedAgentId = s.AssignedAgentId,
@@ -1776,7 +1751,8 @@ app.MapGet("/api/developer/workflows/{id:guid}", async (
         }),
         createdAt = workflow.CreatedAt,
         updatedAt = workflow.UpdatedAt,
-        completedAt = workflow.CompletedAt
+        completedAt = workflow.CompletedAt,
+        pullRequestUrl = workflow.PullRequestUrl
     });
 });
 
@@ -1830,6 +1806,7 @@ app.MapPost("/api/developer/workflows/{id:guid}/plan", async (
                 order = s.Order,
                 name = s.Name,
                 capability = s.Capability,
+                language = s.Language,
                 description = s.Description
             }),
             message = "Workflow planned successfully"
@@ -1984,6 +1961,29 @@ app.MapPost("/api/developer/workflows/{workflowId:guid}/steps/{stepId:guid}/skip
     }
 });
 
+// Reset step - reset any step back to pending for re-execution
+app.MapPost("/api/developer/workflows/{workflowId:guid}/steps/{stepId:guid}/reset", async (
+    Guid workflowId,
+    Guid stepId,
+    IWorkflowService workflowService,
+    CancellationToken ct) =>
+{
+    try
+    {
+        var step = await workflowService.ResetStepAsync(workflowId, stepId, ct);
+        return Results.Ok(new
+        {
+            id = step.Id,
+            name = step.Name,
+            status = step.Status.ToString()
+        });
+    }
+    catch (InvalidOperationException ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+});
+
 // Step chat - interact with agent before/after execution
 app.MapPost("/api/developer/workflows/{workflowId:guid}/steps/{stepId:guid}/chat", async (
     Guid workflowId,
@@ -2075,6 +2075,7 @@ app.MapPost("/api/developer/workflows/{id:guid}/complete", async (
             id = workflow.Id,
             status = workflow.Status.ToString(),
             completedAt = workflow.CompletedAt,
+            pullRequestUrl = workflow.PullRequestUrl,
             message = "Workflow completed successfully"
         });
     }
@@ -2105,6 +2106,119 @@ app.MapPost("/api/developer/workflows/{id:guid}/cancel", async (
     }
 });
 
+// Finalize workflow - commit changes, push branch, and create PR
+app.MapPost("/api/developer/workflows/{id:guid}/finalize", async (
+    Guid id,
+    FinalizeWorkflowRequest request,
+    IWorkflowService workflowService,
+    IGitService gitService,
+    CancellationToken ct) =>
+{
+    try
+    {
+        // Get workflow to find worktree path
+        var workflow = await workflowService.GetByIdWithStepsAsync(id, ct);
+        if (workflow is null)
+            return Results.NotFound(new { error = "Workflow not found" });
+        
+        if (string.IsNullOrEmpty(workflow.WorktreePath))
+            return Results.BadRequest(new { error = "Workflow has no worktree path" });
+        
+        string? commitSha = null;
+        string? prUrl = null;
+        int? prNumber = null;
+        
+        // 1. Check for changes and commit if needed
+        var statusResult = await gitService.GetStatusAsync(workflow.WorktreePath, ct);
+        if (statusResult.Success && statusResult.Value?.IsDirty == true)
+        {
+            var commitMessage = request.CommitMessage ?? $"feat: {workflow.Title}";
+            var commitResult = await gitService.CommitAsync(workflow.WorktreePath, commitMessage, ct);
+            if (!commitResult.Success)
+                return Results.BadRequest(new { error = $"Commit failed: {commitResult.Error}" });
+            
+            commitSha = commitResult.Value;
+        }
+        
+        // 2. Push the branch
+        var pushResult = await gitService.PushAsync(workflow.WorktreePath, setUpstream: true, ct);
+        if (!pushResult.Success)
+            return Results.BadRequest(new { error = $"Push failed: {pushResult.Error}" });
+        
+        // 3. Create PR if requested
+        if (request.CreatePullRequest)
+        {
+            var prTitle = request.PrTitle ?? workflow.Title;
+            var prBody = request.PrBody ?? BuildPrBody(workflow);
+            
+            var prResult = await gitService.CreatePullRequestAsync(
+                workflow.WorktreePath,
+                prTitle,
+                prBody,
+                request.BaseBranch,
+                request.Draft,
+                ct);
+            
+            if (!prResult.Success)
+                return Results.BadRequest(new { error = $"PR creation failed: {prResult.Error}" });
+            
+            prUrl = prResult.Value?.Url;
+            prNumber = prResult.Value?.Number;
+        }
+        
+        // 4. Mark workflow as completed if not already
+        if (workflow.Status != WorkflowStatus.Completed)
+        {
+            await workflowService.CompleteAsync(id, ct);
+        }
+        
+        return Results.Ok(new
+        {
+            workflowId = workflow.Id,
+            commitSha,
+            pushed = true,
+            prNumber,
+            prUrl,
+            message = prUrl is not null 
+                ? $"Workflow finalized. PR created: {prUrl}" 
+                : "Workflow finalized and pushed."
+        });
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+});
+
+static string BuildPrBody(Workflow workflow)
+{
+    var sb = new System.Text.StringBuilder();
+    sb.AppendLine($"## {workflow.Title}");
+    sb.AppendLine();
+    if (!string.IsNullOrEmpty(workflow.Description))
+    {
+        sb.AppendLine(workflow.Description);
+        sb.AppendLine();
+    }
+    sb.AppendLine("### Workflow Steps");
+    sb.AppendLine();
+    foreach (var step in workflow.Steps.OrderBy(s => s.Order))
+    {
+        var status = step.Status switch
+        {
+            StepStatus.Completed => "✅",
+            StepStatus.Skipped => "⏭",
+            StepStatus.Failed => "❌",
+            _ => "⬜"
+        };
+        sb.AppendLine($"- {status} {step.Name}");
+    }
+    sb.AppendLine();
+    sb.AppendLine("---");
+    sb.AppendLine("*Created by [Aura](https://github.com/johnazariah/aura)*");
+    return sb.ToString();
+}
+
 app.MapPost("/api/developer/workflows/{id:guid}/chat", async (
     Guid id,
     WorkflowChatRequest request,
@@ -2134,6 +2248,10 @@ app.MapPost("/api/developer/workflows/{id:guid}/chat", async (
         return Results.BadRequest(new { error = ex.Message });
     }
 });
+
+// Run startup tasks before starting the app
+var startupRunner = app.Services.GetRequiredService<Aura.Foundation.Startup.StartupTaskRunner>();
+await startupRunner.RunAsync();
 
 app.Run();
 
@@ -2170,7 +2288,7 @@ record RagQueryRequest(
 // Graph RAG request models
 record IndexCodeGraphRequest(
     string SolutionPath,
-    string WorkspacePath,
+    string RepositoryPath,
     bool Reindex = false);
 
 // Semantic indexing request models
@@ -2251,6 +2369,14 @@ record UpdateStepDescriptionRequest(
 
 record WorkflowChatRequest(
     string Message);
+
+record FinalizeWorkflowRequest(
+    string? CommitMessage = null,
+    bool CreatePullRequest = true,
+    string? PrTitle = null,
+    string? PrBody = null,
+    string? BaseBranch = null,
+    bool Draft = true);
 
 public partial class Program { }
 
