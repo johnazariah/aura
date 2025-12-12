@@ -40,6 +40,7 @@ features/
 | [TreeSitter Ingesters](completed/treesitter-ingesters.md) | Multi-language TreeSitter parsing | 2025-12-10 |
 | [Workflow PR Creation](completed/workflow-pr-creation.md) | Finalize workflows with commit/push/PR | 2025-12-12 |
 | [Code Graph Status Panel](completed/code-graph-status-panel.md) | Code Graph stats in System Status | 2025-12-12 |
+| [File-Aware RAG Queries](completed/file-aware-rag-queries.md) | Context-aware retrieval with file scoping | 2025-12-12 |
 
 ## Upcoming Features
 
@@ -47,38 +48,33 @@ features/
 
 | Feature | Description |
 |---------|-------------|
-| [Smart Content](upcoming/smart-content.md) | LLM-driven content extraction |
-| [Content File Indexing](upcoming/content-file-indexing.md) | Markdown/JSON/YAML indexing |
-| [Cross-File Enrichment](upcoming/cross-file-enrichment.md) | Import resolution and call graphs |
+| [Unified Indexing Backend](upcoming/unified-indexing-backend.md) | Single pipeline for RAG + Code Graph |
+| [Indexing UX](upcoming/indexing-ux.md) | Progress UI, prompts, query commands |
 
 ### Medium Priority (User Experience)
 
 | Feature | Description |
 |---------|-------------|
-| [Indexing Progress UI](upcoming/indexing-progress-ui.md) | Real-time indexing status |
 | [MCP Server](upcoming/mcp-server.md) | Model Context Protocol integration |
 | [Multi-Workspace](upcoming/multi-workspace.md) | Multiple workspace support |
-| [File-Aware RAG](upcoming/file-aware-rag-queries.md) | Context-aware retrieval |
 
 ### Lower Priority (Advanced)
 
 | Feature | Description |
 |---------|-------------|
 | [Condensed Export](upcoming/condensed-export.md) | Export indexed context |
-| [Boolean Queries](upcoming/boolean-queries.md) | Advanced search operators |
 | [Specialist Agents](upcoming/specialist-coding-agents.md) | Language-specific coding agents |
 | [Tool Execution](upcoming/tool-execution-for-agents.md) | Agent tool invocation |
 | [Internationalization](upcoming/internationalization.md) | Multi-language UI support |
-
-### Implementation Plans
-
-| Document | Description |
-|----------|-------------|
-| [Dependency Graph Edges](upcoming/dependency-graph-edges.md) | Implementation plan for import-based graph |
+| [Generic Language Agent](upcoming/generic-language-agent.md) | Language-agnostic coding agent |
 | [Unified Capability Model](upcoming/unified-capability-model.md) | Consolidate language capabilities |
-| [Unified Indexing Pipeline](upcoming/unified-indexing-pipeline.md) | Single indexing architecture |
-| [Indexing Roadmap](upcoming/indexing-roadmap.md) | Overall indexing strategy |
-| [Graph Enhancements](upcoming/graph-and-indexing-enhancements.md) | Graph improvements |
+| [Unified Software Development](upcoming/unified-software-development-capability.md) | Universal dev capability |
+
+### Unplanned (Backlog)
+
+| Feature | Description |
+|---------|-------------|
+| [Indexing Epic](unplanned/indexing-epic.md) | Future indexing enhancements (smart content, boolean queries, etc.) |
 
 ## See Also
 
