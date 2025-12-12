@@ -46,6 +46,38 @@ public interface IContentIngestor
 }
 
 /// <summary>
+/// Extended ingestor for code files that produces both RAG chunks and code graph nodes.
+/// Modules register specialized code ingestors (e.g., RoslynCodeIngestor for C#).
+/// </summary>
+public interface ICodeIngestor : IContentIngestor
+{
+    /// <summary>
+    /// Ingests a code file and produces RAG chunks, code graph nodes, and edges.
+    /// </summary>
+    /// <param name="filePath">The path to the file.</param>
+    /// <param name="content">The file content.</param>
+    /// <param name="workspacePath">The workspace path for graph isolation.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A result containing chunks, nodes, and edges.</returns>
+    Task<CodeIngestionResult> IngestCodeAsync(
+        string filePath,
+        string content,
+        string workspacePath,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// Result of code ingestion containing RAG chunks and code graph elements.
+/// </summary>
+/// <param name="Chunks">RAG chunks for embedding and semantic search.</param>
+/// <param name="Nodes">Code graph nodes (types, members, etc.).</param>
+/// <param name="Edges">Code graph edges (relationships between nodes).</param>
+public record CodeIngestionResult(
+    IReadOnlyList<IngestedChunk> Chunks,
+    IReadOnlyList<Data.Entities.CodeNode> Nodes,
+    IReadOnlyList<Data.Entities.CodeEdge> Edges);
+
+/// <summary>
 /// A chunk of content produced by an ingestor.
 /// </summary>
 /// <param name="Text">The chunk text content.</param>
@@ -56,6 +88,16 @@ public record IngestedChunk(string Text, string ChunkType)
     /// Gets or sets the title or heading for this chunk.
     /// </summary>
     public string? Title { get; init; }
+
+    /// <summary>
+    /// Gets or sets the symbol name (for code: class name, method name, etc.).
+    /// </summary>
+    public string? SymbolName { get; init; }
+
+    /// <summary>
+    /// Gets or sets the fully qualified name (for code).
+    /// </summary>
+    public string? FullyQualifiedName { get; init; }
 
     /// <summary>
     /// Gets or sets the language (for code chunks).

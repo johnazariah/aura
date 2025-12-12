@@ -73,10 +73,18 @@ public record CodebaseContextOptions
     public IReadOnlyList<string>? PrioritizeFiles { get; init; }
 
     /// <summary>
+    /// Gets whether to prefer code content over documentation in RAG results.
+    /// When true, filters to Code content type. Default is false (all types).
+    /// </summary>
+    public bool PreferCodeContent { get; init; }
+
+    /// <summary>
     /// Gets the default options (project structure + dependencies, no RAG).
     /// </summary>
-    public static CodebaseContextOptions Default => new();    /// <summary>
-    /// Creates options for documentation tasks (structure + RAG).
+    public static CodebaseContextOptions Default => new();
+
+    /// <summary>
+    /// Creates options for documentation tasks (structure + RAG, all content types).
     /// </summary>
     public static CodebaseContextOptions ForDocumentation(
         IReadOnlyList<string> ragQueries,
@@ -86,12 +94,13 @@ public record CodebaseContextOptions
             RagQueries = ragQueries,
             IncludeProjectStructure = true,
             IncludeDependencies = true,
-            MaxRagResults = 20, // Increased for richer documentation context
+            MaxRagResults = 20,
             PrioritizeFiles = prioritizeFiles,
+            PreferCodeContent = false, // Include docs for documentation tasks
         };
 
     /// <summary>
-    /// Creates options for coding tasks (structure + types + RAG).
+    /// Creates options for coding tasks (structure + types + RAG, code content preferred).
     /// </summary>
     public static CodebaseContextOptions ForCoding(
         IReadOnlyList<string> ragQueries,
@@ -106,6 +115,7 @@ public record CodebaseContextOptions
             FocusTypes = focusTypes,
             MaxRagResults = 20,
             PrioritizeFiles = prioritizeFiles,
+            PreferCodeContent = true, // Prefer actual code for coding tasks
         };
 }
 

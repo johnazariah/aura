@@ -31,10 +31,10 @@ public class CodeGraphService : ICodeGraphService
     /// <inheritdoc/>
     public async Task<IReadOnlyList<CodeNode>> FindImplementationsAsync(
         string interfaceName,
-        string? workspacePath = null,
+        string? repositoryPath = null,
         CancellationToken cancellationToken = default)
     {
-        _logger.LogDebug("Finding implementations of {InterfaceName} in workspace {WorkspacePath}", interfaceName, workspacePath);
+        _logger.LogDebug("Finding implementations of {InterfaceName} in repository {RepositoryPath}", interfaceName, repositoryPath);
 
         var query = from implementor in _dbContext.CodeNodes
                     join edge in _dbContext.CodeEdges on implementor.Id equals edge.SourceId
@@ -43,10 +43,10 @@ public class CodeGraphService : ICodeGraphService
                           && (iface.Name == interfaceName || iface.FullName == interfaceName)
                     select implementor;
 
-        if (!string.IsNullOrEmpty(workspacePath))
+        if (!string.IsNullOrEmpty(repositoryPath))
         {
-            var normalizedPath = PathNormalizer.Normalize(workspacePath);
-            query = query.Where(n => EF.Functions.ILike(n.WorkspacePath!, normalizedPath));
+            var normalizedPath = PathNormalizer.Normalize(repositoryPath);
+            query = query.Where(n => EF.Functions.ILike(n.RepositoryPath!, normalizedPath));
         }
 
         return await query.Distinct().ToListAsync(cancellationToken);
@@ -55,10 +55,10 @@ public class CodeGraphService : ICodeGraphService
     /// <inheritdoc/>
     public async Task<IReadOnlyList<CodeNode>> FindDerivedTypesAsync(
         string baseClassName,
-        string? workspacePath = null,
+        string? repositoryPath = null,
         CancellationToken cancellationToken = default)
     {
-        _logger.LogDebug("Finding types derived from {BaseClassName} in workspace {WorkspacePath}", baseClassName, workspacePath);
+        _logger.LogDebug("Finding types derived from {BaseClassName} in repository {RepositoryPath}", baseClassName, repositoryPath);
 
         var query = from derived in _dbContext.CodeNodes
                     join edge in _dbContext.CodeEdges on derived.Id equals edge.SourceId
@@ -67,10 +67,10 @@ public class CodeGraphService : ICodeGraphService
                           && (baseClass.Name == baseClassName || baseClass.FullName == baseClassName)
                     select derived;
 
-        if (!string.IsNullOrEmpty(workspacePath))
+        if (!string.IsNullOrEmpty(repositoryPath))
         {
-            var normalizedPath = PathNormalizer.Normalize(workspacePath);
-            query = query.Where(n => EF.Functions.ILike(n.WorkspacePath!, normalizedPath));
+            var normalizedPath = PathNormalizer.Normalize(repositoryPath);
+            query = query.Where(n => EF.Functions.ILike(n.RepositoryPath!, normalizedPath));
         }
 
         return await query.Distinct().ToListAsync(cancellationToken);
@@ -80,14 +80,14 @@ public class CodeGraphService : ICodeGraphService
     public async Task<IReadOnlyList<CodeNode>> FindCallersAsync(
         string methodName,
         string? containingTypeName = null,
-        string? workspacePath = null,
+        string? repositoryPath = null,
         CancellationToken cancellationToken = default)
     {
         _logger.LogDebug(
-            "Finding callers of {MethodName} in {ContainingType}, workspace {WorkspacePath}",
+            "Finding callers of {MethodName} in {ContainingType}, repository {RepositoryPath}",
             methodName,
             containingTypeName,
-            workspacePath);
+            repositoryPath);
 
         var calleeQuery = _dbContext.CodeNodes
             .Where(n => n.NodeType == CodeNodeType.Method && n.Name == methodName);
@@ -109,10 +109,10 @@ public class CodeGraphService : ICodeGraphService
                     where edge.EdgeType == CodeEdgeType.Calls
                     select caller;
 
-        if (!string.IsNullOrEmpty(workspacePath))
+        if (!string.IsNullOrEmpty(repositoryPath))
         {
-            var normalizedPath = PathNormalizer.Normalize(workspacePath);
-            query = query.Where(n => EF.Functions.ILike(n.WorkspacePath!, normalizedPath));
+            var normalizedPath = PathNormalizer.Normalize(repositoryPath);
+            query = query.Where(n => EF.Functions.ILike(n.RepositoryPath!, normalizedPath));
         }
 
         return await query.Distinct().ToListAsync(cancellationToken);
@@ -122,14 +122,14 @@ public class CodeGraphService : ICodeGraphService
     public async Task<IReadOnlyList<CodeNode>> FindDependenciesAsync(
         string methodName,
         string? containingTypeName = null,
-        string? workspacePath = null,
+        string? repositoryPath = null,
         CancellationToken cancellationToken = default)
     {
         _logger.LogDebug(
-            "Finding dependencies of {MethodName} in {ContainingType}, workspace {WorkspacePath}",
+            "Finding dependencies of {MethodName} in {ContainingType}, repository {RepositoryPath}",
             methodName,
             containingTypeName,
-            workspacePath);
+            repositoryPath);
 
         var sourceQuery = _dbContext.CodeNodes
             .Where(n => n.NodeType == CodeNodeType.Method && n.Name == methodName);
@@ -150,10 +150,10 @@ public class CodeGraphService : ICodeGraphService
                     where edge.EdgeType == CodeEdgeType.Calls || edge.EdgeType == CodeEdgeType.Uses
                     select dependency;
 
-        if (!string.IsNullOrEmpty(workspacePath))
+        if (!string.IsNullOrEmpty(repositoryPath))
         {
-            var normalizedPath = PathNormalizer.Normalize(workspacePath);
-            query = query.Where(n => EF.Functions.ILike(n.WorkspacePath!, normalizedPath));
+            var normalizedPath = PathNormalizer.Normalize(repositoryPath);
+            query = query.Where(n => EF.Functions.ILike(n.RepositoryPath!, normalizedPath));
         }
 
         return await query.Distinct().ToListAsync(cancellationToken);
@@ -162,10 +162,10 @@ public class CodeGraphService : ICodeGraphService
     /// <inheritdoc/>
     public async Task<IReadOnlyList<CodeNode>> GetTypeMembersAsync(
         string typeName,
-        string? workspacePath = null,
+        string? repositoryPath = null,
         CancellationToken cancellationToken = default)
     {
-        _logger.LogDebug("Getting members of type {TypeName} in workspace {WorkspacePath}", typeName, workspacePath);
+        _logger.LogDebug("Getting members of type {TypeName} in repository {RepositoryPath}", typeName, repositoryPath);
 
         var query = from member in _dbContext.CodeNodes
                     join edge in _dbContext.CodeEdges on member.Id equals edge.TargetId
@@ -179,10 +179,10 @@ public class CodeGraphService : ICodeGraphService
                               || member.NodeType == CodeNodeType.Constructor)
                     select member;
 
-        if (!string.IsNullOrEmpty(workspacePath))
+        if (!string.IsNullOrEmpty(repositoryPath))
         {
-            var normalizedPath = PathNormalizer.Normalize(workspacePath);
-            query = query.Where(n => EF.Functions.ILike(n.WorkspacePath!, normalizedPath));
+            var normalizedPath = PathNormalizer.Normalize(repositoryPath);
+            query = query.Where(n => EF.Functions.ILike(n.RepositoryPath!, normalizedPath));
         }
 
         return await query.ToListAsync(cancellationToken);
@@ -191,10 +191,10 @@ public class CodeGraphService : ICodeGraphService
     /// <inheritdoc/>
     public async Task<IReadOnlyList<CodeNode>> GetTypesInNamespaceAsync(
         string namespaceName,
-        string? workspacePath = null,
+        string? repositoryPath = null,
         CancellationToken cancellationToken = default)
     {
-        _logger.LogDebug("Getting types in namespace {NamespaceName}, workspace {WorkspacePath}", namespaceName, workspacePath);
+        _logger.LogDebug("Getting types in namespace {NamespaceName}, repository {RepositoryPath}", namespaceName, repositoryPath);
 
         var query = from type in _dbContext.CodeNodes
                     join edge in _dbContext.CodeEdges on type.Id equals edge.TargetId
@@ -208,10 +208,10 @@ public class CodeGraphService : ICodeGraphService
                               || type.NodeType == CodeNodeType.Enum)
                     select type;
 
-        if (!string.IsNullOrEmpty(workspacePath))
+        if (!string.IsNullOrEmpty(repositoryPath))
         {
-            var normalizedPath = PathNormalizer.Normalize(workspacePath);
-            query = query.Where(n => EF.Functions.ILike(n.WorkspacePath!, normalizedPath));
+            var normalizedPath = PathNormalizer.Normalize(repositoryPath);
+            query = query.Where(n => EF.Functions.ILike(n.RepositoryPath!, normalizedPath));
         }
 
         return await query.ToListAsync(cancellationToken);
@@ -220,10 +220,10 @@ public class CodeGraphService : ICodeGraphService
     /// <inheritdoc/>
     public async Task<IReadOnlyList<CodeNode>> GetProjectReferencesAsync(
         string projectName,
-        string? workspacePath = null,
+        string? repositoryPath = null,
         CancellationToken cancellationToken = default)
     {
-        _logger.LogDebug("Getting references for project {ProjectName}, workspace {WorkspacePath}", projectName, workspacePath);
+        _logger.LogDebug("Getting references for project {ProjectName}, repository {RepositoryPath}", projectName, repositoryPath);
 
         var query = from referenced in _dbContext.CodeNodes
                     join edge in _dbContext.CodeEdges on referenced.Id equals edge.TargetId
@@ -233,10 +233,10 @@ public class CodeGraphService : ICodeGraphService
                           && project.Name == projectName
                     select referenced;
 
-        if (!string.IsNullOrEmpty(workspacePath))
+        if (!string.IsNullOrEmpty(repositoryPath))
         {
-            var normalizedPath = PathNormalizer.Normalize(workspacePath);
-            query = query.Where(n => EF.Functions.ILike(n.WorkspacePath!, normalizedPath));
+            var normalizedPath = PathNormalizer.Normalize(repositoryPath);
+            query = query.Where(n => EF.Functions.ILike(n.RepositoryPath!, normalizedPath));
         }
 
         return await query.ToListAsync(cancellationToken);
@@ -246,10 +246,10 @@ public class CodeGraphService : ICodeGraphService
     public async Task<IReadOnlyList<CodeNode>> FindNodesAsync(
         string name,
         CodeNodeType? nodeType = null,
-        string? workspacePath = null,
+        string? repositoryPath = null,
         CancellationToken cancellationToken = default)
     {
-        _logger.LogDebug("Finding nodes with name {Name}, type {NodeType}, workspace {WorkspacePath}", name, nodeType, workspacePath);
+        _logger.LogDebug("Finding nodes with name {Name}, type {NodeType}, repository {RepositoryPath}", name, nodeType, repositoryPath);
 
         IQueryable<CodeNode> query = _dbContext.CodeNodes;
 
@@ -264,32 +264,32 @@ public class CodeGraphService : ICodeGraphService
             query = query.Where(n => n.NodeType == nodeType.Value);
         }
 
-        if (!string.IsNullOrEmpty(workspacePath))
+        if (!string.IsNullOrEmpty(repositoryPath))
         {
-            var normalizedPath = PathNormalizer.Normalize(workspacePath);
-            query = query.Where(n => EF.Functions.ILike(n.WorkspacePath!, normalizedPath));
+            var normalizedPath = PathNormalizer.Normalize(repositoryPath);
+            query = query.Where(n => EF.Functions.ILike(n.RepositoryPath!, normalizedPath));
         }
 
         return await query.ToListAsync(cancellationToken);
     }
 
     /// <inheritdoc/>
-    public async Task ClearWorkspaceGraphAsync(string workspacePath, CancellationToken cancellationToken = default)
+    public async Task ClearRepositoryGraphAsync(string repositoryPath, CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("Clearing code graph for workspace {WorkspacePath}", workspacePath);
+        _logger.LogInformation("Clearing code graph for repository {RepositoryPath}", repositoryPath);
 
-        var normalizedPath = PathNormalizer.Normalize(workspacePath);
+        var normalizedPath = PathNormalizer.Normalize(repositoryPath);
 
         // Delete edges first (foreign key constraints)
         var edgesToDelete = await _dbContext.CodeEdges
-            .Where(e => EF.Functions.ILike(e.Source!.WorkspacePath!, normalizedPath))
+            .Where(e => EF.Functions.ILike(e.Source!.RepositoryPath!, normalizedPath))
             .ToListAsync(cancellationToken);
 
         _dbContext.CodeEdges.RemoveRange(edgesToDelete);
 
         // Then delete nodes
         var nodesToDelete = await _dbContext.CodeNodes
-            .Where(n => EF.Functions.ILike(n.WorkspacePath!, normalizedPath))
+            .Where(n => EF.Functions.ILike(n.RepositoryPath!, normalizedPath))
             .ToListAsync(cancellationToken);
 
         _dbContext.CodeNodes.RemoveRange(nodesToDelete);
@@ -297,10 +297,10 @@ public class CodeGraphService : ICodeGraphService
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         _logger.LogInformation(
-            "Cleared {EdgeCount} edges and {NodeCount} nodes from workspace {WorkspacePath}",
+            "Cleared {EdgeCount} edges and {NodeCount} nodes from repository {RepositoryPath}",
             edgesToDelete.Count,
             nodesToDelete.Count,
-            workspacePath);
+            repositoryPath);
     }
 
     /// <inheritdoc/>
@@ -321,5 +321,44 @@ public class CodeGraphService : ICodeGraphService
     public async Task SaveChangesAsync(CancellationToken cancellationToken = default)
     {
         await _dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <inheritdoc/>
+    public async Task<CodeGraphStats> GetStatsAsync(string? repositoryPath = null, CancellationToken cancellationToken = default)
+    {
+        IQueryable<CodeNode> nodesQuery = _dbContext.CodeNodes;
+
+        if (!string.IsNullOrEmpty(repositoryPath))
+        {
+            var normalizedPath = PathNormalizer.Normalize(repositoryPath);
+            nodesQuery = nodesQuery.Where(n => EF.Functions.ILike(n.RepositoryPath!, normalizedPath));
+        }
+
+        var nodesByType = await nodesQuery
+            .GroupBy(n => n.NodeType)
+            .Select(g => new { Type = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.Type, x => x.Count, cancellationToken);
+
+        // For edges, filter by source node's repository path (edges don't have their own repository)
+        var edgesQuery = !string.IsNullOrEmpty(repositoryPath)
+            ? from e in _dbContext.CodeEdges
+              join n in _dbContext.CodeNodes on e.SourceId equals n.Id
+              where EF.Functions.ILike(n.RepositoryPath!, PathNormalizer.Normalize(repositoryPath))
+              select e
+            : _dbContext.CodeEdges.AsQueryable();
+
+        var edgesByType = await edgesQuery
+            .GroupBy(e => e.EdgeType)
+            .Select(g => new { Type = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.Type, x => x.Count, cancellationToken);
+
+        return new CodeGraphStats
+        {
+            TotalNodes = nodesByType.Values.Sum(),
+            TotalEdges = edgesByType.Values.Sum(),
+            NodesByType = nodesByType,
+            EdgesByType = edgesByType,
+            RepositoryPath = repositoryPath
+        };
     }
 }

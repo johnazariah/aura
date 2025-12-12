@@ -200,6 +200,8 @@ public sealed class BackgroundIndexer : BackgroundService, IBackgroundIndexer
         using var scope = _scopeFactory.CreateScope();
         var ragService = scope.ServiceProvider.GetRequiredService<IRagService>();
         var agentRegistry = scope.ServiceProvider.GetRequiredService<IAgentRegistry>();
+        var ingestorRegistry = scope.ServiceProvider.GetRequiredService<Ingestors.IIngestorRegistry>();
+        var codeGraphService = scope.ServiceProvider.GetRequiredService<ICodeGraphService>();
 
         switch (workItem.Type)
         {
@@ -208,7 +210,7 @@ public sealed class BackgroundIndexer : BackgroundService, IBackgroundIndexer
                 break;
 
             case WorkItemType.Directory when workItem.DirectoryPath is not null:
-                await ProcessDirectoryAsync(workItem, ragService, agentRegistry, cancellationToken);
+                await ProcessDirectoryAsync(workItem, ragService, agentRegistry, ingestorRegistry, codeGraphService, cancellationToken);
                 break;
         }
     }
@@ -217,6 +219,8 @@ public sealed class BackgroundIndexer : BackgroundService, IBackgroundIndexer
         IndexWorkItem workItem,
         IRagService ragService,
         IAgentRegistry agentRegistry,
+        Ingestors.IIngestorRegistry ingestorRegistry,
+        ICodeGraphService codeGraphService,
         CancellationToken cancellationToken)
     {
         var jobId = workItem.JobId!.Value;
@@ -253,40 +257,105 @@ public sealed class BackgroundIndexer : BackgroundService, IBackgroundIndexer
                 try
                 {
                     var extension = Path.GetExtension(filePath).TrimStart('.');
-                    var capability = $"ingest:{extension}";
+                    var content = await _fileSystem.File.ReadAllTextAsync(filePath, cancellationToken);
 
-                    // Find the best ingester agent for this file type
-                    var ingester = agentRegistry.GetBestForCapability(capability);
+                    // Priority chain: ICodeIngestor > IContentIngestor > Agent > PlainText
+                    var ingestor = ingestorRegistry.GetIngestor(filePath);
 
-                    if (ingester is not null)
+                    if (ingestor is Ingestors.ICodeIngestor codeIngestor)
                     {
-                        // Use agent-based ingestion
-                        var content = await _fileSystem.File.ReadAllTextAsync(filePath, cancellationToken);
-                        var chunks = await IngestWithAgentAsync(ingester, filePath, content, extension, cancellationToken);
+                        // Native code ingestor - produces RAG chunks AND code graph nodes
+                        _logger.LogDebug("Using code ingestor {IngestorId} for {FilePath}",
+                            codeIngestor.IngestorId, filePath);
 
-                        foreach (var chunk in chunks)
+                        var result = await codeIngestor.IngestCodeAsync(
+                            filePath, content, directoryPath, cancellationToken);
+
+                        // Index RAG chunks
+                        foreach (var chunk in result.Chunks)
                         {
                             var contentId = $"{filePath}:{chunk.ChunkType}:{chunk.SymbolName ?? chunk.StartLine.ToString()}";
                             var ragContent = new RagContent(contentId, chunk.Text, RagContentType.Code)
                             {
                                 SourcePath = filePath,
                                 Language = chunk.Language,
-                                Metadata = chunk.Metadata.AsReadOnly(),
+                                Metadata = chunk.Metadata,
+                            };
+                            await ragService.IndexAsync(ragContent, cancellationToken);
+                        }
+
+                        // Save code graph nodes and edges
+                        foreach (var node in result.Nodes)
+                        {
+                            await codeGraphService.AddNodeAsync(node, cancellationToken);
+                        }
+
+                        foreach (var edge in result.Edges)
+                        {
+                            await codeGraphService.AddEdgeAsync(edge, cancellationToken);
+                        }
+
+                        if (result.Nodes.Count > 0 || result.Edges.Count > 0)
+                        {
+                            await codeGraphService.SaveChangesAsync(cancellationToken);
+                        }
+                    }
+                    else if (ingestor is not null && ingestor is not Ingestors.PlainTextIngestor)
+                    {
+                        // Native content ingestor (non-code) - produces RAG chunks only
+                        _logger.LogDebug("Using ingestor {IngestorId} for {FilePath}",
+                            ingestor.IngestorId, filePath);
+
+                        var chunks = await ingestor.IngestAsync(filePath, content, cancellationToken);
+                        foreach (var chunk in chunks)
+                        {
+                            var contentId = $"{filePath}:{chunk.ChunkType}:{chunk.SymbolName ?? chunk.StartLine.ToString()}";
+                            var ragContent = new RagContent(contentId, chunk.Text, ingestor.ContentType)
+                            {
+                                SourcePath = filePath,
+                                Language = chunk.Language,
+                                Metadata = chunk.Metadata,
                             };
                             await ragService.IndexAsync(ragContent, cancellationToken);
                         }
                     }
                     else
                     {
-                        // Fall back to simple text-based RAG indexing (no ingester available)
-                        _logger.LogDebug("No ingester found for .{Extension}, using text indexing for: {Path}",
-                            extension, filePath);
+                        // Try agent-based ingestion (LLM-powered)
+                        var capability = $"ingest:{extension}";
+                        var ingesterAgent = agentRegistry.GetBestForCapability(capability);
 
-                        var content = await _fileSystem.File.ReadAllTextAsync(filePath, cancellationToken);
-                        if (!string.IsNullOrWhiteSpace(content))
+                        if (ingesterAgent is not null)
                         {
-                            var ragContent = RagContent.FromFile(filePath, content);
-                            await ragService.IndexAsync(ragContent, cancellationToken);
+                            _logger.LogDebug("Using agent {AgentId} for {FilePath}",
+                                ingesterAgent.AgentId, filePath);
+
+                            var chunks = await IngestWithAgentAsync(
+                                ingesterAgent, filePath, content, extension, cancellationToken);
+
+                            foreach (var chunk in chunks)
+                            {
+                                var contentId = $"{filePath}:{chunk.ChunkType}:{chunk.SymbolName ?? chunk.StartLine.ToString()}";
+                                var ragContent = new RagContent(contentId, chunk.Text, RagContentType.Code)
+                                {
+                                    SourcePath = filePath,
+                                    Language = chunk.Language,
+                                    Metadata = chunk.Metadata.AsReadOnly(),
+                                };
+                                await ragService.IndexAsync(ragContent, cancellationToken);
+                            }
+                        }
+                        else
+                        {
+                            // Final fallback: plain text indexing
+                            _logger.LogDebug("No ingestor/agent for .{Extension}, using text indexing: {Path}",
+                                extension, filePath);
+
+                            if (!string.IsNullOrWhiteSpace(content))
+                            {
+                                var ragContent = RagContent.FromFile(filePath, content);
+                                await ragService.IndexAsync(ragContent, cancellationToken);
+                            }
                         }
                     }
 

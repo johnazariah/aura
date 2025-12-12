@@ -67,6 +67,7 @@ public class CodebaseContextService : ICodebaseContextService
                 options.RagQueries,
                 options.MaxRagResults,
                 options.PrioritizeFiles,
+                options.PreferCodeContent,
                 ct);
         }
 
@@ -146,7 +147,7 @@ public class CodebaseContextService : ICodebaseContextService
         foreach (var project in projects.OrderBy(p => p.Name))
         {
             var projectPath = project.FilePath != null
-                ? $" - `{Path.GetDirectoryName(project.FilePath)}`"
+                ? $" - `{GetRelativePath(workspacePath, Path.GetDirectoryName(project.FilePath) ?? project.FilePath)}`"
                 : string.Empty;
             sb.AppendLine($"- **{project.Name}**{projectPath}");
         }
@@ -219,6 +220,7 @@ public class CodebaseContextService : ICodebaseContextService
         IReadOnlyList<string> queries,
         int maxResults,
         IReadOnlyList<string>? prioritizeFiles,
+        bool preferCodeContent,
         CancellationToken ct)
     {
         var allResults = new List<(string FilePath, string Content, double Score)>();
@@ -234,6 +236,9 @@ public class CodebaseContextService : ICodebaseContextService
                     MinScore = 0.35f,
                     SourcePathPrefix = workspacePath,
                     PrioritizeFiles = prioritizeFiles,
+                    ContentTypes = preferCodeContent
+                        ? [Aura.Foundation.Rag.RagContentType.Code]
+                        : null,
                 };
 
                 var results = await _ragService.QueryAsync(query, queryOptions, ct);

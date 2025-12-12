@@ -13,24 +13,24 @@ public interface ICodeGraphIndexer
     /// Indexes a solution or project into the code graph.
     /// </summary>
     /// <param name="solutionOrProjectPath">Path to a .sln or .csproj file.</param>
-    /// <param name="workspacePath">The workspace path for node isolation.</param>
+    /// <param name="repositoryPath">The repository path for node isolation.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The indexing result with statistics.</returns>
     Task<CodeGraphIndexResult> IndexAsync(
         string solutionOrProjectPath,
-        string workspacePath,
+        string repositoryPath,
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Re-indexes a workspace (clears existing graph, then indexes).
+    /// Re-indexes a repository (clears existing graph, then indexes).
     /// </summary>
     /// <param name="solutionOrProjectPath">Path to a .sln or .csproj file.</param>
-    /// <param name="workspacePath">The workspace path for node isolation.</param>
+    /// <param name="repositoryPath">The repository path for node isolation.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The indexing result with statistics.</returns>
     Task<CodeGraphIndexResult> ReindexAsync(
         string solutionOrProjectPath,
-        string workspacePath,
+        string repositoryPath,
         CancellationToken cancellationToken = default);
 }
 

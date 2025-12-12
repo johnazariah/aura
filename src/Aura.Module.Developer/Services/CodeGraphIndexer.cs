@@ -42,7 +42,7 @@ public class CodeGraphIndexer : ICodeGraphIndexer
     /// <inheritdoc/>
     public async Task<CodeGraphIndexResult> IndexAsync(
         string solutionOrProjectPath,
-        string workspacePath,
+        string repositoryPath,
         CancellationToken cancellationToken = default)
     {
         var stopwatch = Stopwatch.StartNew();
@@ -53,12 +53,12 @@ public class CodeGraphIndexer : ICodeGraphIndexer
         var fileCount = 0;
         var typeCount = 0;
 
-        // Normalize workspace path for consistent storage (lowercase, forward slashes)
-        var normalizedWorkspacePath = Aura.Foundation.Rag.PathNormalizer.Normalize(workspacePath);
+        // Normalize repository path for consistent storage (lowercase, forward slashes)
+        var normalizedRepositoryPath = Aura.Foundation.Rag.PathNormalizer.Normalize(repositoryPath);
 
         try
         {
-            _logger.LogInformation("Indexing {Path} for workspace {WorkspacePath}", solutionOrProjectPath, normalizedWorkspacePath);
+            _logger.LogInformation("Indexing {Path} for repository {RepositoryPath}", solutionOrProjectPath, normalizedRepositoryPath);
 
             // Load the solution/project
             var solution = await _roslynWorkspace.GetSolutionAsync(solutionOrProjectPath, cancellationToken);
@@ -79,7 +79,7 @@ public class CodeGraphIndexer : ICodeGraphIndexer
                 NodeType = CodeNodeType.Solution,
                 Name = Path.GetFileNameWithoutExtension(solutionOrProjectPath),
                 FilePath = solutionOrProjectPath,
-                WorkspacePath = normalizedWorkspacePath,
+                RepositoryPath = normalizedRepositoryPath,
             }, cancellationToken);
             nodeCount++;
 
@@ -97,7 +97,7 @@ public class CodeGraphIndexer : ICodeGraphIndexer
                 var projectResult = await IndexProjectAsync(
                     project,
                     solutionNode,
-                    normalizedWorkspacePath,
+                    normalizedRepositoryPath,
                     nodesBySymbol,
                     warnings,
                     cancellationToken);
@@ -161,23 +161,23 @@ public class CodeGraphIndexer : ICodeGraphIndexer
     /// <inheritdoc/>
     public async Task<CodeGraphIndexResult> ReindexAsync(
         string solutionOrProjectPath,
-        string workspacePath,
+        string repositoryPath,
         CancellationToken cancellationToken = default)
     {
-        var normalizedPath = Aura.Foundation.Rag.PathNormalizer.Normalize(workspacePath);
-        _logger.LogInformation("Re-indexing workspace {WorkspacePath}", normalizedPath);
+        var normalizedPath = Aura.Foundation.Rag.PathNormalizer.Normalize(repositoryPath);
+        _logger.LogInformation("Re-indexing repository {RepositoryPath}", normalizedPath);
 
         // Clear existing graph
-        await _graphService.ClearWorkspaceGraphAsync(normalizedPath, cancellationToken);
+        await _graphService.ClearRepositoryGraphAsync(normalizedPath, cancellationToken);
 
         // Index fresh
-        return await IndexAsync(solutionOrProjectPath, workspacePath, cancellationToken);
+        return await IndexAsync(solutionOrProjectPath, repositoryPath, cancellationToken);
     }
 
     private async Task<(int NodeCount, int EdgeCount, int FileCount, int TypeCount)> IndexProjectAsync(
         Project project,
         CodeNode solutionNode,
-        string workspacePath,
+        string repositoryPath,
         Dictionary<string, CodeNode> nodesBySymbol,
         List<string> warnings,
         CancellationToken cancellationToken)
@@ -196,7 +196,7 @@ public class CodeGraphIndexer : ICodeGraphIndexer
             NodeType = CodeNodeType.Project,
             Name = project.Name,
             FilePath = project.FilePath,
-            WorkspacePath = workspacePath,
+            RepositoryPath = repositoryPath,
         }, cancellationToken);
         nodeCount++;
         nodesBySymbol[$"project:{project.Name}"] = projectNode;
@@ -238,7 +238,7 @@ public class CodeGraphIndexer : ICodeGraphIndexer
                 document,
                 projectNode,
                 compilation,
-                workspacePath,
+                repositoryPath,
                 nodesBySymbol,
                 warnings,
                 cancellationToken);
@@ -256,7 +256,7 @@ public class CodeGraphIndexer : ICodeGraphIndexer
         Document document,
         CodeNode projectNode,
         Compilation compilation,
-        string workspacePath,
+        string repositoryPath,
         Dictionary<string, CodeNode> nodesBySymbol,
         List<string> warnings,
         CancellationToken cancellationToken)
@@ -281,7 +281,7 @@ public class CodeGraphIndexer : ICodeGraphIndexer
             NodeType = CodeNodeType.File,
             Name = Path.GetFileName(document.FilePath ?? "unknown"),
             FilePath = document.FilePath,
-            WorkspacePath = workspacePath,
+            RepositoryPath = repositoryPath,
         }, cancellationToken);
         nodeCount++;
         if (document.FilePath != null)
@@ -309,7 +309,7 @@ public class CodeGraphIndexer : ICodeGraphIndexer
                 typeDecl,
                 fileNode,
                 semanticModel,
-                workspacePath,
+                repositoryPath,
                 nodesBySymbol,
                 warnings,
                 cancellationToken);
@@ -340,7 +340,7 @@ public class CodeGraphIndexer : ICodeGraphIndexer
                 FilePath = document.FilePath,
                 LineNumber = enumDecl.GetLocation().GetLineSpan().StartLinePosition.Line + 1,
                 Modifiers = GetModifiers(enumDecl.Modifiers),
-                WorkspacePath = workspacePath,
+                RepositoryPath = repositoryPath,
             }, cancellationToken);
             nodeCount++;
             nodesBySymbol[$"type:{symbol.ToDisplayString()}"] = enumNode;
@@ -364,7 +364,7 @@ public class CodeGraphIndexer : ICodeGraphIndexer
         TypeDeclarationSyntax typeDecl,
         CodeNode fileNode,
         SemanticModel semanticModel,
-        string workspacePath,
+        string repositoryPath,
         Dictionary<string, CodeNode> nodesBySymbol,
         List<string> warnings,
         CancellationToken cancellationToken)
@@ -396,7 +396,7 @@ public class CodeGraphIndexer : ICodeGraphIndexer
             FilePath = typeDecl.SyntaxTree.FilePath,
             LineNumber = typeDecl.GetLocation().GetLineSpan().StartLinePosition.Line + 1,
             Modifiers = GetModifiers(typeDecl.Modifiers),
-            WorkspacePath = workspacePath,
+            RepositoryPath = repositoryPath,
         }, cancellationToken);
         nodeCount++;
         var typeKey = $"type:{symbol.ToDisplayString()}";
@@ -424,7 +424,7 @@ public class CodeGraphIndexer : ICodeGraphIndexer
                     NodeType = CodeNodeType.Namespace,
                     Name = symbol.ContainingNamespace.Name,
                     FullName = Truncate(symbol.ContainingNamespace.ToDisplayString(), MaxFullNameLength),
-                    WorkspacePath = workspacePath,
+                    RepositoryPath = repositoryPath,
                 }, cancellationToken);
                 nodeCount++;
                 nodesBySymbol[nsKey] = nsNode;
@@ -444,13 +444,13 @@ public class CodeGraphIndexer : ICodeGraphIndexer
         // Index inheritance
         if (symbol.BaseType != null && symbol.BaseType.SpecialType != SpecialType.System_Object)
         {
-            edgeCount += await CreateInheritanceEdgeAsync(typeNode, symbol.BaseType, nodesBySymbol, workspacePath, cancellationToken);
+            edgeCount += await CreateInheritanceEdgeAsync(typeNode, symbol.BaseType, nodesBySymbol, repositoryPath, cancellationToken);
         }
 
         // Index interface implementations
         foreach (var iface in symbol.Interfaces)
         {
-            edgeCount += await CreateImplementsEdgeAsync(typeNode, iface, nodesBySymbol, workspacePath, cancellationToken);
+            edgeCount += await CreateImplementsEdgeAsync(typeNode, iface, nodesBySymbol, repositoryPath, cancellationToken);
         }
 
         // Index members
@@ -461,7 +461,7 @@ public class CodeGraphIndexer : ICodeGraphIndexer
                 continue;
             }
 
-            var memberResult = await IndexMemberAsync(member, typeNode, semanticModel, workspacePath, nodesBySymbol, cancellationToken);
+            var memberResult = await IndexMemberAsync(member, typeNode, semanticModel, repositoryPath, nodesBySymbol, cancellationToken);
             nodeCount += memberResult.NodeCount;
             edgeCount += memberResult.EdgeCount;
         }
@@ -473,7 +473,7 @@ public class CodeGraphIndexer : ICodeGraphIndexer
         ISymbol member,
         CodeNode typeNode,
         SemanticModel semanticModel,
-        string workspacePath,
+        string repositoryPath,
         Dictionary<string, CodeNode> nodesBySymbol,
         CancellationToken cancellationToken)
     {
@@ -538,7 +538,7 @@ public class CodeGraphIndexer : ICodeGraphIndexer
             LineNumber = lineNumber,
             Signature = Truncate(signature, MaxSignatureLength),
             Modifiers = string.Join(" ", modifiers),
-            WorkspacePath = workspacePath,
+            RepositoryPath = repositoryPath,
         }, cancellationToken);
         nodeCount++;
         nodesBySymbol[$"member:{member.ToDisplayString()}"] = memberNode;
@@ -559,7 +559,7 @@ public class CodeGraphIndexer : ICodeGraphIndexer
             var syntax = member.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax(cancellationToken);
             if (syntax != null)
             {
-                edgeCount += await IndexMethodCallsAsync(memberNode, syntax, semanticModel, nodesBySymbol, workspacePath, cancellationToken);
+                edgeCount += await IndexMethodCallsAsync(memberNode, syntax, semanticModel, nodesBySymbol, repositoryPath, cancellationToken);
             }
 
             // Index override relationship
@@ -588,7 +588,7 @@ public class CodeGraphIndexer : ICodeGraphIndexer
         SyntaxNode syntax,
         SemanticModel semanticModel,
         Dictionary<string, CodeNode> nodesBySymbol,
-        string workspacePath,
+        string repositoryPath,
         CancellationToken cancellationToken)
     {
         var edgeCount = 0;
@@ -625,7 +625,7 @@ public class CodeGraphIndexer : ICodeGraphIndexer
                         Name = calledMethod.Name,
                         FullName = Truncate(calledMethod.ToDisplayString(), MaxFullNameLength),
                         Signature = Truncate(calledMethod.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat), MaxSignatureLength),
-                        WorkspacePath = workspacePath,
+                        RepositoryPath = repositoryPath,
                     }, cancellationToken);
                     nodesBySymbol[calleeKey] = calleeNode;
                 }
@@ -688,7 +688,7 @@ public class CodeGraphIndexer : ICodeGraphIndexer
         CodeNode derivedNode,
         INamedTypeSymbol baseType,
         Dictionary<string, CodeNode> nodesBySymbol,
-        string workspacePath,
+        string repositoryPath,
         CancellationToken cancellationToken)
     {
         var baseKey = $"type:{baseType.ToDisplayString()}";
@@ -702,7 +702,7 @@ public class CodeGraphIndexer : ICodeGraphIndexer
                 NodeType = CodeNodeType.Class,
                 Name = baseType.Name,
                 FullName = Truncate(baseType.ToDisplayString(), MaxFullNameLength),
-                WorkspacePath = workspacePath,
+                RepositoryPath = repositoryPath,
             }, cancellationToken);
             nodesBySymbol[baseKey] = baseNode;
         }
@@ -722,7 +722,7 @@ public class CodeGraphIndexer : ICodeGraphIndexer
         CodeNode implementorNode,
         INamedTypeSymbol interfaceType,
         Dictionary<string, CodeNode> nodesBySymbol,
-        string workspacePath,
+        string repositoryPath,
         CancellationToken cancellationToken)
     {
         var ifaceKey = $"type:{interfaceType.ToDisplayString()}";
@@ -736,7 +736,7 @@ public class CodeGraphIndexer : ICodeGraphIndexer
                 NodeType = CodeNodeType.Interface,
                 Name = interfaceType.Name,
                 FullName = Truncate(interfaceType.ToDisplayString(), MaxFullNameLength),
-                WorkspacePath = workspacePath,
+                RepositoryPath = repositoryPath,
             }, cancellationToken);
             nodesBySymbol[ifaceKey] = ifaceNode;
         }
