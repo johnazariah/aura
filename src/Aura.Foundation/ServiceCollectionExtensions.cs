@@ -185,6 +185,9 @@ public static class ServiceCollectionExtensions
         // Code Graph service (graph-based RAG for structural queries)
         services.AddScoped<ICodeGraphService, CodeGraphService>();
 
+        // Code Graph enricher (extracts structural context from prompts)
+        services.AddScoped<ICodeGraphEnricher, CodeGraphEnricher>();
+
         // RAG-enriched executor
         services.AddScoped<IRagEnrichedExecutor, RagEnrichedExecutor>();
 

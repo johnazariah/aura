@@ -464,6 +464,7 @@ app.MapPost("/api/agents/{agentId}/execute/rag", async (
             request.Prompt,
             request.WorkspacePath,
             request.UseRag,
+            request.UseCodeGraph,
             request.TopK.HasValue ? new RagQueryOptions { TopK = request.TopK.Value } : null,
             cancellationToken);
 
@@ -475,6 +476,7 @@ app.MapPost("/api/agents/{agentId}/execute/rag", async (
             tokensUsed = output.TokensUsed,
             artifacts = output.Artifacts,
             ragEnriched = true,
+            codeGraphEnriched = request.UseCodeGraph ?? true,
             durationMs = stopwatch.ElapsedMilliseconds
         });
     }
@@ -2261,6 +2263,7 @@ record ExecuteWithRagRequest(
     string Prompt,
     string? WorkspacePath = null,
     bool? UseRag = null,
+    bool? UseCodeGraph = null,
     int? TopK = null);
 record CreateConversationRequest(string AgentId, string? Title = null, string? WorkspacePath = null);
 record AddMessageRequest(string Content);

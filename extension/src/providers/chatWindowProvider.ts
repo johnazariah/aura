@@ -66,15 +66,19 @@ export class ChatWindowProvider {
         // Track conversation state
         let messages: ChatMessage[] = [];
         let useRag = true;
+        let useCodeGraph = true;
 
         // Handle messages from webview
         panel.webview.onDidReceiveMessage(async (data) => {
             switch (data.type) {
                 case 'sendMessage':
-                    await this._handleMessage(panel, agent, data.message, messages, useRag);
+                    await this._handleMessage(panel, agent, data.message, messages, useRag, useCodeGraph);
                     break;
                 case 'toggleRag':
                     useRag = data.enabled;
+                    break;
+                case 'toggleCodeGraph':
+                    useCodeGraph = data.enabled;
                     break;
                 case 'clearChat':
                     messages = [];
@@ -85,7 +89,8 @@ export class ChatWindowProvider {
                     panel.webview.postMessage({
                         type: 'init',
                         agent: { id: agent.id, name: agent.name, model: agent.model },
-                        useRag
+                        useRag,
+                        useCodeGraph
                     });
                     break;
             }
@@ -97,7 +102,8 @@ export class ChatWindowProvider {
         agent: AgentInfo,
         message: string,
         messages: ChatMessage[],
-        useRag: boolean
+        useRag: boolean,
+        useCodeGraph: boolean
     ): Promise<void> {
         // Add user message
         const userMessage: ChatMessage = {
@@ -121,12 +127,14 @@ export class ChatWindowProvider {
 
             const startTime = Date.now();
 
-            if (useRag) {
+            if (useRag || useCodeGraph) {
                 const ragResponse = await this._apiService.executeAgentWithRag(
                     agent.id,
                     message,
                     workspacePath,
-                    5
+                    5,
+                    useRag,
+                    useCodeGraph
                 );
                 response = {
                     content: ragResponse.content,
@@ -601,8 +609,12 @@ export class ChatWindowProvider {
         </div>
         <div class="header-controls">
             <div class="toggle-container">
-                <span>Use RAG</span>
-                <div class="toggle active" id="ragToggle" title="Include workspace context in responses"></div>
+                <span>RAG</span>
+                <div class="toggle active" id="ragToggle" title="Include semantic search context"></div>
+            </div>
+            <div class="toggle-container">
+                <span>Code Graph</span>
+                <div class="toggle active" id="codeGraphToggle" title="Include code structure context"></div>
             </div>
             <button class="header-button" id="clearBtn">
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
@@ -666,11 +678,13 @@ export class ChatWindowProvider {
         const messageInput = document.getElementById('messageInput');
         const sendButton = document.getElementById('sendButton');
         const ragToggle = document.getElementById('ragToggle');
+        const codeGraphToggle = document.getElementById('codeGraphToggle');
         const clearBtn = document.getElementById('clearBtn');
         const errorBanner = document.getElementById('errorBanner');
         const suggestions = document.querySelectorAll('.suggestion');
 
         let useRag = true;
+        let useCodeGraph = true;
         let hasMessages = false;
 
         // Handle messages from extension
@@ -680,7 +694,9 @@ export class ChatWindowProvider {
             switch (message.type) {
                 case 'init':
                     useRag = message.useRag;
+                    useCodeGraph = message.useCodeGraph ?? true;
                     ragToggle.classList.toggle('active', useRag);
+                    codeGraphToggle.classList.toggle('active', useCodeGraph);
                     break;
 
                 case 'userMessage':
@@ -821,6 +837,12 @@ export class ChatWindowProvider {
             useRag = !useRag;
             ragToggle.classList.toggle('active', useRag);
             vscode.postMessage({ type: 'toggleRag', enabled: useRag });
+        });
+
+        codeGraphToggle.addEventListener('click', () => {
+            useCodeGraph = !useCodeGraph;
+            codeGraphToggle.classList.toggle('active', useCodeGraph);
+            vscode.postMessage({ type: 'toggleCodeGraph', enabled: useCodeGraph });
         });
 
         clearBtn.addEventListener('click', () => {

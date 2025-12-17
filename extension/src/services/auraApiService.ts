@@ -249,11 +249,13 @@ export class AuraApiService {
         agentId: string,
         prompt: string,
         workspacePath?: string,
-        topK: number = 5
+        topK: number = 5,
+        useRag: boolean = true,
+        useCodeGraph: boolean = true
     ): Promise<RagExecuteResult> {
         const response = await this.httpClient.post(
             `${this.getBaseUrl()}/api/agents/${agentId}/execute/rag`,
-            { prompt, workspacePath, useRag: true, topK },
+            { prompt, workspacePath, useRag, useCodeGraph, topK },
             { timeout: this.getExecutionTimeout() }
         );
         return response.data;

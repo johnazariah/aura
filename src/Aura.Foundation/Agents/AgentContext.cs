@@ -40,6 +40,21 @@ public sealed record AgentContext(
     public IReadOnlyList<RagResult>? RagResults { get; init; }
 
     /// <summary>
+    /// Gets the Code Graph context - structural code information from the semantic index.
+    /// </summary>
+    public string? CodeGraphContext { get; init; }
+
+    /// <summary>
+    /// Gets the relevant code nodes from the Code Graph.
+    /// </summary>
+    public IReadOnlyList<Data.Entities.CodeNode>? RelevantNodes { get; init; }
+
+    /// <summary>
+    /// Gets the relevant code edges (relationships) from the Code Graph.
+    /// </summary>
+    public IReadOnlyList<Data.Entities.CodeEdge>? RelevantEdges { get; init; }
+
+    /// <summary>
     /// Creates a context with just a prompt.
     /// </summary>
     /// <param name="prompt">The prompt text.</param>

@@ -23,6 +23,11 @@ public sealed class RagExecutionOptions
     public bool EnabledByDefault { get; set; } = true;
 
     /// <summary>
+    /// Gets or sets whether Code Graph enrichment is enabled by default.
+    /// </summary>
+    public bool CodeGraphEnabledByDefault { get; set; } = true;
+
+    /// <summary>
     /// Gets or sets the default number of RAG results to include.
     /// </summary>
     public int DefaultTopK { get; set; } = 5;
@@ -45,6 +50,7 @@ public interface IRagEnrichedExecutor
     /// <param name="prompt">The user prompt.</param>
     /// <param name="workspacePath">Optional workspace path.</param>
     /// <param name="useRag">Whether to use RAG enrichment (null = use default).</param>
+    /// <param name="useCodeGraph">Whether to use Code Graph enrichment (null = use default).</param>
     /// <param name="ragOptions">Custom RAG query options.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The agent output.</returns>
@@ -53,6 +59,7 @@ public interface IRagEnrichedExecutor
         string prompt,
         string? workspacePath = null,
         bool? useRag = null,
+        bool? useCodeGraph = null,
         RagQueryOptions? ragOptions = null,
         CancellationToken cancellationToken = default);
 }
@@ -64,6 +71,7 @@ public sealed class RagEnrichedExecutor : IRagEnrichedExecutor
 {
     private readonly IAgentRegistry _agentRegistry;
     private readonly IRagService _ragService;
+    private readonly ICodeGraphEnricher _codeGraphEnricher;
     private readonly RagExecutionOptions _options;
     private readonly ILogger<RagEnrichedExecutor> _logger;
 
@@ -73,11 +81,13 @@ public sealed class RagEnrichedExecutor : IRagEnrichedExecutor
     public RagEnrichedExecutor(
         IAgentRegistry agentRegistry,
         IRagService ragService,
+        ICodeGraphEnricher codeGraphEnricher,
         IOptions<RagExecutionOptions> options,
         ILogger<RagEnrichedExecutor> logger)
     {
         _agentRegistry = agentRegistry;
         _ragService = ragService;
+        _codeGraphEnricher = codeGraphEnricher;
         _options = options.Value;
         _logger = logger;
     }
@@ -88,6 +98,7 @@ public sealed class RagEnrichedExecutor : IRagEnrichedExecutor
         string prompt,
         string? workspacePath = null,
         bool? useRag = null,
+        bool? useCodeGraph = null,
         RagQueryOptions? ragOptions = null,
         CancellationToken cancellationToken = default)
     {
@@ -95,34 +106,35 @@ public sealed class RagEnrichedExecutor : IRagEnrichedExecutor
             ?? throw new AgentException(AgentErrorCode.NotFound, "Agent '" + agentId + "' not found");
 
         var shouldUseRag = useRag ?? _options.EnabledByDefault;
-        
-        AgentContext context;
-        
+        var shouldUseCodeGraph = useCodeGraph ?? _options.CodeGraphEnabledByDefault;
+
+        var context = new AgentContext(prompt, WorkspacePath: workspacePath);
+
+        // Apply RAG enrichment
         if (shouldUseRag)
         {
-            context = await BuildRagEnrichedContextAsync(
-                prompt, 
-                workspacePath, 
-                ragOptions, 
-                cancellationToken);
+            context = await ApplyRagEnrichmentAsync(context, ragOptions, cancellationToken);
         }
-        else
+
+        // Apply Code Graph enrichment
+        if (shouldUseCodeGraph)
         {
-            context = new AgentContext(prompt, WorkspacePath: workspacePath);
+            context = await ApplyCodeGraphEnrichmentAsync(context, cancellationToken);
         }
 
         _logger.LogInformation(
-            "Executing agent {AgentId} with RAG={UseRag}, RagResults={RagCount}",
+            "Executing agent {AgentId} with RAG={UseRag} ({RagCount} results), CodeGraph={UseCodeGraph} ({NodeCount} nodes)",
             agentId,
             shouldUseRag,
-            context.RagResults?.Count ?? 0);
+            context.RagResults?.Count ?? 0,
+            shouldUseCodeGraph,
+            context.RelevantNodes?.Count ?? 0);
 
         return await agent.ExecuteAsync(context, cancellationToken);
     }
 
-    private async Task<AgentContext> BuildRagEnrichedContextAsync(
-        string prompt,
-        string? workspacePath,
+    private async Task<AgentContext> ApplyRagEnrichmentAsync(
+        AgentContext context,
         RagQueryOptions? customOptions,
         CancellationToken cancellationToken)
     {
@@ -130,17 +142,17 @@ public sealed class RagEnrichedExecutor : IRagEnrichedExecutor
         {
             TopK = _options.DefaultTopK,
             MinScore = _options.MinRelevanceScore,
-            SourcePathPrefix = workspacePath,
+            SourcePathPrefix = context.WorkspacePath,
         };
 
         try
         {
-            var results = await _ragService.QueryAsync(prompt, options, cancellationToken);
+            var results = await _ragService.QueryAsync(context.Prompt, options, cancellationToken);
 
             if (results.Count == 0)
             {
                 _logger.LogDebug("No RAG results found for prompt");
-                return new AgentContext(prompt, WorkspacePath: workspacePath);
+                return context;
             }
 
             var ragContext = FormatRagContext(results);
@@ -150,7 +162,7 @@ public sealed class RagEnrichedExecutor : IRagEnrichedExecutor
                 results.Count,
                 string.Join(", ", results.Select(r => r.Score.ToString("F2"))));
 
-            return new AgentContext(prompt, WorkspacePath: workspacePath)
+            return context with
             {
                 RagContext = ragContext,
                 RagResults = results,
@@ -158,8 +170,40 @@ public sealed class RagEnrichedExecutor : IRagEnrichedExecutor
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "RAG query failed, proceeding without context");
-            return new AgentContext(prompt, WorkspacePath: workspacePath);
+            _logger.LogWarning(ex, "RAG query failed, proceeding without RAG context");
+            return context;
+        }
+    }
+
+    private async Task<AgentContext> ApplyCodeGraphEnrichmentAsync(
+        AgentContext context,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var enrichment = await _codeGraphEnricher.EnrichAsync(
+                context.Prompt,
+                context.WorkspacePath,
+                options: null,
+                cancellationToken);
+
+            if (enrichment.Nodes.Count == 0)
+            {
+                _logger.LogDebug("No Code Graph results found for prompt");
+                return context;
+            }
+
+            return context with
+            {
+                CodeGraphContext = enrichment.FormattedContext,
+                RelevantNodes = enrichment.Nodes,
+                RelevantEdges = enrichment.Edges,
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Code Graph enrichment failed, proceeding without Code Graph context");
+            return context;
         }
     }
 
