@@ -41,6 +41,7 @@ features/
 | [Workflow PR Creation](completed/workflow-pr-creation.md) | Finalize workflows with commit/push/PR | 2025-12-12 |
 | [Code Graph Status Panel](completed/code-graph-status-panel.md) | Code Graph stats in System Status | 2025-12-12 |
 | [File-Aware RAG Queries](completed/file-aware-rag-queries.md) | Context-aware retrieval with file scoping | 2025-12-12 |
+| [Code-Aware Chat](completed/code-aware-chat.md) | Chat with RAG + Code Graph context | 2025-12-13 |
 
 ## Upcoming Features
 
@@ -48,7 +49,6 @@ features/
 
 | Feature | Description |
 |---------|-------------|
-| [Code-Aware Chat](upcoming/code-aware-chat.md) | Chat with RAG + Code Graph context |
 | [Unified Indexing Backend](upcoming/unified-indexing-backend.md) | Single pipeline for RAG + Code Graph |
 | [Indexing UX](upcoming/indexing-ux.md) | Progress UI, prompts, query commands |
 
