@@ -38,6 +38,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "installservice"; Description: "Install as Windows Service (auto-start on boot)"; GroupDescription: "Service Options:"
 Name: "starttray"; Description: "Start system tray monitor after installation"; GroupDescription: "Tray Options:"; Flags: checked
 Name: "autostartray"; Description: "Start system tray monitor with Windows"; GroupDescription: "Tray Options:"; Flags: checked
+Name: "installextension"; Description: "Install VS Code extension"; GroupDescription: "VS Code Integration:"; Flags: checked; Check: VSCodeExists
 
 [Files]
 ; API/Service
@@ -46,6 +47,10 @@ Source: "..\..\publish\win-x64\api\*"; DestDir: "{app}\api"; Flags: ignoreversio
 Source: "..\..\publish\win-x64\tray\*"; DestDir: "{app}\tray"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; Agents
 Source: "..\..\publish\win-x64\agents\*"; DestDir: "{app}\agents"; Flags: ignoreversion recursesubdirs createallsubdirs
+; VS Code Extension
+Source: "..\..\publish\win-x64\extension\*.vsix"; DestDir: "{app}\extension"; Flags: ignoreversion
+; Scripts
+Source: "..\..\publish\win-x64\scripts\*"; DestDir: "{app}\scripts"; Flags: ignoreversion
 ; Version info
 Source: "..\..\publish\win-x64\version.json"; DestDir: "{app}"; Flags: ignoreversion
 
@@ -62,6 +67,8 @@ Root: HKCU; Subkey: "SOFTWARE\Microsoft\Windows\CurrentVersion\Run"; ValueType: 
 Filename: "sc.exe"; Parameters: "create AuraService binPath= ""{app}\api\{#MyAppExeName}"" start= auto"; Flags: runhidden; Tasks: installservice
 Filename: "sc.exe"; Parameters: "description AuraService ""Aura local AI assistant service"""; Flags: runhidden; Tasks: installservice
 Filename: "sc.exe"; Parameters: "start AuraService"; Flags: runhidden; Tasks: installservice
+; Install VS Code extension
+Filename: "{code:GetVSCodePath}"; Parameters: "--install-extension ""{app}\extension\aura-{#MyAppVersion}.vsix"" --force"; Flags: runhidden nowait; Tasks: installextension
 ; Start tray app
 Filename: "{app}\tray\{#MyTrayExeName}"; Parameters: "--minimized"; Flags: nowait postinstall; Tasks: starttray
 
@@ -71,6 +78,26 @@ Filename: "sc.exe"; Parameters: "stop AuraService"; Flags: runhidden
 Filename: "sc.exe"; Parameters: "delete AuraService"; Flags: runhidden
 
 [Code]
+function VSCodeExists(): Boolean;
+begin
+  // Check common VS Code locations
+  Result := FileExists(ExpandConstant('{localappdata}\Programs\Microsoft VS Code\bin\code.cmd')) or
+            FileExists('C:\Program Files\Microsoft VS Code\bin\code.cmd') or
+            FileExists(ExpandConstant('{localappdata}\Programs\Microsoft VS Code Insiders\bin\code-insiders.cmd'));
+end;
+
+function GetVSCodePath(Param: string): string;
+begin
+  if FileExists(ExpandConstant('{localappdata}\Programs\Microsoft VS Code\bin\code.cmd')) then
+    Result := ExpandConstant('{localappdata}\Programs\Microsoft VS Code\bin\code.cmd')
+  else if FileExists('C:\Program Files\Microsoft VS Code\bin\code.cmd') then
+    Result := 'C:\Program Files\Microsoft VS Code\bin\code.cmd'
+  else if FileExists(ExpandConstant('{localappdata}\Programs\Microsoft VS Code Insiders\bin\code-insiders.cmd')) then
+    Result := ExpandConstant('{localappdata}\Programs\Microsoft VS Code Insiders\bin\code-insiders.cmd')
+  else
+    Result := 'code';  // Fallback to PATH
+end;
+
 function InitializeSetup(): Boolean;
 begin
   Result := True;
@@ -84,5 +111,14 @@ begin
     begin
       Result := False;
     end;
+  end;
+
+  // Inform about VS Code if not detected
+  if not VSCodeExists() then
+  begin
+    MsgBox('VS Code was not detected. The Aura extension will be placed in the installation folder.' + #13#10 + #13#10 +
+           'You can manually install it later by running:' + #13#10 +
+           'powershell -File "' + ExpandConstant('{app}') + '\scripts\install-extension.ps1"',
+           mbInformation, MB_OK);
   end;
 end;

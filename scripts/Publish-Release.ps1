@@ -58,6 +58,31 @@ try {
     Write-Host "`nCopying agents..." -ForegroundColor Green
     Copy-Item -Path "agents" -Destination "$OutputDir/win-x64/agents" -Recurse
 
+    # Build VS Code extension
+    Write-Host "`nBuilding VS Code Extension..." -ForegroundColor Green
+    Push-Location extension
+    
+    # Update extension version to match release version
+    $packageJsonPath = "package.json"
+    $packageJson = Get-Content $packageJsonPath -Raw | ConvertFrom-Json
+    $packageJson.version = $Version
+    $packageJson | ConvertTo-Json -Depth 10 | Set-Content $packageJsonPath
+    
+    npm ci
+    if ($LASTEXITCODE -ne 0) { throw "Failed to install extension dependencies" }
+    
+    npm run package
+    if ($LASTEXITCODE -ne 0) { throw "Failed to package extension" }
+    Pop-Location
+    
+    # Copy VSIX to publish folder
+    New-Item -ItemType Directory -Path "$OutputDir/win-x64/extension" -Force | Out-Null
+    Copy-Item "extension/aura-$Version.vsix" "$OutputDir/win-x64/extension/"
+    
+    # Copy extension install helper script
+    New-Item -ItemType Directory -Path "$OutputDir/win-x64/scripts" -Force | Out-Null
+    Copy-Item "installers/windows/install-extension.ps1" "$OutputDir/win-x64/scripts/"
+
     # Create version file
     @{
         version = $Version
@@ -69,6 +94,8 @@ try {
     Write-Host "  - api/Aura.Api.exe (Windows Service)" -ForegroundColor Gray
     Write-Host "  - tray/Aura.Tray.exe (System Tray)" -ForegroundColor Gray
     Write-Host "  - agents/ (Agent definitions)" -ForegroundColor Gray
+    Write-Host "  - extension/aura-$Version.vsix (VS Code Extension)" -ForegroundColor Gray
+    Write-Host "  - scripts/install-extension.ps1 (Manual install helper)" -ForegroundColor Gray
 
 } finally {
     Pop-Location
