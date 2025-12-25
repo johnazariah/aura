@@ -30,8 +30,18 @@ jobs:
       - name: Build
         run: dotnet build --no-restore --configuration Release
 
-      - name: Test
-        run: dotnet test --no-build --configuration Release --verbosity normal
+      - name: Test (Unit Tests Only)
+        # Integration tests require Docker which isn't available on macOS runners
+        run: |
+          dotnet test --no-build --configuration Release --verbosity normal \
+            --filter "FullyQualifiedName!~IntegrationTests"
+
+      - name: Test (Integration Tests)
+        # Only run integration tests on platforms with Docker
+        if: matrix.os != 'macos-latest'
+        run: |
+          dotnet test --no-build --configuration Release --verbosity normal \
+            --filter "FullyQualifiedName~IntegrationTests"
 
   coverage:
     runs-on: ubuntu-latest

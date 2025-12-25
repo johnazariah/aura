@@ -392,7 +392,8 @@ public class MarkdownAgentLoaderTests
     public async Task LoadAsync_ReturnsNullForNonExistentFile()
     {
         // Act
-        var agent = await _loader.LoadAsync(@"C:\agents\nonexistent.md");
+        var nonExistentPath = Path.Combine(Path.GetTempPath(), "agents", "nonexistent.md");
+        var agent = await _loader.LoadAsync(nonExistentPath);
 
         // Assert
         agent.Should().BeNull();
@@ -415,10 +416,11 @@ public class MarkdownAgentLoaderTests
             You are a test agent.
             """;
 
-        _fileSystem.AddFile(@"C:\agents\test-agent.md", new MockFileData(content));
+        var agentPath = Path.Combine(Path.GetTempPath(), "agents", "test-agent.md");
+        _fileSystem.AddFile(agentPath, new MockFileData(content));
 
         // Act
-        var agent = await _loader.LoadAsync(@"C:\agents\test-agent.md");
+        var agent = await _loader.LoadAsync(agentPath);
 
         // Assert
         agent.Should().NotBeNull();

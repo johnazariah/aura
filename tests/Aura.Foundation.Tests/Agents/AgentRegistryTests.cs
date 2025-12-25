@@ -20,9 +20,12 @@ public class AgentRegistryTests
     private readonly IAgentLoader _agentLoader;
     private readonly ILogger<AgentRegistry> _logger;
     private readonly AgentRegistry _registry;
+    private readonly string _agentsDir;
 
     public AgentRegistryTests()
     {
+        // Use cross-platform temp path for mock file system
+        _agentsDir = Path.Combine(Path.GetTempPath(), "agents");
         _fileSystem = new MockFileSystem();
         _agentLoader = Substitute.For<IAgentLoader>();
         _logger = Substitute.For<ILogger<AgentRegistry>>();
@@ -210,18 +213,19 @@ public class AgentRegistryTests
     public async Task ReloadAsync_LoadsAgentsFromDirectory()
     {
         // Arrange
-        const string directory = @"C:\agents";
-        _fileSystem.AddDirectory(directory);
-        _fileSystem.AddFile(@"C:\agents\agent1.md", new MockFileData("# Agent 1"));
-        _fileSystem.AddFile(@"C:\agents\agent2.md", new MockFileData("# Agent 2"));
+        var agent1Path = Path.Combine(_agentsDir, "agent1.md");
+        var agent2Path = Path.Combine(_agentsDir, "agent2.md");
+        _fileSystem.AddDirectory(_agentsDir);
+        _fileSystem.AddFile(agent1Path, new MockFileData("# Agent 1"));
+        _fileSystem.AddFile(agent2Path, new MockFileData("# Agent 2"));
 
         var agent1 = CreateMockAgent("agent1", "Agent 1");
         var agent2 = CreateMockAgent("agent2", "Agent 2");
 
-        _agentLoader.LoadAsync(@"C:\agents\agent1.md").Returns(Task.FromResult<IAgent?>(agent1));
-        _agentLoader.LoadAsync(@"C:\agents\agent2.md").Returns(Task.FromResult<IAgent?>(agent2));
+        _agentLoader.LoadAsync(agent1Path).Returns(Task.FromResult<IAgent?>(agent1));
+        _agentLoader.LoadAsync(agent2Path).Returns(Task.FromResult<IAgent?>(agent2));
 
-        _registry.AddWatchDirectory(directory, enableHotReload: false);
+        _registry.AddWatchDirectory(_agentsDir, enableHotReload: false);
 
         // Act
         await _registry.ReloadAsync();
@@ -234,18 +238,18 @@ public class AgentRegistryTests
     public async Task ReloadAsync_RemovesAgentsForDeletedFiles()
     {
         // Arrange
-        const string directory = @"C:\agents";
-        _fileSystem.AddDirectory(directory);
-        _fileSystem.AddFile(@"C:\agents\agent1.md", new MockFileData("# Agent 1"));
+        var agent1Path = Path.Combine(_agentsDir, "agent1.md");
+        _fileSystem.AddDirectory(_agentsDir);
+        _fileSystem.AddFile(agent1Path, new MockFileData("# Agent 1"));
 
         var agent1 = CreateMockAgent("agent1", "Agent 1");
-        _agentLoader.LoadAsync(@"C:\agents\agent1.md").Returns(Task.FromResult<IAgent?>(agent1));
+        _agentLoader.LoadAsync(agent1Path).Returns(Task.FromResult<IAgent?>(agent1));
 
-        _registry.AddWatchDirectory(directory, enableHotReload: false);
+        _registry.AddWatchDirectory(_agentsDir, enableHotReload: false);
         await _registry.ReloadAsync();
 
         // Now simulate file deletion by removing from the file system
-        _fileSystem.RemoveFile(@"C:\agents\agent1.md");
+        _fileSystem.RemoveFile(agent1Path);
 
         // Act
         await _registry.ReloadAsync();
