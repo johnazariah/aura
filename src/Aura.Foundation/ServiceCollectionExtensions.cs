@@ -104,11 +104,11 @@ public static class ServiceCollectionExtensions
 
         return services;
     }    /// <summary>
-    /// Adds LLM provider services.
-    /// </summary>
-    /// <param name="services">The service collection.</param>
-    /// <param name="configuration">Configuration instance.</param>
-    /// <returns>The service collection for chaining.</returns>
+         /// Adds LLM provider services.
+         /// </summary>
+         /// <param name="services">The service collection.</param>
+         /// <param name="configuration">Configuration instance.</param>
+         /// <returns>The service collection for chaining.</returns>
     public static IServiceCollection AddLlmServices(
         this IServiceCollection services,
         IConfiguration configuration)

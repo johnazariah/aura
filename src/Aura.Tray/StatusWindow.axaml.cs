@@ -7,7 +7,7 @@ namespace Aura.Tray;
 public partial class StatusWindow : Window
 {
     private ServiceMonitor? _serviceMonitor;
-    
+
     // Color constants
     private static readonly IBrush GreenBrush = new SolidColorBrush(Color.FromRgb(76, 175, 80));   // #4CAF50
     private static readonly IBrush YellowBrush = new SolidColorBrush(Color.FromRgb(255, 193, 7));  // #FFC107
@@ -23,10 +23,10 @@ public partial class StatusWindow : Window
     public StatusWindow(ServiceMonitor serviceMonitor) : this()
     {
         _serviceMonitor = serviceMonitor;
-        
+
         // Subscribe to status changes
         _serviceMonitor.StatusChanged += OnStatusChanged;
-        
+
         // Show current status immediately
         UpdateStatus(_serviceMonitor.CurrentStatus);
     }
@@ -41,7 +41,7 @@ public partial class StatusWindow : Window
         // Overall status
         var overallStatusDot = this.FindControl<Avalonia.Controls.Shapes.Ellipse>("OverallStatusDot");
         var overallStatusText = this.FindControl<TextBlock>("OverallStatusText");
-        
+
         if (overallStatusDot != null && overallStatusText != null)
         {
             (overallStatusDot.Fill, overallStatusText.Text) = status.OverallStatus switch
@@ -52,19 +52,19 @@ public partial class StatusWindow : Window
                 _ => (GrayBrush, "Checking Status...")
             };
         }
-        
+
         // API Status
         UpdateComponentStatus("Api", status.ApiStatus);
-        
+
         // Ollama Status
         UpdateComponentStatus("Ollama", status.OllamaStatus);
-        
+
         // PostgreSQL Status
         UpdateComponentStatus("Postgres", status.PostgresStatus);
-        
+
         // RAG Status
         UpdateComponentStatus("Rag", status.RagStatus);
-        
+
         // Last checked
         var lastCheckedText = this.FindControl<TextBlock>("LastCheckedText");
         if (lastCheckedText != null)
@@ -78,18 +78,18 @@ public partial class StatusWindow : Window
         var dot = this.FindControl<Avalonia.Controls.Shapes.Ellipse>($"{prefix}StatusDot");
         var text = this.FindControl<TextBlock>($"{prefix}StatusText");
         var details = this.FindControl<TextBlock>($"{prefix}StatusDetails");
-        
+
         if (dot != null)
         {
             dot.Fill = status.IsHealthy ? GreenBrush : RedBrush;
         }
-        
+
         if (text != null)
         {
             text.Text = status.StatusText;
             text.Foreground = status.IsHealthy ? GreenBrush : RedBrush;
         }
-        
+
         if (details != null)
         {
             details.Text = status.Details ?? "";

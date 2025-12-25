@@ -385,7 +385,7 @@ public partial class ReActExecutor : IReActExecutor
               
               REMEMBER: The ONLY valid actions are: {{toolIds}}, finish
               If you want to review/validate, just use "finish" with your analysis in the result.
-              """;var prompt = $"""
+              """; var prompt = $"""
             You are an AI assistant that can use tools to accomplish tasks.
             You should think step by step and use tools when needed.
 

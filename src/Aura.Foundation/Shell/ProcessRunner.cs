@@ -27,7 +27,7 @@ public class ProcessRunner : IProcessRunner
     {
         options ??= new ProcessOptions();
         var sw = Stopwatch.StartNew();
-        
+
         var startInfo = new ProcessStartInfo
         {
             FileName = command,
@@ -38,12 +38,12 @@ public class ProcessRunner : IProcessRunner
             RedirectStandardInput = options.StandardInput is not null,
             WorkingDirectory = options.WorkingDirectory ?? Directory.GetCurrentDirectory()
         };
-        
+
         foreach (var arg in args)
         {
             startInfo.ArgumentList.Add(arg);
         }
-        
+
         if (options.Environment is not null)
         {
             foreach (var (key, value) in options.Environment)
@@ -51,16 +51,16 @@ public class ProcessRunner : IProcessRunner
                 startInfo.Environment[key] = value;
             }
         }
-        
+
         _logger.LogDebug("Running: {Command} {Args}", command, string.Join(" ", args));
-        
+
         try
         {
             using var process = new Process { StartInfo = startInfo };
-            
+
             var stdout = new StringBuilder();
             var stderr = new StringBuilder();
-            
+
             if (options.CaptureOutput)
             {
                 process.OutputDataReceived += (_, e) =>
@@ -69,7 +69,7 @@ public class ProcessRunner : IProcessRunner
                         stdout.AppendLine(e.Data);
                 };
             }
-            
+
             if (options.CaptureError)
             {
                 process.ErrorDataReceived += (_, e) =>
@@ -78,30 +78,30 @@ public class ProcessRunner : IProcessRunner
                         stderr.AppendLine(e.Data);
                 };
             }
-            
+
             process.Start();
-            
+
             if (options.CaptureOutput) process.BeginOutputReadLine();
             if (options.CaptureError) process.BeginErrorReadLine();
-            
+
             if (options.StandardInput is not null)
             {
                 await process.StandardInput.WriteAsync(options.StandardInput);
                 process.StandardInput.Close();
             }
-            
+
             // Wait with timeout
-            using var timeoutCts = options.Timeout.HasValue 
-                ? new CancellationTokenSource(options.Timeout.Value) 
+            using var timeoutCts = options.Timeout.HasValue
+                ? new CancellationTokenSource(options.Timeout.Value)
                 : new CancellationTokenSource();
-            
+
             using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, timeoutCts.Token);
-            
+
             try
             {
                 await process.WaitForExitAsync(linkedCts.Token);
                 sw.Stop();
-                
+
                 return new ProcessResult
                 {
                     ExitCode = process.ExitCode,
@@ -116,9 +116,9 @@ public class ProcessRunner : IProcessRunner
                 // Timeout
                 try { process.Kill(entireProcessTree: true); } catch { }
                 sw.Stop();
-                
+
                 _logger.LogWarning("Process timed out: {Command}", command);
-                
+
                 return new ProcessResult
                 {
                     ExitCode = -1,
@@ -133,7 +133,7 @@ public class ProcessRunner : IProcessRunner
         {
             sw.Stop();
             _logger.LogError(ex, "Failed to run process: {Command}", command);
-            
+
             return new ProcessResult
             {
                 ExitCode = -1,
@@ -164,16 +164,16 @@ public class ProcessRunner : IProcessRunner
             {
                 return new ShellInfo { Path = pwshPath, CommandArg = "-Command", Name = "pwsh" };
             }
-            
+
             var powershellPath = FindExecutable("powershell");
             if (powershellPath is not null)
             {
                 return new ShellInfo { Path = powershellPath, CommandArg = "-Command", Name = "powershell" };
             }
-            
+
             return new ShellInfo { Path = "cmd.exe", CommandArg = "/c", Name = "cmd" };
         }
-        
+
         if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ||
             RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
         {
@@ -184,14 +184,14 @@ public class ProcessRunner : IProcessRunner
                 var name = Path.GetFileName(shell);
                 return new ShellInfo { Path = shell, CommandArg = "-c", Name = name };
             }
-            
+
             // Fall back to bash or sh
             if (File.Exists("/bin/bash"))
                 return new ShellInfo { Path = "/bin/bash", CommandArg = "-c", Name = "bash" };
-            
+
             return new ShellInfo { Path = "/bin/sh", CommandArg = "-c", Name = "sh" };
         }
-        
+
         // Unknown platform, try sh
         return new ShellInfo { Path = "sh", CommandArg = "-c", Name = "sh" };
     }
@@ -201,14 +201,14 @@ public class ProcessRunner : IProcessRunner
         var pathVar = Environment.GetEnvironmentVariable("PATH") ?? "";
         var separator = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? ';' : ':';
         var extension = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? ".exe" : "";
-        
+
         foreach (var dir in pathVar.Split(separator))
         {
             var fullPath = Path.Combine(dir, name + extension);
             if (File.Exists(fullPath))
                 return fullPath;
         }
-        
+
         return null;
     }
 }

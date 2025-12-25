@@ -43,7 +43,7 @@ public class TextChunkerTests
     [Fact]
     public void Split_PlainText_SplitsOnParagraphs()
     {
-        var text = string.Join("\n\n", Enumerable.Range(1, 10).Select(i => 
+        var text = string.Join("\n\n", Enumerable.Range(1, 10).Select(i =>
             "This is paragraph " + i + " with some content."));
 
         var chunks = _chunker.Split(text, RagContentType.PlainText);
@@ -114,7 +114,7 @@ public class Third
 
         // Should produce multiple chunks
         chunks.Should().HaveCountGreaterThan(1);
-        
+
         // All content should be preserved across chunks
         var allContent = string.Concat(chunks);
         allContent.Should().Contain("First");
@@ -133,7 +133,7 @@ public class Third
     [Fact]
     public void Split_PlainText_WithParagraphBreaks_SplitsCorrectly()
     {
-        var text = string.Join("\n\n", Enumerable.Range(1, 20).Select(i => 
+        var text = string.Join("\n\n", Enumerable.Range(1, 20).Select(i =>
             new string((char)('a' + (i % 26)), 30)));
 
         var chunks = _chunker.Split(text, RagContentType.PlainText);

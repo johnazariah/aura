@@ -84,7 +84,7 @@ public sealed class DeveloperDbContext : AuraDbContext
             entity.Property(e => e.Attempts).HasColumnName("attempts");
             entity.Property(e => e.StartedAt).HasColumnName("started_at");
             entity.Property(e => e.CompletedAt).HasColumnName("completed_at");
-            
+
             // Assisted workflow UI fields
             entity.Property(e => e.Approval).HasColumnName("approval");
             entity.Property(e => e.ApprovalFeedback).HasColumnName("approval_feedback");

@@ -20,11 +20,11 @@ public class SilverThreadTests
         var processLogger = Substitute.For<ILogger<ProcessRunner>>();
         var toolLogger = Substitute.For<ILogger<ToolRegistry>>();
         var builtinLogger = Substitute.For<ILogger>();
-        
+
         var processRunner = new ProcessRunner(processLogger);
         var fileSystem = new FileSystem();
         var registry = new ToolRegistry(toolLogger);
-        
+
         BuiltInTools.RegisterBuiltInTools(registry, fileSystem, processRunner, builtinLogger);
 
         // Act - execute a real shell command
@@ -37,7 +37,7 @@ public class SilverThreadTests
                 ["timeoutSeconds"] = 10
             }
         };
-        
+
         var result = await registry.ExecuteAsync(input);
 
         // Assert
@@ -55,13 +55,13 @@ public class SilverThreadTests
         var processLogger = Substitute.For<ILogger<ProcessRunner>>();
         var toolLogger = Substitute.For<ILogger<ToolRegistry>>();
         var builtinLogger = Substitute.For<ILogger>();
-        
+
         var processRunner = new ProcessRunner(processLogger);
         var fileSystem = new FileSystem();
         var registry = new ToolRegistry(toolLogger);
-        
+
         BuiltInTools.RegisterBuiltInTools(registry, fileSystem, processRunner, builtinLogger);
-        
+
         var tempFile = Path.Combine(Path.GetTempPath(), $"aura-test-{Guid.NewGuid()}.txt");
         var testContent = $"Silver thread test content: {DateTime.UtcNow}";
 
@@ -121,10 +121,10 @@ public class SilverThreadTests
         // Arrange - use the aura repo itself
         var processLogger = Substitute.For<ILogger<ProcessRunner>>();
         var gitLogger = Substitute.For<ILogger<GitService>>();
-        
+
         var runner = new ProcessRunner(processLogger);
         var gitService = new GitService(runner, gitLogger);
-        
+
         var repoPath = FindRepoRoot();
         if (repoPath == null)
         {

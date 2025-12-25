@@ -234,7 +234,7 @@ public sealed class WorkflowService : IWorkflowService
         }
 
         // Clean up the workflow branch if it exists
-        if (!string.IsNullOrEmpty(workflow.GitBranch) && 
+        if (!string.IsNullOrEmpty(workflow.GitBranch) &&
             !string.IsNullOrEmpty(workflow.RepositoryPath))
         {
             var deleteBranchResult = await _gitService.DeleteBranchAsync(
@@ -452,17 +452,17 @@ public sealed class WorkflowService : IWorkflowService
         if (isReExecution)
         {
             _logger.LogInformation("Re-executing completed step {StepId}, will cascade rework to subsequent steps", stepId);
-            
+
             // Save previous output for comparison
             step.PreviousOutput = step.Output;
             step.Approval = null;  // Clear approval since we're re-doing it
             step.ApprovalFeedback = null;
-            
+
             // Mark all subsequent steps as needing rework
             var subsequentSteps = workflow.Steps
                 .Where(s => s.Order > step.Order && s.Status == StepStatus.Completed)
                 .ToList();
-            
+
             foreach (var subsequentStep in subsequentSteps)
             {
                 subsequentStep.NeedsRework = true;
@@ -743,9 +743,9 @@ public sealed class WorkflowService : IWorkflowService
             workflow.UpdatedAt = DateTimeOffset.UtcNow;
 
             // Check if all steps are complete AND none need rework
-            var allComplete = workflow.Steps.All(s => 
+            var allComplete = workflow.Steps.All(s =>
                 (s.Status == StepStatus.Completed || s.Status == StepStatus.Skipped) && !s.NeedsRework);
-            
+
             if (allComplete)
             {
                 workflow.Status = WorkflowStatus.Completed;
@@ -897,7 +897,7 @@ public sealed class WorkflowService : IWorkflowService
         }
 
         // Commit, push, and create PR if there are changes in the worktree
-        if (!string.IsNullOrEmpty(workflow.WorktreePath) && 
+        if (!string.IsNullOrEmpty(workflow.WorktreePath) &&
             !string.IsNullOrEmpty(workflow.RepositoryPath) &&
             workflow.WorktreePath != workflow.RepositoryPath)
         {
@@ -1043,7 +1043,7 @@ public sealed class WorkflowService : IWorkflowService
                 // Append the additional context to the workflow description
                 workflow.Description = $"{workflow.Description}\n\nAdditional context: {additionalContext}";
                 await _db.SaveChangesAsync(ct);
-                
+
                 // Re-run analysis
                 await AnalyzeAsync(workflowId, ct);
                 analysisUpdated = true;
@@ -1053,8 +1053,8 @@ public sealed class WorkflowService : IWorkflowService
         {
             var parsed = ParseAddStepAction(output.Content);
             // Validate that we got real values, not placeholder text
-            if (parsed is not null && 
-                !parsed.Value.Name.Contains("[") && 
+            if (parsed is not null &&
+                !parsed.Value.Name.Contains("[") &&
                 !parsed.Value.Capability.Contains("[") &&
                 IsValidCapability(parsed.Value.Capability))
             {
@@ -1084,30 +1084,30 @@ public sealed class WorkflowService : IWorkflowService
                 if (stepToSplit is not null)
                 {
                     var insertAfterOrder = stepToSplit.Order - 1; // Insert at the position of the removed step
-                    
+
                     // Remove the original step
                     stepsRemoved.Add(stepToSplit.Id);
                     await RemoveStepAsync(workflowId, stepToSplit.Id, ct);
-                    
+
                     // Add the new steps in order
                     foreach (var newStep in splitResult.Value.NewSteps)
                     {
-                        if (!newStep.Name.Contains("[") && 
+                        if (!newStep.Name.Contains("[") &&
                             !newStep.Capability.Contains("[") &&
                             IsValidCapability(newStep.Capability))
                         {
                             var addedStep = await AddStepAsync(
-                                workflowId, 
-                                newStep.Name, 
-                                newStep.Capability, 
-                                newStep.Description, 
+                                workflowId,
+                                newStep.Name,
+                                newStep.Capability,
+                                newStep.Description,
                                 afterOrder: insertAfterOrder,
                                 ct: ct);
                             stepsAdded.Add(addedStep);
                             insertAfterOrder = addedStep.Order; // Next step goes after this one
                         }
                     }
-                    
+
                     _logger.LogInformation(
                         "Split step {StepNumber} into {NewStepCount} steps in workflow {WorkflowId}",
                         splitResult.Value.StepNumber,
@@ -1425,7 +1425,7 @@ public sealed class WorkflowService : IWorkflowService
             var lines = response.Split('\n');
             int? stepNumber = null;
             var newSteps = new List<(string Name, string Capability, string? Description)>();
-            
+
             string? currentName = null;
             string? currentCapability = null;
             string? currentDescription = null;
@@ -1434,7 +1434,7 @@ public sealed class WorkflowService : IWorkflowService
             foreach (var rawLine in lines)
             {
                 var line = rawLine.Trim();
-                
+
                 if (line.StartsWith("STEP_NUMBER:", StringComparison.OrdinalIgnoreCase))
                 {
                     var numberStr = line["STEP_NUMBER:".Length..].Trim();
@@ -1450,7 +1450,7 @@ public sealed class WorkflowService : IWorkflowService
                 else if (inNewSteps)
                 {
                     // Parse YAML-like list items
-                    if (line.StartsWith("- NAME:", StringComparison.OrdinalIgnoreCase) || 
+                    if (line.StartsWith("- NAME:", StringComparison.OrdinalIgnoreCase) ||
                         line.StartsWith("-NAME:", StringComparison.OrdinalIgnoreCase))
                     {
                         // Save previous step if we have one
@@ -1458,8 +1458,8 @@ public sealed class WorkflowService : IWorkflowService
                         {
                             newSteps.Add((currentName, currentCapability, currentDescription));
                         }
-                        
-                        currentName = line.Contains("NAME:") 
+
+                        currentName = line.Contains("NAME:")
                             ? line[(line.IndexOf("NAME:", StringComparison.OrdinalIgnoreCase) + 5)..].Trim()
                             : null;
                         currentCapability = null;
@@ -1475,7 +1475,7 @@ public sealed class WorkflowService : IWorkflowService
                     }
                 }
             }
-            
+
             // Don't forget the last step
             if (currentName is not null && currentCapability is not null)
             {
@@ -1500,7 +1500,7 @@ public sealed class WorkflowService : IWorkflowService
         try
         {
             _logger.LogInformation("Indexing worktree {Path} for RAG...", workspacePath);
-            
+
             var options = new RagIndexOptions
             {
                 IncludePatterns = new[] { "*.cs", "*.md", "*.json", "*.yaml", "*.yml", "*.ts", "*.tsx", "*.js", "*.jsx" },
@@ -1509,7 +1509,7 @@ public sealed class WorkflowService : IWorkflowService
             };
 
             var indexedCount = await _ragService.IndexDirectoryAsync(workspacePath, options, ct);
-            
+
             _logger.LogInformation(
                 "Indexed {Count} files from {Path} for RAG",
                 indexedCount,
@@ -1536,7 +1536,7 @@ public sealed class WorkflowService : IWorkflowService
             };
 
             var results = await _ragService.QueryAsync(query, options, ct);
-            
+
             if (results.Count == 0)
             {
                 _logger.LogDebug("No RAG results found for query: {Query}", query);
@@ -1848,7 +1848,7 @@ public sealed class WorkflowService : IWorkflowService
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "RAG query failed, proceeding without context");      
+            _logger.LogWarning(ex, "RAG query failed, proceeding without context");
             return null;
         }
     }

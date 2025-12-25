@@ -210,16 +210,16 @@ public sealed class RagEnrichedExecutor : IRagEnrichedExecutor
     private static string FormatRagContext(IReadOnlyList<RagResult> results)
     {
         var sb = new StringBuilder();
-        
+
         foreach (var result in results)
         {
             sb.AppendLine("---");
-            
+
             if (!string.IsNullOrEmpty(result.SourcePath))
             {
                 sb.AppendLine("Source: " + result.SourcePath);
             }
-            
+
             sb.AppendLine("Relevance: " + result.Score.ToString("P0"));
             sb.AppendLine();
             sb.AppendLine(result.Text);

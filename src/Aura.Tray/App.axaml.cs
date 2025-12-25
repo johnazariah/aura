@@ -25,12 +25,12 @@ public partial class App : Application
         {
             // Don't show main window - we're a tray app
             desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
-            
+
             // Initialize service monitor
             _serviceMonitor = new ServiceMonitor();
             _serviceMonitor.StatusChanged += OnStatusChanged;
             _serviceMonitor.Start();
-            
+
             // Create tray icon
             CreateTrayIcon();
         }
@@ -41,7 +41,7 @@ public partial class App : Application
     private void CreateTrayIcon()
     {
         var menu = new NativeMenu();
-        
+
         // Status header (non-clickable)
         var statusItem = new NativeMenuItem("Aura")
         {
@@ -49,48 +49,48 @@ public partial class App : Application
         };
         menu.Add(statusItem);
         menu.Add(new NativeMenuItemSeparator());
-        
+
         // Show Status Window
         var showStatusItem = new NativeMenuItem("Show Status...");
         showStatusItem.Click += (_, _) => ShowStatusWindow();
         menu.Add(showStatusItem);
-        
+
         menu.Add(new NativeMenuItemSeparator());
-        
+
         // Service controls
         var startServiceItem = new NativeMenuItem("Start Service");
         startServiceItem.Click += async (_, _) => await _serviceMonitor!.StartServiceAsync();
         menu.Add(startServiceItem);
-        
+
         var stopServiceItem = new NativeMenuItem("Stop Service");
         stopServiceItem.Click += async (_, _) => await _serviceMonitor!.StopServiceAsync();
         menu.Add(stopServiceItem);
-        
+
         var restartServiceItem = new NativeMenuItem("Restart Service");
         restartServiceItem.Click += async (_, _) => await _serviceMonitor!.RestartServiceAsync();
         menu.Add(restartServiceItem);
-        
+
         menu.Add(new NativeMenuItemSeparator());
-        
+
         // Quick actions
         var openVsCodeItem = new NativeMenuItem("Open VS Code");
         openVsCodeItem.Click += (_, _) => OpenVsCode();
         menu.Add(openVsCodeItem);
-        
+
         var viewLogsItem = new NativeMenuItem("View Logs...");
         viewLogsItem.Click += (_, _) => ViewLogs();
         menu.Add(viewLogsItem);
-        
+
         menu.Add(new NativeMenuItemSeparator());
-        
+
         // Auto-start toggle
         var isAutoStartEnabled = AutoStartManager.IsAutoStartEnabled();
         _autoStartItem = new NativeMenuItem(isAutoStartEnabled ? "✓ Start with System" : "Start with System");
         _autoStartItem.Click += (_, _) => ToggleAutoStart();
         menu.Add(_autoStartItem);
-        
+
         menu.Add(new NativeMenuItemSeparator());
-        
+
         // Exit
         var exitItem = new NativeMenuItem("Exit");
         exitItem.Click += (_, _) => Exit();
@@ -102,9 +102,9 @@ public partial class App : Application
             Menu = menu,
             IsVisible = true
         };
-        
+
         _trayIcon.Clicked += (_, _) => ShowStatusWindow();
-        
+
         // Set initial icon based on status
         UpdateTrayIcon(ServiceStatus.Unknown);
     }
@@ -112,7 +112,7 @@ public partial class App : Application
     private void ToggleAutoStart()
     {
         var isCurrentlyEnabled = AutoStartManager.IsAutoStartEnabled();
-        
+
         bool success;
         if (isCurrentlyEnabled)
         {
@@ -122,7 +122,7 @@ public partial class App : Application
         {
             success = AutoStartManager.EnableAutoStart();
         }
-        
+
         if (success && _autoStartItem != null)
         {
             var newState = AutoStartManager.IsAutoStartEnabled();
@@ -142,7 +142,7 @@ public partial class App : Application
     private void UpdateTrayIcon(ServiceStatus status)
     {
         if (_trayIcon == null) return;
-        
+
         // Update tooltip with current status
         var statusText = status switch
         {
@@ -151,9 +151,9 @@ public partial class App : Application
             ServiceStatus.Offline => "Services offline",
             _ => "Checking status..."
         };
-        
+
         _trayIcon.ToolTipText = $"Aura - {statusText}";
-        
+
         // Note: For production, you'd want actual icon files for each state
         // For now, we'll just update the tooltip
     }
@@ -213,7 +213,7 @@ public partial class App : Application
     {
         _serviceMonitor?.Stop();
         _trayIcon?.Dispose();
-        
+
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             desktop.Shutdown();

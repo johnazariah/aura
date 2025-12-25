@@ -14,28 +14,28 @@ public interface IAuraModule
     /// Unique identifier for this module (e.g., "developer", "research").
     /// </summary>
     string ModuleId { get; }
-    
+
     /// <summary>
     /// Human-readable name.
     /// </summary>
     string Name { get; }
-    
+
     /// <summary>
     /// Description of what this module provides.
     /// </summary>
     string Description { get; }
-    
+
     /// <summary>
     /// Other modules this depends on. Empty means only Foundation is required.
     /// Modules should generally have no dependencies on other modules.
     /// </summary>
     IReadOnlyList<string> Dependencies => [];
-    
+
     /// <summary>
     /// Register services with the DI container.
     /// </summary>
     void ConfigureServices(IServiceCollection services, IConfiguration configuration);
-    
+
     /// <summary>
     /// Register agents from this module with the agent registry.
     /// </summary>

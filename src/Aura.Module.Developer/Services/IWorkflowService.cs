@@ -224,7 +224,7 @@ public record WorkflowChatResponse
 
     /// <summary>Gets any steps that were removed.</summary>
     public IReadOnlyList<Guid> StepsRemoved { get; init; } = [];
-    
+
     /// <summary>Gets whether the analysis was re-run with additional context.</summary>
     public bool AnalysisUpdated { get; init; }
 }

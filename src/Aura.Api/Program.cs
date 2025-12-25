@@ -456,7 +456,7 @@ app.MapPost("/api/agents/{agentId}/execute/rag", async (
     CancellationToken cancellationToken) =>
 {
     var stopwatch = Stopwatch.StartNew();
-    
+
     try
     {
         var output = await executor.ExecuteAsync(
@@ -1387,9 +1387,9 @@ app.MapPost("/api/tools/{toolId}/execute", async (
         WorkingDirectory = request.WorkingDirectory,
         Parameters = request.Parameters ?? new Dictionary<string, object?>()
     };
-    
+
     var result = await toolRegistry.ExecuteAsync(input, ct);
-    
+
     if (result.Success)
     {
         return Results.Ok(new
@@ -1399,7 +1399,7 @@ app.MapPost("/api/tools/{toolId}/execute", async (
             duration = result.Duration.TotalMilliseconds
         });
     }
-    
+
     return Results.BadRequest(new
     {
         success = false,
@@ -1477,7 +1477,7 @@ app.MapPost("/api/tools/react", async (
                 thought = s.Thought,
                 action = s.Action,
                 actionInput = s.ActionInput,
-                observation = s.Observation.Length > 2000 
+                observation = s.Observation.Length > 2000
                     ? s.Observation[..2000] + "... (truncated)"
                     : s.Observation,
                 durationMs = s.Duration.TotalMilliseconds
@@ -1508,7 +1508,7 @@ app.MapGet("/api/git/status", async (
     CancellationToken ct) =>
 {
     var result = await gitService.GetStatusAsync(path, ct);
-    
+
     if (result.Success)
     {
         return Results.Ok(new
@@ -1521,7 +1521,7 @@ app.MapGet("/api/git/status", async (
             stagedFiles = result.Value.StagedFiles
         });
     }
-    
+
     return Results.BadRequest(new { success = false, error = result.Error });
 });
 
@@ -1532,11 +1532,11 @@ app.MapPost("/api/git/branch", async (
     CancellationToken ct) =>
 {
     var result = await gitService.CreateBranchAsync(
-        request.RepoPath, 
-        request.BranchName, 
-        request.BaseBranch, 
+        request.RepoPath,
+        request.BranchName,
+        request.BaseBranch,
         ct);
-    
+
     if (result.Success)
     {
         return Results.Ok(new
@@ -1546,7 +1546,7 @@ app.MapPost("/api/git/branch", async (
             isCurrent = result.Value.IsCurrent
         });
     }
-    
+
     return Results.BadRequest(new { success = false, error = result.Error });
 });
 
@@ -1557,12 +1557,12 @@ app.MapPost("/api/git/commit", async (
     CancellationToken ct) =>
 {
     var result = await gitService.CommitAsync(request.RepoPath, request.Message, ct);
-    
+
     if (result.Success)
     {
         return Results.Ok(new { success = true, sha = result.Value });
     }
-    
+
     return Results.BadRequest(new { success = false, error = result.Error });
 });
 
@@ -1575,7 +1575,7 @@ app.MapGet("/api/git/worktrees", async (
     CancellationToken ct) =>
 {
     var result = await worktreeService.ListAsync(repoPath, ct);
-    
+
     if (result.Success)
     {
         return Results.Ok(new
@@ -1592,7 +1592,7 @@ app.MapGet("/api/git/worktrees", async (
             })
         });
     }
-    
+
     return Results.BadRequest(new { success = false, error = result.Error });
 });
 
@@ -1608,7 +1608,7 @@ app.MapPost("/api/git/worktrees", async (
         request.WorktreePath,
         request.BaseBranch,
         ct);
-    
+
     if (result.Success)
     {
         return Results.Ok(new
@@ -1619,7 +1619,7 @@ app.MapPost("/api/git/worktrees", async (
             commitSha = result.Value.CommitSha
         });
     }
-    
+
     return Results.BadRequest(new { success = false, error = result.Error });
 });
 
@@ -1631,12 +1631,12 @@ app.MapDelete("/api/git/worktrees", async (
     CancellationToken ct) =>
 {
     var result = await worktreeService.RemoveAsync(path, force ?? false, ct);
-    
+
     if (result.Success)
     {
         return Results.Ok(new { success = true, message = "Worktree removed" });
     }
-    
+
     return Results.BadRequest(new { success = false, error = result.Error });
 });
 
@@ -2122,14 +2122,14 @@ app.MapPost("/api/developer/workflows/{id:guid}/finalize", async (
         var workflow = await workflowService.GetByIdWithStepsAsync(id, ct);
         if (workflow is null)
             return Results.NotFound(new { error = "Workflow not found" });
-        
+
         if (string.IsNullOrEmpty(workflow.WorktreePath))
             return Results.BadRequest(new { error = "Workflow has no worktree path" });
-        
+
         string? commitSha = null;
         string? prUrl = null;
         int? prNumber = null;
-        
+
         // 1. Check for changes and commit if needed
         var statusResult = await gitService.GetStatusAsync(workflow.WorktreePath, ct);
         if (statusResult.Success && statusResult.Value?.IsDirty == true)
@@ -2138,21 +2138,21 @@ app.MapPost("/api/developer/workflows/{id:guid}/finalize", async (
             var commitResult = await gitService.CommitAsync(workflow.WorktreePath, commitMessage, ct);
             if (!commitResult.Success)
                 return Results.BadRequest(new { error = $"Commit failed: {commitResult.Error}" });
-            
+
             commitSha = commitResult.Value;
         }
-        
+
         // 2. Push the branch
         var pushResult = await gitService.PushAsync(workflow.WorktreePath, setUpstream: true, ct);
         if (!pushResult.Success)
             return Results.BadRequest(new { error = $"Push failed: {pushResult.Error}" });
-        
+
         // 3. Create PR if requested
         if (request.CreatePullRequest)
         {
             var prTitle = request.PrTitle ?? workflow.Title;
             var prBody = request.PrBody ?? BuildPrBody(workflow);
-            
+
             var prResult = await gitService.CreatePullRequestAsync(
                 workflow.WorktreePath,
                 prTitle,
@@ -2160,20 +2160,20 @@ app.MapPost("/api/developer/workflows/{id:guid}/finalize", async (
                 request.BaseBranch,
                 request.Draft,
                 ct);
-            
+
             if (!prResult.Success)
                 return Results.BadRequest(new { error = $"PR creation failed: {prResult.Error}" });
-            
+
             prUrl = prResult.Value?.Url;
             prNumber = prResult.Value?.Number;
         }
-        
+
         // 4. Mark workflow as completed if not already
         if (workflow.Status != WorkflowStatus.Completed)
         {
             await workflowService.CompleteAsync(id, ct);
         }
-        
+
         return Results.Ok(new
         {
             workflowId = workflow.Id,
@@ -2181,8 +2181,8 @@ app.MapPost("/api/developer/workflows/{id:guid}/finalize", async (
             pushed = true,
             prNumber,
             prUrl,
-            message = prUrl is not null 
-                ? $"Workflow finalized. PR created: {prUrl}" 
+            message = prUrl is not null
+                ? $"Workflow finalized. PR created: {prUrl}"
                 : "Workflow finalized and pushed."
         });
     }

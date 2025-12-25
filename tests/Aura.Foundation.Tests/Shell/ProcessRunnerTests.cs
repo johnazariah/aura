@@ -120,7 +120,7 @@ public class ProcessRunnerTests
         // Arrange - command that writes to stderr
         var isWindows = OperatingSystem.IsWindows();
         var command = isWindows ? "cmd.exe" : "sh";
-        var args = isWindows 
+        var args = isWindows
             ? new[] { "/c", "echo error message 1>&2" }
             : new[] { "-c", "echo error message >&2" };
 

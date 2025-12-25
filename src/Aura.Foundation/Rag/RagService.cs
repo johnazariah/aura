@@ -228,7 +228,7 @@ public sealed class RagService : IRagService
         {
             // Normalize path for case-insensitive comparison on Windows
             var normalizedPrefix = PathNormalizer.Normalize(options.SourcePathPrefix);
-            dbQuery = dbQuery.Where(c => c.SourcePath != null && 
+            dbQuery = dbQuery.Where(c => c.SourcePath != null &&
                 EF.Functions.ILike(c.SourcePath, normalizedPrefix + "%"));
         }
 

@@ -41,9 +41,9 @@ public class ServiceMonitor : IDisposable
     private readonly string _apiBaseUrl;
     private readonly string _ollamaUrl;
     private bool _isRunning;
-    
+
     public event EventHandler<ServiceStatusEventArgs>? StatusChanged;
-    
+
     public ServiceStatusEventArgs CurrentStatus { get; private set; } = new()
     {
         OverallStatus = ServiceStatus.Unknown,
@@ -86,11 +86,11 @@ public class ServiceMonitor : IDisposable
         // Determine overall status
         var allHealthy = apiStatus.IsHealthy && ollamaStatus.IsHealthy && postgresStatus.IsHealthy;
         var anyHealthy = apiStatus.IsHealthy || ollamaStatus.IsHealthy || postgresStatus.IsHealthy;
-        
-        var overallStatus = allHealthy 
-            ? ServiceStatus.AllHealthy 
-            : anyHealthy 
-                ? ServiceStatus.Degraded 
+
+        var overallStatus = allHealthy
+            ? ServiceStatus.AllHealthy
+            : anyHealthy
+                ? ServiceStatus.Degraded
                 : ServiceStatus.Offline;
 
         CurrentStatus = new ServiceStatusEventArgs
@@ -111,16 +111,16 @@ public class ServiceMonitor : IDisposable
         try
         {
             var response = await _httpClient.GetAsync($"{_apiBaseUrl}/health");
-            
+
             if (response.IsSuccessStatusCode)
             {
                 var content = await response.Content.ReadAsStringAsync();
                 var health = JsonSerializer.Deserialize<JsonElement>(content);
-                
-                var status = health.TryGetProperty("status", out var statusProp) 
-                    ? statusProp.GetString() 
+
+                var status = health.TryGetProperty("status", out var statusProp)
+                    ? statusProp.GetString()
                     : "Healthy";
-                
+
                 return new ComponentStatus
                 {
                     Name = "API",
@@ -129,7 +129,7 @@ public class ServiceMonitor : IDisposable
                     Details = $"Endpoint: {_apiBaseUrl}"
                 };
             }
-            
+
             return new ComponentStatus
             {
                 Name = "API",
@@ -165,16 +165,16 @@ public class ServiceMonitor : IDisposable
         try
         {
             var response = await _httpClient.GetAsync($"{_ollamaUrl}/api/tags");
-            
+
             if (response.IsSuccessStatusCode)
             {
                 var content = await response.Content.ReadAsStringAsync();
                 var data = JsonSerializer.Deserialize<JsonElement>(content);
-                
+
                 var modelCount = data.TryGetProperty("models", out var models) && models.ValueKind == JsonValueKind.Array
                     ? models.GetArrayLength()
                     : 0;
-                
+
                 return new ComponentStatus
                 {
                     Name = "Ollama",
@@ -183,7 +183,7 @@ public class ServiceMonitor : IDisposable
                     Details = $"{modelCount} model(s) available"
                 };
             }
-            
+
             return new ComponentStatus
             {
                 Name = "Ollama",
@@ -218,23 +218,23 @@ public class ServiceMonitor : IDisposable
         {
             // Check via API's database health endpoint
             var response = await _httpClient.GetAsync($"{_apiBaseUrl}/health");
-            
+
             if (response.IsSuccessStatusCode)
             {
                 var content = await response.Content.ReadAsStringAsync();
                 var health = JsonSerializer.Deserialize<JsonElement>(content);
-                
+
                 // Look for database check in health response
                 if (health.TryGetProperty("checks", out var checks) && checks.ValueKind == JsonValueKind.Array)
                 {
                     foreach (var check in checks.EnumerateArray())
                     {
-                        if (check.TryGetProperty("name", out var name) && 
+                        if (check.TryGetProperty("name", out var name) &&
                             name.GetString()?.Contains("database", StringComparison.OrdinalIgnoreCase) == true)
                         {
                             var checkStatus = check.TryGetProperty("status", out var s) ? s.GetString() : null;
                             var isHealthy = checkStatus?.Equals("Healthy", StringComparison.OrdinalIgnoreCase) == true;
-                            
+
                             return new ComponentStatus
                             {
                                 Name = "PostgreSQL",
@@ -245,7 +245,7 @@ public class ServiceMonitor : IDisposable
                         }
                     }
                 }
-                
+
                 // If no explicit database check, assume healthy if API is healthy
                 return new ComponentStatus
                 {
@@ -255,7 +255,7 @@ public class ServiceMonitor : IDisposable
                     Details = "Database accessible via API"
                 };
             }
-            
+
             return new ComponentStatus
             {
                 Name = "PostgreSQL",
@@ -282,15 +282,15 @@ public class ServiceMonitor : IDisposable
         {
             // Check RAG status via API endpoint
             var response = await _httpClient.GetAsync($"{_apiBaseUrl}/api/rag/status");
-            
+
             if (response.IsSuccessStatusCode)
             {
                 var content = await response.Content.ReadAsStringAsync();
                 var data = JsonSerializer.Deserialize<JsonElement>(content);
-                
+
                 var indexed = data.TryGetProperty("indexed", out var idx) && idx.GetBoolean();
                 var fileCount = data.TryGetProperty("fileCount", out var fc) ? fc.GetInt32() : 0;
-                
+
                 return new ComponentStatus
                 {
                     Name = "RAG Index",
@@ -299,7 +299,7 @@ public class ServiceMonitor : IDisposable
                     Details = indexed ? $"{fileCount} files indexed" : "Workspace not indexed"
                 };
             }
-            
+
             // RAG endpoint might not exist yet
             return new ComponentStatus
             {
@@ -336,7 +336,7 @@ public class ServiceMonitor : IDisposable
                     CreateNoWindow = true
                 };
                 System.Diagnostics.Process.Start(startInfo);
-                
+
                 // Give it a moment then check status
                 await Task.Delay(2000);
                 await CheckStatusAsync();
@@ -363,7 +363,7 @@ public class ServiceMonitor : IDisposable
                     CreateNoWindow = true
                 };
                 System.Diagnostics.Process.Start(startInfo);
-                
+
                 await Task.Delay(2000);
                 await CheckStatusAsync();
             }
@@ -384,10 +384,10 @@ public class ServiceMonitor : IDisposable
     private static string? GetInstallerPath()
     {
         var basePath = AppContext.BaseDirectory;
-        var installerName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) 
-            ? "Aura.Installer.exe" 
+        var installerName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+            ? "Aura.Installer.exe"
             : "Aura.Installer";
-        
+
         var installerPath = Path.Combine(basePath, installerName);
         return File.Exists(installerPath) ? installerPath : null;
     }

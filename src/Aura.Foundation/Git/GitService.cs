@@ -28,17 +28,17 @@ public class GitService : IGitService
         var result = await RunGitAsync(repoPath, ["branch", "--show-current"], ct);
         if (!result.Success)
             return GitResult<string>.Fail(result.StandardError);
-        
+
         var branch = result.StandardOutput.Trim();
         if (string.IsNullOrEmpty(branch))
         {
             // Might be in detached HEAD state
             var headResult = await RunGitAsync(repoPath, ["rev-parse", "--short", "HEAD"], ct);
-            return headResult.Success 
+            return headResult.Success
                 ? GitResult<string>.Ok($"HEAD detached at {headResult.StandardOutput.Trim()}")
                 : GitResult<string>.Fail("Unable to determine current branch");
         }
-        
+
         return GitResult<string>.Ok(branch);
     }
 
@@ -47,7 +47,7 @@ public class GitService : IGitService
         var result = await RunGitAsync(repoPath, ["status", "--porcelain"], ct);
         if (!result.Success)
             return GitResult<bool>.Fail(result.StandardError);
-        
+
         return GitResult<bool>.Ok(!string.IsNullOrWhiteSpace(result.StandardOutput));
     }
 
@@ -58,18 +58,18 @@ public class GitService : IGitService
         CancellationToken ct = default)
     {
         // Create the branch
-        var args = baseBranch is not null 
+        var args = baseBranch is not null
             ? new[] { "checkout", "-b", branchName, baseBranch }
             : new[] { "checkout", "-b", branchName };
-        
+
         var result = await RunGitAsync(repoPath, args, ct);
         if (!result.Success)
             return GitResult<BranchInfo>.Fail(result.StandardError);
-        
+
         _logger.LogInformation("Created branch {Branch} in {Repo}", branchName, repoPath);
-        
-        return GitResult<BranchInfo>.Ok(new BranchInfo 
-        { 
+
+        return GitResult<BranchInfo>.Ok(new BranchInfo
+        {
             Name = branchName,
             IsCurrent = true
         });
@@ -80,7 +80,7 @@ public class GitService : IGitService
         var result = await RunGitAsync(repoPath, ["checkout", branchName], ct);
         if (!result.Success)
             return GitResult<Unit>.Fail(result.StandardError);
-        
+
         _logger.LogInformation("Checked out branch {Branch}", branchName);
         return GitResult<Unit>.Ok(Unit.Value);
     }
@@ -91,7 +91,7 @@ public class GitService : IGitService
         var result = await RunGitAsync(repoPath, ["branch", flag, branchName], ct);
         if (!result.Success)
             return GitResult<Unit>.Fail(result.StandardError);
-        
+
         _logger.LogInformation("Deleted branch {Branch} in {Repo}", branchName, repoPath);
         return GitResult<Unit>.Ok(Unit.Value);
     }
@@ -127,16 +127,17 @@ public class GitService : IGitService
 
         _logger.LogInformation("Committed: {Sha}", sha[..Math.Min(7, sha.Length)]);
         return GitResult<string>.Ok(sha);
-    }    public async Task<GitResult<Unit>> PushAsync(string repoPath, bool setUpstream = false, CancellationToken ct = default)
+    }
+    public async Task<GitResult<Unit>> PushAsync(string repoPath, bool setUpstream = false, CancellationToken ct = default)
     {
-        var args = setUpstream 
+        var args = setUpstream
             ? new[] { "push", "-u", "origin", "HEAD" }
             : new[] { "push" };
-        
+
         var result = await RunGitAsync(repoPath, args, ct);
         if (!result.Success)
             return GitResult<Unit>.Fail(result.StandardError);
-        
+
         _logger.LogInformation("Pushed to remote");
         return GitResult<Unit>.Ok(Unit.Value);
     }
@@ -146,7 +147,7 @@ public class GitService : IGitService
         var result = await RunGitAsync(repoPath, ["pull"], ct);
         if (!result.Success)
             return GitResult<Unit>.Fail(result.StandardError);
-        
+
         return GitResult<Unit>.Ok(Unit.Value);
     }
 
@@ -155,35 +156,35 @@ public class GitService : IGitService
         var branchResult = await GetCurrentBranchAsync(repoPath, ct);
         if (!branchResult.Success)
             return GitResult<RepositoryStatus>.Fail(branchResult.Error ?? "Failed to get branch");
-        
+
         var statusResult = await RunGitAsync(repoPath, ["status", "--porcelain=v1"], ct);
         if (!statusResult.Success)
             return GitResult<RepositoryStatus>.Fail(statusResult.StandardError);
-        
+
         var lines = statusResult.StandardOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-        
+
         var modified = new List<string>();
         var untracked = new List<string>();
         var staged = new List<string>();
-        
+
         foreach (var line in lines)
         {
             if (line.Length < 3) continue;
-            
+
             var indexStatus = line[0];
             var workTreeStatus = line[1];
             var file = line[3..].Trim();
-            
+
             if (indexStatus != ' ' && indexStatus != '?')
                 staged.Add(file);
-            
+
             if (workTreeStatus == 'M' || workTreeStatus == 'D')
                 modified.Add(file);
-            
+
             if (indexStatus == '?' && workTreeStatus == '?')
                 untracked.Add(file);
         }
-        
+
         return GitResult<RepositoryStatus>.Ok(new RepositoryStatus
         {
             CurrentBranch = branchResult.Value!,
@@ -199,7 +200,7 @@ public class GitService : IGitService
         var result = await RunGitAsync(repoPath, ["remote", "get-url", "origin"], ct);
         if (!result.Success)
             return GitResult<string>.Fail(result.StandardError);
-        
+
         return GitResult<string>.Ok(result.StandardOutput.Trim());
     }
 
@@ -213,41 +214,41 @@ public class GitService : IGitService
     {
         // Build gh pr create command
         var args = new List<string> { "pr", "create", "--title", title };
-        
+
         if (!string.IsNullOrEmpty(body))
         {
             args.AddRange(["--body", body]);
         }
-        
+
         if (!string.IsNullOrEmpty(baseBranch))
         {
             args.AddRange(["--base", baseBranch]);
         }
-        
+
         if (draft)
         {
             args.Add("--draft");
         }
-        
+
         // Run gh command
         var result = await _process.RunAsync("gh", args.ToArray(), new ProcessOptions
         {
             WorkingDirectory = repoPath,
             Timeout = TimeSpan.FromSeconds(60)
         }, ct);
-        
+
         if (!result.Success)
         {
-            var error = !string.IsNullOrWhiteSpace(result.StandardError) 
-                ? result.StandardError 
+            var error = !string.IsNullOrWhiteSpace(result.StandardError)
+                ? result.StandardError
                 : result.StandardOutput;
-            
+
             // Check for common errors
             if (error.Contains("gh auth login", StringComparison.OrdinalIgnoreCase))
             {
                 return GitResult<PullRequestInfo>.Fail("GitHub CLI not authenticated. Run 'gh auth login' first.");
             }
-            
+
             if (error.Contains("already exists", StringComparison.OrdinalIgnoreCase))
             {
                 // Try to get existing PR URL
@@ -265,14 +266,14 @@ public class GitService : IGitService
                 }
                 return GitResult<PullRequestInfo>.Fail("A pull request already exists for this branch.");
             }
-            
+
             return GitResult<PullRequestInfo>.Fail(error);
         }
-        
+
         // gh pr create outputs the PR URL on success
         var prUrl = result.StandardOutput.Trim();
         _logger.LogInformation("Created PR: {Url}", prUrl);
-        
+
         return GitResult<PullRequestInfo>.Ok(new PullRequestInfo
         {
             Number = ExtractPrNumber(prUrl),
@@ -282,7 +283,7 @@ public class GitService : IGitService
             Title = title
         });
     }
-    
+
     private async Task<GitResult<string>> GetExistingPullRequestUrlAsync(string repoPath, CancellationToken ct)
     {
         var result = await _process.RunAsync("gh", ["pr", "view", "--json", "url", "-q", ".url"], new ProcessOptions
@@ -290,13 +291,13 @@ public class GitService : IGitService
             WorkingDirectory = repoPath,
             Timeout = TimeSpan.FromSeconds(30)
         }, ct);
-        
+
         if (!result.Success)
             return GitResult<string>.Fail(result.StandardError);
-        
+
         return GitResult<string>.Ok(result.StandardOutput.Trim());
     }
-    
+
     private static int ExtractPrNumber(string prUrl)
     {
         // URL format: https://github.com/owner/repo/pull/123
