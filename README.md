@@ -60,6 +60,9 @@ Enable only what you need:
 git clone https://github.com/johnazariah/aura.git
 cd aura
 
+# Install git hooks (recommended)
+.\scripts\Install-GitHooks.ps1
+
 # Build
 dotnet build
 
