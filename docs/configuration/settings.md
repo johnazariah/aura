@@ -1,0 +1,230 @@
+# Settings Reference
+
+Complete reference for Aura configuration options.
+
+## Configuration Files
+
+| File | Purpose |
+|------|---------|
+| `appsettings.json` | Main configuration |
+| `appsettings.Development.json` | Development overrides |
+| `appsettings.Local.json` | Local overrides (git-ignored) |
+
+Location: `C:\Program Files\Aura\api\`
+
+## Connection Strings
+
+```json
+{
+  "ConnectionStrings": {
+    "auradb": "Host=localhost;Port=5433;Database=auradb;Username=postgres"
+  }
+}
+```
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `Host` | `localhost` | PostgreSQL server |
+| `Port` | `5433` | Port (5433 to avoid conflicts) |
+| `Database` | `auradb` | Database name |
+| `Username` | `postgres` | Database user |
+
+## LLM Configuration
+
+```json
+{
+  "Aura": {
+    "Llm": {
+      "DefaultProvider": "Ollama",
+      "Providers": {
+        "Ollama": {
+          "BaseUrl": "http://localhost:11434",
+          "DefaultModel": "qwen2.5-coder:7b",
+          "DefaultEmbeddingModel": "nomic-embed-text",
+          "TimeoutSeconds": 300
+        },
+        "AzureOpenAI": {
+          "Endpoint": "",
+          "ApiKey": "",
+          "DefaultDeployment": "gpt-4o",
+          "MaxTokens": 4096,
+          "TimeoutSeconds": 120
+        },
+        "OpenAI": {
+          "ApiKey": "",
+          "DefaultModel": "gpt-4o",
+          "MaxTokens": 4096,
+          "TimeoutSeconds": 120
+        }
+      }
+    }
+  }
+}
+```
+
+### LLM Settings
+
+| Setting | Type | Description |
+|---------|------|-------------|
+| `DefaultProvider` | string | Which provider to use: `Ollama`, `AzureOpenAI`, `OpenAI` |
+| `Providers.*.BaseUrl` | string | API endpoint URL |
+| `Providers.*.ApiKey` | string | API key for authentication |
+| `Providers.*.DefaultModel` | string | Model to use for generation |
+| `Providers.*.DefaultEmbeddingModel` | string | Model for embeddings (Ollama only) |
+| `Providers.*.TimeoutSeconds` | int | Request timeout |
+| `Providers.*.MaxTokens` | int | Max tokens in response |
+
+## Agent Configuration
+
+```json
+{
+  "Aura": {
+    "Agents": {
+      "Directories": ["agents"],
+      "EnableHotReload": true
+    }
+  }
+}
+```
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `Directories` | `["agents"]` | Paths to agent definition files |
+| `EnableHotReload` | `true` | Reload agents when files change |
+
+## Prompt Configuration
+
+```json
+{
+  "Aura": {
+    "Prompts": {
+      "Directories": ["prompts"]
+    }
+  }
+}
+```
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `Directories` | `["prompts"]` | Paths to prompt template files |
+
+## Developer Module
+
+```json
+{
+  "Aura": {
+    "Modules": {
+      "Developer": {
+        "BranchPrefix": "workflow",
+        "WorktreeDirectory": ".worktrees"
+      }
+    }
+  }
+}
+```
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `BranchPrefix` | `workflow` | Prefix for workflow branches |
+| `WorktreeDirectory` | `.worktrees` | Where to create git worktrees |
+
+## Logging
+
+```json
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning",
+      "Microsoft.EntityFrameworkCore": "Warning"
+    }
+  }
+}
+```
+
+### Log Levels
+
+| Level | Description |
+|-------|-------------|
+| `Trace` | Most detailed (debugging only) |
+| `Debug` | Detailed debug info |
+| `Information` | General operational info |
+| `Warning` | Unexpected but handled events |
+| `Error` | Errors and exceptions |
+| `Critical` | Fatal errors |
+
+### Common Overrides
+
+For debugging LLM calls:
+```json
+{
+  "Logging": {
+    "LogLevel": {
+      "Aura.Foundation.Llm": "Debug"
+    }
+  }
+}
+```
+
+For debugging database:
+```json
+{
+  "Logging": {
+    "LogLevel": {
+      "Microsoft.EntityFrameworkCore": "Debug"
+    }
+  }
+}
+```
+
+## Environment Variables
+
+Any setting can be overridden via environment variables:
+
+```powershell
+# Pattern: Section__SubSection__Key
+$env:Aura__Llm__DefaultProvider = "OpenAI"
+$env:Aura__Llm__Providers__OpenAI__ApiKey = "sk-..."
+```
+
+## Full Example
+
+```json
+{
+  "ConnectionStrings": {
+    "auradb": "Host=localhost;Port=5433;Database=auradb;Username=postgres"
+  },
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning"
+    }
+  },
+  "Aura": {
+    "Llm": {
+      "DefaultProvider": "Ollama",
+      "Providers": {
+        "Ollama": {
+          "BaseUrl": "http://localhost:11434",
+          "DefaultModel": "qwen2.5-coder:7b",
+          "DefaultEmbeddingModel": "nomic-embed-text",
+          "TimeoutSeconds": 300
+        }
+      }
+    },
+    "Agents": {
+      "Directories": ["agents"],
+      "EnableHotReload": true
+    },
+    "Prompts": {
+      "Directories": ["prompts"]
+    },
+    "Modules": {
+      "Developer": {
+        "BranchPrefix": "workflow",
+        "WorktreeDirectory": ".worktrees"
+      }
+    }
+  }
+}
+```
