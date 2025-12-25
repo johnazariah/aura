@@ -32,14 +32,10 @@ jobs:
         run: dotnet build --no-restore --configuration Release
 
       - name: Test (Unit Tests)
-        run: |
-          dotnet test --no-build --configuration Release --verbosity normal \
-            --filter "FullyQualifiedName!~IntegrationTests"
+        run: dotnet test --no-build --configuration Release --verbosity normal --filter "FullyQualifiedName!~IntegrationTests"
 
       - name: Test (Integration Tests)
-        run: |
-          dotnet test --no-build --configuration Release --verbosity normal \
-            --filter "FullyQualifiedName~IntegrationTests"
+        run: dotnet test --no-build --configuration Release --verbosity normal --filter "FullyQualifiedName~IntegrationTests"
 
   coverage:
     runs-on: ubuntu-latest
