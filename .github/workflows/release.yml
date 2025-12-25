@@ -1,0 +1,140 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  DOTNET_VERSION: '10.0.x'
+  NODE_VERSION: '20'
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for changelog
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          $version = "${{ github.ref_name }}" -replace '^v', ''
+          echo "VERSION=$version" >> $env:GITHUB_OUTPUT
+        shell: pwsh
+
+      - name: Run tests
+        run: dotnet test --configuration Release --verbosity normal
+
+      - name: Publish Release
+        run: .\scripts\Publish-Release.ps1 -Version ${{ steps.version.outputs.VERSION }}
+
+      - name: Install Inno Setup
+        run: choco install innosetup -y
+
+      - name: Build Installer
+        run: |
+          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          & $iscc "/DMyAppVersion=${{ steps.version.outputs.VERSION }}" "installers/windows/Aura.iss"
+
+      - name: Upload Windows Installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: publish/installers/Aura-Setup-*.exe
+
+      - name: Upload VS Code Extension
+        uses: actions/upload-artifact@v4
+        with:
+          name: vscode-extension
+          path: publish/win-x64/extension/aura-*.vsix
+
+  create-release:
+    needs: build-windows
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for changelog
+
+      - name: Download Windows Installer
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-installer
+          path: artifacts
+
+      - name: Download VS Code Extension
+        uses: actions/download-artifact@v4
+        with:
+          name: vscode-extension
+          path: artifacts
+
+      - name: Generate Changelog
+        id: changelog
+        run: |
+          # Get previous tag
+          PREV_TAG=$(git describe --abbrev=0 --tags HEAD^ 2>/dev/null || echo "")
+          
+          echo "## Changes" > changelog.md
+          echo "" >> changelog.md
+          
+          if [ -n "$PREV_TAG" ]; then
+            echo "Changes since $PREV_TAG:" >> changelog.md
+            echo "" >> changelog.md
+            git log --pretty=format:"- %s (%h)" $PREV_TAG..HEAD >> changelog.md
+          else
+            echo "Initial release" >> changelog.md
+            echo "" >> changelog.md
+            git log --pretty=format:"- %s (%h)" -20 >> changelog.md
+          fi
+          
+          echo "" >> changelog.md
+          cat changelog.md
+
+      - name: Extract version
+        id: version
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/Aura-Setup-*.exe
+            artifacts/aura-*.vsix
+          body_path: changelog.md
+          append_body: |
+            
+            ## Installation
+            
+            1. Download `Aura-Setup-${{ steps.version.outputs.VERSION }}.exe` and run the installer
+            2. The VS Code extension will be installed automatically if VS Code is detected
+            3. Ensure Ollama is installed: https://ollama.com
+            
+            ## Requirements
+            
+            - Windows 10/11 (x64)
+            - Ollama (for local LLM)
+            - PostgreSQL is bundled with the installer
+            
+            ## Manual Extension Install
+            
+            If VS Code was not detected during installation:
+            ```powershell
+            & "$env:ProgramFiles\Aura\scripts\install-extension.ps1"
+            ```
+          draft: false
+          prerelease: ${{ contains(github.ref_name, 'preview') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'alpha') || contains(github.ref_name, 'rc') }}
+          generate_release_notes: true

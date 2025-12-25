@@ -44,6 +44,7 @@ features/
 | [Code-Aware Chat](completed/code-aware-chat.md) | Chat with RAG + Code Graph context | 2025-12-13 |
 | [Bundled Extension](completed/bundled-extension.md) | VS Code extension bundled with installer | 2025-12-24 |
 | [PostgreSQL Setup](completed/postgresql-setup.md) | Embedded PostgreSQL with pgvector | 2025-12-25 |
+| [GitHub Release Automation](completed/github-release-automation.md) | Tag-triggered releases via GitHub Actions | 2025-12-25 |
 
 ## Upcoming Features
 
