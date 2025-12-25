@@ -73,6 +73,10 @@ try {
     
     npm run package
     if ($LASTEXITCODE -ne 0) { throw "Failed to package extension" }
+    
+    # Create VSIX package using vsce
+    npx @vscode/vsce package --out "aura-$Version.vsix"
+    if ($LASTEXITCODE -ne 0) { throw "Failed to create VSIX package" }
     Pop-Location
     
     # Copy VSIX to publish folder
