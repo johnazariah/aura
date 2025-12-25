@@ -13,7 +13,9 @@ using Xunit;
 
 /// <summary>
 /// Tests for <see cref="TreeSitterIngesterAgent"/> semantic extraction.
+/// Note: TreeSitter native library is only available on Windows in CI.
 /// </summary>
+[Trait("Category", "TreeSitter")]
 public class TreeSitterIngesterAgentTests
 {
     private readonly TreeSitterIngesterAgent _agent;

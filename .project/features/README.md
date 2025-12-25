@@ -62,6 +62,7 @@ features/
 |---------|-------------|
 | [MCP Server](upcoming/mcp-server.md) | Model Context Protocol integration |
 | [Multi-Workspace](upcoming/multi-workspace.md) | Multiple workspace support |
+| [macOS Support](upcoming/macos-support.md) | Native macOS build, installer, and CI |
 
 ### Lower Priority (Advanced)
 
