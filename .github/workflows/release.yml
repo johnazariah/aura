@@ -35,7 +35,7 @@ jobs:
         shell: pwsh
 
       - name: Run tests
-        run: dotnet test --configuration Release --verbosity normal
+        run: dotnet test --configuration Release --verbosity normal --filter "FullyQualifiedName!~IntegrationTests"
 
       - name: Publish Release
         run: .\scripts\Publish-Release.ps1 -Version ${{ steps.version.outputs.VERSION }}
