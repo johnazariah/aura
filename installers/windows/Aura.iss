@@ -51,6 +51,8 @@ Source: "..\..\publish\win-x64\agents\*"; DestDir: "{app}\agents"; Flags: ignore
 Source: "..\..\publish\win-x64\extension\*.vsix"; DestDir: "{app}\extension"; Flags: ignoreversion
 ; Scripts
 Source: "..\..\publish\win-x64\scripts\*"; DestDir: "{app}\scripts"; Flags: ignoreversion
+; PostgreSQL
+Source: "..\..\publish\win-x64\pgsql\*"; DestDir: "{app}\pgsql"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; Version info
 Source: "..\..\publish\win-x64\version.json"; DestDir: "{app}"; Flags: ignoreversion
 
@@ -63,6 +65,16 @@ Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
 Root: HKCU; Subkey: "SOFTWARE\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "AuraTray"; ValueData: """{app}\tray\{#MyTrayExeName}"" --minimized"; Flags: uninsdeletevalue; Tasks: autostartray
 
 [Run]
+; Initialize PostgreSQL database (first install only)
+Filename: "{app}\pgsql\bin\initdb.exe"; Parameters: "-D ""{app}\data"" -U postgres -E UTF8 --locale=en_US.UTF-8"; Flags: runhidden; Check: not DatabaseExists
+; Register PostgreSQL as Windows service
+Filename: "{app}\pgsql\bin\pg_ctl.exe"; Parameters: "register -N AuraDB -D ""{app}\data"" -o ""-p 5433"""; Flags: runhidden; Check: not AuraDBServiceExists
+; Start PostgreSQL service
+Filename: "sc.exe"; Parameters: "start AuraDB"; Flags: runhidden
+; Create auradb database (wait for service to start)
+Filename: "{app}\pgsql\bin\createdb.exe"; Parameters: "-h localhost -p 5433 -U postgres auradb"; Flags: runhidden; Check: not DatabaseExists
+; Enable pgvector extension
+Filename: "{app}\pgsql\bin\psql.exe"; Parameters: "-h localhost -p 5433 -U postgres -d auradb -c ""CREATE EXTENSION IF NOT EXISTS vector"""; Flags: runhidden
 ; Install as Windows Service
 Filename: "sc.exe"; Parameters: "create AuraService binPath= ""{app}\api\{#MyAppExeName}"" start= auto"; Flags: runhidden; Tasks: installservice
 Filename: "sc.exe"; Parameters: "description AuraService ""Aura local AI assistant service"""; Flags: runhidden; Tasks: installservice
@@ -76,8 +88,25 @@ Filename: "{app}\tray\{#MyTrayExeName}"; Parameters: "--minimized"; Flags: nowai
 ; Stop and remove Windows Service
 Filename: "sc.exe"; Parameters: "stop AuraService"; Flags: runhidden
 Filename: "sc.exe"; Parameters: "delete AuraService"; Flags: runhidden
+; Stop and remove PostgreSQL service
+Filename: "sc.exe"; Parameters: "stop AuraDB"; Flags: runhidden
+Filename: "{app}\pgsql\bin\pg_ctl.exe"; Parameters: "unregister -N AuraDB"; Flags: runhidden
 
 [Code]
+function DatabaseExists(): Boolean;
+begin
+  // Check if the data directory already exists (upgrade scenario)
+  Result := DirExists(ExpandConstant('{app}\data'));
+end;
+
+function AuraDBServiceExists(): Boolean;
+var
+  ResultCode: Integer;
+begin
+  // Check if AuraDB service already exists
+  Result := Exec('sc.exe', 'query AuraDB', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) and (ResultCode = 0);
+end;
+
 function VSCodeExists(): Boolean;
 begin
   // Check common VS Code locations

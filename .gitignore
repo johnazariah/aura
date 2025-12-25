@@ -41,4 +41,7 @@ secrets.json
 *.pfx
 *.key
 
+# Build cache
+cache/
+
 .fake

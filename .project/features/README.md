@@ -43,6 +43,7 @@ features/
 | [File-Aware RAG Queries](completed/file-aware-rag-queries.md) | Context-aware retrieval with file scoping | 2025-12-12 |
 | [Code-Aware Chat](completed/code-aware-chat.md) | Chat with RAG + Code Graph context | 2025-12-13 |
 | [Bundled Extension](completed/bundled-extension.md) | VS Code extension bundled with installer | 2025-12-24 |
+| [PostgreSQL Setup](completed/postgresql-setup.md) | Embedded PostgreSQL with pgvector | 2025-12-25 |
 
 ## Upcoming Features
 

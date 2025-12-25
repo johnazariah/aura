@@ -83,6 +83,51 @@ try {
     New-Item -ItemType Directory -Path "$OutputDir/win-x64/scripts" -Force | Out-Null
     Copy-Item "installers/windows/install-extension.ps1" "$OutputDir/win-x64/scripts/"
 
+    # Download and bundle PostgreSQL
+    Write-Host "`nPreparing PostgreSQL..." -ForegroundColor Green
+    $pgVersion = "16.4-1"
+    $pgZip = "postgresql-$pgVersion-windows-x64-binaries.zip"
+    $pgUrl = "https://get.enterprisedb.com/postgresql/$pgZip"
+    $cacheDir = "cache"
+    
+    if (-not (Test-Path $cacheDir)) {
+        New-Item -ItemType Directory -Path $cacheDir -Force | Out-Null
+    }
+    
+    if (-not (Test-Path "$cacheDir/$pgZip")) {
+        Write-Host "  Downloading PostgreSQL $pgVersion (~100MB)..." -ForegroundColor Yellow
+        Invoke-WebRequest -Uri $pgUrl -OutFile "$cacheDir/$pgZip"
+    } else {
+        Write-Host "  Using cached PostgreSQL $pgVersion" -ForegroundColor Gray
+    }
+    
+    # Extract PostgreSQL binaries
+    Write-Host "  Extracting PostgreSQL..." -ForegroundColor Gray
+    $pgTempDir = "$cacheDir/pgsql-temp"
+    if (Test-Path $pgTempDir) { Remove-Item $pgTempDir -Recurse -Force }
+    Expand-Archive "$cacheDir/$pgZip" -DestinationPath $pgTempDir -Force
+    
+    # Copy only the pgsql folder (not the full extracted structure)
+    $pgSourceDir = Get-ChildItem $pgTempDir -Directory | Where-Object { $_.Name -eq "pgsql" } | Select-Object -First 1
+    if (-not $pgSourceDir) {
+        $pgSourceDir = Get-ChildItem $pgTempDir -Directory | Select-Object -First 1
+    }
+    
+    New-Item -ItemType Directory -Path "$OutputDir/win-x64/pgsql" -Force | Out-Null
+    Copy-Item -Path "$($pgSourceDir.FullName)/*" -Destination "$OutputDir/win-x64/pgsql" -Recurse -Force
+    
+    # Copy pgvector extension if available
+    $pgvectorDir = "installers/pgsql-extensions"
+    if (Test-Path "$pgvectorDir/vector.dll") {
+        Write-Host "  Bundling pgvector extension..." -ForegroundColor Gray
+        Copy-Item "$pgvectorDir/vector.dll" "$OutputDir/win-x64/pgsql/lib/"
+        Copy-Item "$pgvectorDir/vector.control" "$OutputDir/win-x64/pgsql/share/extension/"
+        Copy-Item "$pgvectorDir/vector--*.sql" "$OutputDir/win-x64/pgsql/share/extension/"
+    } else {
+        Write-Host "  WARNING: pgvector extension not found in $pgvectorDir" -ForegroundColor Yellow
+        Write-Host "           Vector search will not be available" -ForegroundColor Yellow
+    }
+
     # Create version file
     @{
         version = $Version
@@ -96,6 +141,7 @@ try {
     Write-Host "  - agents/ (Agent definitions)" -ForegroundColor Gray
     Write-Host "  - extension/aura-$Version.vsix (VS Code Extension)" -ForegroundColor Gray
     Write-Host "  - scripts/install-extension.ps1 (Manual install helper)" -ForegroundColor Gray
+    Write-Host "  - pgsql/ (PostgreSQL $pgVersion)" -ForegroundColor Gray
 
 } finally {
     Pop-Location
