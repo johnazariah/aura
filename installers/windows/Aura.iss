@@ -36,9 +36,9 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
 Name: "installservice"; Description: "Install as Windows Service (auto-start on boot)"; GroupDescription: "Service Options:"
-Name: "starttray"; Description: "Start system tray monitor after installation"; GroupDescription: "Tray Options:"; Flags: checked
-Name: "autostartray"; Description: "Start system tray monitor with Windows"; GroupDescription: "Tray Options:"; Flags: checked
-Name: "installextension"; Description: "Install VS Code extension"; GroupDescription: "VS Code Integration:"; Flags: checked; Check: VSCodeExists
+Name: "starttray"; Description: "Start system tray monitor after installation"; GroupDescription: "Tray Options:"
+Name: "autostartray"; Description: "Start system tray monitor with Windows"; GroupDescription: "Tray Options:"
+Name: "installextension"; Description: "Install VS Code extension"; GroupDescription: "VS Code Integration:"; Check: VSCodeExists
 
 [Files]
 ; API/Service
