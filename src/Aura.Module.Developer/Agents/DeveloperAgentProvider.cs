@@ -6,9 +6,7 @@ namespace Aura.Module.Developer.Agents;
 
 using Aura.Foundation.Agents;
 using Aura.Foundation.Llm;
-using Aura.Foundation.Prompts;
 using Aura.Foundation.Tools;
-using Aura.Module.Developer.Services;
 using Microsoft.Extensions.Logging;
 
 /// <summary>
@@ -19,24 +17,18 @@ using Microsoft.Extensions.Logging;
 /// </remarks>
 /// <param name="loggerFactory">Logger factory.</param>
 /// <param name="llmRegistry">LLM provider registry.</param>
-/// <param name="roslynService">Roslyn workspace service.</param>
 /// <param name="reactExecutor">ReAct executor for agentic workflows.</param>
 /// <param name="toolRegistry">Tool registry for accessing tools.</param>
-/// <param name="promptRegistry">Prompt registry for template rendering.</param>
 public sealed class DeveloperAgentProvider(
     ILoggerFactory loggerFactory,
     ILlmProviderRegistry llmRegistry,
-    IRoslynWorkspaceService roslynService,
     IReActExecutor reactExecutor,
-    IToolRegistry toolRegistry,
-    IPromptRegistry promptRegistry) : IHardcodedAgentProvider
+    IToolRegistry toolRegistry) : IHardcodedAgentProvider
 {
     private readonly ILoggerFactory _loggerFactory = loggerFactory;
     private readonly ILlmProviderRegistry _llmRegistry = llmRegistry;
-    private readonly IRoslynWorkspaceService _roslynService = roslynService;
     private readonly IReActExecutor _reactExecutor = reactExecutor;
     private readonly IToolRegistry _toolRegistry = toolRegistry;
-    private readonly IPromptRegistry _promptRegistry = promptRegistry;
 
     /// <inheritdoc/>
     public IEnumerable<IAgent> GetAgents()
@@ -55,46 +47,19 @@ public sealed class DeveloperAgentProvider(
         // === Specialist Coding Agents (Priority 10) ===
 
         // C# - Sophisticated Roslyn coding agent with agentic tool use
+        // Uses Roslyn compiler APIs for semantic analysis - cannot be config-based
         yield return new RoslynCodingAgent(
             _reactExecutor,
             _toolRegistry,
             _llmRegistry,
             _loggerFactory.CreateLogger<RoslynCodingAgent>());
 
-        // F# - FSharp.Compiler.Service agent with functional programming focus
-        yield return new FSharpCodingAgent(
-            _reactExecutor,
-            _toolRegistry,
-            _llmRegistry,
-            _promptRegistry,
-            _loggerFactory.CreateLogger<FSharpCodingAgent>());
-
-        // Python - ReAct agent with Python-specific tools
-        yield return new PythonCodingAgent(
-            _reactExecutor,
-            _toolRegistry,
-            _llmRegistry,
-            _loggerFactory.CreateLogger<PythonCodingAgent>());
-
-        // TypeScript/JavaScript - ReAct agent with TS-specific tools
-        yield return new TypeScriptCodingAgent(
-            _reactExecutor,
-            _toolRegistry,
-            _llmRegistry,
-            _loggerFactory.CreateLogger<TypeScriptCodingAgent>());
-
-        // Go - ReAct agent with Go-specific tools
-        yield return new GoCodingAgent(
-            _reactExecutor,
-            _toolRegistry,
-            _llmRegistry,
-            _loggerFactory.CreateLogger<GoCodingAgent>());
-
-        // Note: F#, Python, TypeScript, Go can be migrated to YAML-configured
-        // LanguageSpecialistAgents. The hardcoded agents remain for now but
-        // their functionality is duplicated in agents/languages/*.yaml.
+        // Note: F#, Python, TypeScript, Go, Rust now use config-based agents
+        // defined in agents/languages/*.yaml. The hardcoded agents have been
+        // removed to eliminate duplication. When LanguageSpecialistAgent is
+        // implemented, it will load these YAML configs at runtime.
         //
-        // C# uses RoslynCodingAgent (above) which needs Roslyn compiler APIs
-        // and cannot be expressed as a simple YAML config.
+        // For now, these languages fall back to the generic "coding-agent.md"
+        // which handles multiple languages with appropriate tooling.
     }
 }
