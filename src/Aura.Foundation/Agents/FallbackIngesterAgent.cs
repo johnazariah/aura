@@ -12,18 +12,13 @@ using Microsoft.Extensions.Logging;
 /// Fallback ingester agent that returns the whole file as a single chunk.
 /// Used when no specialized ingester is available for a file type.
 /// </summary>
-public sealed class FallbackIngesterAgent : IAgent
+/// <remarks>
+/// Initializes a new instance of the <see cref="FallbackIngesterAgent"/> class.
+/// </remarks>
+/// <param name="logger">Optional logger.</param>
+public sealed class FallbackIngesterAgent(ILogger<FallbackIngesterAgent>? logger = null) : IAgent
 {
-    private readonly ILogger<FallbackIngesterAgent>? _logger;
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="FallbackIngesterAgent"/> class.
-    /// </summary>
-    /// <param name="logger">Optional logger.</param>
-    public FallbackIngesterAgent(ILogger<FallbackIngesterAgent>? logger = null)
-    {
-        _logger = logger;
-    }
+    private readonly ILogger<FallbackIngesterAgent>? _logger = logger;
 
     /// <inheritdoc/>
     public string AgentId => "fallback-ingester";

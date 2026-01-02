@@ -9,27 +9,18 @@ namespace Aura.Foundation.Tools;
 /// <summary>
 /// Initializes the tool registry with built-in tools.
 /// </summary>
-public class ToolRegistryInitializer : IHostedService
+public class ToolRegistryInitializer(
+    IToolRegistry registry,
+    IFileSystem fileSystem,
+    IProcessRunner processRunner,
+    IGitService gitService,
+    ILogger<ToolRegistryInitializer> logger) : IHostedService
 {
-    private readonly IToolRegistry _registry;
-    private readonly IFileSystem _fileSystem;
-    private readonly IProcessRunner _processRunner;
-    private readonly IGitService _gitService;
-    private readonly ILogger<ToolRegistryInitializer> _logger;
-
-    public ToolRegistryInitializer(
-        IToolRegistry registry,
-        IFileSystem fileSystem,
-        IProcessRunner processRunner,
-        IGitService gitService,
-        ILogger<ToolRegistryInitializer> logger)
-    {
-        _registry = registry;
-        _fileSystem = fileSystem;
-        _processRunner = processRunner;
-        _gitService = gitService;
-        _logger = logger;
-    }
+    private readonly IToolRegistry _registry = registry;
+    private readonly IFileSystem _fileSystem = fileSystem;
+    private readonly IProcessRunner _processRunner = processRunner;
+    private readonly IGitService _gitService = gitService;
+    private readonly ILogger<ToolRegistryInitializer> _logger = logger;
 
     public Task StartAsync(CancellationToken cancellationToken)
     {

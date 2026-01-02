@@ -10,19 +10,13 @@ using Microsoft.Extensions.Logging;
 /// <summary>
 /// Runs all registered <see cref="IStartupTask"/> implementations in order.
 /// </summary>
-public sealed class StartupTaskRunner
+/// <remarks>
+/// Initializes a new instance of the <see cref="StartupTaskRunner"/> class.
+/// </remarks>
+public sealed class StartupTaskRunner(IServiceProvider serviceProvider, ILogger<StartupTaskRunner> logger)
 {
-    private readonly IServiceProvider _serviceProvider;
-    private readonly ILogger<StartupTaskRunner> _logger;
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="StartupTaskRunner"/> class.
-    /// </summary>
-    public StartupTaskRunner(IServiceProvider serviceProvider, ILogger<StartupTaskRunner> logger)
-    {
-        _serviceProvider = serviceProvider;
-        _logger = logger;
-    }
+    private readonly IServiceProvider _serviceProvider = serviceProvider;
+    private readonly ILogger<StartupTaskRunner> _logger = logger;
 
     /// <summary>
     /// Runs all startup tasks in order.

@@ -10,39 +10,29 @@ using Microsoft.Extensions.Logging;
 /// <summary>
 /// Hosted service that initializes LLM providers on startup.
 /// </summary>
-public sealed class LlmProviderInitializer : IHostedService
+/// <remarks>
+/// Initializes a new instance of the <see cref="LlmProviderInitializer"/> class.
+/// </remarks>
+/// <param name="registry">Provider registry.</param>
+/// <param name="ollamaProvider">Ollama provider instance.</param>
+/// <param name="stubProvider">Stub provider instance.</param>
+/// <param name="logger">Logger instance.</param>
+/// <param name="openAiProvider">Optional OpenAI provider instance.</param>
+/// <param name="azureOpenAiProvider">Optional Azure OpenAI provider instance.</param>
+public sealed class LlmProviderInitializer(
+    ILlmProviderRegistry registry,
+    OllamaProvider ollamaProvider,
+    StubLlmProvider stubProvider,
+    ILogger<LlmProviderInitializer> logger,
+    OpenAiProvider? openAiProvider = null,
+    AzureOpenAiProvider? azureOpenAiProvider = null) : IHostedService
 {
-    private readonly ILlmProviderRegistry _registry;
-    private readonly OllamaProvider _ollamaProvider;
-    private readonly StubLlmProvider _stubProvider;
-    private readonly OpenAiProvider? _openAiProvider;
-    private readonly AzureOpenAiProvider? _azureOpenAiProvider;
-    private readonly ILogger<LlmProviderInitializer> _logger;
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="LlmProviderInitializer"/> class.
-    /// </summary>
-    /// <param name="registry">Provider registry.</param>
-    /// <param name="ollamaProvider">Ollama provider instance.</param>
-    /// <param name="stubProvider">Stub provider instance.</param>
-    /// <param name="logger">Logger instance.</param>
-    /// <param name="openAiProvider">Optional OpenAI provider instance.</param>
-    /// <param name="azureOpenAiProvider">Optional Azure OpenAI provider instance.</param>
-    public LlmProviderInitializer(
-        ILlmProviderRegistry registry,
-        OllamaProvider ollamaProvider,
-        StubLlmProvider stubProvider,
-        ILogger<LlmProviderInitializer> logger,
-        OpenAiProvider? openAiProvider = null,
-        AzureOpenAiProvider? azureOpenAiProvider = null)
-    {
-        _registry = registry;
-        _ollamaProvider = ollamaProvider;
-        _stubProvider = stubProvider;
-        _openAiProvider = openAiProvider;
-        _azureOpenAiProvider = azureOpenAiProvider;
-        _logger = logger;
-    }
+    private readonly ILlmProviderRegistry _registry = registry;
+    private readonly OllamaProvider _ollamaProvider = ollamaProvider;
+    private readonly StubLlmProvider _stubProvider = stubProvider;
+    private readonly OpenAiProvider? _openAiProvider = openAiProvider;
+    private readonly AzureOpenAiProvider? _azureOpenAiProvider = azureOpenAiProvider;
+    private readonly ILogger<LlmProviderInitializer> _logger = logger;
 
     /// <inheritdoc/>
     public async Task StartAsync(CancellationToken cancellationToken)

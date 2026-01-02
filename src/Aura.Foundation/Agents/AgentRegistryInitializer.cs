@@ -11,31 +11,23 @@ using Microsoft.Extensions.Options;
 /// <summary>
 /// Hosted service that initializes the agent registry on startup.
 /// </summary>
-public sealed class AgentRegistryInitializer : IHostedService
+/// <remarks>
+/// Initializes a new instance of the <see cref="AgentRegistryInitializer"/> class.
+/// </remarks>
+/// <param name="registry">Agent registry.</param>
+/// <param name="hardcodedProviders">Hardcoded agent providers.</param>
+/// <param name="options">Agent options.</param>
+/// <param name="logger">Logger instance.</param>
+public sealed class AgentRegistryInitializer(
+    IAgentRegistry registry,
+    IEnumerable<IHardcodedAgentProvider> hardcodedProviders,
+    IOptions<AgentOptions> options,
+    ILogger<AgentRegistryInitializer> logger) : IHostedService
 {
-    private readonly IAgentRegistry _registry;
-    private readonly IEnumerable<IHardcodedAgentProvider> _hardcodedProviders;
-    private readonly AgentOptions _options;
-    private readonly ILogger<AgentRegistryInitializer> _logger;
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="AgentRegistryInitializer"/> class.
-    /// </summary>
-    /// <param name="registry">Agent registry.</param>
-    /// <param name="hardcodedProviders">Hardcoded agent providers.</param>
-    /// <param name="options">Agent options.</param>
-    /// <param name="logger">Logger instance.</param>
-    public AgentRegistryInitializer(
-        IAgentRegistry registry,
-        IEnumerable<IHardcodedAgentProvider> hardcodedProviders,
-        IOptions<AgentOptions> options,
-        ILogger<AgentRegistryInitializer> logger)
-    {
-        _registry = registry;
-        _hardcodedProviders = hardcodedProviders;
-        _options = options.Value;
-        _logger = logger;
-    }
+    private readonly IAgentRegistry _registry = registry;
+    private readonly IEnumerable<IHardcodedAgentProvider> _hardcodedProviders = hardcodedProviders;
+    private readonly AgentOptions _options = options.Value;
+    private readonly ILogger<AgentRegistryInitializer> _logger = logger;
 
     /// <inheritdoc/>
     public async Task StartAsync(CancellationToken cancellationToken)

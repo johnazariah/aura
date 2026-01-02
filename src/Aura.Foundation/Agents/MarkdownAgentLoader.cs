@@ -12,27 +12,20 @@ using Microsoft.Extensions.Logging;
 /// <summary>
 /// Loads agents from markdown files following the Aura agent format.
 /// </summary>
-public sealed partial class MarkdownAgentLoader : IAgentLoader
+/// <remarks>
+/// Initializes a new instance of the <see cref="MarkdownAgentLoader"/> class.
+/// </remarks>
+/// <param name="fileSystem">File system abstraction.</param>
+/// <param name="agentFactory">Factory to create agents from definitions.</param>
+/// <param name="logger">Logger instance.</param>
+public sealed partial class MarkdownAgentLoader(
+    IFileSystem fileSystem,
+    IAgentFactory agentFactory,
+    ILogger<MarkdownAgentLoader> logger) : IAgentLoader
 {
-    private readonly IFileSystem _fileSystem;
-    private readonly IAgentFactory _agentFactory;
-    private readonly ILogger<MarkdownAgentLoader> _logger;
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="MarkdownAgentLoader"/> class.
-    /// </summary>
-    /// <param name="fileSystem">File system abstraction.</param>
-    /// <param name="agentFactory">Factory to create agents from definitions.</param>
-    /// <param name="logger">Logger instance.</param>
-    public MarkdownAgentLoader(
-        IFileSystem fileSystem,
-        IAgentFactory agentFactory,
-        ILogger<MarkdownAgentLoader> logger)
-    {
-        _fileSystem = fileSystem;
-        _agentFactory = agentFactory;
-        _logger = logger;
-    }
+    private readonly IFileSystem _fileSystem = fileSystem;
+    private readonly IAgentFactory _agentFactory = agentFactory;
+    private readonly ILogger<MarkdownAgentLoader> _logger = logger;
 
     /// <inheritdoc/>
     public async Task<IAgent?> LoadAsync(string filePath)

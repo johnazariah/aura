@@ -16,11 +16,17 @@ using Microsoft.Extensions.Options;
 /// Communicates with local Ollama instance via HTTP API.
 /// Also provides embedding generation via IEmbeddingProvider.
 /// </summary>
-public sealed class OllamaProvider : ILlmProvider, IEmbeddingProvider
+/// <remarks>
+/// Initializes a new instance of the <see cref="OllamaProvider"/> class.
+/// </remarks>
+public sealed class OllamaProvider(
+    HttpClient httpClient,
+    IOptions<OllamaOptions> options,
+    ILogger<OllamaProvider> logger) : ILlmProvider, IEmbeddingProvider
 {
-    private readonly HttpClient _httpClient;
-    private readonly ILogger<OllamaProvider> _logger;
-    private readonly OllamaOptions _options;
+    private readonly HttpClient _httpClient = httpClient;
+    private readonly ILogger<OllamaProvider> _logger = logger;
+    private readonly OllamaOptions _options = options.Value;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -28,19 +34,6 @@ public sealed class OllamaProvider : ILlmProvider, IEmbeddingProvider
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     };
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="OllamaProvider"/> class.
-    /// </summary>
-    public OllamaProvider(
-        HttpClient httpClient,
-        IOptions<OllamaOptions> options,
-        ILogger<OllamaProvider> logger)
-    {
-        _httpClient = httpClient;
-        _options = options.Value;
-        _logger = logger;
-    }
 
     /// <inheritdoc/>
     public string ProviderId => "ollama";

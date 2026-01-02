@@ -11,24 +11,18 @@ using Microsoft.Extensions.Options;
 /// <summary>
 /// Default implementation of LLM provider registry.
 /// </summary>
-public sealed class LlmProviderRegistry : ILlmProviderRegistry
+/// <remarks>
+/// Initializes a new instance of the <see cref="LlmProviderRegistry"/> class.
+/// </remarks>
+/// <param name="options">LLM options.</param>
+/// <param name="logger">Logger instance.</param>
+public sealed class LlmProviderRegistry(
+    IOptions<LlmOptions> options,
+    ILogger<LlmProviderRegistry> logger) : ILlmProviderRegistry
 {
     private readonly ConcurrentDictionary<string, ILlmProvider> _providers = new(StringComparer.OrdinalIgnoreCase);
-    private readonly ILogger<LlmProviderRegistry> _logger;
-    private readonly LlmOptions _options;
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="LlmProviderRegistry"/> class.
-    /// </summary>
-    /// <param name="options">LLM options.</param>
-    /// <param name="logger">Logger instance.</param>
-    public LlmProviderRegistry(
-        IOptions<LlmOptions> options,
-        ILogger<LlmProviderRegistry> logger)
-    {
-        _options = options.Value;
-        _logger = logger;
-    }
+    private readonly ILogger<LlmProviderRegistry> _logger = logger;
+    private readonly LlmOptions _options = options.Value;
 
     /// <inheritdoc/>
     public IReadOnlyList<ILlmProvider> Providers => _providers.Values.ToList();

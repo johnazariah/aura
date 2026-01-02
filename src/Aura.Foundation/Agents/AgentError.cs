@@ -7,24 +7,19 @@ namespace Aura.Foundation.Agents;
 /// <summary>
 /// Exception thrown by agents.
 /// </summary>
-public sealed class AgentException : Exception
+/// <remarks>
+/// Initializes a new instance of the <see cref="AgentException"/> class.
+/// </remarks>
+/// <param name="code">Error code for programmatic handling.</param>
+/// <param name="message">Human-readable error message.</param>
+/// <param name="innerException">Optional inner exception.</param>
+public sealed class AgentException(AgentErrorCode code, string message, Exception? innerException = null) : Exception(message, innerException)
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="AgentException"/> class.
-    /// </summary>
-    /// <param name="code">Error code for programmatic handling.</param>
-    /// <param name="message">Human-readable error message.</param>
-    /// <param name="innerException">Optional inner exception.</param>
-    public AgentException(AgentErrorCode code, string message, Exception? innerException = null)
-        : base(message, innerException)
-    {
-        Code = code;
-    }
 
     /// <summary>
     /// Gets the error code for programmatic handling.
     /// </summary>
-    public AgentErrorCode Code { get; }
+    public AgentErrorCode Code { get; } = code;
 
     /// <summary>
     /// Creates an exception for agent not found.

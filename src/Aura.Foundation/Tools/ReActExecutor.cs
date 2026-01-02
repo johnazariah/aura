@@ -101,16 +101,10 @@ public record ReActStep
 /// <summary>
 /// Default implementation of ReAct executor.
 /// </summary>
-public partial class ReActExecutor : IReActExecutor
+public partial class ReActExecutor(IToolRegistry toolRegistry, ILogger<ReActExecutor> logger) : IReActExecutor
 {
-    private readonly IToolRegistry _toolRegistry;
-    private readonly ILogger<ReActExecutor> _logger;
-
-    public ReActExecutor(IToolRegistry toolRegistry, ILogger<ReActExecutor> logger)
-    {
-        _toolRegistry = toolRegistry;
-        _logger = logger;
-    }
+    private readonly IToolRegistry _toolRegistry = toolRegistry;
+    private readonly ILogger<ReActExecutor> _logger = logger;
 
     public async Task<ReActResult> ExecuteAsync(
         string task,

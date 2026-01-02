@@ -13,19 +13,13 @@ using Microsoft.Extensions.Logging;
 /// <summary>
 /// Service for managing conversations with RAG context persistence.
 /// </summary>
-public sealed class ConversationService : IConversationService
+/// <remarks>
+/// Initializes a new instance of the <see cref="ConversationService"/> class.
+/// </remarks>
+public sealed class ConversationService(AuraDbContext dbContext, ILogger<ConversationService> logger) : IConversationService
 {
-    private readonly AuraDbContext _dbContext;
-    private readonly ILogger<ConversationService> _logger;
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ConversationService"/> class.
-    /// </summary>
-    public ConversationService(AuraDbContext dbContext, ILogger<ConversationService> logger)
-    {
-        _dbContext = dbContext;
-        _logger = logger;
-    }
+    private readonly AuraDbContext _dbContext = dbContext;
+    private readonly ILogger<ConversationService> _logger = logger;
 
     /// <inheritdoc/>
     public async Task<Conversation> CreateAsync(

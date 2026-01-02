@@ -13,18 +13,13 @@ using Microsoft.Extensions.Logging;
 /// Native text ingester that chunks files by paragraphs or markdown headers.
 /// Does not use LLM - purely rule-based chunking.
 /// </summary>
-public sealed partial class TextIngesterAgent : IAgent
+/// <remarks>
+/// Initializes a new instance of the <see cref="TextIngesterAgent"/> class.
+/// </remarks>
+/// <param name="logger">Optional logger.</param>
+public sealed partial class TextIngesterAgent(ILogger<TextIngesterAgent>? logger = null) : IAgent
 {
-    private readonly ILogger<TextIngesterAgent>? _logger;
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="TextIngesterAgent"/> class.
-    /// </summary>
-    /// <param name="logger">Optional logger.</param>
-    public TextIngesterAgent(ILogger<TextIngesterAgent>? logger = null)
-    {
-        _logger = logger;
-    }
+    private readonly ILogger<TextIngesterAgent>? _logger = logger;
 
     /// <inheritdoc/>
     public string AgentId => "text-ingester";

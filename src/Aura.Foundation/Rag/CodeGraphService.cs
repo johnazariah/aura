@@ -12,21 +12,15 @@ using Microsoft.Extensions.Logging;
 /// <summary>
 /// Service for querying and managing the code graph stored in PostgreSQL.
 /// </summary>
-public class CodeGraphService : ICodeGraphService
+/// <remarks>
+/// Initializes a new instance of the <see cref="CodeGraphService"/> class.
+/// </remarks>
+/// <param name="dbContext">The database context.</param>
+/// <param name="logger">The logger.</param>
+public class CodeGraphService(AuraDbContext dbContext, ILogger<CodeGraphService> logger) : ICodeGraphService
 {
-    private readonly AuraDbContext _dbContext;
-    private readonly ILogger<CodeGraphService> _logger;
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="CodeGraphService"/> class.
-    /// </summary>
-    /// <param name="dbContext">The database context.</param>
-    /// <param name="logger">The logger.</param>
-    public CodeGraphService(AuraDbContext dbContext, ILogger<CodeGraphService> logger)
-    {
-        _dbContext = dbContext;
-        _logger = logger;
-    }
+    private readonly AuraDbContext _dbContext = dbContext;
+    private readonly ILogger<CodeGraphService> _logger = logger;
 
     /// <inheritdoc/>
     public async Task<IReadOnlyList<CodeNode>> FindImplementationsAsync(

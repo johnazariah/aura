@@ -11,29 +11,20 @@ using Microsoft.Extensions.Options;
 /// <summary>
 /// Initializes the prompt registry on startup.
 /// </summary>
-public sealed class PromptRegistryInitializer : IHostedService
+/// <remarks>
+/// Initializes a new instance of the <see cref="PromptRegistryInitializer"/> class.
+/// </remarks>
+public sealed class PromptRegistryInitializer(
+    IPromptRegistry registry,
+    IHostEnvironment environment,
+    IOptions<PromptOptions> options,
+    ILogger<PromptRegistryInitializer> logger) : IHostedService
 {
-    private readonly IPromptRegistry _registry;
-    private readonly PromptRegistry _promptRegistry;
-    private readonly IHostEnvironment _environment;
-    private readonly PromptOptions _options;
-    private readonly ILogger<PromptRegistryInitializer> _logger;
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="PromptRegistryInitializer"/> class.
-    /// </summary>
-    public PromptRegistryInitializer(
-        IPromptRegistry registry,
-        IHostEnvironment environment,
-        IOptions<PromptOptions> options,
-        ILogger<PromptRegistryInitializer> logger)
-    {
-        _registry = registry;
-        _promptRegistry = registry as PromptRegistry ?? throw new InvalidOperationException("Expected PromptRegistry");
-        _environment = environment;
-        _options = options.Value;
-        _logger = logger;
-    }
+    private readonly IPromptRegistry _registry = registry;
+    private readonly PromptRegistry _promptRegistry = registry as PromptRegistry ?? throw new InvalidOperationException("Expected PromptRegistry");
+    private readonly IHostEnvironment _environment = environment;
+    private readonly PromptOptions _options = options.Value;
+    private readonly ILogger<PromptRegistryInitializer> _logger = logger;
 
     /// <inheritdoc/>
     public Task StartAsync(CancellationToken cancellationToken)

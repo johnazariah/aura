@@ -80,24 +80,19 @@ public sealed record LlmResponse(
 /// <summary>
 /// Exception thrown by LLM providers.
 /// </summary>
-public sealed class LlmException : Exception
+/// <remarks>
+/// Initializes a new instance of the <see cref="LlmException"/> class.
+/// </remarks>
+/// <param name="code">Error code.</param>
+/// <param name="message">Error message.</param>
+/// <param name="innerException">Optional inner exception.</param>
+public sealed class LlmException(LlmErrorCode code, string message, Exception? innerException = null) : Exception(message, innerException)
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="LlmException"/> class.
-    /// </summary>
-    /// <param name="code">Error code.</param>
-    /// <param name="message">Error message.</param>
-    /// <param name="innerException">Optional inner exception.</param>
-    public LlmException(LlmErrorCode code, string message, Exception? innerException = null)
-        : base(message, innerException)
-    {
-        Code = code;
-    }
 
     /// <summary>
     /// Gets the error code.
     /// </summary>
-    public LlmErrorCode Code { get; }
+    public LlmErrorCode Code { get; } = code;
 
     /// <summary>Provider is not available.</summary>
     public static LlmException Unavailable(string provider) =>

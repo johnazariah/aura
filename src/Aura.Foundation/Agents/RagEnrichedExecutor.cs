@@ -67,30 +67,21 @@ public interface IRagEnrichedExecutor
 /// <summary>
 /// Executes agents with automatic RAG context enrichment.
 /// </summary>
-public sealed class RagEnrichedExecutor : IRagEnrichedExecutor
+/// <remarks>
+/// Initializes a new instance of the <see cref="RagEnrichedExecutor"/> class.
+/// </remarks>
+public sealed class RagEnrichedExecutor(
+    IAgentRegistry agentRegistry,
+    IRagService ragService,
+    ICodeGraphEnricher codeGraphEnricher,
+    IOptions<RagExecutionOptions> options,
+    ILogger<RagEnrichedExecutor> logger) : IRagEnrichedExecutor
 {
-    private readonly IAgentRegistry _agentRegistry;
-    private readonly IRagService _ragService;
-    private readonly ICodeGraphEnricher _codeGraphEnricher;
-    private readonly RagExecutionOptions _options;
-    private readonly ILogger<RagEnrichedExecutor> _logger;
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="RagEnrichedExecutor"/> class.
-    /// </summary>
-    public RagEnrichedExecutor(
-        IAgentRegistry agentRegistry,
-        IRagService ragService,
-        ICodeGraphEnricher codeGraphEnricher,
-        IOptions<RagExecutionOptions> options,
-        ILogger<RagEnrichedExecutor> logger)
-    {
-        _agentRegistry = agentRegistry;
-        _ragService = ragService;
-        _codeGraphEnricher = codeGraphEnricher;
-        _options = options.Value;
-        _logger = logger;
-    }
+    private readonly IAgentRegistry _agentRegistry = agentRegistry;
+    private readonly IRagService _ragService = ragService;
+    private readonly ICodeGraphEnricher _codeGraphEnricher = codeGraphEnricher;
+    private readonly RagExecutionOptions _options = options.Value;
+    private readonly ILogger<RagEnrichedExecutor> _logger = logger;
 
     /// <inheritdoc/>
     public async Task<AgentOutput> ExecuteAsync(

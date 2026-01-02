@@ -12,19 +12,13 @@ using System.Text.RegularExpressions;
 /// <summary>
 /// Enriches agent context with Code Graph structural information.
 /// </summary>
-public sealed partial class CodeGraphEnricher : ICodeGraphEnricher
+/// <remarks>
+/// Initializes a new instance of the <see cref="CodeGraphEnricher"/> class.
+/// </remarks>
+public sealed partial class CodeGraphEnricher(ICodeGraphService codeGraph, ILogger<CodeGraphEnricher> logger) : ICodeGraphEnricher
 {
-    private readonly ICodeGraphService _codeGraph;
-    private readonly ILogger<CodeGraphEnricher> _logger;
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="CodeGraphEnricher"/> class.
-    /// </summary>
-    public CodeGraphEnricher(ICodeGraphService codeGraph, ILogger<CodeGraphEnricher> logger)
-    {
-        _codeGraph = codeGraph;
-        _logger = logger;
-    }
+    private readonly ICodeGraphService _codeGraph = codeGraph;
+    private readonly ILogger<CodeGraphEnricher> _logger = logger;
 
     /// <inheritdoc/>
     public async Task<CodeGraphEnrichment> EnrichAsync(

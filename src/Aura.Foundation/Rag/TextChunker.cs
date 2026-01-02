@@ -8,21 +8,15 @@ namespace Aura.Foundation.Rag;
 /// Splits text into chunks suitable for embedding.
 /// Preserves semantic boundaries like paragraphs and code blocks.
 /// </summary>
-public sealed class TextChunker
+/// <remarks>
+/// Initializes a new instance of the <see cref="TextChunker"/> class.
+/// </remarks>
+/// <param name="chunkSize">Target chunk size in characters.</param>
+/// <param name="chunkOverlap">Overlap between chunks in characters.</param>
+public sealed class TextChunker(int chunkSize = 2000, int chunkOverlap = 200)
 {
-    private readonly int _chunkSize;
-    private readonly int _chunkOverlap;
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="TextChunker"/> class.
-    /// </summary>
-    /// <param name="chunkSize">Target chunk size in characters.</param>
-    /// <param name="chunkOverlap">Overlap between chunks in characters.</param>
-    public TextChunker(int chunkSize = 2000, int chunkOverlap = 200)
-    {
-        _chunkSize = chunkSize;
-        _chunkOverlap = chunkOverlap;
-    }
+    private readonly int _chunkSize = chunkSize;
+    private readonly int _chunkOverlap = chunkOverlap;
 
     /// <summary>
     /// Splits text into chunks.

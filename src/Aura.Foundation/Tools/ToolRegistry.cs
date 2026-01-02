@@ -8,15 +8,10 @@ namespace Aura.Foundation.Tools;
 /// <summary>
 /// Default implementation of the tool registry.
 /// </summary>
-public class ToolRegistry : IToolRegistry
+public class ToolRegistry(ILogger<ToolRegistry> logger) : IToolRegistry
 {
     private readonly ConcurrentDictionary<string, ToolDefinition> _tools = new(StringComparer.OrdinalIgnoreCase);
-    private readonly ILogger<ToolRegistry> _logger;
-
-    public ToolRegistry(ILogger<ToolRegistry> logger)
-    {
-        _logger = logger;
-    }
+    private readonly ILogger<ToolRegistry> _logger = logger;
 
     public IReadOnlyList<ToolDefinition> GetAllTools() =>
         _tools.Values.ToList();

@@ -9,21 +9,15 @@ using System.Text;
 /// <summary>
 /// Fallback ingestor for plain text files. Uses simple line-based chunking.
 /// </summary>
-public sealed class PlainTextIngestor : IContentIngestor
+/// <remarks>
+/// Initializes a new instance of the <see cref="PlainTextIngestor"/> class.
+/// </remarks>
+/// <param name="chunkSize">Target chunk size in characters.</param>
+/// <param name="overlap">Overlap between chunks in characters.</param>
+public sealed class PlainTextIngestor(int chunkSize = 1500, int overlap = 200) : IContentIngestor
 {
-    private readonly int _chunkSize;
-    private readonly int _overlap;
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="PlainTextIngestor"/> class.
-    /// </summary>
-    /// <param name="chunkSize">Target chunk size in characters.</param>
-    /// <param name="overlap">Overlap between chunks in characters.</param>
-    public PlainTextIngestor(int chunkSize = 1500, int overlap = 200)
-    {
-        _chunkSize = chunkSize;
-        _overlap = overlap;
-    }
+    private readonly int _chunkSize = chunkSize;
+    private readonly int _overlap = overlap;
 
     /// <inheritdoc/>
     public string IngestorId => "plaintext";

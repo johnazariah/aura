@@ -9,18 +9,13 @@ using Microsoft.Extensions.Logging;
 /// <summary>
 /// Provides foundation-level hardcoded agents.
 /// </summary>
-public sealed class FoundationAgentProvider : IHardcodedAgentProvider
+/// <remarks>
+/// Initializes a new instance of the <see cref="FoundationAgentProvider"/> class.
+/// </remarks>
+/// <param name="loggerFactory">Logger factory.</param>
+public sealed class FoundationAgentProvider(ILoggerFactory loggerFactory) : IHardcodedAgentProvider
 {
-    private readonly ILoggerFactory _loggerFactory;
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="FoundationAgentProvider"/> class.
-    /// </summary>
-    /// <param name="loggerFactory">Logger factory.</param>
-    public FoundationAgentProvider(ILoggerFactory loggerFactory)
-    {
-        _loggerFactory = loggerFactory;
-    }
+    private readonly ILoggerFactory _loggerFactory = loggerFactory;
 
     /// <inheritdoc/>
     public IEnumerable<IAgent> GetAgents()

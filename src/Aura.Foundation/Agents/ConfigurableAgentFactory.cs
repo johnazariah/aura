@@ -12,31 +12,23 @@ using Microsoft.Extensions.Options;
 /// <summary>
 /// Factory for creating ConfigurableAgent instances.
 /// </summary>
-public sealed class ConfigurableAgentFactory : IAgentFactory
+/// <remarks>
+/// Initializes a new instance of the <see cref="ConfigurableAgentFactory"/> class.
+/// </remarks>
+/// <param name="providerRegistry">LLM provider registry.</param>
+/// <param name="llmOptions">LLM configuration options.</param>
+/// <param name="handlebars">Handlebars template engine.</param>
+/// <param name="loggerFactory">Logger factory.</param>
+public sealed class ConfigurableAgentFactory(
+    ILlmProviderRegistry providerRegistry,
+    IOptions<LlmOptions> llmOptions,
+    IHandlebars handlebars,
+    ILoggerFactory loggerFactory) : IAgentFactory
 {
-    private readonly ILlmProviderRegistry _providerRegistry;
-    private readonly LlmOptions _llmOptions;
-    private readonly IHandlebars _handlebars;
-    private readonly ILoggerFactory _loggerFactory;
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ConfigurableAgentFactory"/> class.
-    /// </summary>
-    /// <param name="providerRegistry">LLM provider registry.</param>
-    /// <param name="llmOptions">LLM configuration options.</param>
-    /// <param name="handlebars">Handlebars template engine.</param>
-    /// <param name="loggerFactory">Logger factory.</param>
-    public ConfigurableAgentFactory(
-        ILlmProviderRegistry providerRegistry,
-        IOptions<LlmOptions> llmOptions,
-        IHandlebars handlebars,
-        ILoggerFactory loggerFactory)
-    {
-        _providerRegistry = providerRegistry;
-        _llmOptions = llmOptions.Value;
-        _handlebars = handlebars;
-        _loggerFactory = loggerFactory;
-    }
+    private readonly ILlmProviderRegistry _providerRegistry = providerRegistry;
+    private readonly LlmOptions _llmOptions = llmOptions.Value;
+    private readonly IHandlebars _handlebars = handlebars;
+    private readonly ILoggerFactory _loggerFactory = loggerFactory;
 
     /// <inheritdoc/>
     public IAgent CreateAgent(AgentDefinition definition)

@@ -11,33 +11,26 @@ using Microsoft.Extensions.Logging;
 /// <summary>
 /// Default implementation of agent registry with hot-reload support.
 /// </summary>
-public sealed class AgentRegistry : IAgentRegistry, IDisposable
+/// <remarks>
+/// Initializes a new instance of the <see cref="AgentRegistry"/> class.
+/// </remarks>
+/// <param name="agentLoader">Agent loader for parsing agent files.</param>
+/// <param name="fileSystem">File system abstraction.</param>
+/// <param name="logger">Logger instance.</param>
+public sealed class AgentRegistry(
+    IAgentLoader agentLoader,
+    IFileSystem fileSystem,
+    ILogger<AgentRegistry> logger) : IAgentRegistry, IDisposable
 {
     private readonly ConcurrentDictionary<string, IAgent> _agents = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _hardcodedAgentIds = new(StringComparer.OrdinalIgnoreCase);
-    private readonly IAgentLoader _agentLoader;
-    private readonly IFileSystem _fileSystem;
-    private readonly ILogger<AgentRegistry> _logger;
+    private readonly IAgentLoader _agentLoader = agentLoader;
+    private readonly IFileSystem _fileSystem = fileSystem;
+    private readonly ILogger<AgentRegistry> _logger = logger;
     private readonly List<string> _watchDirectories = [];
     private readonly List<IFileSystemWatcher> _watchers = [];
     private readonly SemaphoreSlim _reloadLock = new(1, 1);
     private bool _disposed;
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="AgentRegistry"/> class.
-    /// </summary>
-    /// <param name="agentLoader">Agent loader for parsing agent files.</param>
-    /// <param name="fileSystem">File system abstraction.</param>
-    /// <param name="logger">Logger instance.</param>
-    public AgentRegistry(
-        IAgentLoader agentLoader,
-        IFileSystem fileSystem,
-        ILogger<AgentRegistry> logger)
-    {
-        _agentLoader = agentLoader;
-        _fileSystem = fileSystem;
-        _logger = logger;
-    }
 
     /// <inheritdoc/>
     public IReadOnlyList<IAgent> Agents => _agents.Values.ToList();

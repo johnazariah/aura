@@ -8,16 +8,10 @@ namespace Aura.Foundation.Shell;
 /// <summary>
 /// Cross-platform process runner implementation.
 /// </summary>
-public class ProcessRunner : IProcessRunner
+public class ProcessRunner(ILogger<ProcessRunner> logger) : IProcessRunner
 {
-    private readonly ILogger<ProcessRunner> _logger;
-    private readonly ShellInfo _defaultShell;
-
-    public ProcessRunner(ILogger<ProcessRunner> logger)
-    {
-        _logger = logger;
-        _defaultShell = DetectDefaultShell();
-    }
+    private readonly ILogger<ProcessRunner> _logger = logger;
+    private readonly ShellInfo _defaultShell = DetectDefaultShell();
 
     public async Task<ProcessResult> RunAsync(
         string command,
