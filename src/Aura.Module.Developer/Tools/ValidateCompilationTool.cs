@@ -79,18 +79,12 @@ public record ValidateCompilationOutput
 /// Validates that a project compiles without errors.
 /// Use after making code changes to verify syntax and type correctness.
 /// </summary>
-public class ValidateCompilationTool : TypedToolBase<ValidateCompilationInput, ValidateCompilationOutput>
+public class ValidateCompilationTool(
+    IRoslynWorkspaceService workspace,
+    ILogger<ValidateCompilationTool> logger) : TypedToolBase<ValidateCompilationInput, ValidateCompilationOutput>
 {
-    private readonly IRoslynWorkspaceService _workspace;
-    private readonly ILogger<ValidateCompilationTool> _logger;
-
-    public ValidateCompilationTool(
-        IRoslynWorkspaceService workspace,
-        ILogger<ValidateCompilationTool> logger)
-    {
-        _workspace = workspace;
-        _logger = logger;
-    }
+    private readonly IRoslynWorkspaceService _workspace = workspace;
+    private readonly ILogger<ValidateCompilationTool> _logger = logger;
 
     /// <inheritdoc/>
     public override string ToolId => "roslyn.validate_compilation";
@@ -124,6 +118,16 @@ public class ValidateCompilationTool : TypedToolBase<ValidateCompilationInput, V
             // First, clear the workspace cache to ensure we get fresh compilation
             _workspace.ClearCache();
 
+            // Validate that WorkingDirectory was provided (should be injected by the tool framework)
+            if (string.IsNullOrEmpty(input.WorkingDirectory))
+            {
+                _logger.LogWarning(
+                    "WorkingDirectory was not provided for roslyn.validate_compilation. " +
+                    "Falling back to Environment.CurrentDirectory: {CurrentDir}. " +
+                    "This may indicate a bug in the tool framework.",
+                    Environment.CurrentDirectory);
+            }
+
             // Find the project - resolve relative paths against current directory
             var workingDir = input.WorkingDirectory ?? Environment.CurrentDirectory;
             var searchDirectory = Path.IsPathRooted(workingDir)
@@ -135,8 +139,18 @@ public class ValidateCompilationTool : TypedToolBase<ValidateCompilationInput, V
             var solutionPath = _workspace.FindSolutionFile(searchDirectory);
             if (solutionPath is null)
             {
-                return ToolResult<ValidateCompilationOutput>.Fail(
-                    $"No solution file found in '{searchDirectory}'");
+                // Provide a helpful error message with suggestions
+                var errorMessage = $"No solution file found in '{searchDirectory}'";
+                if (searchDirectory.Contains("Aura", StringComparison.OrdinalIgnoreCase) &&
+                    input.ProjectName is not null &&
+                    !input.ProjectName.StartsWith("Aura", StringComparison.OrdinalIgnoreCase))
+                {
+                    errorMessage += ". The tool appears to be looking in the Aura directory instead of the target repository. " +
+                                   "This may indicate that the WorkingDirectory was not properly set. " +
+                                   "Try providing the full path to the project's solution file.";
+                }
+
+                return ToolResult<ValidateCompilationOutput>.Fail(errorMessage);
             }
 
             var solution = await _workspace.GetSolutionAsync(solutionPath, ct);

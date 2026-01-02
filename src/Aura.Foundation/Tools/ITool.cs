@@ -97,8 +97,12 @@ public abstract class TypedToolBase<TInput, TOutput> : ITool<TInput, TOutput>
             Handler = async (input, ct) =>
             {
                 // Inject WorkingDirectory into parameters if not already present
+                // Use case-insensitive check since LLM might use different casing
                 var parameters = input.Parameters;
-                if (!string.IsNullOrEmpty(input.WorkingDirectory) && !parameters.ContainsKey("workingDirectory"))
+                var hasWorkingDir = parameters.Keys.Any(k =>
+                    k.Equals("workingDirectory", StringComparison.OrdinalIgnoreCase));
+
+                if (!string.IsNullOrEmpty(input.WorkingDirectory) && !hasWorkingDir)
                 {
                     var mutableParams = new Dictionary<string, object?>(parameters)
                     {
