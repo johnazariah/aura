@@ -1,7 +1,7 @@
 # Aura Project Status
 
-> **Last Updated**: 2025-12-11
-> **Branch**: main (up to date with origin)
+> **Last Updated**: 2026-01-02
+> **Branch**: main
 > **Overall Status**: ✅ MVP Complete
 
 ## Quick Summary
@@ -145,13 +145,31 @@ prompts/                      # Handlebars prompt templates
 | [spec/assisted-workflow-ui.md](spec/assisted-workflow-ui.md) | UI collaboration model |
 | [progress/2025-12-11.md](progress/2025-12-11.md) | Latest weekly progress |
 
-## Recent Changes (Dec 6-11, 2025)
+## Recent Changes (Jan 2, 2026)
+
+1. **Unified Capability Model**
+   - RoslynCodingAgent now uses `software-development-csharp` capability (replaces fragmented `csharp-coding`, `testing-csharp`, etc.)
+   - Added capability aliases in AgentRegistry for backward compatibility
+   - Old capability names automatically resolve to new unified names
+
+2. **Removed Duplicate Language Agents**
+   - Deleted `PythonCodingAgent.cs`, `GoCodingAgent.cs`, `TypeScriptCodingAgent.cs`, `FSharpCodingAgent.cs`
+   - These duplicated functionality defined in `agents/languages/*.yaml`
+   - Languages now fall back to generic `coding-agent.md` until LanguageSpecialistAgent is implemented
+
+3. **Unified Indexing Backend (Complete)**
+   - Created `RoslynCodeIngestor` that produces both RAG chunks AND code graph nodes in single parse
+   - Added `RegisterCodeIngestorsTask` startup task to register ingestors at module load
+   - `/api/semantic/index` endpoint now delegates to BackgroundIndexer with unified pipeline
+   - Deleted `DeveloperSemanticIndexer` - no longer needed with unified approach
+   - C# files indexed via background indexer now get both RAG embeddings and graph nodes
+
+## Previous Changes (Dec 6-11, 2025)
 
 1. **Agent Test-Writing Improvements**
    - Agents read existing tests to match framework and patterns
    - Explicit test file path instructions
    - Agents run tests after writing to verify correctness
-   - `roslyn-coding` agent gains `testing-csharp` and `testing` capabilities
 
 2. **LLM Provider Refinements**
    - Default model fallback when agent doesn't specify a model
@@ -166,7 +184,7 @@ prompts/                      # Handlebars prompt templates
 
 5. **Documentation** - Added API Cheat Sheet for quick reference
 
-## Previous Changes (Dec 2-5, 2025)
+## Earlier Changes (Dec 2-5, 2025)
 
 1. **Assisted Workflow UI** - 5-phase implementation complete
    - Step cards with collapsible output/chat
@@ -187,13 +205,13 @@ prompts/                      # Handlebars prompt templates
 
 | Item | Impact | Notes |
 |------|--------|-------|
-| Duplicate language coding agents | Low | `PythonCodingAgent.cs`, `GoCodingAgent.cs`, `TypeScriptCodingAgent.cs`, `FSharpCodingAgent.cs` duplicate YAML configs in `agents/languages/*.yaml`. Remove hardcoded agents after implementing `LanguageSpecialistAgent` that loads YAML configs. |
 | ReActExecutor inline prompt | Low | Core ReAct prompt is inline in `ReActExecutor.cs` - tightly coupled to parsing logic, consider externalizing with care. |
 
 ### Not Yet Implemented
 
 | Item | Priority | Notes |
 |------|----------|-------|
+| LanguageSpecialistAgent | Medium | Load language configs from `agents/languages/*.yaml` at runtime. Currently these YAML files exist but are not auto-loaded. |
 | Dependency Graph edges | Low | Import relationships in code graph |
 | Azure AD for LLM | Future | Currently API key only |
 | Cost tracking | Future | For cloud LLM usage |
@@ -203,9 +221,9 @@ prompts/                      # Handlebars prompt templates
 
 - [x] Push commits to origin ✅
 - [x] Update progress documentation ✅
+- [x] Remove duplicate language agents (PythonCodingAgent, GoCodingAgent, TypeScriptCodingAgent, FSharpCodingAgent) ✅
 - [ ] Create MVP release tag
 - [ ] User testing with real workflows
-- [ ] Review and commit/discard 11 local uncommitted changes
 
 ## Principles
 
