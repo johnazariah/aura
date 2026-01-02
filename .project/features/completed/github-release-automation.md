@@ -135,6 +135,7 @@ jobs:
 ### Release Process
 
 1. **Developer creates tag:**
+
    ```bash
    git tag -a v0.1.0 -m "Release 0.1.0"
    git push origin v0.1.0
@@ -147,10 +148,12 @@ jobs:
    - Generates changelog from commits
 
 3. **For preview releases:**
+
    ```bash
    git tag -a v0.1.0-preview -m "Preview release"
    git push origin v0.1.0-preview
    ```
+
    This marks the release as "pre-release" on GitHub.
 
 ## Tasks

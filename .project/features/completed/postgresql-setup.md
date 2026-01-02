@@ -23,11 +23,13 @@ The current installer checks for Ollama but not PostgreSQL. End users need a sim
 Bundle a portable PostgreSQL with the installer.
 
 **Pros:**
+
 - Zero configuration for users
 - Works offline
 - No Docker dependency
 
 **Cons:**
+
 - Larger installer (~100MB more)
 - Need to manage PostgreSQL lifecycle
 
@@ -36,10 +38,12 @@ Bundle a portable PostgreSQL with the installer.
 Check for PostgreSQL, prompt to download if missing.
 
 **Pros:**
+
 - Standard PostgreSQL installation
 - User manages their own database
 
 **Cons:**
+
 - Extra step for users
 - Version compatibility concerns
 
@@ -48,10 +52,12 @@ Check for PostgreSQL, prompt to download if missing.
 Use SQLite instead of PostgreSQL for desktop use.
 
 **Pros:**
+
 - Zero setup
 - Tiny footprint
 
 **Cons:**
+
 - Loses pgvector (no vector search)
 - Different code path from server deployment
 

@@ -26,7 +26,7 @@ Create user-facing documentation for installing, configuring, and using Aura. Cu
 
 ## Documentation Structure
 
-```
+```text
 docs/
 ├── README.md                    # Documentation index
 ├── getting-started/
@@ -130,6 +130,7 @@ This downloads a ~4GB model. Smaller options:
 
 | Problem | Solution |
 |---------|----------|
+
 | "Aura API not responding" | Check Windows Service is running |
 | "No LLM provider available" | Ensure Ollama is running, model downloaded |
 | "Database connection failed" | Check PostgreSQL service |

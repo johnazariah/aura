@@ -15,7 +15,8 @@ Consolidate multiple language-specific coding agents into a unified `software-de
 We have multiple agents with overlapping capabilities:
 
 | Agent | Capabilities |
-|-------|-------------|
+|-------|--------------|
+
 | RoslynCodingAgent | `csharp-coding`, `coding`, `refactoring`, `csharp-documentation`, `testing-csharp`, `testing` |
 | TypeScriptCodingAgent | `typescript-coding`, `javascript-coding`, `coding` |
 | PythonCodingAgent | `python-coding`, `coding` |
@@ -23,6 +24,7 @@ We have multiple agents with overlapping capabilities:
 | FSharpCodingAgent | `fsharp-coding`, `coding`, `functional-programming` |
 
 **Issues:**
+
 1. **Fragmentation** - Same language has multiple capabilities (`csharp-coding` vs `testing-csharp`)
 2. **Inconsistency** - Some agents have testing capabilities, others don't
 3. **Code duplication** - All agents follow identical ReAct pattern, differing only in tools and prompts
@@ -33,7 +35,8 @@ We have multiple agents with overlapping capabilities:
 Each language has ONE unified capability:
 
 | Language | Capability | Agent Implementation |
-|----------|------------|---------------------|
+|----------|------------|----------------------|
+
 | C# | `software-development-csharp` | RoslynCodingAgent (class) |
 | F# | `software-development-fsharp` | FSharpCodingAgent (class) or shared with C# |
 | TypeScript | `software-development-typescript` | Configuration-based |
@@ -59,7 +62,7 @@ A `software-development-{language}` capability includes:
 
 Languages with specialized tooling that require custom code:
 
-```
+```text
 ┌─────────────────────────────────────────────────────┐
 │              RoslynCodingAgent                      │
 │  - Roslyn semantic analysis                         │
@@ -95,7 +98,8 @@ prompt_variables:
 ### Tool Mapping
 
 | Capability | Roslyn Agent | Config-based Agent |
-|------------|--------------|-------------------|
+|------------|--------------|--------------------|
+
 | Read code | file.read | file.read |
 | Modify code | file.modify | file.modify |
 | Validate compilation | ValidateCompilationTool | shell.execute (language-specific) |
@@ -108,6 +112,7 @@ Code ingestion stays as a separate capability family:
 
 | Capability | Agent | Purpose |
 |------------|-------|---------|
+
 | `code-parse:csharp` | CSharpIngesterAgent | Roslyn-based semantic parsing |
 | `code-parse:*` | TreeSitterIngesterAgent | Multi-language parsing |
 

@@ -36,6 +36,7 @@ Aura is built from **composable modules**:
 
 | Component | Description |
 |-----------|-------------|
+
 | **Aura.Foundation** | Core services - agents, LLM, RAG, database |
 | **Aura.Module.Developer** | Code automation, git worktrees, workflows |
 | **Aura.Module.Research** | Paper management, synthesis (future) |
@@ -81,6 +82,7 @@ dotnet run --project src/Aura.AppHost
 
 | Platform | Status |
 |----------|--------|
+
 | Windows | Supported |
 | macOS | Supported |
 | Linux | Supported |

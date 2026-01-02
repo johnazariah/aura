@@ -24,11 +24,13 @@ Enable Aura to run natively on macOS with full functionality, including TreeSitt
 **Problem**: The TreeSitter .NET binding requires platform-specific native libraries. Currently only Windows binaries are bundled.
 
 **Solution**:
+
 - Build or source `libtree-sitter.dylib` for macOS (both arm64 and x64)
 - Update the NuGet package or add runtime-specific assets
 - Test on both Intel and Apple Silicon Macs
 
 **Files affected**:
+
 - `src/Aura.Module.Developer/Aura.Module.Developer.csproj` (native library references)
 - Possibly need to create a separate NuGet package for TreeSitter bindings
 
@@ -37,6 +39,7 @@ Enable Aura to run natively on macOS with full functionality, including TreeSitt
 **Problem**: GitHub's macOS runners don't have Docker pre-installed.
 
 **Options**:
+
 1. Use `colima` or `lima` to run Docker on macOS runners
 2. Use self-hosted macOS runners with Docker Desktop
 3. Accept that integration tests only run on Linux/Windows
@@ -46,6 +49,7 @@ Enable Aura to run natively on macOS with full functionality, including TreeSitt
 ### 3. macOS Installer
 
 **Options**:
+
 1. **Homebrew Cask** - Most idiomatic for macOS users
 2. **DMG installer** - Traditional drag-and-drop installation
 3. **PKG installer** - System-level installation with scripts
@@ -53,6 +57,7 @@ Enable Aura to run natively on macOS with full functionality, including TreeSitt
 **Recommendation**: Start with Homebrew Cask for developer audience.
 
 **Components to install**:
+
 - Aura API service (as a launchd daemon)
 - Aura Tray app (menu bar app)
 - VS Code extension (via `code --install-extension`)
@@ -61,6 +66,7 @@ Enable Aura to run natively on macOS with full functionality, including TreeSitt
 ### 4. PostgreSQL on macOS
 
 **Options**:
+
 1. Require user to install via `brew install postgresql@16`
 2. Bundle Postgres.app style self-contained PostgreSQL
 3. Use the official PostgreSQL installer
@@ -71,7 +77,8 @@ Enable Aura to run natively on macOS with full functionality, including TreeSitt
 
 **Problem**: Aspire uses containers for local development.
 
-**Solution**: 
+**Solution**:
+
 - Support OrbStack (already documented in copilot-instructions.md)
 - Support Docker Desktop
 - Support Colima as lightweight alternative
@@ -79,24 +86,28 @@ Enable Aura to run natively on macOS with full functionality, including TreeSitt
 ## Implementation Plan
 
 ### Phase 1: TreeSitter (3-5 days)
+
 1. Research TreeSitter.NET macOS support
 2. Build or obtain macOS native libraries
 3. Update project to include macOS runtime assets
 4. Add CI step to test TreeSitter on macOS
 
 ### Phase 2: Installer (3-5 days)
+
 1. Create Homebrew formula/cask
 2. Build launchd plist for API service
 3. Create menu bar app bundle for Aura.Tray
 4. Write installation/setup documentation
 
 ### Phase 3: CI & Testing (2-3 days)
+
 1. Re-enable macOS in CI matrix
 2. Skip integration tests on macOS (or find Docker solution)
 3. Ensure all unit tests pass
 4. Add macOS-specific test for TreeSitter
 
 ### Phase 4: Documentation (1 day)
+
 1. Update installation docs for macOS
 2. Add troubleshooting section for common macOS issues
 3. Update README with macOS badge

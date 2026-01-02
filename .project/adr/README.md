@@ -6,6 +6,7 @@ This directory contains the architecture decision records for the Aura project.
 
 | ADR | Title | Status | Date |
 |-----|-------|--------|------|
+
 | [ADR-001](001-local-first-architecture.md) | Local-First, Privacy-Safe Architecture | ✅ Accepted | 2025-11-25 |
 | [ADR-002](002-greenfield-rewrite.md) | Greenfield Rewrite from hve-hack | ✅ Accepted | 2025-11-25 |
 | [ADR-003](003-composable-modules.md) | Composable Module System | ✅ Accepted | 2025-11-25 |

@@ -19,6 +19,7 @@ features/
 
 | Feature | Description | Completed |
 |---------|-------------|-----------|
+
 | [Overview](completed/overview.md) | Project vision and architecture | 2025-12-01 |
 | [Agents](completed/agents.md) | Agent framework and lifecycle | 2025-11-27 |
 | [LLM Providers](completed/llm-providers.md) | Multi-provider LLM integration | 2025-11-27 |
@@ -53,6 +54,7 @@ features/
 
 | Feature | Description |
 |---------|-------------|
+
 | [Unified Indexing Backend](upcoming/unified-indexing-backend.md) | Single pipeline for RAG + Code Graph |
 | [Indexing UX](upcoming/indexing-ux.md) | Progress UI, prompts, query commands |
 
@@ -60,6 +62,7 @@ features/
 
 | Feature | Description |
 |---------|-------------|
+
 | [MCP Server](upcoming/mcp-server.md) | Model Context Protocol integration |
 | [Multi-Workspace](upcoming/multi-workspace.md) | Multiple workspace support |
 | [macOS Support](upcoming/macos-support.md) | Native macOS build, installer, and CI |
@@ -68,6 +71,7 @@ features/
 
 | Feature | Description |
 |---------|-------------|
+
 | [Condensed Export](upcoming/condensed-export.md) | Export indexed context |
 | [Specialist Agents](upcoming/specialist-coding-agents.md) | Language-specific coding agents |
 | [Tool Execution](upcoming/tool-execution-for-agents.md) | Agent tool invocation |
@@ -80,6 +84,7 @@ features/
 
 | Feature | Description |
 |---------|-------------|
+
 | [Indexing Epic](unplanned/indexing-epic.md) | Future indexing enhancements (smart content, boolean queries, etc.) |
 
 ## See Also
