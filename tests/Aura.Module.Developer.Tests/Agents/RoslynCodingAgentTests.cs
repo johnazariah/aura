@@ -45,10 +45,9 @@ public class RoslynCodingAgentTests
     [Fact]
     public void Metadata_ShouldHaveCorrectCapabilities()
     {
-        Assert.Contains("csharp-coding", _agent.Metadata.Capabilities);
+        Assert.Contains("software-development-csharp", _agent.Metadata.Capabilities);
+        Assert.Contains("software-development", _agent.Metadata.Capabilities);
         Assert.Contains("coding", _agent.Metadata.Capabilities);
-        Assert.Contains("refactoring", _agent.Metadata.Capabilities);
-        Assert.Contains("csharp-documentation", _agent.Metadata.Capabilities);
     }
 
     [Fact]

@@ -22,6 +22,35 @@ public sealed class AgentRegistry(
     IFileSystem fileSystem,
     ILogger<AgentRegistry> logger) : IAgentRegistry, IDisposable
 {
+    /// <summary>
+    /// Maps old capability names to their unified equivalents for backward compatibility.
+    /// </summary>
+    private static readonly Dictionary<string, string> CapabilityAliases = new(StringComparer.OrdinalIgnoreCase)
+    {
+        // C#
+        ["csharp-coding"] = "software-development-csharp",
+        ["testing-csharp"] = "software-development-csharp",
+        ["csharp-documentation"] = "software-development-csharp",
+
+        // TypeScript
+        ["typescript-coding"] = "software-development-typescript",
+
+        // JavaScript
+        ["javascript-coding"] = "software-development-javascript",
+
+        // Python
+        ["python-coding"] = "software-development-python",
+
+        // Go
+        ["go-coding"] = "software-development-go",
+
+        // F#
+        ["fsharp-coding"] = "software-development-fsharp",
+
+        // Rust
+        ["rust-coding"] = "software-development-rust",
+    };
+
     private readonly ConcurrentDictionary<string, IAgent> _agents = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _hardcodedAgentIds = new(StringComparer.OrdinalIgnoreCase);
     private readonly IAgentLoader _agentLoader = agentLoader;
@@ -80,6 +109,14 @@ public sealed class AgentRegistry(
     /// <inheritdoc/>
     public IAgent? GetBestForCapability(string capability, string? language = null)
     {
+        // Resolve capability alias if one exists (backward compatibility)
+        if (CapabilityAliases.TryGetValue(capability, out var aliasedCapability))
+        {
+            _logger.LogDebug("Resolved capability alias '{OldCapability}' -> '{NewCapability}'",
+                capability, aliasedCapability);
+            capability = aliasedCapability;
+        }
+
         // First: exact match by priority
         var agent = GetByCapability(capability, language).FirstOrDefault();
         if (agent is not null)

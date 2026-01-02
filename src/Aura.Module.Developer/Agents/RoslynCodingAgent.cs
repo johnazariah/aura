@@ -47,7 +47,7 @@ public sealed class RoslynCodingAgent(
         Description: "Sophisticated C# coding agent that uses Roslyn-powered tools to understand, " +
                      "plan, and implement code changes. Uses ReAct reasoning to navigate the codebase, " +
                      "make targeted edits, validate compilation, and produce documentation.",
-        Capabilities: ["csharp-coding", "coding", "refactoring", "csharp-documentation", "testing-csharp", "testing"],
+        Capabilities: ["software-development-csharp", "software-development", "coding"],
         Priority: 10,  // Highest priority for C# coding tasks
         Languages: ["csharp"],
         Provider: "ollama",
