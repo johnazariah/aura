@@ -16,17 +16,12 @@ using Xunit;
 /// Tests validate the API loads agents from the actual agents/ directory.
 /// </summary>
 [Trait("Category", "Integration")]
-public class AgentDiscoveryTests : IntegrationTestBase
+public class AgentDiscoveryTests(AuraApiFactory factory) : IntegrationTestBase(factory)
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = true,
     };
-
-    public AgentDiscoveryTests(AuraApiFactory factory)
-        : base(factory)
-    {
-    }
 
     [Fact]
     public async Task GetAgents_ReturnsAllLoadedAgents()

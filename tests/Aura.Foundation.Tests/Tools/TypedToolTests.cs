@@ -192,4 +192,97 @@ public class TypedToolTests
         var output = Assert.IsType<EchoOutput>(result.Output);
         Assert.Equal("TEST: Through handler", output.EchoedMessage);
     }
+
+    [Fact]
+    public async Task ToToolDefinition_InjectsWorkingDirectoryIntoParameters()
+    {
+        // Arrange
+        var tool = new WorkingDirTool();
+        var definition = tool.ToToolDefinition();
+        var input = new ToolInput
+        {
+            ToolId = "workingdir.test",
+            WorkingDirectory = @"C:\work\target-repo",  // This should be injected
+            Parameters = new Dictionary<string, object?>
+            {
+                ["name"] = "TestProject"
+                // Note: NOT providing workingDirectory in parameters
+            }
+        };
+
+        // Act
+        var result = await definition.Handler!(input, CancellationToken.None);
+
+        // Assert
+        Assert.True(result.Success);
+        var output = Assert.IsType<WorkingDirOutput>(result.Output);
+        Assert.Equal(@"C:\work\target-repo", output.ResolvedPath);
+        Assert.Equal("TestProject", output.Name);
+    }
+
+    [Fact]
+    public async Task ToToolDefinition_DoesNotOverrideExplicitWorkingDirectory()
+    {
+        // Arrange
+        var tool = new WorkingDirTool();
+        var definition = tool.ToToolDefinition();
+        var input = new ToolInput
+        {
+            ToolId = "workingdir.test",
+            WorkingDirectory = @"C:\work\injected-path",  // This would be injected normally
+            Parameters = new Dictionary<string, object?>
+            {
+                ["name"] = "TestProject",
+                ["workingDirectory"] = @"C:\work\explicit-path"  // But LLM provided explicit value
+            }
+        };
+
+        // Act
+        var result = await definition.Handler!(input, CancellationToken.None);
+
+        // Assert
+        Assert.True(result.Success);
+        var output = Assert.IsType<WorkingDirOutput>(result.Output);
+        Assert.Equal(@"C:\work\explicit-path", output.ResolvedPath);  // Should use explicit
+    }
+}
+
+/// <summary>
+/// Test input with WorkingDirectory parameter.
+/// </summary>
+public record WorkingDirInput
+{
+    public required string Name { get; init; }
+    public string? WorkingDirectory { get; init; }
+}
+
+/// <summary>
+/// Test output for WorkingDirectory tool.
+/// </summary>
+public record WorkingDirOutput
+{
+    public required string Name { get; init; }
+    public required string ResolvedPath { get; init; }
+}
+
+/// <summary>
+/// Test tool that uses WorkingDirectory in its input.
+/// </summary>
+public class WorkingDirTool : TypedToolBase<WorkingDirInput, WorkingDirOutput>
+{
+    public override string ToolId => "workingdir.test";
+    public override string Name => "WorkingDir Test";
+    public override string Description => "Test tool that uses working directory";
+
+    public override Task<ToolResult<WorkingDirOutput>> ExecuteAsync(
+        WorkingDirInput input,
+        CancellationToken ct = default)
+    {
+        var output = new WorkingDirOutput
+        {
+            Name = input.Name,
+            ResolvedPath = input.WorkingDirectory ?? "NOT_INJECTED"
+        };
+        return Task.FromResult(ToolResult<WorkingDirOutput>.Ok(output));
+    }
 }

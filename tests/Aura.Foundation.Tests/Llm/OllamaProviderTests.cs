@@ -244,16 +244,10 @@ public class OllamaProviderTests
         return new MockHttpHandler(statusCode, content);
     }
 
-    private class MockHttpHandler : HttpMessageHandler
+    private class MockHttpHandler(HttpStatusCode statusCode, object content) : HttpMessageHandler
     {
-        private readonly HttpStatusCode _statusCode;
-        private readonly object _content;
-
-        public MockHttpHandler(HttpStatusCode statusCode, object content)
-        {
-            _statusCode = statusCode;
-            _content = content;
-        }
+        private readonly HttpStatusCode _statusCode = statusCode;
+        private readonly object _content = content;
 
         protected override Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request,
@@ -271,14 +265,9 @@ public class OllamaProviderTests
         }
     }
 
-    private class FailingHttpHandler : HttpMessageHandler
+    private class FailingHttpHandler(Exception exception) : HttpMessageHandler
     {
-        private readonly Exception _exception;
-
-        public FailingHttpHandler(Exception exception)
-        {
-            _exception = exception;
-        }
+        private readonly Exception _exception = exception;
 
         protected override Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request,

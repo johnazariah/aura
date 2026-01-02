@@ -16,17 +16,12 @@ using Xunit;
 /// Tests validate agent execution through the API using the stub LLM provider.
 /// </summary>
 [Trait("Category", "Integration")]
-public class AgentExecutionTests : IntegrationTestBase
+public class AgentExecutionTests(AuraApiFactory factory) : IntegrationTestBase(factory)
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = true,
     };
-
-    public AgentExecutionTests(AuraApiFactory factory)
-        : base(factory)
-    {
-    }
 
     [Fact]
     public async Task ExecuteAgent_WithValidPrompt_ReturnsResponse()

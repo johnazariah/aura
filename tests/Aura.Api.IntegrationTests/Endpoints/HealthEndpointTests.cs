@@ -15,17 +15,12 @@ using Xunit;
 /// Integration tests for health check endpoints.
 /// </summary>
 [Trait("Category", "Integration")]
-public class HealthEndpointTests : IntegrationTestBase
+public class HealthEndpointTests(AuraApiFactory factory) : IntegrationTestBase(factory)
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = true,
     };
-
-    public HealthEndpointTests(AuraApiFactory factory)
-        : base(factory)
-    {
-    }
 
     [Fact]
     public async Task Health_ReturnsHealthy()
