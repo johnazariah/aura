@@ -6,6 +6,7 @@ Complete reference for Aura configuration options.
 
 | File | Purpose |
 |------|---------|
+
 | `appsettings.json` | Main configuration |
 | `appsettings.Development.json` | Development overrides |
 | `appsettings.Local.json` | Local overrides (git-ignored) |
@@ -24,6 +25,7 @@ Location: `C:\Program Files\Aura\api\`
 
 | Setting | Default | Description |
 |---------|---------|-------------|
+
 | `Host` | `localhost` | PostgreSQL server |
 | `Port` | `5433` | Port (5433 to avoid conflicts) |
 | `Database` | `auradb` | Database name |
@@ -66,6 +68,7 @@ Location: `C:\Program Files\Aura\api\`
 
 | Setting | Type | Description |
 |---------|------|-------------|
+
 | `DefaultProvider` | string | Which provider to use: `Ollama`, `AzureOpenAI`, `OpenAI` |
 | `Providers.*.BaseUrl` | string | API endpoint URL |
 | `Providers.*.ApiKey` | string | API key for authentication |
@@ -89,6 +92,7 @@ Location: `C:\Program Files\Aura\api\`
 
 | Setting | Default | Description |
 |---------|---------|-------------|
+
 | `Directories` | `["agents"]` | Paths to agent definition files |
 | `EnableHotReload` | `true` | Reload agents when files change |
 
@@ -106,6 +110,7 @@ Location: `C:\Program Files\Aura\api\`
 
 | Setting | Default | Description |
 |---------|---------|-------------|
+
 | `Directories` | `["prompts"]` | Paths to prompt template files |
 
 ## Developer Module
@@ -125,6 +130,7 @@ Location: `C:\Program Files\Aura\api\`
 
 | Setting | Default | Description |
 |---------|---------|-------------|
+
 | `BranchPrefix` | `workflow` | Prefix for workflow branches |
 | `WorktreeDirectory` | `.worktrees` | Where to create git worktrees |
 
@@ -146,6 +152,7 @@ Location: `C:\Program Files\Aura\api\`
 
 | Level | Description |
 |-------|-------------|
+
 | `Trace` | Most detailed (debugging only) |
 | `Debug` | Detailed debug info |
 | `Information` | General operational info |
@@ -156,6 +163,7 @@ Location: `C:\Program Files\Aura\api\`
 ### Common Overrides
 
 For debugging LLM calls:
+
 ```json
 {
   "Logging": {
@@ -167,6 +175,7 @@ For debugging LLM calls:
 ```
 
 For debugging database:
+
 ```json
 {
   "Logging": {

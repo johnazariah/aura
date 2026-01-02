@@ -15,6 +15,7 @@ When running as a service, logs go to Windows Event Log:
 ### Console Output
 
 When running manually (development):
+
 ```powershell
 cd "C:\Program Files\Aura\api"
 .\Aura.Api.exe
@@ -25,6 +26,7 @@ Logs appear in the console with timestamps.
 ### Extension Logs
 
 In VS Code:
+
 1. View → Output (`Ctrl+Shift+U`)
 2. Select "Aura" from the dropdown
 
@@ -32,6 +34,7 @@ In VS Code:
 
 | Level | Color | Meaning |
 |-------|-------|---------|
+
 | **TRC** | Gray | Trace - very detailed |
 | **DBG** | Blue | Debug - debugging info |
 | **INF** | Green | Info - normal operations |
@@ -43,7 +46,7 @@ In VS Code:
 
 ### Successful Startup
 
-```
+```text
 [INF] Starting Aura API...
 [INF] Database connection established
 [INF] Loaded 12 agents from agents/
@@ -53,7 +56,7 @@ In VS Code:
 
 ### LLM Connection Failed
 
-```
+```text
 [WRN] Failed to connect to Ollama at http://localhost:11434
 [ERR] HttpRequestException: Connection refused
 [INF] Falling back to next provider...
@@ -63,7 +66,7 @@ In VS Code:
 
 ### Database Connection Failed
 
-```
+```text
 [ERR] Failed to connect to database
 [ERR] NpgsqlException: Connection refused
 [CRT] Cannot start without database connection
@@ -73,7 +76,7 @@ In VS Code:
 
 ### Agent Loading Error
 
-```
+```text
 [WRN] Failed to load agent from agents/broken-agent.md
 [WRN] Parse error at line 15: Invalid YAML
 [INF] Loaded 11 agents (1 failed)
@@ -97,6 +100,7 @@ For more detailed logs, edit `appsettings.json`:
 ```
 
 Then restart the service:
+
 ```powershell
 Restart-Service AuraService
 ```
@@ -172,6 +176,7 @@ Get-Content "$env:ProgramFiles\Aura\data\log\postgresql-*.log" -Tail 50
 
 | Error | Meaning | Solution |
 |-------|---------|----------|
+
 | `FATAL: database "auradb" does not exist` | DB not created | Reinstall or manually create |
 | `FATAL: password authentication failed` | Wrong credentials | Check connection string |
 | `could not connect to server` | PostgreSQL not running | Start AuraDB service |
@@ -202,6 +207,7 @@ When reporting a bug, include:
 3. **Expected vs actual behavior**
 4. **Log excerpts** (sanitized of secrets)
 5. **Version info:**
+
    ```powershell
    Get-Content "$env:ProgramFiles\Aura\version.json"
    ollama --version

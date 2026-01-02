@@ -9,6 +9,7 @@ Solutions to frequently encountered problems.
 **Problem:** Windows blocks the installer from running.
 
 **Solution:**
+
 1. Click "More info"
 2. Click "Run anyway"
 
@@ -19,6 +20,7 @@ This is normal for new/unsigned applications.
 **Problem:** Extension wasn't installed during setup.
 
 **Solution:**
+
 ```powershell
 & "$env:ProgramFiles\Aura\scripts\install-extension.ps1"
 ```
@@ -30,6 +32,7 @@ Then reload VS Code.
 **Problem:** Permission error during installation.
 
 **Solution:**
+
 1. Run installer as Administrator
 2. Or install to a user-writable location
 
@@ -42,6 +45,7 @@ Then reload VS Code.
 **Solutions:**
 
 1. **Check Windows Service:**
+
    ```powershell
    Get-Service AuraService
    # If stopped:
@@ -49,6 +53,7 @@ Then reload VS Code.
    ```
 
 2. **Check manually:**
+
    ```powershell
    curl http://localhost:5300/health
    ```
@@ -65,6 +70,7 @@ Then reload VS Code.
 **Solutions:**
 
 1. **Check PostgreSQL service:**
+
    ```powershell
    Get-Service AuraDB
    # If stopped:
@@ -72,6 +78,7 @@ Then reload VS Code.
    ```
 
 2. **Verify port:**
+
    ```powershell
    Test-NetConnection localhost -Port 5433
    ```
@@ -89,6 +96,7 @@ Then reload VS Code.
    - Or run: `ollama list`
 
 2. **Pull a model:**
+
    ```powershell
    ollama pull qwen2.5-coder:7b
    ```
@@ -104,6 +112,7 @@ Then reload VS Code.
 **Solutions:**
 
 1. **Check LLM is responding:**
+
    ```powershell
    curl http://localhost:11434/api/generate -d '{"model":"qwen2.5-coder:7b","prompt":"Hi"}'
    ```
@@ -119,16 +128,19 @@ Then reload VS Code.
 **Solutions:**
 
 1. **Check you're in a git repository:**
+
    ```powershell
    git status
    ```
 
 2. **Check worktree directory is writable:**
+
    ```powershell
    Test-Path .worktrees
    ```
 
 3. **Clean up old worktrees:**
+
    ```powershell
    git worktree prune
    ```
@@ -166,6 +178,7 @@ Then reload VS Code.
 **Solutions:**
 
 1. **Use a smaller model:**
+
    ```powershell
    ollama pull llama3.2:3b
    ```
@@ -215,6 +228,7 @@ Then reload VS Code.
    - `Ctrl+Shift+X` → Search "Aura"
 
 2. **Reinstall:**
+
    ```powershell
    & "$env:ProgramFiles\Aura\scripts\install-extension.ps1"
    ```
@@ -244,11 +258,13 @@ Then reload VS Code.
 **Problem:** Aura using too much CPU.
 
 **Causes:**
+
 - Active indexing
 - LLM processing
 - Multiple workflows
 
 **Solutions:**
+
 1. Wait for indexing to complete
 2. Run one workflow at a time
 3. Use cloud LLM to offload processing
@@ -258,10 +274,12 @@ Then reload VS Code.
 **Problem:** Aura using too much RAM.
 
 **Causes:**
+
 - Large model loaded in Ollama
 - Many files indexed
 
 **Solutions:**
+
 1. Use a smaller model
 2. Restart services to clear memory
 3. Close unused workflows

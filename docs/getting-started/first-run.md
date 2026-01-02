@@ -38,6 +38,7 @@ ollama pull nomic-embed-text
 
 | Model | Size | Best For |
 |-------|------|----------|
+
 | `qwen2.5-coder:7b` | ~4GB | General coding tasks (recommended) |
 | `qwen2.5-coder:14b` | ~8GB | Better quality, needs more RAM |
 | `llama3.2:3b` | ~2GB | Faster responses, less capable |
@@ -75,6 +76,7 @@ Before Aura can help with your code, it needs to understand your project:
 ### What Gets Indexed
 
 Aura extracts:
+
 - **Functions & Methods** - Names, signatures, documentation
 - **Classes & Types** - Structure and relationships
 - **Files** - Content for semantic search
@@ -83,6 +85,7 @@ Aura extracts:
 
 | Language | Parser |
 |----------|--------|
+
 | C# | Roslyn (full semantic analysis) |
 | TypeScript/JavaScript | TreeSitter |
 | Python | TreeSitter |
@@ -108,6 +111,7 @@ Aura will search your indexed code and provide context-aware answers.
 
 | Issue | Solution |
 |-------|----------|
+
 | Ollama not detected | Ensure Ollama is running (check system tray) |
 | No models available | Run `ollama pull qwen2.5-coder:7b` |
 | Database not starting | Check Windows Services for "AuraDB" |

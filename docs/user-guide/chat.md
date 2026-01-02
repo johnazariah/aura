@@ -31,7 +31,7 @@ Unlike generic AI chat, Aura chat:
 
 ### Understanding Code
 
-```
+```text
 You: What does the PaymentService class do?
 
 Aura: The PaymentService handles payment processing for orders. 
@@ -47,7 +47,7 @@ all transactions to the PaymentAuditRepository.
 
 ### Finding Code
 
-```
+```text
 You: Where is user authentication implemented?
 
 Aura: Authentication is implemented in several places:
@@ -65,7 +65,7 @@ The main flow is:
 
 ### Explaining Patterns
 
-```
+```text
 You: How does dependency injection work in this project?
 
 Aura: This project uses .NET's built-in DI container configured 
@@ -92,7 +92,7 @@ Key registration locations:
 2. Open chat
 3. Ask about the selection
 
-```
+```text
 You: [with code selected] What does this method do?
 
 Aura: The selected `CalculateDiscount` method applies discount 
@@ -109,7 +109,7 @@ The maximum total discount is capped at 30%.
 
 Chat automatically knows which file you're viewing:
 
-```
+```text
 You: Are there any bugs in this file?
 
 Aura: I found a few potential issues in OrderService.cs:
@@ -127,6 +127,7 @@ Use special commands for specific actions:
 
 | Command | Description |
 |---------|-------------|
+
 | `/explain` | Explain selected code in detail |
 | `/find` | Search for code matching description |
 | `/review` | Review code for issues |
@@ -135,7 +136,7 @@ Use special commands for specific actions:
 
 ### Example
 
-```
+```text
 You: /review the authentication flow
 
 Aura: Code Review: Authentication Flow
@@ -160,7 +161,7 @@ Aura: Code Review: Authentication Flow
 
 If chat suggests code changes, you can create a workflow:
 
-```
+```text
 You: Add rate limiting to the login endpoint
 
 Aura: I recommend adding rate limiting using the 
@@ -180,14 +181,14 @@ Click **"Create Workflow"** to turn the suggestion into executable steps.
 
 ### Be Specific
 
-```
+```text
 ❌ "How does this work?"
 ✅ "How does the order validation logic handle partial refunds?"
 ```
 
 ### Provide Context
 
-```
+```text
 ❌ "Why is this slow?"
 ✅ "The GetUserOrders method on line 45 is slow for users 
     with 1000+ orders. Why might this be?"
@@ -197,7 +198,7 @@ Click **"Create Workflow"** to turn the suggestion into executable steps.
 
 Chat remembers context within a session:
 
-```
+```text
 You: What caching is used in the project?
 Aura: The project uses Redis caching via...
 
@@ -208,6 +209,7 @@ Aura: Based on the existing Redis setup, you would...
 ## Privacy
 
 All chat processing happens:
+
 - **Locally** with Ollama (default)
 - **Or** via configured cloud providers
 

@@ -6,6 +6,7 @@ The Aura VS Code extension provides the primary interface for interacting with A
 
 | Feature | Description |
 |---------|-------------|
+
 | **Workflows** | Create, manage, and execute AI-assisted development tasks |
 | **Chat** | Code-aware conversations about your codebase |
 | **Code Graph** | View and manage code indexing |
@@ -18,14 +19,18 @@ Click the **Aura icon** in the Activity Bar (left sidebar) to open the Aura pane
 ### Sections
 
 #### System Status
+
 Shows health of Aura components:
+
 - ✅ Aura API - Core service
 - ✅ Database - PostgreSQL connection
 - ✅ Ollama - LLM provider
 - ✅ Code Graph - Indexing status
 
 #### Workflows
+
 Lists your workflows with status indicators:
+
 - 🟡 In Progress
 - ✅ Completed
 - ❌ Failed
@@ -33,9 +38,11 @@ Lists your workflows with status indicators:
 Click a workflow to open it.
 
 #### Chat
+
 Quick access to code-aware chat.
 
 #### Code Graph
+
 - Repository indexing status
 - Symbol counts
 - Index/Re-index buttons
@@ -46,6 +53,7 @@ Access via Command Palette (`Ctrl+Shift+P`):
 
 | Command | Description |
 |---------|-------------|
+
 | `Aura: New Workflow` | Create a new workflow |
 | `Aura: Open Chat` | Open chat panel |
 | `Aura: Index Repository` | Start code indexing |
@@ -57,22 +65,27 @@ Access via Command Palette (`Ctrl+Shift+P`):
 When you open a workflow:
 
 ### Header
+
 - Workflow name and description
 - Current status
 - Created/updated timestamps
 
 ### Steps List
+
 - Each step with status icon
 - Click to expand details
 - Approve/Skip/Edit buttons
 
 ### Diff Viewer
+
 For file modifications:
+
 - Side-by-side comparison
 - Inline diff view toggle
 - Syntax highlighting
 
 ### Actions
+
 - **Approve Step** - Apply changes
 - **Skip Step** - Move to next
 - **Edit Step** - Modify before applying
@@ -81,11 +94,13 @@ For file modifications:
 ## Chat Panel
 
 ### Input
+
 - Multi-line text input
 - Send with Enter or button
 - Clear history option
 
 ### Messages
+
 - Your questions
 - Aura's responses with:
   - Code blocks (syntax highlighted)
@@ -93,7 +108,9 @@ For file modifications:
   - Action buttons
 
 ### Context
+
 Shows what context Aura is using:
+
 - Current file
 - Selection (if any)
 - Retrieved code snippets
@@ -119,6 +136,7 @@ Configure the extension in VS Code settings:
 
 | Setting | Default | Description |
 |---------|---------|-------------|
+
 | `aura.apiUrl` | `http://localhost:5300` | Aura API endpoint |
 | `aura.autoConnect` | `true` | Connect on VS Code start |
 | `aura.showStatusBar` | `true` | Show status in status bar |
@@ -129,6 +147,7 @@ Default shortcuts (customizable in VS Code):
 
 | Shortcut | Command |
 |----------|---------|
+
 | (none by default) | Aura: New Workflow |
 | (none by default) | Aura: Open Chat |
 
@@ -148,6 +167,7 @@ Default shortcuts (customizable in VS Code):
    - Should show as installed
 
 2. Reinstall if needed:
+
    ```powershell
    & "$env:ProgramFiles\Aura\scripts\install-extension.ps1"
    ```
@@ -164,6 +184,7 @@ Default shortcuts (customizable in VS Code):
 2. Verify URL in settings matches your setup
 
 3. Check API is responding:
+
    ```powershell
    curl http://localhost:5300/health
    ```
@@ -183,6 +204,7 @@ The extension is bundled with the Aura installer. To update:
 3. Reload VS Code
 
 Manual update from VSIX:
+
 ```powershell
 code --install-extension "C:\Program Files\Aura\extension\aura-X.Y.Z.vsix" --force
 ```

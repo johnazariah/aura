@@ -8,6 +8,7 @@ Before installing Aura, ensure you have:
 
 | Requirement | Details |
 |-------------|---------|
+
 | **Windows 10/11** | 64-bit, version 1903 or later |
 | **Ollama** | Local LLM runtime - [download here](https://ollama.com) |
 | **RAM** | 8GB minimum (16GB+ recommended for larger models) |
@@ -34,6 +35,7 @@ The installer offers several options:
 
 | Option | Description | Recommended |
 |--------|-------------|-------------|
+
 | **Install as Windows Service** | Aura API starts automatically on boot | ✅ Yes |
 | **Start system tray monitor** | Shows Aura status in taskbar | ✅ Yes |
 | **Auto-start tray with Windows** | Tray icon appears on login | ✅ Yes |
@@ -60,7 +62,7 @@ After installation:
 
 Aura installs to `C:\Program Files\Aura\` by default:
 
-```
+```text
 C:\Program Files\Aura\
 ├── api\                    # Aura API service
 ├── tray\                   # System tray application
@@ -77,6 +79,7 @@ Two services are created:
 
 | Service | Purpose |
 |---------|---------|
+
 | **AuraDB** | PostgreSQL database for storing workflows and code index |
 | **AuraService** | Main Aura API (optional, if you chose service install) |
 

@@ -6,6 +6,7 @@ Aura supports multiple LLM providers for AI capabilities. You can use local mode
 
 | Provider | Type | Best For |
 |----------|------|----------|
+
 | **Ollama** | Local | Privacy, offline use, no API costs |
 | **Azure OpenAI** | Cloud | Enterprise, compliance, GPT-4 quality |
 | **OpenAI** | Cloud | Best quality, easy setup |
@@ -18,10 +19,12 @@ Ollama runs models locally on your machine.
 
 1. Install Ollama from [ollama.com](https://ollama.com)
 2. Pull a model:
+
    ```powershell
    ollama pull qwen2.5-coder:7b
    ollama pull nomic-embed-text
    ```
+
 3. Ollama is auto-detected by Aura
 
 ### Configuration
@@ -50,14 +53,17 @@ In `C:\Program Files\Aura\api\appsettings.json`:
 
 | Model | Size | Use Case |
 |-------|------|----------|
+
 | `qwen2.5-coder:7b` | ~4GB | General coding (recommended) |
 | `qwen2.5-coder:14b` | ~8GB | Better quality, needs 16GB+ RAM |
 | `codellama:7b` | ~4GB | Alternative coding model |
 | `llama3.2:3b` | ~2GB | Faster, less capable |
 
 For embeddings:
+
 | Model | Size | Use Case |
 |-------|------|----------|
+
 | `nomic-embed-text` | ~275MB | Best quality (recommended) |
 | `all-minilm` | ~45MB | Smaller, faster |
 
@@ -146,6 +152,7 @@ Use OpenAI's API directly.
 
 | Model | Quality | Speed | Cost |
 |-------|---------|-------|------|
+
 | `gpt-4o` | Best | Fast | $$ |
 | `gpt-4o-mini` | Good | Fastest | $ |
 | `gpt-4-turbo` | Best | Slower | $$$ |
@@ -175,6 +182,7 @@ If Azure is unavailable, Aura uses Ollama.
 
 | Scenario | Recommended |
 |----------|-------------|
+
 | **Privacy-critical** | Ollama |
 | **Offline use** | Ollama |
 | **Best quality** | Azure OpenAI / OpenAI |
@@ -187,6 +195,7 @@ If Azure is unavailable, Aura uses Ollama.
 After editing `appsettings.json`:
 
 1. Restart Aura service:
+
    ```powershell
    Restart-Service AuraService
    ```
@@ -201,6 +210,7 @@ After editing `appsettings.json`:
 
 - Never commit API keys to source control
 - Use environment variables for CI/CD:
+
   ```json
   {
     "Aura": {

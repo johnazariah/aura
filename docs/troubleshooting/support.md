@@ -58,9 +58,8 @@ What actually happened
 - LLM: Ollama qwen2.5-coder:7b
 
 ## Logs
-```
+```text
 Relevant log excerpts here
-```
 ```
 
 ## Feature Requests
@@ -96,6 +95,7 @@ For questions, ideas, and community chat:
 💬 [Discussions](https://github.com/johnazariah/aura/discussions)
 
 Categories:
+
 - **Q&A** - Ask questions
 - **Ideas** - Share feature ideas
 - **Show and Tell** - Share your use cases
@@ -119,6 +119,7 @@ Aura is an open-source project. For professional support:
 
 | Resource | Link |
 |----------|------|
+
 | Documentation | [docs/README.md](../README.md) |
 | GitHub Repository | [github.com/johnazariah/aura](https://github.com/johnazariah/aura) |
 | Issues | [GitHub Issues](https://github.com/johnazariah/aura/issues) |

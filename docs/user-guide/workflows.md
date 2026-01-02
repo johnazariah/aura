@@ -6,12 +6,13 @@ Workflows are the core way to accomplish development tasks with Aura. This guide
 
 Every workflow goes through these stages:
 
-```
+```text
 Created → Analyzing → Analyzed → Planning → Planned → Executing → Completed/Failed
 ```
 
 | Stage | Description |
 |-------|-------------|
+
 | **Created** | Workflow initialized with your description |
 | **Analyzing** | Aura examines your codebase and request |
 | **Analyzed** | Analysis complete, ready for planning |
@@ -39,19 +40,22 @@ Created → Analyzing → Analyzed → Planning → Planned → Executing → Co
 ### Tips for Good Descriptions
 
 **Include context:**
-```
+
+```text
 Add a caching layer to the ProductService using Redis. 
 Cache product lookups for 5 minutes.
 ```
 
 **Reference existing patterns:**
-```
+
+```text
 Create a new CustomerController following the same 
 structure as OrderController.
 ```
 
 **Specify constraints:**
-```
+
+```text
 Add pagination to the /api/users endpoint. 
 Use cursor-based pagination, not offset.
 ```
@@ -62,6 +66,7 @@ Each workflow is broken into steps. Steps can be:
 
 | Type | Description |
 |------|-------------|
+
 | **Create** | Create a new file |
 | **Modify** | Edit an existing file |
 | **Delete** | Remove a file |
@@ -71,6 +76,7 @@ Each workflow is broken into steps. Steps can be:
 
 | State | Icon | Meaning |
 |-------|------|---------|
+
 | **Pending** | ⏳ | Waiting to be executed |
 | **Executing** | 🔄 | Currently running |
 | **Completed** | ✅ | Successfully done |
@@ -82,10 +88,12 @@ Each workflow is broken into steps. Steps can be:
 Before approving a step, review the proposed changes:
 
 ### For New Files
+
 - Full file content shown
 - Syntax highlighted
 
 ### For Modifications
+
 - Diff view showing additions/removals
 - Line-by-line changes
 
@@ -103,7 +111,7 @@ The edited version will be used instead.
 
 Workflows create changes in an isolated git worktree:
 
-```
+```text
 your-repo/
 ├── .worktrees/
 │   └── workflow-abc123/    # Isolated workspace
@@ -112,6 +120,7 @@ your-repo/
 ```
 
 This means:
+
 - ✅ Your main branch stays clean
 - ✅ You can work on other things while a workflow runs
 - ✅ Easy to discard if something goes wrong
@@ -135,6 +144,7 @@ When all steps are complete:
 4. Click **"Complete"**
 
 Aura will:
+
 - Commit all changes
 - Push to a new branch
 - Open PR creation page (if configured)
@@ -153,6 +163,7 @@ The worktree and all changes will be removed.
 ### View All Workflows
 
 The Aura panel shows all workflows:
+
 - **Active** - In progress
 - **Recent** - Completed in last 7 days
 
@@ -170,6 +181,7 @@ If VS Code closes or you switch tasks:
 2. Select **"Delete"**
 
 Or clean up all old workflows:
+
 1. Command Palette → "Aura: Clean Up Workflows"
 
 ## Troubleshooting Workflows
