@@ -67,18 +67,12 @@ public record GetProjectReferencesOutput
 /// Gets the project reference graph for a project.
 /// Use to understand project dependencies before making architectural changes.
 /// </summary>
-public class GetProjectReferencesTool : TypedToolBase<GetProjectReferencesInput, GetProjectReferencesOutput>
+public class GetProjectReferencesTool(
+    IRoslynWorkspaceService workspace,
+    ILogger<GetProjectReferencesTool> logger) : TypedToolBase<GetProjectReferencesInput, GetProjectReferencesOutput>
 {
-    private readonly IRoslynWorkspaceService _workspace;
-    private readonly ILogger<GetProjectReferencesTool> _logger;
-
-    public GetProjectReferencesTool(
-        IRoslynWorkspaceService workspace,
-        ILogger<GetProjectReferencesTool> logger)
-    {
-        _workspace = workspace;
-        _logger = logger;
-    }
+    private readonly IRoslynWorkspaceService _workspace = workspace;
+    private readonly ILogger<GetProjectReferencesTool> _logger = logger;
 
     /// <inheritdoc/>
     public override string ToolId => "roslyn.get_project_references";

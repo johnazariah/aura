@@ -19,29 +19,21 @@ using Microsoft.Extensions.Logging;
 /// - Runs pytest for testing
 /// - Follows PEP 8 and modern Python idioms
 /// </summary>
-public sealed class PythonCodingAgent : IAgent
+/// <remarks>
+/// Initializes a new instance of the <see cref="PythonCodingAgent"/> class.
+/// </remarks>
+public sealed class PythonCodingAgent(
+    IReActExecutor reactExecutor,
+    IToolRegistry toolRegistry,
+    ILlmProviderRegistry llmRegistry,
+    ILogger<PythonCodingAgent> logger) : IAgent
 {
     private const double DefaultTemperature = 0.2;
 
-    private readonly IReActExecutor _reactExecutor;
-    private readonly IToolRegistry _toolRegistry;
-    private readonly ILlmProviderRegistry _llmRegistry;
-    private readonly ILogger<PythonCodingAgent> _logger;
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="PythonCodingAgent"/> class.
-    /// </summary>
-    public PythonCodingAgent(
-        IReActExecutor reactExecutor,
-        IToolRegistry toolRegistry,
-        ILlmProviderRegistry llmRegistry,
-        ILogger<PythonCodingAgent> logger)
-    {
-        _reactExecutor = reactExecutor;
-        _toolRegistry = toolRegistry;
-        _llmRegistry = llmRegistry;
-        _logger = logger;
-    }
+    private readonly IReActExecutor _reactExecutor = reactExecutor;
+    private readonly IToolRegistry _toolRegistry = toolRegistry;
+    private readonly ILlmProviderRegistry _llmRegistry = llmRegistry;
+    private readonly ILogger<PythonCodingAgent> _logger = logger;
 
     /// <inheritdoc/>
     public string AgentId => "python-coding";

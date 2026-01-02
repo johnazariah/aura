@@ -63,18 +63,12 @@ public record ListProjectsOutput
 /// Lists all C# projects in a solution or directory.
 /// Provides project metadata for understanding codebase structure.
 /// </summary>
-public class ListProjectsTool : TypedToolBase<ListProjectsInput, ListProjectsOutput>
+public class ListProjectsTool(
+    IRoslynWorkspaceService workspace,
+    ILogger<ListProjectsTool> logger) : TypedToolBase<ListProjectsInput, ListProjectsOutput>
 {
-    private readonly IRoslynWorkspaceService _workspace;
-    private readonly ILogger<ListProjectsTool> _logger;
-
-    public ListProjectsTool(
-        IRoslynWorkspaceService workspace,
-        ILogger<ListProjectsTool> logger)
-    {
-        _workspace = workspace;
-        _logger = logger;
-    }
+    private readonly IRoslynWorkspaceService _workspace = workspace;
+    private readonly ILogger<ListProjectsTool> _logger = logger;
 
     /// <inheritdoc/>
     public override string ToolId => "roslyn.list_projects";

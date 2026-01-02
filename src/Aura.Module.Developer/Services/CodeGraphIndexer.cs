@@ -15,29 +15,22 @@ using Microsoft.Extensions.Logging;
 /// <summary>
 /// Roslyn-based indexer that populates the code graph from C# source code.
 /// </summary>
-public class CodeGraphIndexer : ICodeGraphIndexer
+/// <remarks>
+/// Initializes a new instance of the <see cref="CodeGraphIndexer"/> class.
+/// </remarks>
+public class CodeGraphIndexer(
+    IRoslynWorkspaceService roslynWorkspace,
+    ICodeGraphService graphService,
+    ILogger<CodeGraphIndexer> logger) : ICodeGraphIndexer
 {
     private const int MaxNameLength = 500;
     private const int MaxFullNameLength = 2000;
     private const int MaxSignatureLength = 2000;
     private const int MaxFilePathLength = 1000;
 
-    private readonly IRoslynWorkspaceService _roslynWorkspace;
-    private readonly ICodeGraphService _graphService;
-    private readonly ILogger<CodeGraphIndexer> _logger;
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="CodeGraphIndexer"/> class.
-    /// </summary>
-    public CodeGraphIndexer(
-        IRoslynWorkspaceService roslynWorkspace,
-        ICodeGraphService graphService,
-        ILogger<CodeGraphIndexer> logger)
-    {
-        _roslynWorkspace = roslynWorkspace;
-        _graphService = graphService;
-        _logger = logger;
-    }
+    private readonly IRoslynWorkspaceService _roslynWorkspace = roslynWorkspace;
+    private readonly ICodeGraphService _graphService = graphService;
+    private readonly ILogger<CodeGraphIndexer> _logger = logger;
 
     /// <inheritdoc/>
     public async Task<CodeGraphIndexResult> IndexAsync(

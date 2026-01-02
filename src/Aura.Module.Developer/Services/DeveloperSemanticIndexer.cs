@@ -13,27 +13,20 @@ using Microsoft.Extensions.Logging;
 /// - For C# code: Uses Roslyn-based CodeGraphIndexer (fast structural indexing)
 /// - For text/docs: Uses RAG service with text chunking (selective embeddings)
 /// </summary>
-public sealed class DeveloperSemanticIndexer : ISemanticIndexer
+/// <remarks>
+/// Initializes a new instance of the <see cref="DeveloperSemanticIndexer"/> class.
+/// </remarks>
+public sealed class DeveloperSemanticIndexer(
+    ICodeGraphIndexer graphIndexer,
+    IRagService ragService,
+    ILogger<DeveloperSemanticIndexer> logger) : ISemanticIndexer
 {
     private static readonly string[] DocumentPatterns = ["*.md", "*.txt"];
     private static readonly string[] ExcludedDirectories = ["bin", "obj", "node_modules", ".git", ".vs", "packages"];
 
-    private readonly ICodeGraphIndexer _graphIndexer;
-    private readonly IRagService _ragService;
-    private readonly ILogger<DeveloperSemanticIndexer> _logger;
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="DeveloperSemanticIndexer"/> class.
-    /// </summary>
-    public DeveloperSemanticIndexer(
-        ICodeGraphIndexer graphIndexer,
-        IRagService ragService,
-        ILogger<DeveloperSemanticIndexer> logger)
-    {
-        _graphIndexer = graphIndexer;
-        _ragService = ragService;
-        _logger = logger;
-    }
+    private readonly ICodeGraphIndexer _graphIndexer = graphIndexer;
+    private readonly IRagService _ragService = ragService;
+    private readonly ILogger<DeveloperSemanticIndexer> _logger = logger;
 
     /// <inheritdoc/>
     public async Task<SemanticIndexResult> IndexDirectoryAsync(

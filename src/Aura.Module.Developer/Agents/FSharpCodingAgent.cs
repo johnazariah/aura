@@ -22,32 +22,23 @@ using Microsoft.Extensions.Logging;
 /// - Runs tests with dotnet test
 /// - Handles significant whitespace correctly
 /// </summary>
-public sealed class FSharpCodingAgent : IAgent
+/// <remarks>
+/// Initializes a new instance of the <see cref="FSharpCodingAgent"/> class.
+/// </remarks>
+public sealed class FSharpCodingAgent(
+    IReActExecutor reactExecutor,
+    IToolRegistry toolRegistry,
+    ILlmProviderRegistry llmRegistry,
+    IPromptRegistry promptRegistry,
+    ILogger<FSharpCodingAgent> logger) : IAgent
 {
     private const double DefaultTemperature = 0.2;
 
-    private readonly IReActExecutor _reactExecutor;
-    private readonly IToolRegistry _toolRegistry;
-    private readonly ILlmProviderRegistry _llmRegistry;
-    private readonly IPromptRegistry _promptRegistry;
-    private readonly ILogger<FSharpCodingAgent> _logger;
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="FSharpCodingAgent"/> class.
-    /// </summary>
-    public FSharpCodingAgent(
-        IReActExecutor reactExecutor,
-        IToolRegistry toolRegistry,
-        ILlmProviderRegistry llmRegistry,
-        IPromptRegistry promptRegistry,
-        ILogger<FSharpCodingAgent> logger)
-    {
-        _reactExecutor = reactExecutor;
-        _toolRegistry = toolRegistry;
-        _llmRegistry = llmRegistry;
-        _promptRegistry = promptRegistry;
-        _logger = logger;
-    }
+    private readonly IReActExecutor _reactExecutor = reactExecutor;
+    private readonly IToolRegistry _toolRegistry = toolRegistry;
+    private readonly ILlmProviderRegistry _llmRegistry = llmRegistry;
+    private readonly IPromptRegistry _promptRegistry = promptRegistry;
+    private readonly ILogger<FSharpCodingAgent> _logger = logger;
 
     /// <inheritdoc/>
     public string AgentId => "fsharp-coding";

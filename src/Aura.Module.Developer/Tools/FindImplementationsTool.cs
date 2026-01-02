@@ -11,19 +11,13 @@ using Microsoft.Extensions.Logging;
 /// <summary>
 /// Tool that finds all types implementing a given interface using the code graph.
 /// </summary>
-public class FindImplementationsTool : TypedToolBase<FindImplementationsInput, FindImplementationsOutput>
+/// <remarks>
+/// Initializes a new instance of the <see cref="FindImplementationsTool"/> class.
+/// </remarks>
+public class FindImplementationsTool(ICodeGraphService graphService, ILogger<FindImplementationsTool> logger) : TypedToolBase<FindImplementationsInput, FindImplementationsOutput>
 {
-    private readonly ICodeGraphService _graphService;
-    private readonly ILogger<FindImplementationsTool> _logger;
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="FindImplementationsTool"/> class.
-    /// </summary>
-    public FindImplementationsTool(ICodeGraphService graphService, ILogger<FindImplementationsTool> logger)
-    {
-        _graphService = graphService;
-        _logger = logger;
-    }
+    private readonly ICodeGraphService _graphService = graphService;
+    private readonly ILogger<FindImplementationsTool> _logger = logger;
 
     /// <inheritdoc/>
     public override string ToolId => "graph.find_implementations";

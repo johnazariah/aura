@@ -22,29 +22,21 @@ using Microsoft.Extensions.Logging;
 /// - Self-corrects when errors occur
 /// - Produces documentation and tests alongside implementation
 /// </summary>
-public sealed class RoslynCodingAgent : IAgent
+/// <remarks>
+/// Initializes a new instance of the <see cref="RoslynCodingAgent"/> class.
+/// </remarks>
+public sealed class RoslynCodingAgent(
+    IReActExecutor reactExecutor,
+    IToolRegistry toolRegistry,
+    ILlmProviderRegistry llmRegistry,
+    ILogger<RoslynCodingAgent> logger) : IAgent
 {
     private const double DefaultTemperature = 0.2;
 
-    private readonly IReActExecutor _reactExecutor;
-    private readonly IToolRegistry _toolRegistry;
-    private readonly ILlmProviderRegistry _llmRegistry;
-    private readonly ILogger<RoslynCodingAgent> _logger;
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="RoslynCodingAgent"/> class.
-    /// </summary>
-    public RoslynCodingAgent(
-        IReActExecutor reactExecutor,
-        IToolRegistry toolRegistry,
-        ILlmProviderRegistry llmRegistry,
-        ILogger<RoslynCodingAgent> logger)
-    {
-        _reactExecutor = reactExecutor;
-        _toolRegistry = toolRegistry;
-        _llmRegistry = llmRegistry;
-        _logger = logger;
-    }
+    private readonly IReActExecutor _reactExecutor = reactExecutor;
+    private readonly IToolRegistry _toolRegistry = toolRegistry;
+    private readonly ILlmProviderRegistry _llmRegistry = llmRegistry;
+    private readonly ILogger<RoslynCodingAgent> _logger = logger;
 
     /// <inheritdoc/>
     public string AgentId => "roslyn-coding";

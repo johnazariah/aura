@@ -12,16 +12,12 @@ using Microsoft.EntityFrameworkCore;
 /// Database context for the Developer module.
 /// Extends AuraDbContext with developer-specific entities.
 /// </summary>
-public sealed class DeveloperDbContext : AuraDbContext
+/// <remarks>
+/// Initializes a new instance of the <see cref="DeveloperDbContext"/> class.
+/// </remarks>
+/// <param name="options">Database context options.</param>
+public sealed class DeveloperDbContext(DbContextOptions<DeveloperDbContext> options) : AuraDbContext(options)
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="DeveloperDbContext"/> class.
-    /// </summary>
-    /// <param name="options">Database context options.</param>
-    public DeveloperDbContext(DbContextOptions<DeveloperDbContext> options)
-        : base(options)
-    {
-    }
 
     /// <summary>Gets the workflows.</summary>
     public DbSet<Workflow> Workflows => Set<Workflow>();

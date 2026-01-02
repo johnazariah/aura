@@ -16,9 +16,13 @@ using TreeSitter;
 /// Priority 20: Below Roslyn (10), above LLM fallback (40).
 /// Extracts rich semantic information: signatures, docstrings, parameters, types.
 /// </summary>
-public sealed partial class TreeSitterIngesterAgent : IAgent
+/// <remarks>
+/// Initializes a new instance of the <see cref="TreeSitterIngesterAgent"/> class.
+/// </remarks>
+/// <param name="logger">Logger instance.</param>
+public sealed partial class TreeSitterIngesterAgent(ILogger<TreeSitterIngesterAgent> logger) : IAgent
 {
-    private readonly ILogger<TreeSitterIngesterAgent> _logger;
+    private readonly ILogger<TreeSitterIngesterAgent> _logger = logger;
 
     /// <summary>
     /// Language configurations for TreeSitter parsing.
@@ -91,15 +95,6 @@ public sealed partial class TreeSitterIngesterAgent : IAgent
         ["json"] = new("json", ["object", "array"]),
         ["toml"] = new("toml", ["table", "table_array_element"]),
     };
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="TreeSitterIngesterAgent"/> class.
-    /// </summary>
-    /// <param name="logger">Logger instance.</param>
-    public TreeSitterIngesterAgent(ILogger<TreeSitterIngesterAgent> logger)
-    {
-        _logger = logger;
-    }
 
     /// <inheritdoc/>
     public string AgentId => "treesitter-ingester";

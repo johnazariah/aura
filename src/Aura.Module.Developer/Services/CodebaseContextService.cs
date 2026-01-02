@@ -13,24 +13,17 @@ using Microsoft.Extensions.Logging;
 /// Implementation of <see cref="ICodebaseContextService"/> that combines
 /// code graph structure with RAG semantic search.
 /// </summary>
-public class CodebaseContextService : ICodebaseContextService
+/// <remarks>
+/// Initializes a new instance of the <see cref="CodebaseContextService"/> class.
+/// </remarks>
+public class CodebaseContextService(
+    ICodeGraphService graphService,
+    IRagService ragService,
+    ILogger<CodebaseContextService> logger) : ICodebaseContextService
 {
-    private readonly ICodeGraphService _graphService;
-    private readonly IRagService _ragService;
-    private readonly ILogger<CodebaseContextService> _logger;
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="CodebaseContextService"/> class.
-    /// </summary>
-    public CodebaseContextService(
-        ICodeGraphService graphService,
-        IRagService ragService,
-        ILogger<CodebaseContextService> logger)
-    {
-        _graphService = graphService;
-        _ragService = ragService;
-        _logger = logger;
-    }
+    private readonly ICodeGraphService _graphService = graphService;
+    private readonly IRagService _ragService = ragService;
+    private readonly ILogger<CodebaseContextService> _logger = logger;
 
     /// <inheritdoc/>
     public async Task<CodebaseContext> GetContextAsync(

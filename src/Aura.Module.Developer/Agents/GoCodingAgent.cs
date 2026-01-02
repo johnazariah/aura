@@ -19,29 +19,21 @@ using Microsoft.Extensions.Logging;
 /// - Runs gofmt for formatting
 /// - Follows Go idioms and effective Go guidelines
 /// </summary>
-public sealed class GoCodingAgent : IAgent
+/// <remarks>
+/// Initializes a new instance of the <see cref="GoCodingAgent"/> class.
+/// </remarks>
+public sealed class GoCodingAgent(
+    IReActExecutor reactExecutor,
+    IToolRegistry toolRegistry,
+    ILlmProviderRegistry llmRegistry,
+    ILogger<GoCodingAgent> logger) : IAgent
 {
     private const double DefaultTemperature = 0.2;
 
-    private readonly IReActExecutor _reactExecutor;
-    private readonly IToolRegistry _toolRegistry;
-    private readonly ILlmProviderRegistry _llmRegistry;
-    private readonly ILogger<GoCodingAgent> _logger;
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="GoCodingAgent"/> class.
-    /// </summary>
-    public GoCodingAgent(
-        IReActExecutor reactExecutor,
-        IToolRegistry toolRegistry,
-        ILlmProviderRegistry llmRegistry,
-        ILogger<GoCodingAgent> logger)
-    {
-        _reactExecutor = reactExecutor;
-        _toolRegistry = toolRegistry;
-        _llmRegistry = llmRegistry;
-        _logger = logger;
-    }
+    private readonly IReActExecutor _reactExecutor = reactExecutor;
+    private readonly IToolRegistry _toolRegistry = toolRegistry;
+    private readonly ILlmProviderRegistry _llmRegistry = llmRegistry;
+    private readonly ILogger<GoCodingAgent> _logger = logger;
 
     /// <inheritdoc/>
     public string AgentId => "go-coding";

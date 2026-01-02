@@ -14,39 +14,29 @@ using Microsoft.Extensions.Logging;
 /// <summary>
 /// Provides hardcoded agents for the Developer module.
 /// </summary>
-public sealed class DeveloperAgentProvider : IHardcodedAgentProvider
+/// <remarks>
+/// Initializes a new instance of the <see cref="DeveloperAgentProvider"/> class.
+/// </remarks>
+/// <param name="loggerFactory">Logger factory.</param>
+/// <param name="llmRegistry">LLM provider registry.</param>
+/// <param name="roslynService">Roslyn workspace service.</param>
+/// <param name="reactExecutor">ReAct executor for agentic workflows.</param>
+/// <param name="toolRegistry">Tool registry for accessing tools.</param>
+/// <param name="promptRegistry">Prompt registry for template rendering.</param>
+public sealed class DeveloperAgentProvider(
+    ILoggerFactory loggerFactory,
+    ILlmProviderRegistry llmRegistry,
+    IRoslynWorkspaceService roslynService,
+    IReActExecutor reactExecutor,
+    IToolRegistry toolRegistry,
+    IPromptRegistry promptRegistry) : IHardcodedAgentProvider
 {
-    private readonly ILoggerFactory _loggerFactory;
-    private readonly ILlmProviderRegistry _llmRegistry;
-    private readonly IRoslynWorkspaceService _roslynService;
-    private readonly IReActExecutor _reactExecutor;
-    private readonly IToolRegistry _toolRegistry;
-    private readonly IPromptRegistry _promptRegistry;
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="DeveloperAgentProvider"/> class.
-    /// </summary>
-    /// <param name="loggerFactory">Logger factory.</param>
-    /// <param name="llmRegistry">LLM provider registry.</param>
-    /// <param name="roslynService">Roslyn workspace service.</param>
-    /// <param name="reactExecutor">ReAct executor for agentic workflows.</param>
-    /// <param name="toolRegistry">Tool registry for accessing tools.</param>
-    /// <param name="promptRegistry">Prompt registry for template rendering.</param>
-    public DeveloperAgentProvider(
-        ILoggerFactory loggerFactory,
-        ILlmProviderRegistry llmRegistry,
-        IRoslynWorkspaceService roslynService,
-        IReActExecutor reactExecutor,
-        IToolRegistry toolRegistry,
-        IPromptRegistry promptRegistry)
-    {
-        _loggerFactory = loggerFactory;
-        _llmRegistry = llmRegistry;
-        _roslynService = roslynService;
-        _reactExecutor = reactExecutor;
-        _toolRegistry = toolRegistry;
-        _promptRegistry = promptRegistry;
-    }
+    private readonly ILoggerFactory _loggerFactory = loggerFactory;
+    private readonly ILlmProviderRegistry _llmRegistry = llmRegistry;
+    private readonly IRoslynWorkspaceService _roslynService = roslynService;
+    private readonly IReActExecutor _reactExecutor = reactExecutor;
+    private readonly IToolRegistry _toolRegistry = toolRegistry;
+    private readonly IPromptRegistry _promptRegistry = promptRegistry;
 
     /// <inheritdoc/>
     public IEnumerable<IAgent> GetAgents()

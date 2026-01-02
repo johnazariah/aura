@@ -16,18 +16,13 @@ using Microsoft.Extensions.Logging;
 /// C# ingester agent using Roslyn for semantic code analysis.
 /// Extracts classes, interfaces, methods, properties as semantic chunks.
 /// </summary>
-public sealed class CSharpIngesterAgent : IAgent
+/// <remarks>
+/// Initializes a new instance of the <see cref="CSharpIngesterAgent"/> class.
+/// </remarks>
+/// <param name="logger">Logger instance.</param>
+public sealed class CSharpIngesterAgent(ILogger<CSharpIngesterAgent> logger) : IAgent
 {
-    private readonly ILogger<CSharpIngesterAgent> _logger;
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="CSharpIngesterAgent"/> class.
-    /// </summary>
-    /// <param name="logger">Logger instance.</param>
-    public CSharpIngesterAgent(ILogger<CSharpIngesterAgent> logger)
-    {
-        _logger = logger;
-    }
+    private readonly ILogger<CSharpIngesterAgent> _logger = logger;
 
     /// <inheritdoc/>
     public string AgentId => "csharp-ingester";

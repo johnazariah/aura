@@ -98,18 +98,12 @@ public record ListClassesOutput
 /// Lists all classes, interfaces, and records in a project.
 /// Use to discover types before examining specific class details.
 /// </summary>
-public class ListClassesTool : TypedToolBase<ListClassesInput, ListClassesOutput>
+public class ListClassesTool(
+    IRoslynWorkspaceService workspace,
+    ILogger<ListClassesTool> logger) : TypedToolBase<ListClassesInput, ListClassesOutput>
 {
-    private readonly IRoslynWorkspaceService _workspace;
-    private readonly ILogger<ListClassesTool> _logger;
-
-    public ListClassesTool(
-        IRoslynWorkspaceService workspace,
-        ILogger<ListClassesTool> logger)
-    {
-        _workspace = workspace;
-        _logger = logger;
-    }
+    private readonly IRoslynWorkspaceService _workspace = workspace;
+    private readonly ILogger<ListClassesTool> _logger = logger;
 
     /// <inheritdoc/>
     public override string ToolId => "roslyn.list_classes";

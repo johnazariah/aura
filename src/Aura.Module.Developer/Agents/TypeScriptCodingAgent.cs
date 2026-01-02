@@ -19,29 +19,21 @@ using Microsoft.Extensions.Logging;
 /// - Runs tests with Jest/Vitest/Mocha
 /// - Follows modern TS/JS idioms and ESLint rules
 /// </summary>
-public sealed class TypeScriptCodingAgent : IAgent
+/// <remarks>
+/// Initializes a new instance of the <see cref="TypeScriptCodingAgent"/> class.
+/// </remarks>
+public sealed class TypeScriptCodingAgent(
+    IReActExecutor reactExecutor,
+    IToolRegistry toolRegistry,
+    ILlmProviderRegistry llmRegistry,
+    ILogger<TypeScriptCodingAgent> logger) : IAgent
 {
     private const double DefaultTemperature = 0.2;
 
-    private readonly IReActExecutor _reactExecutor;
-    private readonly IToolRegistry _toolRegistry;
-    private readonly ILlmProviderRegistry _llmRegistry;
-    private readonly ILogger<TypeScriptCodingAgent> _logger;
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="TypeScriptCodingAgent"/> class.
-    /// </summary>
-    public TypeScriptCodingAgent(
-        IReActExecutor reactExecutor,
-        IToolRegistry toolRegistry,
-        ILlmProviderRegistry llmRegistry,
-        ILogger<TypeScriptCodingAgent> logger)
-    {
-        _reactExecutor = reactExecutor;
-        _toolRegistry = toolRegistry;
-        _llmRegistry = llmRegistry;
-        _logger = logger;
-    }
+    private readonly IReActExecutor _reactExecutor = reactExecutor;
+    private readonly IToolRegistry _toolRegistry = toolRegistry;
+    private readonly ILlmProviderRegistry _llmRegistry = llmRegistry;
+    private readonly ILogger<TypeScriptCodingAgent> _logger = logger;
 
     /// <inheritdoc/>
     public string AgentId => "typescript-coding";

@@ -11,19 +11,13 @@ using Microsoft.Extensions.Logging;
 /// <summary>
 /// Tool that indexes a codebase into the code graph for structural queries.
 /// </summary>
-public class IndexCodeGraphTool : TypedToolBase<IndexCodeGraphInput, IndexCodeGraphOutput>
+/// <remarks>
+/// Initializes a new instance of the <see cref="IndexCodeGraphTool"/> class.
+/// </remarks>
+public class IndexCodeGraphTool(ICodeGraphIndexer indexer, ILogger<IndexCodeGraphTool> logger) : TypedToolBase<IndexCodeGraphInput, IndexCodeGraphOutput>
 {
-    private readonly ICodeGraphIndexer _indexer;
-    private readonly ILogger<IndexCodeGraphTool> _logger;
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="IndexCodeGraphTool"/> class.
-    /// </summary>
-    public IndexCodeGraphTool(ICodeGraphIndexer indexer, ILogger<IndexCodeGraphTool> logger)
-    {
-        _indexer = indexer;
-        _logger = logger;
-    }
+    private readonly ICodeGraphIndexer _indexer = indexer;
+    private readonly ILogger<IndexCodeGraphTool> _logger = logger;
 
     /// <inheritdoc/>
     public override string ToolId => "graph.index_code";

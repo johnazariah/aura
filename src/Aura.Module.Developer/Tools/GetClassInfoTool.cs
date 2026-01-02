@@ -158,18 +158,12 @@ public record GetClassInfoOutput
 /// Gets detailed information about a specific class, interface, or record.
 /// Includes methods, properties, constructors, and optionally source code.
 /// </summary>
-public class GetClassInfoTool : TypedToolBase<GetClassInfoInput, GetClassInfoOutput>
+public class GetClassInfoTool(
+    IRoslynWorkspaceService workspace,
+    ILogger<GetClassInfoTool> logger) : TypedToolBase<GetClassInfoInput, GetClassInfoOutput>
 {
-    private readonly IRoslynWorkspaceService _workspace;
-    private readonly ILogger<GetClassInfoTool> _logger;
-
-    public GetClassInfoTool(
-        IRoslynWorkspaceService workspace,
-        ILogger<GetClassInfoTool> logger)
-    {
-        _workspace = workspace;
-        _logger = logger;
-    }
+    private readonly IRoslynWorkspaceService _workspace = workspace;
+    private readonly ILogger<GetClassInfoTool> _logger = logger;
 
     /// <inheritdoc/>
     public override string ToolId => "roslyn.get_class_info";

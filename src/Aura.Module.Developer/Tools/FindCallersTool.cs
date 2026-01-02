@@ -11,19 +11,13 @@ using Microsoft.Extensions.Logging;
 /// <summary>
 /// Tool that finds all methods calling a given method using the code graph.
 /// </summary>
-public class FindCallersTool : TypedToolBase<FindCallersInput, FindCallersOutput>
+/// <remarks>
+/// Initializes a new instance of the <see cref="FindCallersTool"/> class.
+/// </remarks>
+public class FindCallersTool(ICodeGraphService graphService, ILogger<FindCallersTool> logger) : TypedToolBase<FindCallersInput, FindCallersOutput>
 {
-    private readonly ICodeGraphService _graphService;
-    private readonly ILogger<FindCallersTool> _logger;
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="FindCallersTool"/> class.
-    /// </summary>
-    public FindCallersTool(ICodeGraphService graphService, ILogger<FindCallersTool> logger)
-    {
-        _graphService = graphService;
-        _logger = logger;
-    }
+    private readonly ICodeGraphService _graphService = graphService;
+    private readonly ILogger<FindCallersTool> _logger = logger;
 
     /// <inheritdoc/>
     public override string ToolId => "graph.find_callers";

@@ -12,19 +12,13 @@ using Microsoft.Extensions.Logging;
 /// <summary>
 /// Tool that gets all members of a type using the code graph.
 /// </summary>
-public class GetTypeMembersTool : TypedToolBase<GetTypeMembersInput, GetTypeMembersOutput>
+/// <remarks>
+/// Initializes a new instance of the <see cref="GetTypeMembersTool"/> class.
+/// </remarks>
+public class GetTypeMembersTool(ICodeGraphService graphService, ILogger<GetTypeMembersTool> logger) : TypedToolBase<GetTypeMembersInput, GetTypeMembersOutput>
 {
-    private readonly ICodeGraphService _graphService;
-    private readonly ILogger<GetTypeMembersTool> _logger;
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="GetTypeMembersTool"/> class.
-    /// </summary>
-    public GetTypeMembersTool(ICodeGraphService graphService, ILogger<GetTypeMembersTool> logger)
-    {
-        _graphService = graphService;
-        _logger = logger;
-    }
+    private readonly ICodeGraphService _graphService = graphService;
+    private readonly ILogger<GetTypeMembersTool> _logger = logger;
 
     /// <inheritdoc/>
     public override string ToolId => "graph.get_type_members";

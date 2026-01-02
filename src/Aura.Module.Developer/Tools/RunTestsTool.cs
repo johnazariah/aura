@@ -86,14 +86,9 @@ public record RunTestsOutput
 /// Runs unit tests for a project using dotnet test.
 /// Use to verify that code changes don't break existing tests.
 /// </summary>
-public partial class RunTestsTool : TypedToolBase<RunTestsInput, RunTestsOutput>
+public partial class RunTestsTool(ILogger<RunTestsTool> logger) : TypedToolBase<RunTestsInput, RunTestsOutput>
 {
-    private readonly ILogger<RunTestsTool> _logger;
-
-    public RunTestsTool(ILogger<RunTestsTool> logger)
-    {
-        _logger = logger;
-    }
+    private readonly ILogger<RunTestsTool> _logger = logger;
 
     /// <inheritdoc/>
     public override string ToolId => "dotnet.run_tests";

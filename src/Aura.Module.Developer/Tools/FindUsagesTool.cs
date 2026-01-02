@@ -80,18 +80,12 @@ public record FindUsagesOutput
 /// Finds all usages/references of a symbol across the codebase.
 /// Use to understand how a class, method, or property is used.
 /// </summary>
-public class FindUsagesTool : TypedToolBase<FindUsagesInput, FindUsagesOutput>
+public class FindUsagesTool(
+    IRoslynWorkspaceService workspace,
+    ILogger<FindUsagesTool> logger) : TypedToolBase<FindUsagesInput, FindUsagesOutput>
 {
-    private readonly IRoslynWorkspaceService _workspace;
-    private readonly ILogger<FindUsagesTool> _logger;
-
-    public FindUsagesTool(
-        IRoslynWorkspaceService workspace,
-        ILogger<FindUsagesTool> logger)
-    {
-        _workspace = workspace;
-        _logger = logger;
-    }
+    private readonly IRoslynWorkspaceService _workspace = workspace;
+    private readonly ILogger<FindUsagesTool> _logger = logger;
 
     /// <inheritdoc/>
     public override string ToolId => "roslyn.find_usages";
