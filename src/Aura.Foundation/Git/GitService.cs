@@ -6,16 +6,10 @@ namespace Aura.Foundation.Git;
 /// <summary>
 /// Git service using CLI commands for cross-platform compatibility.
 /// </summary>
-public class GitService : IGitService
+public class GitService(IProcessRunner process, ILogger<GitService> logger) : IGitService
 {
-    private readonly IProcessRunner _process;
-    private readonly ILogger<GitService> _logger;
-
-    public GitService(IProcessRunner process, ILogger<GitService> logger)
-    {
-        _process = process;
-        _logger = logger;
-    }
+    private readonly IProcessRunner _process = process;
+    private readonly ILogger<GitService> _logger = logger;
 
     public async Task<bool> IsRepositoryAsync(string path, CancellationToken ct = default)
     {
@@ -305,6 +299,104 @@ public class GitService : IGitService
         if (parts.Length > 0 && int.TryParse(parts[^1], out var number))
             return number;
         return 0;
+    }
+
+    public async Task<GitResult<string>> SquashCommitsAsync(
+        string repoPath,
+        string baseBranch,
+        string message,
+        CancellationToken ct = default)
+    {
+        _logger.LogInformation("Squashing commits on current branch since {BaseBranch}", baseBranch);
+
+        // First, ensure the base branch reference is up to date
+        // Get the merge base (where the current branch diverged from base)
+        var mergeBaseResult = await RunGitAsync(repoPath, ["merge-base", baseBranch, "HEAD"], ct);
+        if (!mergeBaseResult.Success)
+        {
+            return GitResult<string>.Fail($"Failed to find merge base with {baseBranch}: {mergeBaseResult.StandardError}");
+        }
+
+        var mergeBase = mergeBaseResult.StandardOutput.Trim();
+        _logger.LogDebug("Merge base with {BaseBranch}: {MergeBase}", baseBranch, mergeBase);
+
+        // Count commits to squash
+        var commitCountResult = await RunGitAsync(repoPath, ["rev-list", "--count", $"{mergeBase}..HEAD"], ct);
+        if (!commitCountResult.Success)
+        {
+            return GitResult<string>.Fail($"Failed to count commits: {commitCountResult.StandardError}");
+        }
+
+        var commitCount = int.Parse(commitCountResult.StandardOutput.Trim());
+        if (commitCount <= 1)
+        {
+            _logger.LogInformation("Only {Count} commit(s) since base, no squash needed", commitCount);
+            // Return current HEAD as the "squashed" commit
+            var headResult = await RunGitAsync(repoPath, ["rev-parse", "HEAD"], ct);
+            return headResult.Success
+                ? GitResult<string>.Ok(headResult.StandardOutput.Trim())
+                : GitResult<string>.Fail($"Failed to get HEAD: {headResult.StandardError}");
+        }
+
+        _logger.LogInformation("Squashing {Count} commits into one", commitCount);
+
+        // Perform soft reset to merge base, keeping all changes staged
+        var resetResult = await RunGitAsync(repoPath, ["reset", "--soft", mergeBase], ct);
+        if (!resetResult.Success)
+        {
+            return GitResult<string>.Fail($"Failed to reset: {resetResult.StandardError}");
+        }
+
+        // Commit all staged changes with the new message
+        var commitResult = await RunGitAsync(repoPath, ["commit", "-m", message], ct);
+        if (!commitResult.Success)
+        {
+            return GitResult<string>.Fail($"Failed to commit squashed changes: {commitResult.StandardError}");
+        }
+
+        // Get the new commit SHA
+        var newHeadResult = await RunGitAsync(repoPath, ["rev-parse", "HEAD"], ct);
+        if (!newHeadResult.Success)
+        {
+            return GitResult<string>.Fail($"Failed to get new HEAD: {newHeadResult.StandardError}");
+        }
+
+        var newSha = newHeadResult.StandardOutput.Trim();
+        _logger.LogInformation("Squashed {Count} commits into {Sha}", commitCount, newSha[..7]);
+
+        return GitResult<string>.Ok(newSha);
+    }
+
+    public async Task<GitResult<string>> GetDefaultBranchAsync(string repoPath, CancellationToken ct = default)
+    {
+        // Try to get the default branch from origin/HEAD
+        var result = await RunGitAsync(repoPath, ["symbolic-ref", "refs/remotes/origin/HEAD", "--short"], ct);
+        if (result.Success)
+        {
+            var branch = result.StandardOutput.Trim();
+            // Remove "origin/" prefix if present
+            if (branch.StartsWith("origin/", StringComparison.OrdinalIgnoreCase))
+            {
+                branch = branch["origin/".Length..];
+            }
+            return GitResult<string>.Ok(branch);
+        }
+
+        // Fallback: check if 'main' exists
+        var mainResult = await RunGitAsync(repoPath, ["show-ref", "--verify", "refs/heads/main"], ct);
+        if (mainResult.Success)
+        {
+            return GitResult<string>.Ok("main");
+        }
+
+        // Fallback: check if 'master' exists
+        var masterResult = await RunGitAsync(repoPath, ["show-ref", "--verify", "refs/heads/master"], ct);
+        if (masterResult.Success)
+        {
+            return GitResult<string>.Ok("master");
+        }
+
+        return GitResult<string>.Fail("Unable to determine default branch");
     }
 
     private async Task<ProcessResult> RunGitAsync(string workDir, string[] args, CancellationToken ct)

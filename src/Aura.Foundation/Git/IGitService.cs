@@ -50,6 +50,21 @@ public interface IGitService
 
     /// <summary>Get the remote URL for origin</summary>
     Task<GitResult<string>> GetRemoteUrlAsync(string repoPath, CancellationToken ct = default);
+
+    /// <summary>Squash all commits on the current branch into a single commit</summary>
+    /// <param name="repoPath">Path to the repository</param>
+    /// <param name="baseBranch">The branch to compare against (e.g., "main"). Commits after diverging from this branch will be squashed.</param>
+    /// <param name="message">The commit message for the squashed commit</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>The SHA of the new squashed commit</returns>
+    Task<GitResult<string>> SquashCommitsAsync(
+        string repoPath,
+        string baseBranch,
+        string message,
+        CancellationToken ct = default);
+
+    /// <summary>Get the default branch name for a repository (usually main or master)</summary>
+    Task<GitResult<string>> GetDefaultBranchAsync(string repoPath, CancellationToken ct = default);
 }
 
 /// <summary>

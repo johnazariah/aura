@@ -7,16 +7,10 @@ namespace Aura.Foundation.Git;
 /// <summary>
 /// Git worktree service using CLI commands.
 /// </summary>
-public class GitWorktreeService : IGitWorktreeService
+public class GitWorktreeService(IProcessRunner process, ILogger<GitWorktreeService> logger) : IGitWorktreeService
 {
-    private readonly IProcessRunner _process;
-    private readonly ILogger<GitWorktreeService> _logger;
-
-    public GitWorktreeService(IProcessRunner process, ILogger<GitWorktreeService> logger)
-    {
-        _process = process;
-        _logger = logger;
-    }
+    private readonly IProcessRunner _process = process;
+    private readonly ILogger<GitWorktreeService> _logger = logger;
 
     public async Task<GitResult<WorktreeInfo>> CreateAsync(
         string repoPath,
