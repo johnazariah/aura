@@ -90,6 +90,9 @@ If the step says **"Commit"** or **"Apply"**:
 - If roslyn.validate_compilation returns ANY errors, you MUST fix the code with file.modify and validate again
 - Do NOT call git.commit or finish until roslyn.validate_compilation returns success with ZERO errors
 - If roslyn.validate_compilation fails with "No solution file found", provide the full project path
+- **CRITICAL: After compilation succeeds, you MUST call git.commit to commit your changes before finishing**
+  - Use a descriptive commit message that summarizes what was created/changed
+  - Example: `git.commit` with message "Add unit tests for DynamicExpression class"
 
 **CRITICAL: All file paths are RELATIVE to your working directory**
 - Paths in the context below (like `BrightSword.SwissKnife/StringExtensions.cs`) are RELATIVE paths
