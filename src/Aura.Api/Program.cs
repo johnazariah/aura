@@ -1223,42 +1223,91 @@ app.MapDelete("/api/graph/{repositoryPath}", async (
 });
 
 // Semantic index a directory (code graph + selective embeddings)
+// DEPRECATED: This endpoint now delegates to the unified background indexer.
+// Prefer using /api/index/background for new integrations.
 app.MapPost("/api/semantic/index", async (
     SemanticIndexRequest request,
-    IServiceScopeFactory scopeFactory,
+    Aura.Foundation.Rag.IBackgroundIndexer backgroundIndexer,
     CancellationToken ct) =>
 {
     try
     {
-        using var scope = scopeFactory.CreateScope();
-        var indexer = scope.ServiceProvider.GetRequiredService<Aura.Foundation.Rag.ISemanticIndexer>();
+        if (string.IsNullOrWhiteSpace(request.DirectoryPath))
+        {
+            return Results.BadRequest(new { success = false, error = "'directoryPath' is required" });
+        }
 
-        var options = new Aura.Foundation.Rag.SemanticIndexOptions
+        if (!System.IO.Directory.Exists(request.DirectoryPath))
+        {
+            return Results.BadRequest(new { success = false, error = $"Directory does not exist: {request.DirectoryPath}" });
+        }
+
+        var options = new Aura.Foundation.Rag.RagIndexOptions
         {
             Recursive = request.Recursive ?? true,
-            Parallel = request.Parallel ?? true,
         };
 
-        var result = await indexer.IndexDirectoryAsync(request.DirectoryPath, options, ct);
+        // Queue for background indexing (which now includes code graph via RoslynCodeIngestor)
+        var jobId = backgroundIndexer.QueueDirectory(request.DirectoryPath, options);
 
-        if (!result.Success)
+        // Poll for completion (maintain backward compatibility with sync callers)
+        var startTime = DateTime.UtcNow;
+        var timeout = TimeSpan.FromMinutes(10);
+        Aura.Foundation.Rag.IndexJobStatus? status = null;
+
+        while (DateTime.UtcNow - startTime < timeout)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            status = backgroundIndexer.GetJobStatus(jobId);
+            if (status?.State is Aura.Foundation.Rag.IndexJobState.Completed
+                              or Aura.Foundation.Rag.IndexJobState.Failed
+                              or Aura.Foundation.Rag.IndexJobState.Cancelled)
+            {
+                break;
+            }
+
+            await Task.Delay(500, ct);
+        }
+
+        if (status?.State == Aura.Foundation.Rag.IndexJobState.Completed)
+        {
+            var durationMs = status.CompletedAt.HasValue && status.StartedAt.HasValue
+                ? (int)(status.CompletedAt.Value - status.StartedAt.Value).TotalMilliseconds
+                : 0;
+
+            return Results.Ok(new
+            {
+                success = true,
+                filesIndexed = status.ProcessedItems,
+                chunksCreated = status.ProcessedItems, // Approximation
+                durationMs,
+                warnings = new List<string>()
+            });
+        }
+        else if (status?.State == Aura.Foundation.Rag.IndexJobState.Failed)
         {
             return Results.BadRequest(new
             {
                 success = false,
-                errors = result.Errors
+                error = status.Error ?? "Indexing failed"
             });
         }
-
-        return Results.Ok(new
+        else
         {
-            success = true,
-            filesIndexed = result.FilesIndexed,
-            chunksCreated = result.ChunksCreated,
-            durationMs = (int)result.Duration.TotalMilliseconds,
-            filesByLanguage = result.FilesByLanguage,
-            warnings = result.Warnings
-        });
+            // Timeout - return job ID for async tracking
+            return Results.Ok(new
+            {
+                success = true,
+                message = "Indexing still in progress",
+                jobId = jobId,
+                checkStatus = $"/api/index/jobs/{jobId}"
+            });
+        }
+    }
+    catch (OperationCanceledException)
+    {
+        return Results.BadRequest(new { success = false, error = "Request cancelled" });
     }
     catch (Exception ex)
     {

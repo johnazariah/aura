@@ -57,14 +57,14 @@ public sealed class DeveloperModule : IAuraModule
         // Register Code Graph indexer (for Graph RAG)
         services.AddScoped<ICodeGraphIndexer, CodeGraphIndexer>();
 
-        // Register semantic indexer (combines code graph + selective embeddings)
-        services.AddScoped<ISemanticIndexer, DeveloperSemanticIndexer>();
-
         // Register codebase context service (combines graph + RAG for agent context)
         services.AddScoped<ICodebaseContextService, CodebaseContextService>();
 
         // Register hardcoded agents provider (C# ingester, etc.)
         services.AddSingleton<IHardcodedAgentProvider, DeveloperAgentProvider>();
+
+        // Register startup task for code ingestors
+        services.AddSingleton<Foundation.Startup.IStartupTask, Startup.RegisterCodeIngestorsTask>();
 
         // Register Roslyn tools
         services.AddSingleton<ListProjectsTool>();
