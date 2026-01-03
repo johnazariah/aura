@@ -102,15 +102,18 @@ public class ProcessRunnerTests
     [Fact]
     public async Task RunShellAsync_ExecutesShellCommand()
     {
-        // Arrange
+        // Arrange - use Write-Output for PowerShell compatibility
         var isWindows = OperatingSystem.IsWindows();
-        var shellCommand = isWindows ? "echo hello" : "echo hello";
+        var shellCommand = isWindows ? "Write-Output 'hello'" : "echo hello";
 
         // Act
-        var result = await _runner.RunShellAsync(shellCommand);
+        var result = await _runner.RunShellAsync(shellCommand, new ProcessOptions
+        {
+            Timeout = TimeSpan.FromSeconds(10)
+        });
 
         // Assert
-        Assert.True(result.Success);
+        Assert.True(result.Success, $"Command failed. Exit code: {result.ExitCode}, stderr: {result.StandardError}");
         Assert.Contains("hello", result.StandardOutput);
     }
 

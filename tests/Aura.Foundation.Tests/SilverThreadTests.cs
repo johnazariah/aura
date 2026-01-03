@@ -27,14 +27,17 @@ public class SilverThreadTests
 
         BuiltInTools.RegisterBuiltInTools(registry, fileSystem, processRunner, builtinLogger);
 
-        // Act - execute a real shell command
+        // Act - execute a real shell command (use Write-Output for PowerShell compatibility)
+        var isWindows = OperatingSystem.IsWindows();
+        var shellCommand = isWindows ? "Write-Output 'silver-thread-test'" : "echo silver-thread-test";
+
         var input = new ToolInput
         {
             ToolId = "shell.execute",
             Parameters = new Dictionary<string, object?>
             {
-                ["command"] = "echo silver-thread-test",
-                ["timeoutSeconds"] = 10
+                ["command"] = shellCommand,
+                ["timeoutSeconds"] = 30
             }
         };
 
@@ -137,8 +140,8 @@ public class SilverThreadTests
         var statusResult = await gitService.GetStatusAsync(repoPath);
 
         // Assert
-        Assert.True(isRepo);
-        Assert.True(statusResult.Success);
+        Assert.True(isRepo, "Expected to find a git repository");
+        Assert.True(statusResult.Success, $"Git status failed: {statusResult.Error}");
         Assert.NotNull(statusResult.Value);
         Assert.NotEmpty(statusResult.Value.CurrentBranch);
     }
