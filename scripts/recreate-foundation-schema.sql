@@ -13,6 +13,7 @@ DROP TABLE IF EXISTS conversations CASCADE;
 DROP TABLE IF EXISTS code_edges CASCADE;
 DROP TABLE IF EXISTS code_nodes CASCADE;
 DROP TABLE IF EXISTS rag_chunks CASCADE;
+DROP TABLE IF EXISTS index_metadata CASCADE;
 DROP TABLE IF EXISTS "__EFMigrationsHistory" CASCADE;
 
 -- ============================================
@@ -149,6 +150,25 @@ CREATE INDEX IX_code_edges_source_id_edge_type ON code_edges(source_id, edge_typ
 CREATE INDEX IX_code_edges_target_id_edge_type ON code_edges(target_id, edge_type);
 
 -- ============================================
+-- Index Metadata table (index freshness tracking)
+-- ============================================
+CREATE TABLE index_metadata (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_path VARCHAR(1024) NOT NULL,
+    index_type VARCHAR(50) NOT NULL,
+    indexed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    commit_sha VARCHAR(40),
+    commit_at TIMESTAMPTZ,
+    files_indexed INTEGER,
+    items_created INTEGER,
+    stats JSONB
+);
+
+CREATE INDEX IX_index_metadata_workspace_path ON index_metadata(workspace_path);
+CREATE INDEX IX_index_metadata_index_type ON index_metadata(index_type);
+CREATE UNIQUE INDEX IX_index_metadata_workspace_path_index_type ON index_metadata(workspace_path, index_type);
+
+-- ============================================
 -- EF Migrations History (mark as applied)
 -- ============================================
 CREATE TABLE "__EFMigrationsHistory" (
@@ -161,7 +181,8 @@ INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion") VALUES
     ('20251127054022_InitialFoundation', '9.0.0'),
     ('20251128022829_AddRagChunks', '9.0.0'),
     ('20251201000000_AddCodeGraph', '9.0.0'),
-    ('20251212000000_RenameWorkspaceToRepository', '9.0.0');
+    ('20251212000000_RenameWorkspaceToRepository', '9.0.0'),
+    ('20250117000000_AddIndexMetadata', '10.0.0');
 
 -- ============================================
 -- Verification
@@ -173,5 +194,6 @@ SELECT table_name,
 FROM information_schema.tables t 
 WHERE table_schema = 'public' 
   AND table_name IN ('conversations', 'messages', 'message_rag_contexts', 
-                     'agent_executions', 'rag_chunks', 'code_nodes', 'code_edges')
+                     'agent_executions', 'rag_chunks', 'code_nodes', 'code_edges',
+                     'index_metadata')
 ORDER BY table_name;

@@ -399,6 +399,52 @@ public class GitService(IProcessRunner process, ILogger<GitService> logger) : IG
         return GitResult<string>.Fail("Unable to determine default branch");
     }
 
+    public async Task<GitResult<string>> GetHeadCommitAsync(string repoPath, CancellationToken ct = default)
+    {
+        var result = await RunGitAsync(repoPath, ["rev-parse", "HEAD"], ct);
+        if (!result.Success)
+            return GitResult<string>.Fail(result.StandardError);
+
+        return GitResult<string>.Ok(result.StandardOutput.Trim());
+    }
+
+    public async Task<GitResult<int>> CountCommitsSinceAsync(string repoPath, string commitSha, CancellationToken ct = default)
+    {
+        // Count commits from the given SHA to HEAD (exclusive of the SHA itself)
+        var result = await RunGitAsync(repoPath, ["rev-list", "--count", $"{commitSha}..HEAD"], ct);
+        if (!result.Success)
+        {
+            // If the SHA doesn't exist, return -1 to indicate unknown
+            if (result.StandardError.Contains("unknown revision") ||
+                result.StandardError.Contains("bad revision"))
+            {
+                return GitResult<int>.Ok(-1);
+            }
+            return GitResult<int>.Fail(result.StandardError);
+        }
+
+        if (int.TryParse(result.StandardOutput.Trim(), out var count))
+        {
+            return GitResult<int>.Ok(count);
+        }
+
+        return GitResult<int>.Fail("Unable to parse commit count");
+    }
+
+    public async Task<GitResult<DateTimeOffset>> GetCommitTimestampAsync(string repoPath, string commitSha, CancellationToken ct = default)
+    {
+        var result = await RunGitAsync(repoPath, ["show", "-s", "--format=%cI", commitSha], ct);
+        if (!result.Success)
+            return GitResult<DateTimeOffset>.Fail(result.StandardError);
+
+        if (DateTimeOffset.TryParse(result.StandardOutput.Trim(), out var timestamp))
+        {
+            return GitResult<DateTimeOffset>.Ok(timestamp);
+        }
+
+        return GitResult<DateTimeOffset>.Fail("Unable to parse commit timestamp");
+    }
+
     private async Task<ProcessResult> RunGitAsync(string workDir, string[] args, CancellationToken ct)
     {
         return await _process.RunAsync("git", args, new ProcessOptions

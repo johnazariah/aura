@@ -1,5 +1,8 @@
 import * as vscode from 'vscode';
-import { AuraApiService, AgentInfo } from '../services/auraApiService';
+import { AuraApiService, AgentInfo, IndexHealthResponse } from '../services/auraApiService';
+
+// Context modes for chat - determines what context is included with prompts
+export type ContextMode = 'none' | 'text' | 'graph' | 'full';
 
 interface ChatMessage {
     role: 'user' | 'assistant' | 'system';
@@ -16,7 +19,7 @@ interface Conversation {
     agentId: string;
     agentName: string;
     messages: ChatMessage[];
-    useRag: boolean;
+    contextMode: ContextMode;
 }
 
 export class ChatPanelProvider implements vscode.WebviewViewProvider {
@@ -25,7 +28,8 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
     private _view?: vscode.WebviewView;
     private _currentConversation?: Conversation;
     private _currentAgent?: AgentInfo;
-    private _useRag: boolean = true;
+    private _contextMode: ContextMode = 'full';
+    private _indexHealth?: IndexHealthResponse;
 
     constructor(
         private readonly _extensionUri: vscode.Uri,
@@ -55,8 +59,8 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
                 case 'selectAgent':
                     await this._selectAgent();
                     break;
-                case 'toggleRag':
-                    this._useRag = data.enabled;
+                case 'setContextMode':
+                    this._contextMode = data.mode as ContextMode;
                     this._updateState();
                     break;
                 case 'newConversation':
@@ -64,6 +68,9 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
                     break;
                 case 'ready':
                     await this._initializeChat();
+                    break;
+                case 'refreshHealth':
+                    await this._refreshIndexHealth();
                     break;
             }
         });
@@ -84,11 +91,27 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
                 type: 'agents',
                 agents: agents.map(a => ({ id: a.id, name: a.name }))
             });
+
+            // Also fetch index health
+            await this._refreshIndexHealth();
         } catch (error) {
             this._view?.webview.postMessage({
                 type: 'error',
                 message: 'Failed to connect to Aura API. Is the service running?'
             });
+        }
+    }
+
+    private async _refreshIndexHealth() {
+        try {
+            const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+            if (workspacePath) {
+                this._indexHealth = await this._apiService.getIndexHealth(workspacePath);
+                this._updateState();
+            }
+        } catch {
+            // Index health is optional - don't show error
+            this._indexHealth = undefined;
         }
     }
 
@@ -101,7 +124,7 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
             agentId: this._currentAgent.id,
             agentName: this._currentAgent.name,
             messages: [],
-            useRag: this._useRag
+            contextMode: this._contextMode
         };
 
         this._updateState();
@@ -156,7 +179,10 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
             const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
             let response: { content: string; tokensUsed: number; ragEnriched?: boolean };
 
-            if (this._useRag) {
+            // Use RAG based on context mode (text or full mode)
+            const useRag = this._contextMode === 'text' || this._contextMode === 'full';
+            
+            if (useRag) {
                 response = await this._apiService.executeAgentWithRag(
                     this._currentAgent.id,
                     message,
@@ -204,7 +230,8 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
                 name: this._currentAgent.name,
                 model: this._currentAgent.model
             } : null,
-            useRag: this._useRag
+            contextMode: this._contextMode,
+            indexHealth: this._indexHealth
         });
     }
 
@@ -263,41 +290,56 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
             gap: 8px;
         }
         
-        .toggle-container {
+        .context-selector {
             display: flex;
             align-items: center;
-            gap: 4px;
+            gap: 6px;
             font-size: 11px;
         }
         
-        .toggle {
-            width: 32px;
-            height: 16px;
+        .context-select {
+            padding: 2px 6px;
             background: var(--vscode-input-background);
-            border-radius: 8px;
-            position: relative;
-            cursor: pointer;
+            color: var(--vscode-input-foreground);
             border: 1px solid var(--vscode-input-border);
+            border-radius: 3px;
+            font-size: 11px;
+            cursor: pointer;
         }
         
-        .toggle.active {
-            background: var(--vscode-button-background);
+        .context-select:focus {
+            outline: none;
+            border-color: var(--vscode-focusBorder);
         }
         
-        .toggle::after {
-            content: '';
-            position: absolute;
-            width: 12px;
-            height: 12px;
-            background: var(--vscode-button-foreground);
+        .health-indicator {
+            display: flex;
+            align-items: center;
+            gap: 3px;
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        
+        .health-indicator.fresh {
+            color: var(--vscode-testing-iconPassed);
+        }
+        
+        .health-indicator.stale {
+            color: var(--vscode-testing-iconFailed);
+            background: var(--vscode-inputValidation-warningBackground);
+        }
+        
+        .health-indicator.not-indexed {
+            color: var(--vscode-disabledForeground);
+        }
+        
+        .health-dot {
+            width: 6px;
+            height: 6px;
             border-radius: 50%;
-            top: 1px;
-            left: 1px;
-            transition: transform 0.2s;
-        }
-        
-        .toggle.active::after {
-            transform: translateX(16px);
+            background: currentColor;
         }
         
         .icon-button {
@@ -506,9 +548,17 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
     <div class="header">
         <span class="header-title" id="agentName" title="Click to change agent">Select Agent</span>
         <div class="header-controls">
-            <div class="toggle-container">
-                <span>RAG</span>
-                <div class="toggle active" id="ragToggle" title="Use RAG for context-aware responses"></div>
+            <div class="context-selector">
+                <span id="healthIndicator" class="health-indicator not-indexed" title="Index status">
+                    <span class="health-dot"></span>
+                    <span id="healthText">Not indexed</span>
+                </span>
+                <select id="contextMode" class="context-select" title="Context mode">
+                    <option value="none">No context</option>
+                    <option value="text">Text RAG</option>
+                    <option value="graph">Graph RAG</option>
+                    <option value="full" selected>Full context</option>
+                </select>
             </div>
             <button class="icon-button" id="newChatBtn" title="New conversation">
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
@@ -523,7 +573,7 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
     <div class="messages" id="messages">
         <div class="empty-state" id="emptyState">
             <h3>🌟 Aura Chat</h3>
-            <p>Ask questions about your codebase.<br/>RAG-enabled for context-aware answers.</p>
+            <p>Ask questions about your codebase.<br/>Select a context mode for RAG-enriched answers.</p>
         </div>
     </div>
     
@@ -555,7 +605,9 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
         const messageInput = document.getElementById('messageInput');
         const sendButton = document.getElementById('sendButton');
         const agentNameEl = document.getElementById('agentName');
-        const ragToggle = document.getElementById('ragToggle');
+        const contextModeSelect = document.getElementById('contextMode');
+        const healthIndicator = document.getElementById('healthIndicator');
+        const healthText = document.getElementById('healthText');
         const newChatBtn = document.getElementById('newChatBtn');
         const errorBanner = document.getElementById('errorBanner');
         
@@ -597,8 +649,28 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
                 agentNameEl.textContent = 'Select Agent';
             }
             
-            // Update RAG toggle
-            ragToggle.classList.toggle('active', currentState.useRag);
+            // Update context mode selector
+            if (currentState.contextMode) {
+                contextModeSelect.value = currentState.contextMode;
+            }
+            
+            // Update index health indicator
+            if (currentState.indexHealth) {
+                const health = currentState.indexHealth;
+                healthIndicator.className = 'health-indicator ' + health.overallStatus;
+                
+                if (health.overallStatus === 'fresh') {
+                    healthText.textContent = 'Indexed';
+                    healthIndicator.title = 'Index is up to date with latest commit';
+                } else if (health.overallStatus === 'stale') {
+                    const behind = health.rag?.commitsBehind || health.graph?.commitsBehind || 0;
+                    healthText.textContent = behind > 0 ? \`\${behind} behind\` : 'Stale';
+                    healthIndicator.title = 'Index is behind - click to refresh';
+                } else {
+                    healthText.textContent = 'Not indexed';
+                    healthIndicator.title = 'Workspace not indexed - run indexing first';
+                }
+            }
             
             // Render messages
             const messages = currentState.conversation?.messages || [];
@@ -699,9 +771,12 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
             vscode.postMessage({ type: 'selectAgent' });
         });
         
-        ragToggle.addEventListener('click', () => {
-            const isActive = ragToggle.classList.toggle('active');
-            vscode.postMessage({ type: 'toggleRag', enabled: isActive });
+        contextModeSelect.addEventListener('change', (e) => {
+            vscode.postMessage({ type: 'setContextMode', mode: e.target.value });
+        });
+        
+        healthIndicator.addEventListener('click', () => {
+            vscode.postMessage({ type: 'refreshHealth' });
         });
         
         newChatBtn.addEventListener('click', () => {

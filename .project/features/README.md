@@ -54,7 +54,8 @@ features/
 
 | Feature | Description |
 |---------|-------------|
-
+| [Chat Context Modes](upcoming/chat-context-modes.md) | Context mode selector for RAG/Graph chat |
+| [Index Health Dashboard](upcoming/index-health-dashboard.md) | Index coverage, freshness, and actions |
 | [Unified Indexing Backend](upcoming/unified-indexing-backend.md) | Single pipeline for RAG + Code Graph |
 | [Indexing UX](upcoming/indexing-ux.md) | Progress UI, prompts, query commands |
 

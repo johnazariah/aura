@@ -12,6 +12,7 @@ using Aura.Module.Developer;
 using Aura.Module.Developer.Data;
 using Aura.Module.Developer.Data.Entities;
 using Aura.Module.Developer.Services;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Diagnostics;
 
@@ -1374,6 +1375,135 @@ app.MapGet("/api/index/status", (Aura.Foundation.Rag.IBackgroundIndexer backgrou
     });
 });
 
+// Get index health for a workspace (freshness, staleness)
+app.MapGet("/api/index/health", async (
+    [FromQuery] string? workspacePath,
+    Aura.Foundation.Data.AuraDbContext db,
+    Aura.Foundation.Git.IGitService gitService,
+    CancellationToken ct) =>
+{
+    if (string.IsNullOrEmpty(workspacePath))
+    {
+        return Results.BadRequest(new { error = "workspacePath query parameter is required" });
+    }
+
+    // Normalize path
+    var normalizedPath = Path.GetFullPath(workspacePath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+    // Get index metadata for this workspace
+    var ragIndex = await db.IndexMetadata
+        .Where(i => i.WorkspacePath == normalizedPath && i.IndexType == Aura.Foundation.Data.Entities.IndexTypes.Rag)
+        .FirstOrDefaultAsync(ct);
+
+    var graphIndex = await db.IndexMetadata
+        .Where(i => i.WorkspacePath == normalizedPath && i.IndexType == Aura.Foundation.Data.Entities.IndexTypes.Graph)
+        .FirstOrDefaultAsync(ct);
+
+    // Get current HEAD commit info
+    string? currentCommitSha = null;
+    DateTimeOffset? currentCommitAt = null;
+    var isGitRepo = await gitService.IsRepositoryAsync(normalizedPath, ct);
+    if (isGitRepo)
+    {
+        var headResult = await gitService.GetHeadCommitAsync(normalizedPath, ct);
+        if (headResult.Success)
+        {
+            currentCommitSha = headResult.Value;
+            var timestampResult = await gitService.GetCommitTimestampAsync(normalizedPath, currentCommitSha!, ct);
+            if (timestampResult.Success)
+            {
+                currentCommitAt = timestampResult.Value;
+            }
+        }
+    }
+
+    // Calculate freshness for each index
+    async Task<IndexHealthInfo> GetHealthInfo(Aura.Foundation.Data.Entities.IndexMetadata? index, string indexType)
+    {
+        if (index == null)
+        {
+            return new IndexHealthInfo
+            {
+                IndexType = indexType,
+                Status = "not-indexed",
+                IndexedAt = null,
+                IndexedCommitSha = null,
+                CommitsBehind = null,
+                IsStale = true,
+                ItemCount = 0
+            };
+        }
+
+        int? commitsBehind = null;
+        bool isStale = false;
+
+        if (isGitRepo && !string.IsNullOrEmpty(index.CommitSha) && !string.IsNullOrEmpty(currentCommitSha))
+        {
+            if (index.CommitSha != currentCommitSha)
+            {
+                var countResult = await gitService.CountCommitsSinceAsync(normalizedPath, index.CommitSha, ct);
+                if (countResult.Success && countResult.Value >= 0)
+                {
+                    commitsBehind = countResult.Value;
+                    isStale = commitsBehind > 0;
+                }
+                else
+                {
+                    // Commit SHA not found (history rewritten?) - mark as stale
+                    isStale = true;
+                }
+            }
+        }
+        else if (!isGitRepo)
+        {
+            // For non-git repos, compare timestamps (stale if older than 24 hours)
+            isStale = index.IndexedAt < DateTimeOffset.UtcNow.AddHours(-24);
+        }
+
+        var status = isStale ? "stale" : "fresh";
+
+        return new IndexHealthInfo
+        {
+            IndexType = indexType,
+            Status = status,
+            IndexedAt = index.IndexedAt,
+            IndexedCommitSha = index.CommitSha,
+            CommitsBehind = commitsBehind,
+            IsStale = isStale,
+            ItemCount = index.ItemsCreated
+        };
+    }
+
+    var ragHealth = await GetHealthInfo(ragIndex, "rag");
+    var graphHealth = await GetHealthInfo(graphIndex, "graph");
+
+    // Overall status: fresh if all are fresh, stale if any stale, not-indexed if none indexed
+    string overallStatus;
+    if (ragHealth.Status == "not-indexed" && graphHealth.Status == "not-indexed")
+    {
+        overallStatus = "not-indexed";
+    }
+    else if (ragHealth.IsStale || graphHealth.IsStale)
+    {
+        overallStatus = "stale";
+    }
+    else
+    {
+        overallStatus = "fresh";
+    }
+
+    return Results.Ok(new
+    {
+        workspacePath = normalizedPath,
+        isGitRepository = isGitRepo,
+        currentCommitSha = currentCommitSha?[..Math.Min(7, currentCommitSha?.Length ?? 0)],
+        currentCommitAt,
+        overallStatus,
+        rag = ragHealth,
+        graph = graphHealth
+    });
+});
+
 // Get specific job status
 app.MapGet("/api/index/jobs/{jobId:guid}", (
     Guid jobId,
@@ -2429,6 +2559,18 @@ record FinalizeWorkflowRequest(
     string? PrBody = null,
     string? BaseBranch = null,
     bool Draft = true);
+
+// Index health response models
+record IndexHealthInfo
+{
+    public required string IndexType { get; init; }
+    public required string Status { get; init; }
+    public DateTimeOffset? IndexedAt { get; init; }
+    public string? IndexedCommitSha { get; init; }
+    public int? CommitsBehind { get; init; }
+    public bool IsStale { get; init; }
+    public int ItemCount { get; init; }
+}
 
 public partial class Program { }
 

@@ -65,6 +65,15 @@ public interface IGitService
 
     /// <summary>Get the default branch name for a repository (usually main or master)</summary>
     Task<GitResult<string>> GetDefaultBranchAsync(string repoPath, CancellationToken ct = default);
+
+    /// <summary>Get the current HEAD commit SHA</summary>
+    Task<GitResult<string>> GetHeadCommitAsync(string repoPath, CancellationToken ct = default);
+
+    /// <summary>Count commits since a specific SHA (returns 0 if the SHA is HEAD)</summary>
+    Task<GitResult<int>> CountCommitsSinceAsync(string repoPath, string commitSha, CancellationToken ct = default);
+
+    /// <summary>Get the commit timestamp for a specific SHA</summary>
+    Task<GitResult<DateTimeOffset>> GetCommitTimestampAsync(string repoPath, string commitSha, CancellationToken ct = default);
 }
 
 /// <summary>

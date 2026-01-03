@@ -27,6 +27,26 @@ export interface RagHealthResponse {
     totalChunks: number;
 }
 
+export interface IndexHealthInfo {
+    indexType: string;
+    status: 'fresh' | 'stale' | 'not-indexed';
+    indexedAt?: string;
+    indexedCommitSha?: string;
+    commitsBehind?: number;
+    isStale: boolean;
+    itemCount: number;
+}
+
+export interface IndexHealthResponse {
+    workspacePath: string;
+    isGitRepository: boolean;
+    currentCommitSha?: string;
+    currentCommitAt?: string;
+    overallStatus: 'fresh' | 'stale' | 'not-indexed';
+    rag: IndexHealthInfo;
+    graph: IndexHealthInfo;
+}
+
 export interface RagIndexResult {
     success: boolean;
     filesIndexed: number;
@@ -169,6 +189,13 @@ export class AuraApiService {
 
     async getRagHealth(): Promise<RagHealthResponse> {
         const response = await this.httpClient.get(`${this.getBaseUrl()}/health/rag`);
+        return response.data;
+    }
+
+    async getIndexHealth(workspacePath: string): Promise<IndexHealthResponse> {
+        const response = await this.httpClient.get(`${this.getBaseUrl()}/api/index/health`, {
+            params: { workspacePath }
+        });
         return response.data;
     }
 

@@ -54,6 +54,9 @@ public class AuraDbContext : DbContext
     /// <summary>Gets the code edges for graph RAG.</summary>
     public DbSet<CodeEdge> CodeEdges => Set<CodeEdge>();
 
+    /// <summary>Gets the index metadata for tracking index freshness.</summary>
+    public DbSet<IndexMetadata> IndexMetadata => Set<IndexMetadata>();
+
     /// <inheritdoc/>
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -230,6 +233,26 @@ public class AuraDbContext : DbContext
             entity.HasIndex(e => e.EdgeType);
             entity.HasIndex(e => new { e.SourceId, e.EdgeType });
             entity.HasIndex(e => new { e.TargetId, e.EdgeType });
+        });
+
+        // IndexMetadata configuration for tracking index freshness
+        modelBuilder.Entity<IndexMetadata>(entity =>
+        {
+            entity.ToTable("index_metadata");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id").HasDefaultValueSql("gen_random_uuid()");
+            entity.Property(e => e.WorkspacePath).HasColumnName("workspace_path").HasMaxLength(1024).IsRequired();
+            entity.Property(e => e.IndexType).HasColumnName("index_type").HasMaxLength(50).IsRequired();
+            entity.Property(e => e.IndexedAt).HasColumnName("indexed_at");
+            entity.Property(e => e.CommitSha).HasColumnName("commit_sha").HasMaxLength(40);
+            entity.Property(e => e.CommitAt).HasColumnName("commit_at");
+            entity.Property(e => e.FilesIndexed).HasColumnName("files_indexed");
+            entity.Property(e => e.ItemsCreated).HasColumnName("items_created");
+            entity.Property(e => e.StatsJson).HasColumnName("stats").HasColumnType("jsonb");
+
+            entity.HasIndex(e => e.WorkspacePath);
+            entity.HasIndex(e => e.IndexType);
+            entity.HasIndex(e => new { e.WorkspacePath, e.IndexType }).IsUnique();
         });
     }
 }

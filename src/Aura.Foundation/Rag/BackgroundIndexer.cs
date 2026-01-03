@@ -9,6 +9,10 @@ using System.IO.Abstractions;
 using System.Text.Json;
 using System.Threading.Channels;
 using Aura.Foundation.Agents;
+using Aura.Foundation.Data;
+using Aura.Foundation.Data.Entities;
+using Aura.Foundation.Git;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -202,6 +206,8 @@ public sealed class BackgroundIndexer : BackgroundService, IBackgroundIndexer
         var agentRegistry = scope.ServiceProvider.GetRequiredService<IAgentRegistry>();
         var ingestorRegistry = scope.ServiceProvider.GetRequiredService<Ingestors.IIngestorRegistry>();
         var codeGraphService = scope.ServiceProvider.GetRequiredService<ICodeGraphService>();
+        var dbContext = scope.ServiceProvider.GetRequiredService<AuraDbContext>();
+        var gitService = scope.ServiceProvider.GetRequiredService<IGitService>();
 
         switch (workItem.Type)
         {
@@ -210,7 +216,7 @@ public sealed class BackgroundIndexer : BackgroundService, IBackgroundIndexer
                 break;
 
             case WorkItemType.Directory when workItem.DirectoryPath is not null:
-                await ProcessDirectoryAsync(workItem, ragService, agentRegistry, ingestorRegistry, codeGraphService, cancellationToken);
+                await ProcessDirectoryAsync(workItem, ragService, agentRegistry, ingestorRegistry, codeGraphService, dbContext, gitService, cancellationToken);
                 break;
         }
     }
@@ -221,6 +227,8 @@ public sealed class BackgroundIndexer : BackgroundService, IBackgroundIndexer
         IAgentRegistry agentRegistry,
         Ingestors.IIngestorRegistry ingestorRegistry,
         ICodeGraphService codeGraphService,
+        AuraDbContext dbContext,
+        IGitService gitService,
         CancellationToken cancellationToken)
     {
         var jobId = workItem.JobId!.Value;
@@ -375,6 +383,9 @@ public sealed class BackgroundIndexer : BackgroundService, IBackgroundIndexer
                 CompletedAt = DateTimeOffset.UtcNow,
             });
 
+            // Save index metadata for freshness tracking
+            await SaveIndexMetadataAsync(directoryPath, processedCount, totalFiles, dbContext, gitService, cancellationToken);
+
             _logger.LogInformation("Directory indexing completed: {Path} ({Processed}/{Total} files, Job: {JobId})",
                 directoryPath, processedCount, totalFiles, jobId);
         }
@@ -387,6 +398,82 @@ public sealed class BackgroundIndexer : BackgroundService, IBackgroundIndexer
                 Error = ex.Message,
                 CompletedAt = DateTimeOffset.UtcNow,
             });
+        }
+    }
+
+    private async Task SaveIndexMetadataAsync(
+        string directoryPath,
+        int processedCount,
+        int totalFiles,
+        AuraDbContext dbContext,
+        IGitService gitService,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            // Normalize the workspace path
+            var normalizedPath = Path.GetFullPath(directoryPath)
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+            // Get git commit info if available
+            string? commitSha = null;
+            DateTimeOffset? commitAt = null;
+
+            var isGitRepo = await gitService.IsRepositoryAsync(normalizedPath, cancellationToken);
+            if (isGitRepo)
+            {
+                var headResult = await gitService.GetHeadCommitAsync(normalizedPath, cancellationToken);
+                if (headResult.Success)
+                {
+                    commitSha = headResult.Value;
+                    var timestampResult = await gitService.GetCommitTimestampAsync(normalizedPath, commitSha!, cancellationToken);
+                    if (timestampResult.Success)
+                    {
+                        commitAt = timestampResult.Value;
+                    }
+                }
+            }
+
+            // Save metadata for RAG index (the BackgroundIndexer does unified indexing for both RAG and graph)
+            // We'll create/update entries for both index types since ProcessDirectoryAsync handles both
+            var indexTypes = new[] { IndexTypes.Rag, IndexTypes.Graph };
+
+            foreach (var indexType in indexTypes)
+            {
+                var existingMetadata = await dbContext.IndexMetadata
+                    .FirstOrDefaultAsync(m => m.WorkspacePath == normalizedPath && m.IndexType == indexType, cancellationToken);
+
+                if (existingMetadata is not null)
+                {
+                    existingMetadata.IndexedAt = DateTimeOffset.UtcNow;
+                    existingMetadata.CommitSha = commitSha;
+                    existingMetadata.CommitAt = commitAt;
+                    existingMetadata.FilesIndexed = totalFiles;
+                    existingMetadata.ItemsCreated = processedCount;
+                }
+                else
+                {
+                    var metadata = new IndexMetadata
+                    {
+                        WorkspacePath = normalizedPath,
+                        IndexType = indexType,
+                        IndexedAt = DateTimeOffset.UtcNow,
+                        CommitSha = commitSha,
+                        CommitAt = commitAt,
+                        FilesIndexed = totalFiles,
+                        ItemsCreated = processedCount,
+                    };
+                    dbContext.IndexMetadata.Add(metadata);
+                }
+            }
+
+            await dbContext.SaveChangesAsync(cancellationToken);
+            _logger.LogDebug("Saved index metadata for {Path} (commit: {CommitSha})", normalizedPath, commitSha?[..7] ?? "non-git");
+        }
+        catch (Exception ex)
+        {
+            // Don't fail the indexing job if metadata save fails
+            _logger.LogWarning(ex, "Failed to save index metadata for {Path}", directoryPath);
         }
     }
 
