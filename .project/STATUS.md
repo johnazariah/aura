@@ -1,6 +1,6 @@
 # Aura Project Status
 
-> **Last Updated**: 2026-01-02
+> **Last Updated**: 2026-01-03
 > **Branch**: main
 > **Overall Status**: ✅ MVP Complete
 
@@ -17,7 +17,7 @@ Aura is a **local-first, privacy-safe AI foundation** for knowledge work. The De
 | **Aura.Api** | ✅ Complete | `src/Aura.Api/Program.cs` |
 | **Aura.AppHost** | ✅ Complete | `src/Aura.AppHost/` |
 | **VS Code Extension** | ✅ Complete | `extension/src/` |
-| **Tests** | ✅ 205+ passing | `tests/` |
+| **Tests** | ✅ 400 passing | `tests/` |
 
 ## Feature Inventory
 
@@ -30,6 +30,7 @@ Aura is a **local-first, privacy-safe AI foundation** for knowledge work. The De
 | LLM Providers (Ollama, Azure, OpenAI) | ✅ | [spec/24-llm-providers.md](spec/24-llm-providers.md) |
 | RAG Pipeline | ✅ | [adr/008-local-rag-foundation.md](adr/008-local-rag-foundation.md) |
 | Tool Framework (ReAct) | ✅ | [adr/012-tool-using-agents.md](adr/012-tool-using-agents.md) |
+| Tool Execution (Function Calling) | ✅ | [features/completed/tool-execution-for-agents.md](features/completed/tool-execution-for-agents.md) |
 | Prompt Templates | ✅ | [adr/018-prompt-template-architecture.md](adr/018-prompt-template-architecture.md) |
 
 ### Developer Module
@@ -43,6 +44,7 @@ Aura is a **local-first, privacy-safe AI foundation** for knowledge work. The De
 | Graph RAG for Code | ✅ | [adr/015-graph-rag-for-code.md](adr/015-graph-rag-for-code.md) |
 | TreeSitter Ingesters | ✅ | [spec/22-ingester-agents.md](spec/22-ingester-agents.md) |
 | Semantic Enrichment | ✅ | [tasks/treesitter-ingesters.md](tasks/treesitter-ingesters.md) |
+| Language Specialist Agents | ✅ | [features/completed/generic-language-agent.md](features/completed/generic-language-agent.md) |
 
 ### VS Code Extension
 
@@ -145,7 +147,26 @@ prompts/                      # Handlebars prompt templates
 | [spec/assisted-workflow-ui.md](spec/assisted-workflow-ui.md) | UI collaboration model |
 | [progress/2025-12-11.md](progress/2025-12-11.md) | Latest weekly progress |
 
-## Recent Changes (Jan 2, 2026)
+## Recent Changes (Jan 3, 2026)
+
+1. **Tool Execution for Agents (Complete)**
+   - Added `ChatWithFunctionsAsync` to all LLM providers (Azure OpenAI, OpenAI, Ollama)
+   - Added `FunctionDefinition`, `FunctionCall`, `LlmFunctionResponse` records for function calling
+   - Updated `ConfigurableAgent` with tool execution loop supporting native LLM function calling
+   - Added `IToolConfirmationService` for human-in-the-loop tool approval
+   - Added `ToolConfirmationOptions` for configuring auto-approve/require-approval tools
+   - Agents can now execute tools declared in their `## Tools Available` section
+   - Tools requiring confirmation will be rejected in auto-approve mode
+
+2. **Language Specialist Agents (Complete)**
+   - Implemented `LanguageSpecialistAgent` that loads behavior from YAML config files
+   - Added `LanguageConfigLoader` to parse `agents/languages/*.yaml` files
+   - Added `LanguageToolFactory` to create CLI tools from YAML definitions
+   - Added `RegisterLanguageAgentsTask` startup task to auto-load language agents
+   - Python, TypeScript, Go, Rust, F#, etc. now have proper specialist agents
+   - C# continues to use hardcoded `RoslynCodingAgent` (needs Roslyn APIs)
+
+## Previous Changes (Jan 2, 2026)
 
 1. **Unified Capability Model**
    - RoslynCodingAgent now uses `software-development-csharp` capability (replaces fragmented `csharp-coding`, `testing-csharp`, etc.)
@@ -211,7 +232,6 @@ prompts/                      # Handlebars prompt templates
 
 | Item | Priority | Notes |
 |------|----------|-------|
-| LanguageSpecialistAgent | Medium | Load language configs from `agents/languages/*.yaml` at runtime. Currently these YAML files exist but are not auto-loaded. |
 | Dependency Graph edges | Low | Import relationships in code graph |
 | Azure AD for LLM | Future | Currently API key only |
 | Cost tracking | Future | For cloud LLM usage |

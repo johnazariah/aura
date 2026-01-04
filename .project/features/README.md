@@ -47,6 +47,7 @@ features/
 | [PostgreSQL Setup](completed/postgresql-setup.md) | Embedded PostgreSQL with pgvector | 2025-12-25 |
 | [GitHub Release Automation](completed/github-release-automation.md) | Tag-triggered releases via GitHub Actions | 2025-12-25 |
 | [End-User Documentation](completed/end-user-documentation.md) | User-facing docs for install, config, usage | 2025-12-25 |
+| [Tool Execution for Agents](completed/tool-execution-for-agents.md) | Agent tool invocation via LLM function calling | 2026-01-03 |
 
 ## Upcoming Features
 
@@ -75,7 +76,6 @@ features/
 
 | [Condensed Export](upcoming/condensed-export.md) | Export indexed context |
 | [Specialist Agents](upcoming/specialist-coding-agents.md) | Language-specific coding agents |
-| [Tool Execution](upcoming/tool-execution-for-agents.md) | Agent tool invocation |
 | [Internationalization](upcoming/internationalization.md) | Multi-language UI support |
 | [Generic Language Agent](upcoming/generic-language-agent.md) | Language-agnostic coding agent |
 | [Unified Capability Model](upcoming/unified-capability-model.md) | Consolidate language capabilities |
