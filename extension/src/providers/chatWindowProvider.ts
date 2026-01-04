@@ -1,5 +1,7 @@
 import * as vscode from 'vscode';
-import { AuraApiService, AgentInfo } from '../services/auraApiService';
+import { AuraApiService, AgentInfo, IndexHealthResponse } from '../services/auraApiService';
+
+export type ContextMode = 'none' | 'text' | 'graph' | 'full';
 
 interface ChatMessage {
     role: 'user' | 'assistant' | 'system';
@@ -65,20 +67,33 @@ export class ChatWindowProvider {
 
         // Track conversation state
         let messages: ChatMessage[] = [];
-        let useRag = true;
-        let useCodeGraph = true;
+        let contextMode: ContextMode = 'full';
+        let indexHealth: IndexHealthResponse | undefined;
+
+        // Refresh index health
+        const refreshIndexHealth = async () => {
+            const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+            if (workspacePath) {
+                try {
+                    indexHealth = await this._apiService.getIndexHealth(workspacePath);
+                    panel.webview.postMessage({ type: 'healthUpdate', health: indexHealth });
+                } catch {
+                    // Silently fail - health indicator will show unknown
+                }
+            }
+        };
 
         // Handle messages from webview
         panel.webview.onDidReceiveMessage(async (data) => {
             switch (data.type) {
                 case 'sendMessage':
-                    await this._handleMessage(panel, agent, data.message, messages, useRag, useCodeGraph);
+                    await this._handleMessage(panel, agent, data.message, messages, contextMode);
                     break;
-                case 'toggleRag':
-                    useRag = data.enabled;
+                case 'setContextMode':
+                    contextMode = data.mode as ContextMode;
                     break;
-                case 'toggleCodeGraph':
-                    useCodeGraph = data.enabled;
+                case 'refreshHealth':
+                    await refreshIndexHealth();
                     break;
                 case 'clearChat':
                     messages = [];
@@ -89,9 +104,11 @@ export class ChatWindowProvider {
                     panel.webview.postMessage({
                         type: 'init',
                         agent: { id: agent.id, name: agent.name, model: agent.model },
-                        useRag,
-                        useCodeGraph
+                        contextMode,
+                        indexHealth
                     });
+                    // Fetch initial health
+                    await refreshIndexHealth();
                     break;
             }
         });
@@ -102,8 +119,7 @@ export class ChatWindowProvider {
         agent: AgentInfo,
         message: string,
         messages: ChatMessage[],
-        useRag: boolean,
-        useCodeGraph: boolean
+        contextMode: ContextMode
     ): Promise<void> {
         // Add user message
         const userMessage: ChatMessage = {
@@ -126,8 +142,10 @@ export class ChatWindowProvider {
             let response: { content: string; tokensUsed: number; durationMs?: number };
 
             const startTime = Date.now();
+            const useRag = contextMode === 'text' || contextMode === 'full';
+            const useCodeGraph = contextMode === 'graph' || contextMode === 'full';
 
-            if (useRag || useCodeGraph) {
+            if (contextMode !== 'none') {
                 const ragResponse = await this._apiService.executeAgentWithRag(
                     agent.id,
                     message,
@@ -257,6 +275,37 @@ export class ChatWindowProvider {
             align-items: center;
             gap: 16px;
         }
+
+        .context-mode-container {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+        }
+
+        .context-select {
+            background: var(--vscode-dropdown-background);
+            color: var(--vscode-dropdown-foreground);
+            border: 1px solid var(--vscode-dropdown-border);
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+
+        .context-select:focus {
+            outline: 1px solid var(--vscode-focusBorder);
+        }
+
+        .health-indicator {
+            font-size: 12px;
+            cursor: help;
+        }
+
+        .health-indicator.fresh { color: #4caf50; }
+        .health-indicator.stale { color: #ff9800; }
+        .health-indicator.outdated { color: #f44336; }
+        .health-indicator.unknown { color: #9e9e9e; }
 
         .toggle-container {
             display: flex;
@@ -608,13 +657,15 @@ export class ChatWindowProvider {
             </div>
         </div>
         <div class="header-controls">
-            <div class="toggle-container">
-                <span>RAG</span>
-                <div class="toggle active" id="ragToggle" title="Include semantic search context"></div>
-            </div>
-            <div class="toggle-container">
-                <span>Code Graph</span>
-                <div class="toggle active" id="codeGraphToggle" title="Include code structure context"></div>
+            <div class="context-mode-container">
+                <label for="contextMode">Context:</label>
+                <select id="contextMode" class="context-select">
+                    <option value="full">Full (Text + Graph)</option>
+                    <option value="text">Text RAG Only</option>
+                    <option value="graph">Graph RAG Only</option>
+                    <option value="none">No Context</option>
+                </select>
+                <span id="healthIndicator" class="health-indicator" title="Index health unknown">●</span>
             </div>
             <button class="header-button" id="clearBtn">
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
@@ -677,15 +728,29 @@ export class ChatWindowProvider {
         const typingIndicator = document.getElementById('typingIndicator');
         const messageInput = document.getElementById('messageInput');
         const sendButton = document.getElementById('sendButton');
-        const ragToggle = document.getElementById('ragToggle');
-        const codeGraphToggle = document.getElementById('codeGraphToggle');
+        const ragToggle = document.getElementById('contextMode');
+        const healthIndicator = document.getElementById('healthIndicator');
         const clearBtn = document.getElementById('clearBtn');
         const errorBanner = document.getElementById('errorBanner');
         const suggestions = document.querySelectorAll('.suggestion');
 
-        let useRag = true;
-        let useCodeGraph = true;
+        let contextMode = 'full';
         let hasMessages = false;
+
+        function updateHealthIndicator(health) {
+            if (!health) {
+                healthIndicator.className = 'health-indicator unknown';
+                healthIndicator.title = 'Index health unknown';
+                return;
+            }
+            const status = health.overallStatus || 'unknown';
+            healthIndicator.className = 'health-indicator ' + status;
+            let title = 'Index status: ' + status;
+            if (health.commitsBehind > 0) {
+                title += ' (' + health.commitsBehind + ' commits behind)';
+            }
+            healthIndicator.title = title;
+        }
 
         // Handle messages from extension
         window.addEventListener('message', event => {
@@ -693,10 +758,13 @@ export class ChatWindowProvider {
 
             switch (message.type) {
                 case 'init':
-                    useRag = message.useRag;
-                    useCodeGraph = message.useCodeGraph ?? true;
-                    ragToggle.classList.toggle('active', useRag);
-                    codeGraphToggle.classList.toggle('active', useCodeGraph);
+                    contextMode = message.contextMode || 'full';
+                    ragToggle.value = contextMode;
+                    updateHealthIndicator(message.indexHealth);
+                    break;
+
+                case 'healthUpdate':
+                    updateHealthIndicator(message.health);
                     break;
 
                 case 'userMessage':
@@ -833,16 +901,9 @@ export class ChatWindowProvider {
             messageInput.style.height = Math.min(messageInput.scrollHeight, 200) + 'px';
         });
 
-        ragToggle.addEventListener('click', () => {
-            useRag = !useRag;
-            ragToggle.classList.toggle('active', useRag);
-            vscode.postMessage({ type: 'toggleRag', enabled: useRag });
-        });
-
-        codeGraphToggle.addEventListener('click', () => {
-            useCodeGraph = !useCodeGraph;
-            codeGraphToggle.classList.toggle('active', useCodeGraph);
-            vscode.postMessage({ type: 'toggleCodeGraph', enabled: useCodeGraph });
+        ragToggle.addEventListener('change', () => {
+            contextMode = ragToggle.value;
+            vscode.postMessage({ type: 'setContextMode', mode: contextMode });
         });
 
         clearBtn.addEventListener('click', () => {

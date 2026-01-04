@@ -41,6 +41,10 @@ export interface RagStatus extends ServiceStatus {
     // Code graph stats
     graphNodes?: number;
     graphEdges?: number;
+    // Index health (freshness)
+    indexHealth?: 'fresh' | 'stale' | 'outdated' | 'not-indexed';
+    commitsBehind?: number;
+    lastIndexedAt?: string;
 }
 
 export interface HealthStatuses {
@@ -247,6 +251,9 @@ export class HealthCheckService {
             let graphNodes = 0;
             let graphEdges = 0;
             let chunksByType: Record<string, number> = {};
+            let indexHealth: 'fresh' | 'stale' | 'outdated' | 'not-indexed' = 'not-indexed';
+            let commitsBehind = 0;
+            let lastIndexedAt: string | undefined;
 
             try {
                 if (repositoryPath) {
@@ -265,6 +272,27 @@ export class HealthCheckService {
                     );
                     graphNodes = graphStatsResponse.data?.totalNodes || 0;
                     graphEdges = graphStatsResponse.data?.totalEdges || 0;
+
+                    // Get index health (freshness based on git commits)
+                    try {
+                        const healthResponse = await this.httpClient.get(
+                            `${url}/api/index/health`,
+                            { params: { workspacePath: repositoryPath } }
+                        );
+                        const overallStatus = healthResponse.data?.overallStatus || 'not-indexed';
+                        // Map API status to our enum
+                        if (overallStatus === 'fresh') {
+                            indexHealth = 'fresh';
+                        } else if (overallStatus === 'stale') {
+                            indexHealth = 'stale';
+                        } else {
+                            indexHealth = 'not-indexed';
+                        }
+                        commitsBehind = healthResponse.data?.rag?.commitsBehind || healthResponse.data?.graph?.commitsBehind || 0;
+                        lastIndexedAt = healthResponse.data?.rag?.indexedAt;
+                    } catch {
+                        // Health endpoint might not exist or fail
+                    }
                 }
 
                 // Also get overall stats
@@ -296,6 +324,9 @@ export class HealthCheckService {
                 repositoryPath,
                 graphNodes,
                 graphEdges,
+                indexHealth,
+                commitsBehind,
+                lastIndexedAt,
                 lastChecked: new Date()
             };
         } catch (error) {

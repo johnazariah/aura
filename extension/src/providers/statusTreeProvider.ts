@@ -60,7 +60,7 @@ export class StatusTreeProvider implements vscode.TreeDataProvider<StatusItem> {
 
     private createRagItem(status: RagStatus): StatusItem {
         const hasDetails = status.status === 'healthy' && (status.totalDocuments || 0) > 0;
-        return new StatusItem(
+        const item = new StatusItem(
             'RAG Index',
             status,
             'rag',
@@ -68,6 +68,8 @@ export class StatusTreeProvider implements vscode.TreeDataProvider<StatusItem> {
             undefined,
             status
         );
+        item.contextValue = 'rag';
+        return item;
     }
 
     private getOllamaChildren(status: OllamaStatus): StatusItem[] {
@@ -148,6 +150,12 @@ export class StatusTreeProvider implements vscode.TreeDataProvider<StatusItem> {
     private getRagChildren(status: RagStatus): StatusItem[] {
         const children: StatusItem[] = [];
 
+        // Index Health indicator (freshness)
+        if (status.indexHealth) {
+            const healthItem = this.createHealthItem(status);
+            children.push(healthItem);
+        }
+
         // Code Graph stats (Roslyn semantic index)
         if (status.graphNodes !== undefined && status.graphNodes > 0) {
             const graphItem = new StatusItem(
@@ -201,6 +209,40 @@ export class StatusTreeProvider implements vscode.TreeDataProvider<StatusItem> {
         return children;
     }
 
+    private createHealthItem(status: RagStatus): StatusItem {
+        const health = status.indexHealth || 'not-indexed';
+        let label: string;
+        let icon: vscode.ThemeIcon;
+        let details: string;
+
+        switch (health) {
+            case 'fresh':
+                label = 'Index Fresh';
+                icon = new vscode.ThemeIcon('check', new vscode.ThemeColor('charts.green'));
+                details = 'Up to date with latest commit';
+                break;
+            case 'stale':
+                label = 'Index Stale';
+                icon = new vscode.ThemeIcon('warning', new vscode.ThemeColor('charts.yellow'));
+                details = `${status.commitsBehind || 0} commit(s) behind`;
+                break;
+            case 'outdated':
+                label = 'Index Outdated';
+                icon = new vscode.ThemeIcon('error', new vscode.ThemeColor('charts.orange'));
+                details = `${status.commitsBehind || 0} commit(s) behind - consider reindexing`;
+                break;
+            default:
+                label = 'Not Indexed';
+                icon = new vscode.ThemeIcon('circle-outline');
+                details = 'Run indexing to enable RAG';
+        }
+
+        const item = new StatusItem(label, { status: 'healthy', details }, 'health');
+        item.iconPath = icon;
+        item.contextValue = 'indexHealth';
+        return item;
+    }
+
     private getIconForContentType(type: string): vscode.ThemeIcon {
         const iconMap: Record<string, string> = {
             'Markdown': 'markdown',
@@ -224,7 +266,7 @@ export class StatusTreeProvider implements vscode.TreeDataProvider<StatusItem> {
     }
 }
 
-export type StatusItemType = 'service' | 'ollama' | 'rag' | 'ollama-models' | 'model' | 'running-model' | 'info';
+export type StatusItemType = 'service' | 'ollama' | 'rag' | 'ollama-models' | 'model' | 'running-model' | 'info' | 'health';
 
 export class StatusItem extends vscode.TreeItem {
     constructor(
