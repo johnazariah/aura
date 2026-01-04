@@ -47,7 +47,11 @@ features/
 | [PostgreSQL Setup](completed/postgresql-setup.md) | Embedded PostgreSQL with pgvector | 2025-12-25 |
 | [GitHub Release Automation](completed/github-release-automation.md) | Tag-triggered releases via GitHub Actions | 2025-12-25 |
 | [End-User Documentation](completed/end-user-documentation.md) | User-facing docs for install, config, usage | 2025-12-25 |
+| [Unified Capability Model](completed/unified-capability-model.md) | Unified software-development-{language} capabilities | 2026-01-02 |
+| [Unified Indexing Backend](completed/unified-indexing-backend.md) | Single pipeline for RAG + code graph | 2026-01-02 |
 | [Tool Execution for Agents](completed/tool-execution-for-agents.md) | Agent tool invocation via LLM function calling | 2026-01-03 |
+| [Language Specialist Agents](completed/generic-language-agent.md) | YAML-configurable language coding agents | 2026-01-03 |
+| [Index Health Dashboard](completed/index-health-dashboard.md) | Workspace indexing visibility and health | 2026-01-03 |
 
 ## Upcoming Features
 

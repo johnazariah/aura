@@ -242,7 +242,7 @@ prompts/                      # Handlebars prompt templates
 - [x] Push commits to origin ✅
 - [x] Update progress documentation ✅
 - [x] Remove duplicate language agents (PythonCodingAgent, GoCodingAgent, TypeScriptCodingAgent, FSharpCodingAgent) ✅
-- [ ] Create MVP release tag
+- [x] Create MVP release tag ✅ (v1.0.0-mvp)
 - [ ] User testing with real workflows
 
 ## Principles
