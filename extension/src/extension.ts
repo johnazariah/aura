@@ -170,6 +170,42 @@ export async function activate(context: vscode.ExtensionContext) {
         await deleteWorkflow(item);
     });
 
+    // Help commands
+    const showHelpCommand = vscode.commands.registerCommand('aura.showHelp', async () => {
+        const items: vscode.QuickPickItem[] = [
+            { label: '$(rocket) Getting Started', description: 'Open the Aura walkthrough' },
+            { label: '$(book) Documentation', description: 'Open full documentation' },
+            { label: '$(note) Quick Reference', description: 'Show keyboard shortcuts and tips' },
+            { label: '$(comment-discussion) Use Cases', description: 'See practical examples' },
+        ];
+        const selected = await vscode.window.showQuickPick(items, {
+            placeHolder: 'How can we help?'
+        });
+        if (selected) {
+            if (selected.label.includes('Getting Started')) {
+                vscode.commands.executeCommand('workbench.action.openWalkthrough', 'aura.aura#aura.gettingStarted');
+            } else if (selected.label.includes('Documentation')) {
+                vscode.commands.executeCommand('aura.openDocs');
+            } else if (selected.label.includes('Quick Reference')) {
+                vscode.commands.executeCommand('aura.showCheatSheet');
+            } else if (selected.label.includes('Use Cases')) {
+                openDocFile('user-guide/use-cases.md');
+            }
+        }
+    });
+
+    const openDocsCommand = vscode.commands.registerCommand('aura.openDocs', async () => {
+        openDocFile('README.md');
+    });
+
+    const showCheatSheetCommand = vscode.commands.registerCommand('aura.showCheatSheet', async () => {
+        showCheatSheet();
+    });
+
+    const openGettingStartedCommand = vscode.commands.registerCommand('aura.openGettingStarted', async () => {
+        vscode.commands.executeCommand('workbench.action.openWalkthrough', 'aura.aura#aura.gettingStarted');
+    });
+
     // Subscribe to configuration changes
     const configWatcher = vscode.workspace.onDidChangeConfiguration(e => {
         if (e.affectsConfiguration('aura')) {
@@ -199,6 +235,10 @@ export async function activate(context: vscode.ExtensionContext) {
         executeStepCommand,
         refreshWorkflowsCommand,
         deleteWorkflowCommand,
+        showHelpCommand,
+        openDocsCommand,
+        showCheatSheetCommand,
+        openGettingStartedCommand,
         configWatcher
     );
 
@@ -616,6 +656,126 @@ async function deleteWorkflow(item?: any): Promise<void> {
         const message = error instanceof Error ? error.message : 'Unknown error';
         vscode.window.showErrorMessage(`Failed to delete workflow: ${message}`);
     }
+}
+
+// =====================
+// Help Functions
+// =====================
+
+function openDocFile(relativePath: string): void {
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (workspaceFolders && workspaceFolders.length > 0) {
+        // Try to find docs in the Aura project itself
+        const docsPath = vscode.Uri.joinPath(workspaceFolders[0].uri, 'docs', relativePath);
+        vscode.workspace.fs.stat(docsPath).then(
+            () => {
+                vscode.commands.executeCommand('markdown.showPreview', docsPath);
+            },
+            () => {
+                // File not found in workspace, open GitHub docs
+                vscode.env.openExternal(vscode.Uri.parse('https://github.com/johnazariah/aura/tree/main/docs/' + relativePath));
+            }
+        );
+    } else {
+        // No workspace, open GitHub docs
+        vscode.env.openExternal(vscode.Uri.parse('https://github.com/johnazariah/aura/tree/main/docs/' + relativePath));
+    }
+}
+
+function showCheatSheet(): void {
+    const panel = vscode.window.createWebviewPanel(
+        'auraCheatSheet',
+        'Aura Quick Reference',
+        vscode.ViewColumn.One,
+        {}
+    );
+
+    panel.webview.html = getCheatSheetHtml();
+}
+
+function getCheatSheetHtml(): string {
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aura Quick Reference</title>
+    <style>
+        body {
+            font-family: var(--vscode-font-family);
+            padding: 20px;
+            color: var(--vscode-foreground);
+            background: var(--vscode-editor-background);
+        }
+        h1 { color: var(--vscode-textLink-foreground); }
+        h2 { 
+            color: var(--vscode-textLink-activeForeground); 
+            border-bottom: 1px solid var(--vscode-textSeparator-foreground);
+            padding-bottom: 5px;
+        }
+        table { 
+            border-collapse: collapse; 
+            width: 100%; 
+            margin-bottom: 20px;
+        }
+        th, td { 
+            border: 1px solid var(--vscode-textSeparator-foreground); 
+            padding: 8px 12px; 
+            text-align: left; 
+        }
+        th { background: var(--vscode-editor-selectionBackground); }
+        code { 
+            background: var(--vscode-textCodeBlock-background); 
+            padding: 2px 6px; 
+            border-radius: 3px;
+        }
+        .shortcut { font-family: monospace; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>⚡ Aura Quick Reference</h1>
+
+    <h2>Keyboard Shortcuts</h2>
+    <table>
+        <tr><th>Action</th><th>Windows/Linux</th><th>macOS</th></tr>
+        <tr><td>New Workflow</td><td class="shortcut">Ctrl+Shift+W</td><td class="shortcut">Cmd+Shift+W</td></tr>
+        <tr><td>Open Chat</td><td class="shortcut">Ctrl+Shift+A</td><td class="shortcut">Cmd+Shift+A</td></tr>
+        <tr><td>Execute Agent</td><td class="shortcut">Ctrl+Shift+E</td><td class="shortcut">Cmd+Shift+E</td></tr>
+        <tr><td>Index Workspace</td><td class="shortcut">Ctrl+Alt+I</td><td class="shortcut">Cmd+Alt+I</td></tr>
+        <tr><td>Show Help</td><td class="shortcut">Ctrl+Shift+/</td><td class="shortcut">Cmd+Shift+/</td></tr>
+    </table>
+
+    <h2>Workflow Tips</h2>
+    <table>
+        <tr><th>Task</th><th>Example Prompt</th></tr>
+        <tr><td>New endpoint</td><td><code>Create POST /api/products endpoint following OrderController patterns</code></td></tr>
+        <tr><td>Write tests</td><td><code>Add unit tests for OrderService using xUnit</code></td></tr>
+        <tr><td>Refactor</td><td><code>Extract email logic from UserService into EmailNotificationService</code></td></tr>
+        <tr><td>Documentation</td><td><code>Add XML docs to all public methods in PaymentController</code></td></tr>
+    </table>
+
+    <h2>Chat Examples</h2>
+    <table>
+        <tr><th>Goal</th><th>Question</th></tr>
+        <tr><td>Understand code</td><td><code>How does authentication work in this project?</code></td></tr>
+        <tr><td>Find code</td><td><code>Where is payment processing implemented?</code></td></tr>
+        <tr><td>Trace flow</td><td><code>What happens when a user places an order?</code></td></tr>
+        <tr><td>Review code</td><td><code>Are there SQL injection risks in UserRepository?</code></td></tr>
+    </table>
+
+    <h2>Step Actions</h2>
+    <table>
+        <tr><th>Action</th><th>When to Use</th></tr>
+        <tr><td>✅ Approve</td><td>Output looks correct</td></tr>
+        <tr><td>❌ Reject</td><td>Output is wrong, let agent retry</td></tr>
+        <tr><td>⏭️ Skip</td><td>Step not needed</td></tr>
+        <tr><td>💬 Chat</td><td>Ask agent to modify or explain</td></tr>
+        <tr><td>🔄 Reassign</td><td>Use a different agent</td></tr>
+    </table>
+
+    <p><em>Press <strong>Ctrl+Shift+P</strong> and type "Aura" to see all commands.</em></p>
+</body>
+</html>`;
 }
 
 export function deactivate() {

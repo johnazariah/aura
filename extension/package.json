@@ -119,6 +119,26 @@
         "command": "aura.deleteWorkflow",
         "title": "Delete Workflow",
         "icon": "$(trash)"
+      },
+      {
+        "command": "aura.showHelp",
+        "title": "Aura: Show Help",
+        "icon": "$(question)"
+      },
+      {
+        "command": "aura.openDocs",
+        "title": "Aura: Open Documentation",
+        "icon": "$(book)"
+      },
+      {
+        "command": "aura.showCheatSheet",
+        "title": "Aura: Quick Reference",
+        "icon": "$(note)"
+      },
+      {
+        "command": "aura.openGettingStarted",
+        "title": "Aura: Getting Started",
+        "icon": "$(rocket)"
       }
     ],
     "menus": {
@@ -145,6 +165,16 @@
         }
       ],
       "view/item/context": [
+        {
+          "command": "aura.indexWorkspace",
+          "when": "view == aura.status && viewItem == indexHealth",
+          "group": "inline"
+        },
+        {
+          "command": "aura.indexWorkspace",
+          "when": "view == aura.status && viewItem == rag",
+          "group": "inline"
+        },
         {
           "command": "aura.executeAgent",
           "when": "view == aura.agents && viewItem == agent",
@@ -184,6 +214,60 @@
         "key": "ctrl+alt+i",
         "mac": "cmd+alt+i",
         "when": "workspaceFolderCount > 0"
+      },
+      {
+        "command": "aura.showHelp",
+        "key": "ctrl+shift+/",
+        "mac": "cmd+shift+/"
+      }
+    ],
+    "walkthroughs": [
+      {
+        "id": "aura.gettingStarted",
+        "title": "Get Started with Aura",
+        "description": "Learn how to use Aura for AI-assisted development",
+        "steps": [
+          {
+            "id": "aura.walkthrough.checkServices",
+            "title": "Check Services are Running",
+            "description": "Aura needs its backend services running. Check the **System Status** panel to see if API and Ollama are connected.\n\n[Check Status](command:aura.refreshStatus)",
+            "media": {
+              "markdown": "resources/walkthrough/check-services.md"
+            }
+          },
+          {
+            "id": "aura.walkthrough.indexCode",
+            "title": "Index Your Codebase",
+            "description": "Index your project so Aura understands your code. This powers semantic search and code-aware chat.\n\n[Index Workspace](command:aura.indexWorkspace)",
+            "media": {
+              "markdown": "resources/walkthrough/index-code.md"
+            }
+          },
+          {
+            "id": "aura.walkthrough.tryChat",
+            "title": "Try Code-Aware Chat",
+            "description": "Ask questions about your codebase. Aura will search your indexed code and provide contextual answers.\n\n[Open Chat](command:aura.openChat)",
+            "media": {
+              "markdown": "resources/walkthrough/try-chat.md"
+            }
+          },
+          {
+            "id": "aura.walkthrough.createWorkflow",
+            "title": "Create Your First Workflow",
+            "description": "Workflows are multi-step development tasks. Describe what you want to build and Aura creates a plan.\n\n[Create Workflow](command:aura.createWorkflow)",
+            "media": {
+              "markdown": "resources/walkthrough/create-workflow.md"
+            }
+          },
+          {
+            "id": "aura.walkthrough.learnMore",
+            "title": "Learn More",
+            "description": "Explore the full documentation for detailed guides on workflows, chat, and all features.\n\n[Open Documentation](command:aura.openDocs)",
+            "media": {
+              "markdown": "resources/walkthrough/learn-more.md"
+            }
+          }
+        ]
       }
     ],
     "configuration": {
