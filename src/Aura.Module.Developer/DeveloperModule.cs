@@ -66,6 +66,12 @@ public sealed class DeveloperModule : IAuraModule
         // Register startup task for code ingestors
         services.AddSingleton<Foundation.Startup.IStartupTask, Startup.RegisterCodeIngestorsTask>();
 
+        // Register startup task for language specialist agents (from YAML configs)
+        services.AddSingleton<Foundation.Startup.IStartupTask, Startup.RegisterLanguageAgentsTask>();
+
+        // Register language config loader
+        services.AddSingleton<Agents.ILanguageConfigLoader, Agents.LanguageConfigLoader>();
+
         // Register Roslyn tools
         services.AddSingleton<ListProjectsTool>();
         services.AddSingleton<ListClassesTool>();
