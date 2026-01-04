@@ -14,6 +14,8 @@ New to Aura? Start here:
 
 Learn how to use Aura effectively:
 
+- **[Use Cases](user-guide/use-cases.md)** - Practical examples for common tasks
+- **[Cheat Sheet](user-guide/cheat-sheet.md)** - Quick reference for developers
 - **[Workflows](user-guide/workflows.md)** - Create, manage, and execute AI workflows
 - **[Chat](user-guide/chat.md)** - Code-aware conversations with your codebase
 - **[Code Indexing](user-guide/indexing.md)** - How Aura understands your code
