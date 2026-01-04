@@ -89,6 +89,35 @@ public sealed class StubLlmProvider(ILogger<StubLlmProvider> logger) : ILlmProvi
         return Task.FromResult<IReadOnlyList<ModelInfo>>(_models);
     }
 
+    /// <inheritdoc/>
+    public Task<LlmFunctionResponse> ChatWithFunctionsAsync(
+        string? model,
+        IReadOnlyList<ChatMessage> messages,
+        IReadOnlyList<FunctionDefinition> functions,
+        IReadOnlyList<FunctionResultMessage>? functionResults = null,
+        double temperature = 0.7,
+        CancellationToken cancellationToken = default)
+    {
+        var effectiveModel = model ?? "stub-model";
+        _logger.LogDebug(
+            "Stub function chat: model={Model}, messages={MessageCount}, functions={FunctionCount}",
+            effectiveModel, messages.Count, functions.Count);
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var lastUserMessage = messages.LastOrDefault(m => m.Role == ChatRole.User)?.Content ?? "empty";
+        var tokenCount = messages.Sum(m => m.Content.Length) / 4;
+
+        var response = new LlmFunctionResponse(
+            Content: $"[Stub chat response to: {TruncatePrompt(lastUserMessage)}]",
+            TokensUsed: tokenCount,
+            Model: effectiveModel,
+            FinishReason: "stop",
+            FunctionCalls: null);
+
+        return Task.FromResult(response);
+    }
+
     private static string TruncatePrompt(string prompt, int maxLength = 50)
     {
         if (prompt.Length <= maxLength)

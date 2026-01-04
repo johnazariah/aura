@@ -169,6 +169,127 @@ public sealed class OllamaProvider(
     }
 
     /// <inheritdoc/>
+    public async Task<LlmFunctionResponse> ChatWithFunctionsAsync(
+        string? model,
+        IReadOnlyList<ChatMessage> messages,
+        IReadOnlyList<FunctionDefinition> functions,
+        IReadOnlyList<FunctionResultMessage>? functionResults = null,
+        double temperature = 0.7,
+        CancellationToken cancellationToken = default)
+    {
+        var effectiveModel = model ?? _options.DefaultModel;
+        _logger.LogDebug(
+            "Ollama function chat: model={Model}, messages={MessageCount}, functions={FunctionCount}",
+            effectiveModel, messages.Count, functions.Count);
+
+        try
+        {
+            // Build messages including function results
+            var ollamaMessages = messages.Select(m => new OllamaChatMessage
+            {
+                Role = m.Role.ToString().ToLowerInvariant(),
+                Content = m.Content,
+            }).ToList();
+
+            // Add function result messages if provided
+            if (functionResults is { Count: > 0 })
+            {
+                foreach (var fnResult in functionResults)
+                {
+                    ollamaMessages.Add(new OllamaChatMessage
+                    {
+                        Role = "tool",
+                        Content = fnResult.Result,
+                    });
+                }
+            }
+
+            // Convert functions to Ollama tool format
+            var tools = functions.Select(fn => new OllamaTool
+            {
+                Type = "function",
+                Function = new OllamaToolFunction
+                {
+                    Name = fn.Name,
+                    Description = fn.Description,
+                    Parameters = JsonSerializer.Deserialize<JsonDocument>(fn.Parameters),
+                },
+            }).ToList();
+
+            var request = new OllamaChatWithToolsRequest
+            {
+                Model = effectiveModel,
+                Messages = ollamaMessages,
+                Tools = tools,
+                Stream = false,
+                Options = new OllamaModelOptions { Temperature = temperature },
+            };
+
+            using var cts = CreateTimeoutCts(cancellationToken);
+
+            var response = await _httpClient.PostAsJsonAsync(
+                _options.BaseUrl + "/api/chat",
+                request,
+                JsonOptions,
+                cts.Token).ConfigureAwait(false);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await response.Content.ReadAsStringAsync(cts.Token).ConfigureAwait(false);
+                _logger.LogError("Ollama function chat failed: {StatusCode} - {Error}", response.StatusCode, errorContent);
+                throw LlmException.GenerationFailed("HTTP " + response.StatusCode + ": " + errorContent);
+            }
+
+            var result = await response.Content.ReadFromJsonAsync<OllamaChatWithToolsResponse>(JsonOptions, cts.Token).ConfigureAwait(false);
+
+            if (result is null)
+            {
+                throw LlmException.GenerationFailed("Empty response from Ollama");
+            }
+
+            // Extract function calls from the response
+            List<FunctionCall>? functionCalls = null;
+            if (result.Message?.ToolCalls is { Count: > 0 })
+            {
+                functionCalls = [];
+                foreach (var toolCall in result.Message.ToolCalls)
+                {
+                    var argsJson = toolCall.Function?.Arguments is not null
+                        ? JsonSerializer.Serialize(toolCall.Function.Arguments)
+                        : "{}";
+                    functionCalls.Add(new FunctionCall(
+                        null, // Ollama doesn't provide call IDs
+                        toolCall.Function?.Name ?? string.Empty,
+                        argsJson));
+                }
+            }
+
+            _logger.LogDebug(
+                "Ollama function response: tokens={Tokens}, done={Done}, function_calls={FunctionCallCount}",
+                (result.PromptEvalCount ?? 0) + (result.EvalCount ?? 0), result.Done, functionCalls?.Count ?? 0);
+
+            return new LlmFunctionResponse(
+                Content: result.Message?.Content,
+                TokensUsed: (result.PromptEvalCount ?? 0) + (result.EvalCount ?? 0),
+                Model: result.Model ?? model,
+                FinishReason: result.Done ? "stop" : null,
+                FunctionCalls: functionCalls);
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (LlmException) { throw; }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogError(ex, "Ollama connection failed");
+            throw LlmException.Unavailable("ollama");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Ollama function chat error");
+            throw LlmException.GenerationFailed(ex.Message, ex);
+        }
+    }
+
+    /// <inheritdoc/>
     public async Task<float[]> GenerateEmbeddingAsync(
         string model,
         string text,
@@ -413,6 +534,56 @@ public sealed class OllamaProvider(
     {
         public List<float[]>? Embeddings { get; init; }
         public string? Model { get; init; }
+    }
+
+    // Tool calling DTOs
+    private sealed record OllamaChatWithToolsRequest
+    {
+        public required string Model { get; init; }
+        public required List<OllamaChatMessage> Messages { get; init; }
+        public List<OllamaTool>? Tools { get; init; }
+        public bool Stream { get; init; }
+        public OllamaModelOptions? Options { get; init; }
+    }
+
+    private sealed record OllamaTool
+    {
+        public required string Type { get; init; }
+        public OllamaToolFunction? Function { get; init; }
+    }
+
+    private sealed record OllamaToolFunction
+    {
+        public required string Name { get; init; }
+        public required string Description { get; init; }
+        public JsonDocument? Parameters { get; init; }
+    }
+
+    private sealed record OllamaChatWithToolsResponse
+    {
+        public string? Model { get; init; }
+        public OllamaToolMessage? Message { get; init; }
+        public bool Done { get; init; }
+        public int? PromptEvalCount { get; init; }
+        public int? EvalCount { get; init; }
+    }
+
+    private sealed record OllamaToolMessage
+    {
+        public required string Role { get; init; }
+        public string? Content { get; init; }
+        public List<OllamaToolCall>? ToolCalls { get; init; }
+    }
+
+    private sealed record OllamaToolCall
+    {
+        public OllamaToolCallFunction? Function { get; init; }
+    }
+
+    private sealed record OllamaToolCallFunction
+    {
+        public string? Name { get; init; }
+        public JsonElement? Arguments { get; init; }
     }
 
     #endregion

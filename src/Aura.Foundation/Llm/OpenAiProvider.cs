@@ -173,6 +173,120 @@ public sealed class OpenAiProvider : ILlmProvider
         }
     }
 
+    /// <inheritdoc/>
+    public async Task<LlmFunctionResponse> ChatWithFunctionsAsync(
+        string? model,
+        IReadOnlyList<Agents.ChatMessage> messages,
+        IReadOnlyList<FunctionDefinition> functions,
+        IReadOnlyList<FunctionResultMessage>? functionResults = null,
+        double temperature = 0.7,
+        CancellationToken cancellationToken = default)
+    {
+        var modelName = ResolveModelName(model);
+
+        _logger.LogDebug(
+            "OpenAI function call: model={Model}, messages={MessageCount}, functions={FunctionCount}",
+            modelName, messages.Count, functions.Count);
+
+        try
+        {
+            var chatClient = _client.GetChatClient(modelName);
+
+            // Build the message list including function results
+            var chatMessages = new List<OpenAI.Chat.ChatMessage>();
+            foreach (var m in messages)
+            {
+                chatMessages.Add(ConvertMessage(m));
+            }
+
+            // Add function result messages if provided
+            if (functionResults is { Count: > 0 })
+            {
+                foreach (var result in functionResults)
+                {
+                    chatMessages.Add(new ToolChatMessage(result.CallId ?? result.Name, result.Result));
+                }
+            }
+
+            // Build chat options with tools
+            var chatOptions = new ChatCompletionOptions
+            {
+                Temperature = (float)temperature,
+                MaxOutputTokenCount = _options.MaxTokens,
+            };
+
+            // Add tools (functions)
+            foreach (var fn in functions)
+            {
+                var tool = ChatTool.CreateFunctionTool(
+                    fn.Name,
+                    fn.Description,
+                    BinaryData.FromString(fn.Parameters));
+                chatOptions.Tools.Add(tool);
+            }
+
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(_options.TimeoutSeconds));
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(cts.Token, cancellationToken);
+
+            var response = await chatClient.CompleteChatAsync(chatMessages, chatOptions, linked.Token).ConfigureAwait(false);
+            var completion = response.Value;
+
+            var content = string.Join(string.Empty, completion.Content.Select(c => c.Text));
+            var tokensUsed = (completion.Usage?.InputTokenCount ?? 0) + (completion.Usage?.OutputTokenCount ?? 0);
+
+            // Extract function calls from the response
+            List<FunctionCall>? functionCalls = null;
+            if (completion.ToolCalls is { Count: > 0 })
+            {
+                functionCalls = [];
+                foreach (var toolCall in completion.ToolCalls)
+                {
+                    functionCalls.Add(new FunctionCall(
+                        toolCall.Id,
+                        toolCall.FunctionName,
+                        toolCall.FunctionArguments.ToString()));
+                }
+            }
+
+            _logger.LogDebug(
+                "OpenAI function response: tokens={Tokens}, finish_reason={FinishReason}, function_calls={FunctionCallCount}",
+                tokensUsed, completion.FinishReason, functionCalls?.Count ?? 0);
+
+            return new LlmFunctionResponse(
+                Content: string.IsNullOrEmpty(content) ? null : content,
+                TokensUsed: tokensUsed,
+                Model: modelName,
+                FinishReason: completion.FinishReason.ToString(),
+                FunctionCalls: functionCalls);
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (ClientResultException ex) when (ex.Status == 401 || ex.Status == 403)
+        {
+            _logger.LogError(ex, "OpenAI authentication failed");
+            throw LlmException.Unavailable("openai");
+        }
+        catch (ClientResultException ex) when (ex.Status == 404)
+        {
+            _logger.LogError(ex, "OpenAI model not found: {Model}", modelName);
+            throw LlmException.ModelNotFound(modelName);
+        }
+        catch (ClientResultException ex) when (ex.Status == 429)
+        {
+            _logger.LogWarning("OpenAI rate limited");
+            throw LlmException.GenerationFailed("Rate limited - too many requests");
+        }
+        catch (ClientResultException ex)
+        {
+            _logger.LogError(ex, "OpenAI request failed: {Status}", ex.Status);
+            throw LlmException.GenerationFailed($"OpenAI error: {ex.Message}", ex);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "OpenAI function call error");
+            throw LlmException.GenerationFailed(ex.Message, ex);
+        }
+    }
+
     /// <summary>
     /// Resolves a model name to an OpenAI model identifier.
     /// </summary>

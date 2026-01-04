@@ -5,6 +5,7 @@
 namespace Aura.Foundation.Agents;
 
 using Aura.Foundation.Llm;
+using Aura.Foundation.Tools;
 using HandlebarsDotNet;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -19,16 +20,25 @@ using Microsoft.Extensions.Options;
 /// <param name="llmOptions">LLM configuration options.</param>
 /// <param name="handlebars">Handlebars template engine.</param>
 /// <param name="loggerFactory">Logger factory.</param>
+/// <param name="toolRegistry">Optional tool registry for tool execution.</param>
+/// <param name="confirmationService">Optional confirmation service for tool approval.</param>
+/// <param name="toolOptions">Optional tool execution configuration.</param>
 public sealed class ConfigurableAgentFactory(
     ILlmProviderRegistry providerRegistry,
     IOptions<LlmOptions> llmOptions,
     IHandlebars handlebars,
-    ILoggerFactory loggerFactory) : IAgentFactory
+    ILoggerFactory loggerFactory,
+    IToolRegistry? toolRegistry = null,
+    IToolConfirmationService? confirmationService = null,
+    IOptions<ToolConfirmationOptions>? toolOptions = null) : IAgentFactory
 {
     private readonly ILlmProviderRegistry _providerRegistry = providerRegistry;
     private readonly LlmOptions _llmOptions = llmOptions.Value;
     private readonly IHandlebars _handlebars = handlebars;
     private readonly ILoggerFactory _loggerFactory = loggerFactory;
+    private readonly IToolRegistry? _toolRegistry = toolRegistry;
+    private readonly IToolConfirmationService? _confirmationService = confirmationService;
+    private readonly ToolConfirmationOptions _toolOptions = toolOptions?.Value ?? new ToolConfirmationOptions();
 
     /// <inheritdoc/>
     public IAgent CreateAgent(AgentDefinition definition)
@@ -61,6 +71,18 @@ public sealed class ConfigurableAgentFactory(
             definition.Model ?? _llmOptions.DefaultModel);
 
         var logger = _loggerFactory.CreateLogger<ConfigurableAgent>();
-        return new ConfigurableAgent(definition, _providerRegistry, _handlebars, logger);
+
+        // Only pass tool support if enabled
+        var effectiveToolRegistry = _toolOptions.Enabled ? _toolRegistry : null;
+        var effectiveConfirmationService = _toolOptions.Enabled ? _confirmationService : null;
+
+        return new ConfigurableAgent(
+            definition,
+            _providerRegistry,
+            _handlebars,
+            logger,
+            effectiveToolRegistry,
+            effectiveConfirmationService,
+            _toolOptions.MaxIterations);
     }
 }

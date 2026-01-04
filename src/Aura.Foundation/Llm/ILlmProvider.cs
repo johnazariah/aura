@@ -49,6 +49,26 @@ public interface ILlmProvider
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Generates a completion from a chat conversation with function calling support.
+    /// </summary>
+    /// <param name="model">The model to use. If null, uses provider's default.</param>
+    /// <param name="messages">The conversation messages.</param>
+    /// <param name="functions">Available functions the model can call.</param>
+    /// <param name="functionResults">Results from previous function calls to include in the conversation.</param>
+    /// <param name="temperature">Temperature for sampling.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The generated response, potentially including function calls.</returns>
+    /// <exception cref="LlmException">Thrown when generation fails.</exception>
+    /// <exception cref="OperationCanceledException">Thrown when cancelled.</exception>
+    Task<LlmFunctionResponse> ChatWithFunctionsAsync(
+        string? model,
+        IReadOnlyList<ChatMessage> messages,
+        IReadOnlyList<FunctionDefinition> functions,
+        IReadOnlyList<FunctionResultMessage>? functionResults = null,
+        double temperature = 0.7,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Checks if a model is available on this provider.
     /// </summary>
     /// <param name="model">The model name.</param>

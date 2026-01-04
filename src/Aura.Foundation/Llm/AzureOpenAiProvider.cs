@@ -142,6 +142,127 @@ public sealed class AzureOpenAiProvider : ILlmProvider
     }
 
     /// <inheritdoc/>
+    public async Task<LlmFunctionResponse> ChatWithFunctionsAsync(
+        string? model,
+        IReadOnlyList<Agents.ChatMessage> messages,
+        IReadOnlyList<FunctionDefinition> functions,
+        IReadOnlyList<FunctionResultMessage>? functionResults = null,
+        double temperature = 0.7,
+        CancellationToken cancellationToken = default)
+    {
+        var deploymentName = ResolveDeploymentName(model);
+        var callStart = DateTime.UtcNow;
+
+        _logger.LogDebug(
+            "Azure OpenAI function call starting: deployment={Deployment}, messages={MessageCount}, functions={FunctionCount}",
+            deploymentName, messages.Count, functions.Count);
+
+        try
+        {
+            var chatClient = _client.GetChatClient(deploymentName);
+
+            // Build the message list including function results
+            var chatMessages = new List<OpenAI.Chat.ChatMessage>();
+            foreach (var m in messages)
+            {
+                chatMessages.Add(ConvertMessage(m));
+            }
+
+            // Add function result messages if provided
+            if (functionResults is { Count: > 0 })
+            {
+                foreach (var result in functionResults)
+                {
+                    chatMessages.Add(new ToolChatMessage(result.CallId ?? result.Name, result.Result));
+                }
+            }
+
+            // Build chat options with tools
+            var chatOptions = new ChatCompletionOptions
+            {
+                Temperature = (float)temperature,
+                MaxOutputTokenCount = _options.MaxTokens,
+            };
+
+            // Add tools (functions)
+            foreach (var fn in functions)
+            {
+                var tool = ChatTool.CreateFunctionTool(
+                    fn.Name,
+                    fn.Description,
+                    BinaryData.FromString(fn.Parameters));
+                chatOptions.Tools.Add(tool);
+            }
+
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(_options.TimeoutSeconds));
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(cts.Token, cancellationToken);
+
+            var response = await chatClient.CompleteChatAsync(chatMessages, chatOptions, linked.Token).ConfigureAwait(false);
+            var completion = response.Value;
+
+            var content = string.Join(string.Empty, completion.Content.Select(c => c.Text));
+            var tokensUsed = (completion.Usage?.InputTokenCount ?? 0) + (completion.Usage?.OutputTokenCount ?? 0);
+            var callDuration = DateTime.UtcNow - callStart;
+
+            // Extract function calls from the response
+            List<FunctionCall>? functionCalls = null;
+            if (completion.ToolCalls is { Count: > 0 })
+            {
+                functionCalls = [];
+                foreach (var toolCall in completion.ToolCalls)
+                {
+                    functionCalls.Add(new FunctionCall(
+                        toolCall.Id,
+                        toolCall.FunctionName,
+                        toolCall.FunctionArguments.ToString()));
+                }
+            }
+
+            _logger.LogDebug(
+                "Azure OpenAI function call completed in {Duration:F1}s: tokens={Tokens}, finish_reason={FinishReason}, function_calls={FunctionCallCount}",
+                callDuration.TotalSeconds, tokensUsed, completion.FinishReason, functionCalls?.Count ?? 0);
+
+            return new LlmFunctionResponse(
+                Content: string.IsNullOrEmpty(content) ? null : content,
+                TokensUsed: tokensUsed,
+                Model: deploymentName,
+                FinishReason: completion.FinishReason.ToString(),
+                FunctionCalls: functionCalls);
+        }
+        catch (OperationCanceledException)
+        {
+            var callDuration = DateTime.UtcNow - callStart;
+            _logger.LogWarning("Azure OpenAI function call cancelled after {Duration:F1}s", callDuration.TotalSeconds);
+            throw;
+        }
+        catch (RequestFailedException ex) when (ex.Status == 401 || ex.Status == 403)
+        {
+            _logger.LogError(ex, "Azure OpenAI authentication failed");
+            throw LlmException.Unavailable("azureopenai");
+        }
+        catch (RequestFailedException ex) when (ex.Status == 404)
+        {
+            _logger.LogError(ex, "Azure OpenAI deployment not found: {Deployment}", deploymentName);
+            throw LlmException.ModelNotFound(deploymentName);
+        }
+        catch (RequestFailedException ex) when (ex.Status == 429)
+        {
+            _logger.LogWarning("Azure OpenAI rate limited");
+            throw LlmException.GenerationFailed("Rate limited - too many requests");
+        }
+        catch (RequestFailedException ex)
+        {
+            _logger.LogError(ex, "Azure OpenAI request failed: {Status}", ex.Status);
+            throw LlmException.GenerationFailed($"Azure OpenAI error: {ex.Message}", ex);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Azure OpenAI error during function call");
+            throw LlmException.GenerationFailed(ex.Message, ex);
+        }
+    }
+
+    /// <inheritdoc/>
     public Task<bool> IsModelAvailableAsync(string model, CancellationToken cancellationToken = default)
     {
         // Azure OpenAI doesn't have a simple "list deployments" API in the SDK
