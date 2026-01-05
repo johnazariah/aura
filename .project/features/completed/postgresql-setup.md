@@ -197,12 +197,62 @@ end;
 
 | Component | Size |
 |-----------|------|
-| PostgreSQL binaries | ~90 MB |
-| pgvector extension | ~1 MB |
-| **Total addition** | ~91 MB |
+| PostgreSQL binaries | ~120 MB (after trimming) |
+| pgvector extension | ~1 MB (not yet bundled) |
+| **Total addition** | ~121 MB |
 
-Current installer is ~50MB, so total would be ~140MB. Acceptable for a desktop app.
+Current installer is ~110MB total (LZMA2 compressed).
 
 ## Dependencies
 
 - None (but blocks end-user documentation database section)
+
+---
+
+## Implementation Notes (2025-01-04)
+
+### Critical Learnings
+
+#### 1. pgAdmin Bloat Removal
+
+The PostgreSQL Windows binaries include pgAdmin 4 with a full Python 3.12 environment (~616MB). **This must be removed** in `Publish-Release.ps1`:
+
+```powershell
+# Remove unnecessary folders (saves ~800MB)
+@("pgAdmin 4", "symbols", "doc", "include", "StackBuilder") | ForEach-Object {
+    Remove-Item "$pgsqlDir/$_" -Recurse -Force -ErrorAction SilentlyContinue
+}
+```
+
+**Size reduction:** 920MB → 120MB
+
+#### 2. Windows Locale Flag
+
+On Windows, `initdb` does NOT support `--locale=en_US.UTF-8`:
+
+```
+initdb: error: invalid locale name "en_US.UTF-8"
+```
+
+**Solution:** Omit the `--locale` flag entirely. Windows uses system locale automatically.
+
+#### 3. Data Directory Location
+
+**Never use `{app}\data`** (Program Files). Use `{commonappdata}\Aura\data` instead:
+
+- `{app}` = `C:\Program Files\Aura\` (requires admin, UAC issues)
+- `{commonappdata}` = `C:\ProgramData\Aura\` (writable by services)
+
+#### 4. prompts/ Folder
+
+The `prompts/` folder with Handlebars templates must be bundled alongside `agents/`. Without it, agents fail at runtime.
+
+### Actual Installer Size
+
+| Component | Uncompressed | Compressed |
+|-----------|-------------|------------|
+| API (self-contained .NET 10) | ~180 MB | ~60 MB |
+| Tray app | ~25 MB | ~8 MB |
+| PostgreSQL (trimmed) | ~120 MB | ~40 MB |
+| Extension + agents + prompts | ~1 MB | ~0.5 MB |
+| **Total** | ~325 MB | **~110 MB** |

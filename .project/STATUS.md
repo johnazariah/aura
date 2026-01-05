@@ -232,6 +232,7 @@ prompts/                      # Handlebars prompt templates
 
 | Item | Priority | Notes |
 |------|----------|-------|
+| **pgvector for Windows** | **High** | Need pre-built Windows x64 binaries for PostgreSQL 16. Without it, vector search (RAG) is disabled. See `installers/pgsql-extensions/README.md` |
 | Dependency Graph edges | Low | Import relationships in code graph |
 | Azure AD for LLM | Future | Currently API key only |
 | Cost tracking | Future | For cloud LLM usage |

@@ -67,10 +67,13 @@ C:\Program Files\Aura\
 ├── api\                    # Aura API service
 ├── tray\                   # System tray application
 ├── agents\                 # AI agent definitions
-├── pgsql\                  # PostgreSQL database
+├── prompts\                # Prompt templates
+├── pgsql\                  # PostgreSQL binaries
 ├── extension\              # VS Code extension (.vsix)
-├── scripts\                # Helper scripts
-└── data\                   # Database files
+└── scripts\                # Helper scripts
+
+C:\ProgramData\Aura\
+└── data\                   # PostgreSQL database files
 ```
 
 ## Windows Services
@@ -95,4 +98,4 @@ To remove Aura:
 2. Find "Aura" and click **Uninstall**
 3. The uninstaller will stop services and remove all files
 
-> **Note:** Your database files in `C:\Program Files\Aura\data\` are preserved by default. Delete manually if you want a clean removal.
+> **Note:** Your database files in `C:\ProgramData\Aura\data\` are preserved by default. Delete manually if you want a clean removal.
