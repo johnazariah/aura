@@ -84,12 +84,19 @@ var app = builder.Build();
 if (!app.Environment.IsEnvironment("Testing"))
 {
     using var scope = app.Services.CreateScope();
-    var db = scope.ServiceProvider.GetRequiredService<AuraDbContext>();
     var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
     try
     {
         logger.LogInformation("Applying database migrations...");
-        db.Database.Migrate();
+
+        // Apply Foundation migrations first
+        var foundationDb = scope.ServiceProvider.GetRequiredService<AuraDbContext>();
+        foundationDb.Database.Migrate();
+
+        // Apply Developer module migrations (includes its own entities)
+        var developerDb = scope.ServiceProvider.GetRequiredService<Aura.Module.Developer.Data.DeveloperDbContext>();
+        developerDb.Database.Migrate();
+
         logger.LogInformation("Database migrations applied successfully");
     }
     catch (Exception ex)
