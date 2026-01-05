@@ -141,9 +141,15 @@ for file in $STAGED_FILES; do
                 fi
                 ;;
             *.json)
-                # Check for valid JSON syntax
-                if command -v python3 > /dev/null 2>&1; then
-                    if ! git show ":$file" 2>/dev/null | python3 -m json.tool > /dev/null 2>&1; then
+                # Check for valid JSON syntax (try python3 first, then python)
+                PYTHON_CMD=""
+                if command -v python3 > /dev/null 2>&1 && python3 --version > /dev/null 2>&1; then
+                    PYTHON_CMD="python3"
+                elif command -v python > /dev/null 2>&1; then
+                    PYTHON_CMD="python"
+                fi
+                if [ -n "$PYTHON_CMD" ]; then
+                    if ! git show ":$file" 2>/dev/null | $PYTHON_CMD -m json.tool > /dev/null 2>&1; then
                         echo "${RED}❌ Invalid JSON syntax in: $file${NC}"
                         MISTAKES=1
                     fi
