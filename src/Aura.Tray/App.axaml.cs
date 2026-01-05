@@ -2,8 +2,10 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using System;
+using System.Reflection;
 
 namespace Aura.Tray;
 
@@ -100,7 +102,8 @@ public partial class App : Application
         {
             ToolTipText = "Aura",
             Menu = menu,
-            IsVisible = true
+            IsVisible = true,
+            Icon = LoadTrayIcon("tray-unknown")
         };
 
         _trayIcon.Clicked += (_, _) => ShowStatusWindow();
@@ -154,8 +157,34 @@ public partial class App : Application
 
         _trayIcon.ToolTipText = $"Aura - {statusText}";
 
-        // Note: For production, you'd want actual icon files for each state
-        // For now, we'll just update the tooltip
+        // Update icon based on status
+        var iconName = status switch
+        {
+            ServiceStatus.AllHealthy => "tray-healthy",
+            ServiceStatus.Degraded => "tray-degraded",
+            ServiceStatus.Offline => "tray-offline",
+            _ => "tray-unknown"
+        };
+        _trayIcon.Icon = LoadTrayIcon(iconName);
+    }
+
+    private static WindowIcon? LoadTrayIcon(string iconName)
+    {
+        try
+        {
+            var assembly = Assembly.GetExecutingAssembly();
+            var resourceName = $"Aura.Tray.Assets.{iconName}.png";
+            using var stream = assembly.GetManifestResourceStream(resourceName);
+            if (stream != null)
+            {
+                return new WindowIcon(stream);
+            }
+        }
+        catch
+        {
+            // Ignore icon loading errors
+        }
+        return null;
     }
 
     private void ShowStatusWindow()

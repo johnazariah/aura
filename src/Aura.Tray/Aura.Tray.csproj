@@ -30,6 +30,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Assets\*.svg" />
+    <EmbeddedResource Include="Assets\*.png" />
     <None Include="Assets\*.*" CopyToOutputDirectory="PreserveNewest" LinkBase="Assets" />
   </ItemGroup>
 
