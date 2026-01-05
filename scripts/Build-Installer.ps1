@@ -23,16 +23,30 @@ try {
     Write-Host "Building Aura Installer $Version" -ForegroundColor Cyan
     Write-Host "=" * 50 -ForegroundColor Cyan
 
-    # Check for Inno Setup
-    $iscc = Get-Command "iscc" -ErrorAction SilentlyContinue
-    if (-not $iscc) {
-        $iscc = Get-Command "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" -ErrorAction SilentlyContinue
+    # Check for Inno Setup in various locations
+    $isccPaths = @(
+        "iscc",
+        "C:\Program Files (x86)\Inno Setup 6\ISCC.exe",
+        "C:\Program Files\Inno Setup 6\ISCC.exe",
+        "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe"
+    )
+    
+    $iscc = $null
+    foreach ($path in $isccPaths) {
+        $cmd = Get-Command $path -ErrorAction SilentlyContinue
+        if ($cmd) {
+            $iscc = $cmd
+            break
+        }
     }
+    
     if (-not $iscc) {
         Write-Host "Inno Setup not found. Install from: https://jrsoftware.org/isdl.php" -ForegroundColor Red
         Write-Host "Or: winget install -e --id JRSoftware.InnoSetup" -ForegroundColor Yellow
         exit 1
     }
+    
+    Write-Host "Using Inno Setup: $($iscc.Source)" -ForegroundColor Gray
 
     # Publish first
     Write-Host "`nStep 1: Publishing release..." -ForegroundColor Green

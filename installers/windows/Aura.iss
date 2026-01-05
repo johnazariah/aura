@@ -47,6 +47,8 @@ Source: "..\..\publish\win-x64\api\*"; DestDir: "{app}\api"; Flags: ignoreversio
 Source: "..\..\publish\win-x64\tray\*"; DestDir: "{app}\tray"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; Agents
 Source: "..\..\publish\win-x64\agents\*"; DestDir: "{app}\agents"; Flags: ignoreversion recursesubdirs createallsubdirs
+; Prompts
+Source: "..\..\publish\win-x64\prompts\*"; DestDir: "{app}\prompts"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; VS Code Extension
 Source: "..\..\publish\win-x64\extension\*.vsix"; DestDir: "{app}\extension"; Flags: ignoreversion
 ; Scripts
@@ -66,9 +68,9 @@ Root: HKCU; Subkey: "SOFTWARE\Microsoft\Windows\CurrentVersion\Run"; ValueType: 
 
 [Run]
 ; Initialize PostgreSQL database (first install only)
-Filename: "{app}\pgsql\bin\initdb.exe"; Parameters: "-D ""{app}\data"" -U postgres -E UTF8 --locale=en_US.UTF-8"; Flags: runhidden; Check: not DatabaseExists
+Filename: "{app}\pgsql\bin\initdb.exe"; Parameters: "-D ""{commonappdata}\Aura\data"" -U postgres -E UTF8"; Flags: runhidden; Check: not DatabaseExists
 ; Register PostgreSQL as Windows service
-Filename: "{app}\pgsql\bin\pg_ctl.exe"; Parameters: "register -N AuraDB -D ""{app}\data"" -o ""-p 5433"""; Flags: runhidden; Check: not AuraDBServiceExists
+Filename: "{app}\pgsql\bin\pg_ctl.exe"; Parameters: "register -N AuraDB -D ""{commonappdata}\Aura\data"" -o ""-p 5433"""; Flags: runhidden; Check: not AuraDBServiceExists
 ; Start PostgreSQL service
 Filename: "sc.exe"; Parameters: "start AuraDB"; Flags: runhidden
 ; Create auradb database (wait for service to start)
@@ -78,6 +80,8 @@ Filename: "{app}\pgsql\bin\psql.exe"; Parameters: "-h localhost -p 5433 -U postg
 ; Install as Windows Service
 Filename: "sc.exe"; Parameters: "create AuraService binPath= ""{app}\api\{#MyAppExeName}"" start= auto"; Flags: runhidden; Tasks: installservice
 Filename: "sc.exe"; Parameters: "description AuraService ""Aura local AI assistant service"""; Flags: runhidden; Tasks: installservice
+; Set environment for service to use Production settings
+Filename: "reg.exe"; Parameters: "add ""HKLM\SYSTEM\CurrentControlSet\Services\AuraService"" /v Environment /t REG_MULTI_SZ /d ""ASPNETCORE_ENVIRONMENT=Production"" /f"; Flags: runhidden; Tasks: installservice
 Filename: "sc.exe"; Parameters: "start AuraService"; Flags: runhidden; Tasks: installservice
 ; Install VS Code extension
 Filename: "{code:GetVSCodePath}"; Parameters: "--install-extension ""{app}\extension\aura-{#MyAppVersion}.vsix"" --force"; Flags: runhidden nowait; Tasks: installextension
@@ -95,8 +99,8 @@ Filename: "{app}\pgsql\bin\pg_ctl.exe"; Parameters: "unregister -N AuraDB"; Flag
 [Code]
 function DatabaseExists(): Boolean;
 begin
-  // Check if the data directory already exists (upgrade scenario)
-  Result := DirExists(ExpandConstant('{app}\data'));
+  // Check if the data directory already exists in ProgramData (upgrade scenario)
+  Result := DirExists(ExpandConstant('{commonappdata}\Aura\data'));
 end;
 
 function AuraDBServiceExists(): Boolean;

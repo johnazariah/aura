@@ -1,31 +1,22 @@
 # PostgreSQL Extensions
 
-This directory contains pre-compiled PostgreSQL extensions for bundling with the installer.
+This directory documents the PostgreSQL extensions bundled with Aura.
 
-## Required Files for pgvector
+## pgvector
 
-To enable vector search, you need to place the following files here:
+The pgvector extension enables vector similarity search for RAG (Retrieval-Augmented Generation).
+
+**Source:** https://github.com/andreiramani/pgvector_pgsql_windows/releases
+
+The `Publish-Release.ps1` script automatically downloads prebuilt Windows binaries from the community-maintained repository above. The files are:
 
 - `vector.dll` - The pgvector extension binary (compiled for Windows x64, PostgreSQL 16)
-- `vector.control` - Extension control file
-- `vector--0.7.0.sql` - SQL installation script (version may vary)
+- `vector.control` - Extension control file  
+- `vector--*.sql` - SQL installation/upgrade scripts
 
-## How to Obtain pgvector for Windows
+## Manual Override
 
-### Option 1: Download Pre-built (Recommended)
-
-Download from the pgvector releases page:
-https://github.com/pgvector/pgvector/releases
-
-Look for Windows x64 builds compatible with PostgreSQL 16.
-
-### Option 2: Build from Source
-
-1. Install Visual Studio Build Tools
-2. Install PostgreSQL 16 development headers
-3. Clone pgvector: `git clone https://github.com/pgvector/pgvector.git`
-4. Build: `nmake /F Makefile.win`
-5. Copy the resulting files here
+If you need to use a different version, place the files here and modify `Publish-Release.ps1` to copy from this directory instead of downloading.
 
 ## Without pgvector
 

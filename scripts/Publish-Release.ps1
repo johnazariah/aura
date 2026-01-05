@@ -58,6 +58,10 @@ try {
     Write-Host "`nCopying agents..." -ForegroundColor Green
     Copy-Item -Path "agents" -Destination "$OutputDir/win-x64/agents" -Recurse
 
+    # Copy prompts
+    Write-Host "`nCopying prompts..." -ForegroundColor Green
+    Copy-Item -Path "prompts" -Destination "$OutputDir/win-x64/prompts" -Recurse
+
     # Build VS Code extension
     Write-Host "`nBuilding VS Code Extension..." -ForegroundColor Green
     Push-Location extension
@@ -120,17 +124,44 @@ try {
     New-Item -ItemType Directory -Path "$OutputDir/win-x64/pgsql" -Force | Out-Null
     Copy-Item -Path "$($pgSourceDir.FullName)/*" -Destination "$OutputDir/win-x64/pgsql" -Recurse -Force
     
-    # Copy pgvector extension if available
-    $pgvectorDir = "installers/pgsql-extensions"
-    if (Test-Path "$pgvectorDir/vector.dll") {
-        Write-Host "  Bundling pgvector extension..." -ForegroundColor Gray
-        Copy-Item "$pgvectorDir/vector.dll" "$OutputDir/win-x64/pgsql/lib/"
-        Copy-Item "$pgvectorDir/vector.control" "$OutputDir/win-x64/pgsql/share/extension/"
-        Copy-Item "$pgvectorDir/vector--*.sql" "$OutputDir/win-x64/pgsql/share/extension/"
-    } else {
-        Write-Host "  WARNING: pgvector extension not found in $pgvectorDir" -ForegroundColor Yellow
-        Write-Host "           Vector search will not be available" -ForegroundColor Yellow
+    # Remove pgAdmin 4 - we don't need a web GUI, saves ~500MB
+    $pgAdminDir = "$OutputDir/win-x64/pgsql/pgAdmin 4"
+    if (Test-Path $pgAdminDir) {
+        Write-Host "  Removing pgAdmin 4 (not needed, saves ~500MB)..." -ForegroundColor Gray
+        Remove-Item $pgAdminDir -Recurse -Force
     }
+    
+    # Remove other unnecessary folders to reduce installer size
+    foreach ($unneeded in @("symbols", "doc", "include", "StackBuilder")) {
+        $unneededDir = "$OutputDir/win-x64/pgsql/$unneeded"
+        if (Test-Path $unneededDir) {
+            Write-Host "  Removing $unneeded (not needed for runtime)..." -ForegroundColor Gray
+            Remove-Item $unneededDir -Recurse -Force
+        }
+    }
+    
+    # Download and bundle pgvector extension
+    Write-Host "`nPreparing pgvector extension..." -ForegroundColor Green
+    $pgvectorZip = "pgvector-pg16.zip"
+    $pgvectorUrl = "https://github.com/andreiramani/pgvector_pgsql_windows/releases/download/0.8.1_16/vector.v0.8.1-pg16.zip"
+    
+    if (-not (Test-Path "$cacheDir/$pgvectorZip")) {
+        Write-Host "  Downloading pgvector 0.8.1 for PostgreSQL 16..." -ForegroundColor Yellow
+        Invoke-WebRequest -Uri $pgvectorUrl -OutFile "$cacheDir/$pgvectorZip"
+    } else {
+        Write-Host "  Using cached pgvector" -ForegroundColor Gray
+    }
+    
+    # Extract pgvector
+    $pgvectorTempDir = "$cacheDir/pgvector-temp"
+    if (Test-Path $pgvectorTempDir) { Remove-Item $pgvectorTempDir -Recurse -Force }
+    Expand-Archive "$cacheDir/$pgvectorZip" -DestinationPath $pgvectorTempDir -Force
+    
+    # Copy pgvector files to PostgreSQL directories
+    Write-Host "  Bundling pgvector extension..." -ForegroundColor Gray
+    Copy-Item "$pgvectorTempDir/lib/vector.dll" "$OutputDir/win-x64/pgsql/lib/"
+    Copy-Item "$pgvectorTempDir/share/extension/vector.control" "$OutputDir/win-x64/pgsql/share/extension/"
+    Copy-Item "$pgvectorTempDir/share/extension/vector--*.sql" "$OutputDir/win-x64/pgsql/share/extension/"
 
     # Create version file
     @{
@@ -143,6 +174,7 @@ try {
     Write-Host "  - api/Aura.Api.exe (Windows Service)" -ForegroundColor Gray
     Write-Host "  - tray/Aura.Tray.exe (System Tray)" -ForegroundColor Gray
     Write-Host "  - agents/ (Agent definitions)" -ForegroundColor Gray
+    Write-Host "  - prompts/ (Prompt templates)" -ForegroundColor Gray
     Write-Host "  - extension/aura-$Version.vsix (VS Code Extension)" -ForegroundColor Gray
     Write-Host "  - scripts/install-extension.ps1 (Manual install helper)" -ForegroundColor Gray
     Write-Host "  - pgsql/ (PostgreSQL $pgVersion)" -ForegroundColor Gray
