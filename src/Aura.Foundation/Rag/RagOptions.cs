@@ -94,6 +94,8 @@ public sealed record RagIndexOptions
         "**/.vs/**", "**/packages/**", "**/dist/**", "**/.nuget/**",
         "**/*.dll", "**/*.exe", "**/*.pdb", "**/*.cache",
         "**/wwwroot/lib/**", "**/.idea/**", "**/coverage/**",
+        "**/.venv/**", "**/venv/**", "**/cache/**", "**/publish/**",
+        "**/temp/**", "**/TestResults/**", "**/__pycache__/**",
     ];
 
     /// <summary>
