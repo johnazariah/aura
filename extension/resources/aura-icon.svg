@@ -1,8 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5">
-  <!-- Outer circle (aura ring) -->
-  <circle cx="12" cy="12" r="10"/>
-  <!-- Inner circle -->
-  <circle cx="12" cy="12" r="6"/>
-  <!-- Stylized A using lines -->
-  <path d="M12 7 L9 15 M12 7 L15 15 M10 13 L14 13"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+  <!-- Aura logo - gold center with aura rings -->
+  <!-- Outer aura ring -->
+  <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.6"/>
+  <!-- Inner aura ring -->
+  <circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" stroke-width="1" opacity="0.3"/>
+  <!-- Gold solid center -->
+  <circle cx="12" cy="12" r="4" fill="#FFB300"/>
 </svg>
