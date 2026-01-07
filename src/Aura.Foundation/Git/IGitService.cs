@@ -74,6 +74,12 @@ public interface IGitService
 
     /// <summary>Get the commit timestamp for a specific SHA</summary>
     Task<GitResult<DateTimeOffset>> GetCommitTimestampAsync(string repoPath, string commitSha, CancellationToken ct = default);
+
+    /// <summary>Get all files tracked by git in the repository</summary>
+    /// <param name="repoPath">Path to the repository</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>List of relative file paths tracked by git</returns>
+    Task<GitResult<IReadOnlyList<string>>> GetTrackedFilesAsync(string repoPath, CancellationToken ct = default);
 }
 
 /// <summary>

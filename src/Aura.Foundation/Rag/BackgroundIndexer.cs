@@ -243,8 +243,8 @@ public sealed class BackgroundIndexer : BackgroundService, IBackgroundIndexer
 
         try
         {
-            // Discover files first
-            var files = DiscoverFiles(directoryPath, options);
+            // Discover files first (prefer git-tracked files for performance)
+            var files = await DiscoverFilesAsync(directoryPath, options, gitService, cancellationToken);
             var totalFiles = files.Count;
 
             UpdateJobStatus(jobId, s => s with { TotalItems = totalFiles });
@@ -477,14 +477,41 @@ public sealed class BackgroundIndexer : BackgroundService, IBackgroundIndexer
         }
     }
 
-    private List<string> DiscoverFiles(string directoryPath, RagIndexOptions options)
+    private async Task<List<string>> DiscoverFilesAsync(
+        string directoryPath,
+        RagIndexOptions options,
+        IGitService gitService,
+        CancellationToken ct)
     {
+        var patterns = options.EffectiveIncludePatterns;
+        var excludePatterns = options.EffectiveExcludePatterns;
+
+        // Try git-based discovery first (much faster, respects .gitignore)
+        if (options.PreferGitTrackedFiles && await gitService.IsRepositoryAsync(directoryPath, ct))
+        {
+            var gitResult = await gitService.GetTrackedFilesAsync(directoryPath, ct);
+            if (gitResult.Success && gitResult.Value is not null)
+            {
+                var gitFiles = gitResult.Value
+                    .Select(relativePath => Path.Combine(directoryPath, relativePath.Replace('/', Path.DirectorySeparatorChar)))
+                    .Where(absolutePath => MatchesIncludePatterns(absolutePath, patterns))
+                    .Where(absolutePath => !GlobMatcher.MatchesAny(absolutePath, excludePatterns))
+                    .ToList();
+
+                _logger.LogInformation("Git-based discovery found {FileCount} matching files (from {TotalTracked} tracked)",
+                    gitFiles.Count, gitResult.Value.Count);
+
+                return gitFiles;
+            }
+
+            _logger.LogWarning("Git-based discovery failed: {Error}. Falling back to directory scan.",
+                gitResult.Error);
+        }
+
+        // Fallback: traditional directory scan
         var searchOption = options.Recursive
             ? SearchOption.AllDirectories
             : SearchOption.TopDirectoryOnly;
-
-        var patterns = options.EffectiveIncludePatterns;
-        var excludePatterns = options.EffectiveExcludePatterns;
 
         var files = new List<string>();
 
@@ -501,6 +528,27 @@ public sealed class BackgroundIndexer : BackgroundService, IBackgroundIndexer
         }
 
         return files;
+    }
+
+    private static bool MatchesIncludePatterns(string filePath, IReadOnlyList<string> patterns)
+    {
+        var fileName = Path.GetFileName(filePath);
+        foreach (var pattern in patterns)
+        {
+            // Simple extension matching for patterns like "*.cs"
+            if (pattern.StartsWith("*.") && fileName.EndsWith(pattern[1..], StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            // Exact name match
+            if (fileName.Equals(pattern, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private async Task<IReadOnlyList<SemanticChunk>> IngestWithAgentAsync(

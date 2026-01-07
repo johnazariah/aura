@@ -445,6 +445,20 @@ public class GitService(IProcessRunner process, ILogger<GitService> logger) : IG
         return GitResult<DateTimeOffset>.Fail("Unable to parse commit timestamp");
     }
 
+    public async Task<GitResult<IReadOnlyList<string>>> GetTrackedFilesAsync(string repoPath, CancellationToken ct = default)
+    {
+        // Use git ls-files to get all tracked files (respects .gitignore)
+        var result = await RunGitAsync(repoPath, ["ls-files", "--cached", "--others", "--exclude-standard"], ct);
+        if (!result.Success)
+            return GitResult<IReadOnlyList<string>>.Fail(result.StandardError);
+
+        var files = result.StandardOutput
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToList();
+
+        return GitResult<IReadOnlyList<string>>.Ok(files);
+    }
+
     private async Task<ProcessResult> RunGitAsync(string workDir, string[] args, CancellationToken ct)
     {
         return await _process.RunAsync("git", args, new ProcessOptions

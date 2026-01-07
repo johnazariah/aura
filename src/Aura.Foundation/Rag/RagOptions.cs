@@ -124,6 +124,13 @@ public sealed record RagIndexOptions
     public bool Recursive { get; init; } = true;
 
     /// <summary>
+    /// Gets or sets whether to prefer git-tracked files when indexing a git repository.
+    /// When true, uses 'git ls-files' to discover files, which is faster and respects .gitignore.
+    /// Defaults to true.
+    /// </summary>
+    public bool PreferGitTrackedFiles { get; init; } = true;
+
+    /// <summary>
     /// Gets or sets the content type override.
     /// If null, type is auto-detected from file extension.
     /// </summary>
