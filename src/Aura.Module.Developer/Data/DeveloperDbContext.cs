@@ -4,19 +4,18 @@
 
 namespace Aura.Module.Developer.Data;
 
-using Aura.Foundation.Data;
 using Aura.Module.Developer.Data.Entities;
 using Microsoft.EntityFrameworkCore;
 
 /// <summary>
 /// Database context for the Developer module.
-/// Extends AuraDbContext with developer-specific entities.
+/// Manages developer-specific entities only. Foundation entities are managed by AuraDbContext.
 /// </summary>
 /// <remarks>
 /// Initializes a new instance of the <see cref="DeveloperDbContext"/> class.
 /// </remarks>
 /// <param name="options">Database context options.</param>
-public sealed class DeveloperDbContext(DbContextOptions<DeveloperDbContext> options) : AuraDbContext(options)
+public sealed class DeveloperDbContext(DbContextOptions<DeveloperDbContext> options) : DbContext(options)
 {
 
     /// <summary>Gets the workflows.</summary>
@@ -28,10 +27,9 @@ public sealed class DeveloperDbContext(DbContextOptions<DeveloperDbContext> opti
     /// <inheritdoc/>
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        // Configure foundation entities first
-        ConfigureFoundationEntities(modelBuilder);
+        base.OnModelCreating(modelBuilder);
 
-        // Configure developer-specific entities
+        // Configure developer-specific entities only
         ConfigureDeveloperEntities(modelBuilder);
     }
 
