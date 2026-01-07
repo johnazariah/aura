@@ -53,7 +53,7 @@ public class ServiceMonitor : IDisposable
         RagStatus = new ComponentStatus { Name = "RAG Index", StatusText = "Checking..." }
     };
 
-    public ServiceMonitor(string apiBaseUrl = "http://localhost:5280", string ollamaUrl = "http://localhost:11434")
+    public ServiceMonitor(string apiBaseUrl = "http://localhost:5300", string ollamaUrl = "http://localhost:11434")
     {
         _apiBaseUrl = apiBaseUrl;
         _ollamaUrl = ollamaUrl;
@@ -115,7 +115,8 @@ public class ServiceMonitor : IDisposable
             if (response.IsSuccessStatusCode)
             {
                 var content = await response.Content.ReadAsStringAsync();
-                var health = JsonSerializer.Deserialize<JsonElement>(content);
+                using var doc = JsonDocument.Parse(content);
+                var health = doc.RootElement;
 
                 var status = health.TryGetProperty("status", out var statusProp)
                     ? statusProp.GetString()
@@ -169,7 +170,8 @@ public class ServiceMonitor : IDisposable
             if (response.IsSuccessStatusCode)
             {
                 var content = await response.Content.ReadAsStringAsync();
-                var data = JsonSerializer.Deserialize<JsonElement>(content);
+                using var doc = JsonDocument.Parse(content);
+                var data = doc.RootElement;
 
                 var modelCount = data.TryGetProperty("models", out var models) && models.ValueKind == JsonValueKind.Array
                     ? models.GetArrayLength()
@@ -222,7 +224,8 @@ public class ServiceMonitor : IDisposable
             if (response.IsSuccessStatusCode)
             {
                 var content = await response.Content.ReadAsStringAsync();
-                var health = JsonSerializer.Deserialize<JsonElement>(content);
+                using var doc = JsonDocument.Parse(content);
+                var health = doc.RootElement;
 
                 // Look for database check in health response
                 if (health.TryGetProperty("checks", out var checks) && checks.ValueKind == JsonValueKind.Array)
@@ -280,33 +283,45 @@ public class ServiceMonitor : IDisposable
     {
         try
         {
-            // Check RAG status via API endpoint
-            var response = await _httpClient.GetAsync($"{_apiBaseUrl}/api/rag/status");
+            // Get aggregate RAG stats (system-wide, not per-repo)
+            // Per-repo stats are shown in the VS Code extension
+            var response = await _httpClient.GetAsync($"{_apiBaseUrl}/api/rag/stats");
 
             if (response.IsSuccessStatusCode)
             {
                 var content = await response.Content.ReadAsStringAsync();
-                var data = JsonSerializer.Deserialize<JsonElement>(content);
+                using var doc = JsonDocument.Parse(content);
+                var data = doc.RootElement;
 
-                var indexed = data.TryGetProperty("indexed", out var idx) && idx.GetBoolean();
-                var fileCount = data.TryGetProperty("fileCount", out var fc) ? fc.GetInt32() : 0;
+                var totalDocs = data.TryGetProperty("totalDocuments", out var docs) ? docs.GetInt32() : 0;
+                var totalChunks = data.TryGetProperty("totalChunks", out var chunks) ? chunks.GetInt32() : 0;
+
+                if (totalDocs > 0)
+                {
+                    return new ComponentStatus
+                    {
+                        Name = "RAG Index",
+                        IsHealthy = true,
+                        StatusText = "Active",
+                        Details = $"{totalDocs:N0} files, {totalChunks:N0} chunks indexed"
+                    };
+                }
 
                 return new ComponentStatus
                 {
                     Name = "RAG Index",
-                    IsHealthy = indexed,
-                    StatusText = indexed ? "Indexed" : "Not indexed",
-                    Details = indexed ? $"{fileCount} files indexed" : "Workspace not indexed"
+                    IsHealthy = true,
+                    StatusText = "Empty",
+                    Details = "No repositories indexed yet"
                 };
             }
 
-            // RAG endpoint might not exist yet
             return new ComponentStatus
             {
                 Name = "RAG Index",
                 IsHealthy = false,
-                StatusText = "Not available",
-                Details = "RAG service not configured"
+                StatusText = "Unavailable",
+                Details = "RAG service not responding"
             };
         }
         catch

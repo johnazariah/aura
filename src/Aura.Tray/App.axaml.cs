@@ -100,16 +100,13 @@ public partial class App : Application
 
         _trayIcon = new TrayIcon
         {
-            ToolTipText = "Aura",
+            ToolTipText = "Aura - Checking...",
             Menu = menu,
             IsVisible = true,
             Icon = LoadTrayIcon("tray-unknown")
         };
 
         _trayIcon.Clicked += (_, _) => ShowStatusWindow();
-
-        // Set initial icon based on status
-        UpdateTrayIcon(ServiceStatus.Unknown);
     }
 
     private void ToggleAutoStart()
@@ -137,28 +134,33 @@ public partial class App : Application
     {
         Avalonia.Threading.Dispatcher.UIThread.Post(() =>
         {
-            UpdateTrayIcon(e.OverallStatus);
+            UpdateTrayIcon(e);
             _statusWindow?.UpdateStatus(e);
         });
     }
 
-    private void UpdateTrayIcon(ServiceStatus status)
+    private void UpdateTrayIcon(ServiceStatusEventArgs e)
     {
         if (_trayIcon == null) return;
 
-        // Update tooltip with current status
-        var statusText = status switch
+        // Build detailed tooltip showing each component
+        var api = e.ApiStatus.IsHealthy ? "✓" : "✗";
+        var ollama = e.OllamaStatus.IsHealthy ? "✓" : "✗";
+        var db = e.PostgresStatus.IsHealthy ? "✓" : "✗";
+        var rag = e.RagStatus.IsHealthy ? "✓" : "○";  // ○ for "empty but ok"
+
+        var statusLine = e.OverallStatus switch
         {
             ServiceStatus.AllHealthy => "All systems operational",
             ServiceStatus.Degraded => "Some services degraded",
             ServiceStatus.Offline => "Services offline",
-            _ => "Checking status..."
+            _ => "Checking..."
         };
 
-        _trayIcon.ToolTipText = $"Aura - {statusText}";
+        _trayIcon.ToolTipText = $"Aura - {statusLine}\n{api} API  {ollama} Ollama  {db} DB  {rag} RAG";
 
         // Update icon based on status
-        var iconName = status switch
+        var iconName = e.OverallStatus switch
         {
             ServiceStatus.AllHealthy => "tray-healthy",
             ServiceStatus.Degraded => "tray-degraded",
