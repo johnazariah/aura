@@ -215,6 +215,17 @@ export class StatusTreeProvider implements vscode.TreeDataProvider<StatusItem> {
         let icon: vscode.ThemeIcon;
         let details: string;
 
+        // Check if indexing is in progress first
+        if (status.isIndexing) {
+            label = 'Indexing...';
+            icon = new vscode.ThemeIcon('sync~spin', new vscode.ThemeColor('charts.blue'));
+            details = `${status.indexingProgress || 0}% complete`;
+            const item = new StatusItem(label, { status: 'healthy', details }, 'health');
+            item.iconPath = icon;
+            item.contextValue = 'indexHealth';
+            return item;
+        }
+
         switch (health) {
             case 'fresh':
                 label = 'Index Fresh';

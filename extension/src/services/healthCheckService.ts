@@ -45,6 +45,9 @@ export interface RagStatus extends ServiceStatus {
     indexHealth?: 'fresh' | 'stale' | 'outdated' | 'not-indexed';
     commitsBehind?: number;
     lastIndexedAt?: string;
+    // Indexing in progress
+    isIndexing?: boolean;
+    indexingProgress?: number;
 }
 
 export interface HealthStatuses {
@@ -254,6 +257,8 @@ export class HealthCheckService {
             let indexHealth: 'fresh' | 'stale' | 'outdated' | 'not-indexed' = 'not-indexed';
             let commitsBehind = 0;
             let lastIndexedAt: string | undefined;
+            let isIndexing = false;
+            let indexingProgress = 0;
 
             try {
                 if (repositoryPath) {
@@ -293,6 +298,21 @@ export class HealthCheckService {
                     } catch {
                         // Health endpoint might not exist or fail
                     }
+
+                    // Check if indexing is in progress
+                    try {
+                        const indexStatusResponse = await this.httpClient.get(`${url}/api/index/status`);
+                        if (indexStatusResponse.data?.isProcessing) {
+                            isIndexing = true;
+                            const processed = indexStatusResponse.data?.processedItems || 0;
+                            const total = indexStatusResponse.data?.queuedItems || 0;
+                            if (total > 0) {
+                                indexingProgress = Math.round((processed / (processed + total)) * 100);
+                            }
+                        }
+                    } catch {
+                        // Index status endpoint might not exist
+                    }
                 }
 
                 // Also get overall stats
@@ -304,7 +324,9 @@ export class HealthCheckService {
 
             // Build details string based on whether we have repository filtering
             let details: string;
-            if (repositoryPath && (repoDocuments > 0 || repoChunks > 0 || graphNodes > 0)) {
+            if (isIndexing) {
+                details = `Indexing... ${indexingProgress}%`;
+            } else if (repositoryPath && (repoDocuments > 0 || repoChunks > 0 || graphNodes > 0)) {
                 details = `${repoDocuments} files, ${repoChunks} chunks, ${graphNodes} graph nodes`;
             } else if (repositoryPath) {
                 details = `Not indexed (${totalDocuments} symbols in other repos)`;
@@ -327,6 +349,8 @@ export class HealthCheckService {
                 indexHealth,
                 commitsBehind,
                 lastIndexedAt,
+                isIndexing,
+                indexingProgress,
                 lastChecked: new Date()
             };
         } catch (error) {
