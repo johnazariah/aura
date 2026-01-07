@@ -13,7 +13,16 @@ type TreeNode = CapabilityGroup | SubCapabilityGroup | AgentItem | PlaceholderIt
 
 // Define parent-child capability relationships
 const CAPABILITY_HIERARCHY: Record<string, string[]> = {
-    'coding': ['csharp-coding', 'fsharp-coding', 'python-coding', 'typescript-coding', 'javascript-coding', 'go-coding', 'rust-coding'],
+    'coding': [
+        // Core languages
+        'csharp-coding', 'fsharp-coding', 'python-coding', 'typescript-coding', 
+        'javascript-coding', 'go-coding', 'rust-coding',
+        // Additional language agents from YAML configs
+        'arm-coding', 'bash-coding', 'bicep-coding', 'elm-coding', 
+        'haskell-coding', 'powershell-coding', 'terraform-coding',
+        // Generic software development
+        'software-development', 'software-development-csharp',
+    ],
     'ingest': [
         'ingest:cs', 'ingest:csx',      // C#
         'ingest:fs', 'ingest:fsx',      // F#
@@ -32,6 +41,27 @@ for (const [parent, children] of Object.entries(CAPABILITY_HIERARCHY)) {
     for (const child of children) {
         CHILD_TO_PARENT[child] = parent;
     }
+}
+
+// Dynamic parent lookup - also handles patterns not in the static map
+function getParentCapability(capability: string): string | undefined {
+    // Check static map first
+    if (CHILD_TO_PARENT[capability]) {
+        return CHILD_TO_PARENT[capability];
+    }
+    // Any capability ending in -coding goes under 'coding'
+    if (capability.endsWith('-coding')) {
+        return 'coding';
+    }
+    // Any capability starting with 'ingest:' goes under 'ingest'
+    if (capability.startsWith('ingest:')) {
+        return 'ingest';
+    }
+    // Any capability starting with 'software-development' goes under 'coding'
+    if (capability.startsWith('software-development')) {
+        return 'coding';
+    }
+    return undefined;
 }
 
 export class AgentTreeProvider implements vscode.TreeDataProvider<TreeNode> {
@@ -99,21 +129,31 @@ export class AgentTreeProvider implements vscode.TreeDataProvider<TreeNode> {
                 }
 
                 const primaryCap = capabilities[0];
-                const parentCap = CHILD_TO_PARENT[primaryCap];
+                const parentCap = getParentCapability(primaryCap);
 
                 if (parentCap) {
-                    // This is a sub-capability - nest it
-                    if (!subCapabilityMap.has(parentCap)) {
-                        subCapabilityMap.set(parentCap, new Map());
-                    }
-                    const subMap = subCapabilityMap.get(parentCap)!;
-                    const list = subMap.get(primaryCap) || [];
-                    list.push(agent);
-                    subMap.set(primaryCap, list);
+                    // This is a sub-capability
+                    // For 'coding' parent, flatten all agents directly (no sub-groups)
+                    // For 'ingest' parent, keep sub-groups by file type
+                    if (parentCap === 'coding') {
+                        // Put directly under coding parent
+                        const list = topLevelMap.get(parentCap) || [];
+                        list.push(agent);
+                        topLevelMap.set(parentCap, list);
+                    } else {
+                        // Create sub-capability groups (for ingest, etc.)
+                        if (!subCapabilityMap.has(parentCap)) {
+                            subCapabilityMap.set(parentCap, new Map());
+                        }
+                        const subMap = subCapabilityMap.get(parentCap)!;
+                        const list = subMap.get(primaryCap) || [];
+                        list.push(agent);
+                        subMap.set(primaryCap, list);
 
-                    // Ensure parent exists in top-level
-                    if (!topLevelMap.has(parentCap)) {
-                        topLevelMap.set(parentCap, []);
+                        // Ensure parent exists in top-level
+                        if (!topLevelMap.has(parentCap)) {
+                            topLevelMap.set(parentCap, []);
+                        }
                     }
                 } else {
                     // Top-level capability
