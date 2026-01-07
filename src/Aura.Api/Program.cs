@@ -46,6 +46,16 @@ builder.Host.UseSerilog((context, services, configuration) =>
             rollingInterval: RollingInterval.Day,
             retainedFileCountLimit: 7,
             formatProvider: CultureInfo.InvariantCulture);
+
+    // On Windows, also log warnings and errors to Windows Event Log
+    if (OperatingSystem.IsWindows())
+    {
+        configuration.WriteTo.EventLog(
+            source: "Aura",
+            logName: "Application",
+            restrictedToMinimumLevel: LogEventLevel.Warning,
+            formatProvider: CultureInfo.InvariantCulture);
+    }
 });
 
 // Add Aspire service defaults (telemetry, health checks, resilience)
@@ -85,25 +95,14 @@ if (!app.Environment.IsEnvironment("Testing"))
 {
     using var scope = app.Services.CreateScope();
     var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-    try
-    {
-        logger.LogInformation("Applying database migrations...");
 
-        // Apply Foundation migrations first
-        var foundationDb = scope.ServiceProvider.GetRequiredService<AuraDbContext>();
-        foundationDb.Database.Migrate();
+    // Apply Foundation migrations first
+    var foundationDb = scope.ServiceProvider.GetRequiredService<AuraDbContext>();
+    await ApplyMigrationsAsync(foundationDb, "Foundation", logger);
 
-        // Apply Developer module migrations (includes its own entities)
-        var developerDb = scope.ServiceProvider.GetRequiredService<Aura.Module.Developer.Data.DeveloperDbContext>();
-        developerDb.Database.Migrate();
-
-        logger.LogInformation("Database migrations applied successfully");
-    }
-    catch (Exception ex)
-    {
-        logger.LogError(ex, "Failed to apply database migrations");
-        throw;
-    }
+    // Apply Developer module migrations (includes its own entities)
+    var developerDb = scope.ServiceProvider.GetRequiredService<Aura.Module.Developer.Data.DeveloperDbContext>();
+    await ApplyMigrationsAsync(developerDb, "Developer", logger);
 
     // Register Developer Module tools with the tool registry
     var toolRegistry = scope.ServiceProvider.GetRequiredService<Aura.Foundation.Tools.IToolRegistry>();
@@ -2579,5 +2578,39 @@ record IndexHealthInfo
     public int ItemCount { get; init; }
 }
 
-public partial class Program { }
+public partial class Program
+{
+    /// <summary>
+    /// Applies database migrations on startup.
+    /// For v1, we use simple migrations - clean installs are required.
+    /// </summary>
+    private static async Task ApplyMigrationsAsync(DbContext db, string moduleName, Microsoft.Extensions.Logging.ILogger logger)
+    {
+        var pendingMigrations = (await db.Database.GetPendingMigrationsAsync()).ToList();
+        if (pendingMigrations.Count == 0)
+        {
+            logger.LogInformation("{Module} database is up to date", moduleName);
+            return;
+        }
+
+        logger.LogInformation("Applying {Count} {Module} migrations: {Migrations}",
+            pendingMigrations.Count, moduleName, string.Join(", ", pendingMigrations));
+
+        try
+        {
+            await db.Database.MigrateAsync();
+            logger.LogInformation("{Module} migrations complete", moduleName);
+        }
+        catch (Npgsql.PostgresException ex) when (ex.SqlState == "42P07" || ex.SqlState == "42701")
+        {
+            // Table or column already exists - database is in inconsistent state
+            logger.LogError(ex,
+                "{Module} migration failed: {Message}. Database may need to be reset. " +
+                "Stop services, drop database with: psql -h 127.0.0.1 -p 5433 -U postgres -c \"DROP DATABASE auradb; CREATE DATABASE auradb;\" " +
+                "then: psql -h 127.0.0.1 -p 5433 -U postgres -d auradb -c \"CREATE EXTENSION vector;\" and restart.",
+                moduleName, ex.MessageText);
+            throw;
+        }
+    }
+}
 
