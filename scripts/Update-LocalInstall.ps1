@@ -220,6 +220,16 @@ try {
                 Start-Sleep -Seconds 1
             }
         }
+        
+        # Restart tray app if it was stopped
+        $trayPath = Join-Path $InstallPath "tray\Aura.Tray.exe"
+        if (Test-Path $trayPath) {
+            $trayRunning = Get-Process -Name "Aura.Tray" -ErrorAction SilentlyContinue
+            if (-not $trayRunning) {
+                Write-Step "Starting Aura.Tray..."
+                Start-Process -FilePath $trayPath -ArgumentList "--minimized" -WindowStyle Hidden
+            }
+        }
     }
 
     # =============================================================================
