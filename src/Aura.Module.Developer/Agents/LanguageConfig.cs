@@ -13,7 +13,7 @@ public sealed record LanguageConfig
     public required LanguageMetadata Language { get; init; }
 
     /// <summary>Gets the capabilities this agent provides.</summary>
-    public IReadOnlyList<string> Capabilities { get; init; } = [];
+    public List<string> Capabilities { get; init; } = [];
 
     /// <summary>Gets the agent priority (lower = more specialized).</summary>
     public int Priority { get; init; } = 10;
@@ -22,8 +22,7 @@ public sealed record LanguageConfig
     public AgentConfig Agent { get; init; } = new();
 
     /// <summary>Gets the tool definitions.</summary>
-    public IReadOnlyDictionary<string, ToolConfig> Tools { get; init; } =
-        new Dictionary<string, ToolConfig>();
+    public Dictionary<string, ToolConfig> Tools { get; init; } = [];
 
     /// <summary>Gets the prompt template sections.</summary>
     public PromptConfig Prompt { get; init; } = new();
@@ -41,10 +40,10 @@ public sealed record LanguageMetadata
     public required string Name { get; init; }
 
     /// <summary>Gets the file extensions for this language.</summary>
-    public IReadOnlyList<string> Extensions { get; init; } = [];
+    public List<string> Extensions { get; init; } = [];
 
     /// <summary>Gets the project file patterns.</summary>
-    public IReadOnlyList<string> ProjectFiles { get; init; } = [];
+    public List<string> ProjectFiles { get; init; } = [];
 }
 
 /// <summary>
@@ -80,13 +79,13 @@ public sealed record ToolConfig
     public required string Command { get; init; }
 
     /// <summary>Gets the command arguments.</summary>
-    public IReadOnlyList<string> Args { get; init; } = [];
+    public List<string> Args { get; init; } = [];
 
     /// <summary>Gets the description.</summary>
     public string? Description { get; init; }
 
     /// <summary>Gets the tool categories.</summary>
-    public IReadOnlyList<string> Categories { get; init; } = [];
+    public List<string> Categories { get; init; } = [];
 
     /// <summary>Gets whether confirmation is required.</summary>
     public bool RequiresConfirmation { get; init; }
@@ -101,13 +100,13 @@ public sealed record ToolConfig
     public int? ScriptArg { get; init; }
 
     /// <summary>Gets the configuration argument prefix.</summary>
-    public IReadOnlyList<string>? ConfigArg { get; init; }
+    public List<string>? ConfigArg { get; init; }
 
     /// <summary>Gets the fallback command if primary fails.</summary>
     public FallbackConfig? Fallback { get; init; }
 
     /// <summary>Gets the output parsers.</summary>
-    public IReadOnlyDictionary<string, OutputParserConfig>? OutputParsers { get; init; }
+    public Dictionary<string, OutputParserConfig>? OutputParsers { get; init; }
 }
 
 /// <summary>
@@ -119,7 +118,7 @@ public sealed record FallbackConfig
     public required string Command { get; init; }
 
     /// <summary>Gets the fallback arguments.</summary>
-    public IReadOnlyList<string> Args { get; init; } = [];
+    public List<string> Args { get; init; } = [];
 }
 
 /// <summary>
@@ -137,13 +136,13 @@ public sealed record OutputParserConfig
     public bool IgnoreCase { get; init; }
 
     /// <summary>Gets the named groups for regex parsers.</summary>
-    public IReadOnlyList<string>? Groups { get; init; }
+    public List<string>? Groups { get; init; }
 
     /// <summary>Gets the JSONPath for json parsers.</summary>
     public string? Path { get; init; }
 
     /// <summary>Gets the success codes for exitCode parsers.</summary>
-    public IReadOnlyList<int>? SuccessCodes { get; init; }
+    public List<int>? SuccessCodes { get; init; }
 }
 
 /// <summary>

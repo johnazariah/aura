@@ -17,16 +17,19 @@ using Microsoft.Extensions.Options;
 /// <param name="registry">Agent registry.</param>
 /// <param name="hardcodedProviders">Hardcoded agent providers.</param>
 /// <param name="options">Agent options.</param>
+/// <param name="environment">Host environment for resolving paths.</param>
 /// <param name="logger">Logger instance.</param>
 public sealed class AgentRegistryInitializer(
     IAgentRegistry registry,
     IEnumerable<IHardcodedAgentProvider> hardcodedProviders,
     IOptions<AgentOptions> options,
+    IHostEnvironment environment,
     ILogger<AgentRegistryInitializer> logger) : IHostedService
 {
     private readonly IAgentRegistry _registry = registry;
     private readonly IEnumerable<IHardcodedAgentProvider> _hardcodedProviders = hardcodedProviders;
     private readonly AgentOptions _options = options.Value;
+    private readonly IHostEnvironment _environment = environment;
     private readonly ILogger<AgentRegistryInitializer> _logger = logger;
 
     /// <inheritdoc/>
@@ -39,7 +42,13 @@ public sealed class AgentRegistryInitializer(
         {
             foreach (var directory in _options.Directories)
             {
-                agentRegistry.AddWatchDirectory(directory, _options.EnableHotReload);
+                // Resolve relative paths against content root (important for Windows Services)
+                var resolvedPath = Path.IsPathRooted(directory)
+                    ? directory
+                    : Path.GetFullPath(Path.Combine(_environment.ContentRootPath, directory));
+
+                _logger.LogDebug("Resolved agent directory: {Original} -> {Resolved}", directory, resolvedPath);
+                agentRegistry.AddWatchDirectory(resolvedPath, _options.EnableHotReload);
             }
 
             await agentRegistry.ReloadAsync().ConfigureAwait(false);

@@ -37,6 +37,7 @@ public sealed class RegisterLanguageAgentsTask : IStartupTask
         var processRunner = serviceProvider.GetRequiredService<IProcessRunner>();
         var reactExecutor = serviceProvider.GetRequiredService<IReActExecutor>();
         var llmRegistry = serviceProvider.GetRequiredService<ILlmProviderRegistry>();
+        var hostEnvironment = serviceProvider.GetRequiredService<Microsoft.Extensions.Hosting.IHostEnvironment>();
 
         var logger = loggerFactory.CreateLogger<RegisterLanguageAgentsTask>();
         var configLoader = new LanguageConfigLoader(
@@ -44,8 +45,10 @@ public sealed class RegisterLanguageAgentsTask : IStartupTask
             loggerFactory.CreateLogger<LanguageConfigLoader>());
 
         // Get the languages directory path
-        var languagesPath = config["Aura:Modules:Developer:LanguagesPath"]
-            ?? GetDefaultLanguagesPath(fileSystem);
+        var configuredPath = config["Aura:Modules:Developer:LanguagesPath"];
+        var languagesPath = configuredPath != null
+            ? ResolveLanguagesPath(fileSystem, hostEnvironment.ContentRootPath, configuredPath)
+            : GetDefaultLanguagesPath(fileSystem);
 
         if (!fileSystem.Directory.Exists(languagesPath))
         {
@@ -54,6 +57,8 @@ public sealed class RegisterLanguageAgentsTask : IStartupTask
                 languagesPath);
             return;
         }
+
+        logger.LogDebug("Loading language configurations from: {Path}", languagesPath);
 
         // Load all language configurations
         var languageConfigs = await configLoader.LoadAllAsync(languagesPath).ConfigureAwait(false);
@@ -97,7 +102,8 @@ public sealed class RegisterLanguageAgentsTask : IStartupTask
                     llmRegistry,
                     loggerFactory.CreateLogger<LanguageSpecialistAgent>());
 
-                agentRegistry.Register(agent);
+                // Register as "hardcoded" to prevent removal during markdown agent reload
+                agentRegistry.Register(agent, isHardcoded: true);
                 registeredAgents.Add(agent.AgentId);
 
                 logger.LogDebug(
@@ -121,11 +127,24 @@ public sealed class RegisterLanguageAgentsTask : IStartupTask
     }
 
     /// <summary>
+    /// Resolves a configured path, making it absolute if relative.
+    /// </summary>
+    private static string ResolveLanguagesPath(IFileSystem fileSystem, string contentRootPath, string configuredPath)
+    {
+        if (fileSystem.Path.IsPathRooted(configuredPath))
+        {
+            return configuredPath;
+        }
+
+        return fileSystem.Path.GetFullPath(fileSystem.Path.Combine(contentRootPath, configuredPath));
+    }
+
+    /// <summary>
     /// Gets the default languages directory path.
     /// </summary>
     private static string GetDefaultLanguagesPath(IFileSystem fileSystem)
     {
-        // Try relative to current directory first
+        // Try relative to current directory first (works for dev)
         var relativePath = fileSystem.Path.Combine("agents", "languages");
         if (fileSystem.Directory.Exists(relativePath))
         {
@@ -138,6 +157,17 @@ public sealed class RegisterLanguageAgentsTask : IStartupTask
         if (fileSystem.Directory.Exists(absolutePath))
         {
             return absolutePath;
+        }
+
+        // Try one level up from base directory (installed layout: api\ is sibling to agents\)
+        var parentPath = fileSystem.Path.GetDirectoryName(basePath.TrimEnd(fileSystem.Path.DirectorySeparatorChar));
+        if (!string.IsNullOrEmpty(parentPath))
+        {
+            var siblingPath = fileSystem.Path.Combine(parentPath, "agents", "languages");
+            if (fileSystem.Directory.Exists(siblingPath))
+            {
+                return siblingPath;
+            }
         }
 
         // Default to relative path (may not exist)

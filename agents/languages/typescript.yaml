@@ -28,7 +28,7 @@ tools:
     name: Compile TypeScript
     command: npx
     args: ["tsc"]
-    projectArg: ["--project"]
+    configArg: ["--project"]
     description: "Compile TypeScript code using tsc"
     categories: [typescript, compilation]
     requiresConfirmation: false
@@ -43,7 +43,7 @@ tools:
     name: Type Check TypeScript
     command: npx
     args: ["tsc", "--noEmit"]
-    projectArg: ["--project"]
+    configArg: ["--project"]
     description: "Type-check TypeScript without emitting files"
     categories: [typescript, compilation]
     requiresConfirmation: false

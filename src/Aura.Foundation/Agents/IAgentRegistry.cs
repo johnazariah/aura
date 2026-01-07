@@ -61,6 +61,13 @@ public interface IAgentRegistry
     void Register(IAgent agent);
 
     /// <summary>
+    /// Registers an agent.
+    /// </summary>
+    /// <param name="agent">The agent to register.</param>
+    /// <param name="isHardcoded">Whether this is a hardcoded (non-markdown) agent that should not be removed during reloads.</param>
+    void Register(IAgent agent, bool isHardcoded);
+
+    /// <summary>
     /// Unregisters an agent.
     /// </summary>
     /// <param name="agentId">The agent ID to unregister.</param>
