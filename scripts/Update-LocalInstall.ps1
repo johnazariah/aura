@@ -107,42 +107,50 @@ try {
     # =============================================================================
     $apiJob = $null
     $extensionJob = $null
+    $tempDir = Join-Path $root ".update-temp"
+    if (-not (Test-Path $tempDir)) { New-Item -ItemType Directory -Path $tempDir -Force | Out-Null }
     
     if (-not $SkipApi) {
-        Write-Header "Building Aura.Api (background)"
+        Write-Step "Building Aura.Api (background)..."
+        $apiLogFile = Join-Path $tempDir "api-build.log"
         $apiJob = Start-Job -ScriptBlock {
-            param($root)
+            param($root, $logFile)
             Set-Location $root
-            dotnet publish src/Aura.Api/Aura.Api.csproj `
+            $output = dotnet publish src/Aura.Api/Aura.Api.csproj `
                 -c Release `
                 -r win-x64 `
                 -p:PublishSelfContained=true `
                 -o ".update-temp/api" 2>&1
-            if ($LASTEXITCODE -ne 0) { throw "Failed to build Aura.Api" }
+            $output | Out-File -FilePath $logFile -Encoding utf8
+            if ($LASTEXITCODE -ne 0) { throw "Failed to build Aura.Api. See $logFile" }
             return "API build complete"
-        } -ArgumentList $root
+        } -ArgumentList $root, $apiLogFile
     } else {
         Write-Skip "API"
     }
     
     if (-not $SkipExtension) {
-        Write-Header "Building VS Code Extension (background)"
+        Write-Step "Building VS Code Extension (background)..."
+        $extLogFile = Join-Path $tempDir "extension-build.log"
         $extensionJob = Start-Job -ScriptBlock {
-            param($root)
+            param($root, $logFile)
             Set-Location (Join-Path $root "extension")
             
             # Build extension
+            $output = @()
             $result = npm run package 2>&1
+            $output += $result
             if ($LASTEXITCODE -ne 0) { 
-                npm ci 2>&1
-                npm run package 2>&1
+                $output += npm ci 2>&1
+                $output += npm run package 2>&1
             }
             
             # Package as VSIX
-            npx @vscode/vsce package --out "aura-dev.vsix" 2>&1
-            if ($LASTEXITCODE -ne 0) { throw "Failed to package extension" }
+            $output += npx @vscode/vsce package --out "aura-dev.vsix" 2>&1
+            $output | Out-File -FilePath $logFile -Encoding utf8
+            if ($LASTEXITCODE -ne 0) { throw "Failed to package extension. See $logFile" }
             return "Extension build complete"
-        } -ArgumentList $root
+        } -ArgumentList $root, $extLogFile
     } else {
         Write-Skip "Extension"
     }
@@ -165,14 +173,30 @@ try {
     }
 
     # =============================================================================
-    # Wait for API build and deploy
+    # Wait for builds with progress indicator
+    # =============================================================================
+    $spinner = @('⠋','⠙','⠹','⠸','⠼','⠴','⠦','⠧','⠇','⠏')
+    $spinIdx = 0
+    
+    while (($apiJob -and $apiJob.State -eq "Running") -or ($extensionJob -and $extensionJob.State -eq "Running")) {
+        $apiStatus = if ($apiJob) { if ($apiJob.State -eq "Running") { "building" } else { $apiJob.State } } else { "skipped" }
+        $extStatus = if ($extensionJob) { if ($extensionJob.State -eq "Running") { "building" } else { $extensionJob.State } } else { "skipped" }
+        Write-Host -NoNewline "`r$($spinner[$spinIdx]) API: $apiStatus | Extension: $extStatus    "
+        $spinIdx = ($spinIdx + 1) % $spinner.Length
+        Start-Sleep -Milliseconds 200
+    }
+    Write-Host "`r                                                        " # Clear spinner line
+    
+    # =============================================================================
+    # Check API build result and deploy
     # =============================================================================
     if ($apiJob) {
-        Write-Header "Waiting for API build..."
-        $apiResult = Receive-Job -Job $apiJob -Wait
         if ($apiJob.State -eq "Failed") {
-            throw "API build failed: $($apiJob.ChildJobs[0].JobStateInfo.Reason)"
+            Write-Host "API build failed! Log:" -ForegroundColor Red
+            Get-Content $apiLogFile -Tail 20
+            throw "API build failed"
         }
+        $apiResult = Receive-Job -Job $apiJob
         Write-Step $apiResult
         Remove-Job -Job $apiJob
         
@@ -202,19 +226,20 @@ try {
     }
 
     # =============================================================================
-    # Wait for Extension build and install
+    # Check Extension build result and install
     # =============================================================================
     if ($extensionJob) {
-        Write-Header "Waiting for Extension build..."
-        $extResult = Receive-Job -Job $extensionJob -Wait
         if ($extensionJob.State -eq "Failed") {
-            throw "Extension build failed: $($extensionJob.ChildJobs[0].JobStateInfo.Reason)"
+            Write-Host "Extension build failed! Log:" -ForegroundColor Red
+            Get-Content $extLogFile -Tail 20
+            throw "Extension build failed"
         }
+        $extResult = Receive-Job -Job $extensionJob
         Write-Step $extResult
         Remove-Job -Job $extensionJob
         
         Write-Step "Installing extension..."
-        code --install-extension "extension/aura-dev.vsix" --force
+        code --install-extension "extension/aura-dev.vsix" --force 2>&1 | Out-Null
         
         if ($LASTEXITCODE -ne 0) { throw "Failed to install extension" }
         
