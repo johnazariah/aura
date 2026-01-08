@@ -103,18 +103,78 @@ try {
     }
 
     # =============================================================================
-    # Build and Deploy API
+    # Build API and Extension in PARALLEL for speed
     # =============================================================================
+    $apiJob = $null
+    $extensionJob = $null
+    
     if (-not $SkipApi) {
-        Write-Header "Building Aura.Api"
+        Write-Header "Building Aura.Api (background)"
+        $apiJob = Start-Job -ScriptBlock {
+            param($root)
+            Set-Location $root
+            dotnet publish src/Aura.Api/Aura.Api.csproj `
+                -c Release `
+                -r win-x64 `
+                -p:PublishSelfContained=true `
+                -o ".update-temp/api" 2>&1
+            if ($LASTEXITCODE -ne 0) { throw "Failed to build Aura.Api" }
+            return "API build complete"
+        } -ArgumentList $root
+    } else {
+        Write-Skip "API"
+    }
+    
+    if (-not $SkipExtension) {
+        Write-Header "Building VS Code Extension (background)"
+        $extensionJob = Start-Job -ScriptBlock {
+            param($root)
+            Set-Location (Join-Path $root "extension")
+            
+            # Build extension
+            $result = npm run package 2>&1
+            if ($LASTEXITCODE -ne 0) { 
+                npm ci 2>&1
+                npm run package 2>&1
+            }
+            
+            # Package as VSIX
+            npx @vscode/vsce package --out "aura-dev.vsix" 2>&1
+            if ($LASTEXITCODE -ne 0) { throw "Failed to package extension" }
+            return "Extension build complete"
+        } -ArgumentList $root
+    } else {
+        Write-Skip "Extension"
+    }
+
+    # =============================================================================
+    # Deploy Agents (while builds run)
+    # =============================================================================
+    if (-not $SkipAgents) {
+        Write-Header "Deploying Agents"
         
-        dotnet publish src/Aura.Api/Aura.Api.csproj `
-            -c Release `
-            -r win-x64 `
-            -p:PublishSelfContained=true `
-            -o ".update-temp/api"
+        # Copy agents directory
+        if (Test-Path $agentsPath) {
+            Remove-Item $agentsPath -Recurse -Force
+        }
+        Copy-Item -Path "agents" -Destination $agentsPath -Recurse
         
-        if ($LASTEXITCODE -ne 0) { throw "Failed to build Aura.Api" }
+        Write-Step "Agents updated"
+    } else {
+        Write-Skip "Agents"
+    }
+
+    # =============================================================================
+    # Wait for API build and deploy
+    # =============================================================================
+    if ($apiJob) {
+        Write-Header "Waiting for API build..."
+        $apiResult = Receive-Job -Job $apiJob -Wait
+        if ($apiJob.State -eq "Failed") {
+            throw "API build failed: $($apiJob.ChildJobs[0].JobStateInfo.Reason)"
+        }
+        Write-Step $apiResult
+        Remove-Job -Job $apiJob
         
         Write-Step "Deploying to $apiPath..."
         
@@ -139,49 +199,19 @@ try {
         }
         
         Write-Step "API updated"
-    } else {
-        Write-Skip "API"
     }
 
     # =============================================================================
-    # Deploy Agents
+    # Wait for Extension build and install
     # =============================================================================
-    if (-not $SkipAgents) {
-        Write-Header "Deploying Agents"
-        
-        # Copy agents directory
-        if (Test-Path $agentsPath) {
-            Remove-Item $agentsPath -Recurse -Force
+    if ($extensionJob) {
+        Write-Header "Waiting for Extension build..."
+        $extResult = Receive-Job -Job $extensionJob -Wait
+        if ($extensionJob.State -eq "Failed") {
+            throw "Extension build failed: $($extensionJob.ChildJobs[0].JobStateInfo.Reason)"
         }
-        Copy-Item -Path "agents" -Destination $agentsPath -Recurse
-        
-        Write-Step "Agents updated"
-    } else {
-        Write-Skip "Agents"
-    }
-
-    # =============================================================================
-    # Build and Deploy Extension
-    # =============================================================================
-    if (-not $SkipExtension) {
-        Write-Header "Building VS Code Extension"
-        
-        Push-Location extension
-        
-        # Build extension
-        npm run package 2>$null
-        if ($LASTEXITCODE -ne 0) { 
-            npm ci
-            npm run package
-        }
-        
-        # Package as VSIX
-        $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
-        npx @vscode/vsce package --out "aura-dev.vsix" 2>$null
-        
-        if ($LASTEXITCODE -ne 0) { throw "Failed to package extension" }
-        
-        Pop-Location
+        Write-Step $extResult
+        Remove-Job -Job $extensionJob
         
         Write-Step "Installing extension..."
         code --install-extension "extension/aura-dev.vsix" --force
@@ -189,8 +219,6 @@ try {
         if ($LASTEXITCODE -ne 0) { throw "Failed to install extension" }
         
         Write-Step "Extension updated - reload VS Code to activate"
-    } else {
-        Write-Skip "Extension"
     }
 
     # =============================================================================
