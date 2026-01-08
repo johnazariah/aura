@@ -728,48 +728,50 @@ app.MapPost("/api/rag/index", async (
     }
 });
 
-// Index a directory
-app.MapPost("/api/rag/index/directory", async (
+// Index a directory (delegates to background indexer - always async)
+app.MapPost("/api/rag/index/directory", (
     IndexDirectoryRequest request,
-    IRagService ragService,
-    CancellationToken cancellationToken) =>
+    Aura.Foundation.Rag.IBackgroundIndexer backgroundIndexer) =>
 {
-    try
+    if (!Directory.Exists(request.Path))
     {
-        if (!Directory.Exists(request.Path))
+        return Results.NotFound(new
         {
-            return Results.NotFound(new
-            {
-                success = false,
-                error = "Directory not found: " + request.Path
-            });
-        }
+            success = false,
+            error = "Directory not found: " + request.Path
+        });
+    }
 
-        var options = new RagIndexOptions
-        {
-            IncludePatterns = request.IncludePatterns,
-            ExcludePatterns = request.ExcludePatterns,
-            Recursive = request.Recursive ?? true,
-        };
+    var options = new RagIndexOptions
+    {
+        IncludePatterns = request.IncludePatterns,
+        ExcludePatterns = request.ExcludePatterns,
+        Recursive = request.Recursive ?? true,
+    };
 
-        var count = await ragService.IndexDirectoryAsync(request.Path, options, cancellationToken);
+    var (jobId, isNew) = backgroundIndexer.QueueDirectory(request.Path, options);
 
+    if (!isNew)
+    {
+        var existingStatus = backgroundIndexer.GetJobStatus(jobId);
         return Results.Ok(new
         {
             success = true,
             path = request.Path,
-            filesIndexed = count,
-            message = count + " files indexed successfully"
+            jobId,
+            message = "Indexing already in progress",
+            state = existingStatus?.State.ToString() ?? "Unknown",
+            progressPercent = existingStatus?.ProgressPercent ?? 0
         });
     }
-    catch (Exception ex)
+
+    return Results.Accepted($"/api/index/jobs/{jobId}", new
     {
-        return Results.BadRequest(new
-        {
-            success = false,
-            error = ex.Message
-        });
-    }
+        success = true,
+        path = request.Path,
+        jobId,
+        message = "Indexing queued. Check status at /api/index/jobs/{jobId}"
+    });
 });
 
 // Query the RAG index
@@ -1255,7 +1257,7 @@ app.MapPost("/api/semantic/index", async (
         };
 
         // Queue for background indexing (which now includes code graph via RoslynCodeIngestor)
-        var jobId = backgroundIndexer.QueueDirectory(request.DirectoryPath, options);
+        var (jobId, isNew) = backgroundIndexer.QueueDirectory(request.DirectoryPath, options);
 
         // Poll for completion (maintain backward compatibility with sync callers)
         var startTime = DateTime.UtcNow;
@@ -1357,11 +1359,24 @@ app.MapPost("/api/index/background", (
         ExcludePatterns = request.ExcludePatterns?.ToArray(),
     };
 
-    var jobId = backgroundIndexer.QueueDirectory(request.Directory, options);
+    var (jobId, isNew) = backgroundIndexer.QueueDirectory(request.Directory, options);
+
+    if (!isNew)
+    {
+        var existingStatus = backgroundIndexer.GetJobStatus(jobId);
+        return Results.Ok(new
+        {
+            jobId,
+            message = "Indexing already in progress",
+            directory = request.Directory,
+            state = existingStatus?.State.ToString() ?? "Unknown",
+            progressPercent = existingStatus?.ProgressPercent ?? 0
+        });
+    }
 
     return Results.Accepted($"/api/index/jobs/{jobId}", new
     {
-        jobId = jobId,
+        jobId,
         message = "Indexing queued. Check status at /api/index/jobs/{jobId}",
         directory = request.Directory
     });

@@ -20,11 +20,12 @@ public interface IBackgroundIndexer
     /// <summary>
     /// Queues a directory for background indexing.
     /// Returns immediately - indexing happens asynchronously.
+    /// If a job for the same path is already queued or processing, returns that job's ID.
     /// </summary>
     /// <param name="directoryPath">Path to the directory.</param>
     /// <param name="options">Indexing options.</param>
-    /// <returns>A job ID for tracking progress.</returns>
-    Guid QueueDirectory(string directoryPath, RagIndexOptions? options = null);
+    /// <returns>A tuple of (jobId, isNew) - isNew is false if reusing existing job.</returns>
+    (Guid JobId, bool IsNew) QueueDirectory(string directoryPath, RagIndexOptions? options = null);
 
     /// <summary>
     /// Gets the current queue status.

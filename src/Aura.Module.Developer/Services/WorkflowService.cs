@@ -115,14 +115,14 @@ public sealed class WorkflowService(
                 else
                 {
                     // Repository not indexed - queue worktree for background RAG indexing (non-blocking)
-                    var jobId = _backgroundIndexer.QueueDirectory(workflow.WorktreePath, new RagIndexOptions
+                    var (jobId, isNew) = _backgroundIndexer.QueueDirectory(workflow.WorktreePath, new RagIndexOptions
                     {
                         IncludePatterns = new[] { "*.cs", "*.md", "*.json", "*.yaml", "*.yml", "*.ts", "*.tsx", "*.js", "*.jsx" },
                         ExcludePatterns = new[] { "**/bin/**", "**/obj/**", "**/node_modules/**", "**/.git/**" },
                         Recursive = true,
                     });
-                    _logger.LogInformation("Queued worktree indexing job {JobId} for workflow {WorkflowId}",
-                        jobId, workflow.Id);
+                    _logger.LogInformation("{Action} worktree indexing job {JobId} for workflow {WorkflowId}",
+                        isNew ? "Queued" : "Reusing", jobId, workflow.Id);
                 }
             }
             else

@@ -78,13 +78,31 @@ public sealed class BackgroundIndexer : BackgroundService, IBackgroundIndexer
     }
 
     /// <inheritdoc/>
-    public Guid QueueDirectory(string directoryPath, RagIndexOptions? options = null)
+    public (Guid JobId, bool IsNew) QueueDirectory(string directoryPath, RagIndexOptions? options = null)
     {
+        // Normalize path for consistent comparison
+        var normalizedPath = Path.GetFullPath(directoryPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+        // Check if there's already an active job for this path
+        var existingJob = _jobs.Values.FirstOrDefault(j =>
+            (j.State == IndexJobState.Queued || j.State == IndexJobState.Processing) &&
+            string.Equals(
+                Path.GetFullPath(j.Source).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                normalizedPath,
+                StringComparison.OrdinalIgnoreCase));
+
+        if (existingJob is not null)
+        {
+            _logger.LogInformation("Reusing existing job {JobId} for {Path} (state: {State})",
+                existingJob.JobId, normalizedPath, existingJob.State);
+            return (existingJob.JobId, false);
+        }
+
         var jobId = Guid.NewGuid();
         var jobStatus = new IndexJobStatus
         {
             JobId = jobId,
-            Source = directoryPath,
+            Source = normalizedPath,
             State = IndexJobState.Queued,
             TotalItems = 0, // Will be updated when processing starts
         };
@@ -95,7 +113,7 @@ public sealed class BackgroundIndexer : BackgroundService, IBackgroundIndexer
         var workItem = new IndexWorkItem
         {
             Type = WorkItemType.Directory,
-            DirectoryPath = directoryPath,
+            DirectoryPath = normalizedPath,
             IndexOptions = options,
             JobId = jobId,
         };
@@ -107,16 +125,16 @@ public sealed class BackgroundIndexer : BackgroundService, IBackgroundIndexer
             {
                 await _channel.Writer.WriteAsync(workItem);
                 Interlocked.Increment(ref _queuedItems);
-                _logger.LogInformation("Queued directory for indexing: {Path} (Job: {JobId})", directoryPath, jobId);
+                _logger.LogInformation("Queued directory for indexing: {Path} (Job: {JobId})", normalizedPath, jobId);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to queue directory: {Path}", directoryPath);
+                _logger.LogError(ex, "Failed to queue directory: {Path}", normalizedPath);
                 UpdateJobStatus(jobId, s => s with { State = IndexJobState.Failed, Error = ex.Message });
             }
         });
 
-        return jobId;
+        return (jobId, true);
     }
 
     /// <inheritdoc/>
