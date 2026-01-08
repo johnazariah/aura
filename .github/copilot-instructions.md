@@ -2,6 +2,17 @@
 
 > **Read First**: `.project/STATUS.md` for current project state and feature inventory.
 
+## Primary Goal
+
+**Build Aura as a production-ready product**, not just fix local development issues. Every change should consider:
+
+- Will this work for all users on a clean install?
+- Is the UX clear without requiring technical knowledge?
+- Are edge cases handled gracefully?
+- Is this documented for future maintainers?
+
+When encountering issues, fix them properly in the product—don't apply quick workarounds that only help the current developer.
+
 ## Core Principles
 
 1. **NEVER implement without a spec** - All changes require documented requirements and context
@@ -9,6 +20,7 @@
 3. **User controls the server** - Never start/stop the API server; user runs `Start-Api` manually
 4. **Document all decisions** - Update `.project/STATUS.md` after significant changes
 5. **Complete features properly** - Follow the ceremony in `.github/prompts/aura.complete-feature.prompt.md`
+6. **Product-first mindset** - Fix issues for all users, not just the current environment
 
 ## Quick Context
 

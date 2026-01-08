@@ -524,27 +524,41 @@ public sealed class BackgroundIndexer : BackgroundService, IBackgroundIndexer
         var patterns = options.EffectiveIncludePatterns;
         var excludePatterns = options.EffectiveExcludePatterns;
 
+        _logger.LogInformation("DiscoverFilesAsync: path={Path}, preferGit={PreferGit}, patterns={Patterns}",
+            directoryPath, options.PreferGitTrackedFiles, string.Join(",", patterns));
+
         // Try git-based discovery first (much faster, respects .gitignore)
-        if (options.PreferGitTrackedFiles && await gitService.IsRepositoryAsync(directoryPath, ct))
+        if (options.PreferGitTrackedFiles)
         {
-            var gitResult = await gitService.GetTrackedFilesAsync(directoryPath, ct);
-            if (gitResult.Success && gitResult.Value is not null)
+            var isRepo = await gitService.IsRepositoryAsync(directoryPath, ct);
+            _logger.LogInformation("IsRepositoryAsync({Path}) = {IsRepo}", directoryPath, isRepo);
+
+            if (isRepo)
             {
-                var gitFiles = gitResult.Value
-                    .Select(relativePath => Path.Combine(directoryPath, relativePath.Replace('/', Path.DirectorySeparatorChar)))
-                    .Where(absolutePath => MatchesIncludePatterns(absolutePath, patterns))
-                    .Where(absolutePath => !GlobMatcher.MatchesAny(absolutePath, excludePatterns))
-                    .ToList();
+                var gitResult = await gitService.GetTrackedFilesAsync(directoryPath, ct);
+                _logger.LogInformation("GetTrackedFilesAsync: Success={Success}, Count={Count}, Error={Error}",
+                    gitResult.Success, gitResult.Value?.Count ?? 0, gitResult.Error ?? "none");
 
-                _logger.LogInformation("Git-based discovery found {FileCount} matching files (from {TotalTracked} tracked)",
-                    gitFiles.Count, gitResult.Value.Count);
+                if (gitResult.Success && gitResult.Value is not null)
+                {
+                    var gitFiles = gitResult.Value
+                        .Select(relativePath => Path.Combine(directoryPath, relativePath.Replace('/', Path.DirectorySeparatorChar)))
+                        .Where(absolutePath => MatchesIncludePatterns(absolutePath, patterns))
+                        .Where(absolutePath => !GlobMatcher.MatchesAny(absolutePath, excludePatterns))
+                        .ToList();
 
-                return gitFiles;
+                    _logger.LogInformation("Git-based discovery found {FileCount} matching files (from {TotalTracked} tracked)",
+                        gitFiles.Count, gitResult.Value.Count);
+
+                    return gitFiles;
+                }
+
+                _logger.LogWarning("Git-based discovery failed: {Error}. Falling back to directory scan.",
+                    gitResult.Error);
             }
-
-            _logger.LogWarning("Git-based discovery failed: {Error}. Falling back to directory scan.",
-                gitResult.Error);
         }
+
+        _logger.LogWarning("Using fallback directory scan for {Path}", directoryPath);
 
         // Fallback: traditional directory scan
         var searchOption = options.Recursive

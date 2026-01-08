@@ -14,6 +14,31 @@ public class GitService(IProcessRunner process, ILogger<GitService> logger) : IG
     public async Task<bool> IsRepositoryAsync(string path, CancellationToken ct = default)
     {
         var result = await RunGitAsync(path, ["rev-parse", "--is-inside-work-tree"], ct);
+
+        // Handle "dubious ownership" error by adding to safe.directory
+        if (!result.Success && result.StandardError.Contains("dubious ownership", StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogInformation("Adding {Path} to git safe.directory to fix ownership issue", path);
+            var safeResult = await _process.RunAsync("git",
+                ["config", "--global", "--add", "safe.directory", path.Replace('\\', '/')],
+                new ProcessOptions { Timeout = TimeSpan.FromSeconds(10) }, ct);
+
+            if (safeResult.Success)
+            {
+                // Retry the check
+                result = await RunGitAsync(path, ["rev-parse", "--is-inside-work-tree"], ct);
+            }
+            else
+            {
+                _logger.LogWarning("Failed to add safe.directory: {Error}", safeResult.StandardError);
+            }
+        }
+
+        if (!result.Success)
+        {
+            _logger.LogWarning("IsRepositoryAsync failed for {Path}: ExitCode={ExitCode}, StdErr={StdErr}",
+                path, result.ExitCode, result.StandardError);
+        }
         return result.Success && result.StandardOutput.Trim() == "true";
     }
 
