@@ -26,6 +26,15 @@ public interface IRagService
     Task IndexManyAsync(IEnumerable<RagContent> contents, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Indexes multiple pieces of content with batched embedding generation.
+    /// More efficient than calling IndexAsync multiple times as embeddings are generated in a single batch.
+    /// </summary>
+    /// <param name="contents">The contents to index (each should be a single chunk - no further splitting).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Number of chunks indexed.</returns>
+    Task<int> IndexBatchAsync(IReadOnlyList<RagContent> contents, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Indexes all files in a directory.
     /// </summary>
     /// <param name="directoryPath">Path to the directory.</param>

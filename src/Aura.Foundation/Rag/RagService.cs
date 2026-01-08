@@ -115,6 +115,61 @@ public sealed class RagService : IRagService
     }
 
     /// <inheritdoc/>
+    public async Task<int> IndexBatchAsync(IReadOnlyList<RagContent> contents, CancellationToken cancellationToken = default)
+    {
+        if (contents.Count == 0)
+        {
+            return 0;
+        }
+
+        _logger.LogDebug("Batch indexing {Count} content items", contents.Count);
+
+        // Remove existing chunks for all content IDs first
+        foreach (var content in contents)
+        {
+            await RemoveAsync(content.ContentId, cancellationToken).ConfigureAwait(false);
+        }
+
+        // Collect all texts for batch embedding (one text per content item - no chunking)
+        var texts = contents.Select(c => c.Text).ToList();
+
+        // Generate all embeddings in one batch call
+        var embeddings = await _embeddingProvider.GenerateEmbeddingsAsync(
+            _options.EmbeddingModel,
+            texts,
+            cancellationToken).ConfigureAwait(false);
+
+        // Store all chunks
+        for (var i = 0; i < contents.Count; i++)
+        {
+            var content = contents[i];
+            var metadataJson = content.Metadata != null
+                ? JsonSerializer.Serialize(content.Metadata)
+                : null;
+
+            var ragChunk = new RagChunk
+            {
+                Id = Guid.NewGuid(),
+                ContentId = content.ContentId,
+                ChunkIndex = 0,
+                Content = content.Text,
+                ContentType = content.ContentType,
+                SourcePath = content.SourcePath is not null ? PathNormalizer.Normalize(content.SourcePath) : null,
+                Embedding = new Vector(embeddings[i]),
+                MetadataJson = metadataJson,
+                CreatedAt = DateTimeOffset.UtcNow,
+            };
+
+            _dbContext.RagChunks.Add(ragChunk);
+        }
+
+        await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+        _logger.LogInformation("Batch indexed {Count} chunks", contents.Count);
+        return contents.Count;
+    }
+
+    /// <inheritdoc/>
     public async Task<int> IndexDirectoryAsync(
         string directoryPath,
         RagIndexOptions? options = null,

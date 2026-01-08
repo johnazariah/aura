@@ -297,17 +297,23 @@ public sealed class BackgroundIndexer : BackgroundService, IBackgroundIndexer
                         var result = await codeIngestor.IngestCodeAsync(
                             filePath, content, directoryPath, cancellationToken);
 
-                        // Index RAG chunks
+                        // Collect all RAG chunks for batch embedding
+                        var ragContents = new List<RagContent>(result.Chunks.Count);
                         foreach (var chunk in result.Chunks)
                         {
                             var contentId = $"{filePath}:{chunk.ChunkType}:{chunk.SymbolName ?? chunk.StartLine.ToString()}";
-                            var ragContent = new RagContent(contentId, chunk.Text, RagContentType.Code)
+                            ragContents.Add(new RagContent(contentId, chunk.Text, RagContentType.Code)
                             {
                                 SourcePath = filePath,
                                 Language = chunk.Language,
                                 Metadata = chunk.Metadata,
-                            };
-                            await ragService.IndexAsync(ragContent, cancellationToken);
+                            });
+                        }
+
+                        // Index all chunks in one batch (single embedding call for the file)
+                        if (ragContents.Count > 0)
+                        {
+                            await ragService.IndexBatchAsync(ragContents, cancellationToken);
                         }
 
                         // Save code graph nodes and edges
@@ -333,16 +339,24 @@ public sealed class BackgroundIndexer : BackgroundService, IBackgroundIndexer
                             ingestor.IngestorId, filePath);
 
                         var chunks = await ingestor.IngestAsync(filePath, content, cancellationToken);
+
+                        // Collect all chunks for batch embedding
+                        var ragContents = new List<RagContent>(chunks.Count);
                         foreach (var chunk in chunks)
                         {
                             var contentId = $"{filePath}:{chunk.ChunkType}:{chunk.SymbolName ?? chunk.StartLine.ToString()}";
-                            var ragContent = new RagContent(contentId, chunk.Text, ingestor.ContentType)
+                            ragContents.Add(new RagContent(contentId, chunk.Text, ingestor.ContentType)
                             {
                                 SourcePath = filePath,
                                 Language = chunk.Language,
                                 Metadata = chunk.Metadata,
-                            };
-                            await ragService.IndexAsync(ragContent, cancellationToken);
+                            });
+                        }
+
+                        // Index all chunks in one batch
+                        if (ragContents.Count > 0)
+                        {
+                            await ragService.IndexBatchAsync(ragContents, cancellationToken);
                         }
                     }
                     else
@@ -359,16 +373,22 @@ public sealed class BackgroundIndexer : BackgroundService, IBackgroundIndexer
                             var chunks = await IngestWithAgentAsync(
                                 ingesterAgent, filePath, content, extension, cancellationToken);
 
+                            // Collect all chunks for batch embedding
+                            var ragContents = new List<RagContent>(chunks.Count);
                             foreach (var chunk in chunks)
                             {
                                 var contentId = $"{filePath}:{chunk.ChunkType}:{chunk.SymbolName ?? chunk.StartLine.ToString()}";
-                                var ragContent = new RagContent(contentId, chunk.Text, RagContentType.Code)
+                                ragContents.Add(new RagContent(contentId, chunk.Text, RagContentType.Code)
                                 {
                                     SourcePath = filePath,
                                     Language = chunk.Language,
                                     Metadata = chunk.Metadata.AsReadOnly(),
-                                };
-                                await ragService.IndexAsync(ragContent, cancellationToken);
+                                });
+                            }
+
+                            if (ragContents.Count > 0)
+                            {
+                                await ragService.IndexBatchAsync(ragContents, cancellationToken);
                             }
                         }
                         else
