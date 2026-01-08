@@ -124,10 +124,11 @@ public sealed class RagService : IRagService
 
         _logger.LogDebug("Batch indexing {Count} content items", contents.Count);
 
-        // Remove existing chunks for all content IDs first
-        foreach (var content in contents)
+        // Remove existing chunks for all unique content IDs first
+        var uniqueContentIds = contents.Select(c => c.ContentId).Distinct().ToList();
+        foreach (var contentId in uniqueContentIds)
         {
-            await RemoveAsync(content.ContentId, cancellationToken).ConfigureAwait(false);
+            await RemoveAsync(contentId, cancellationToken).ConfigureAwait(false);
         }
 
         // Collect all texts for batch embedding (one text per content item - no chunking)
@@ -139,6 +140,9 @@ public sealed class RagService : IRagService
             texts,
             cancellationToken).ConfigureAwait(false);
 
+        // Track chunk indices per content ID to handle duplicates
+        var chunkIndices = new Dictionary<string, int>();
+
         // Store all chunks
         for (var i = 0; i < contents.Count; i++)
         {
@@ -147,11 +151,19 @@ public sealed class RagService : IRagService
                 ? JsonSerializer.Serialize(content.Metadata)
                 : null;
 
+            // Get next chunk index for this content ID
+            if (!chunkIndices.TryGetValue(content.ContentId, out var chunkIndex))
+            {
+                chunkIndex = 0;
+            }
+
+            chunkIndices[content.ContentId] = chunkIndex + 1;
+
             var ragChunk = new RagChunk
             {
                 Id = Guid.NewGuid(),
                 ContentId = content.ContentId,
-                ChunkIndex = 0,
+                ChunkIndex = chunkIndex,
                 Content = content.Text,
                 ContentType = content.ContentType,
                 SourcePath = content.SourcePath is not null ? PathNormalizer.Normalize(content.SourcePath) : null,
