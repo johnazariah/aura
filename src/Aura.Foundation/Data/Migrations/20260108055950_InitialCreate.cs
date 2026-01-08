@@ -54,6 +54,25 @@ namespace Aura.Foundation.Data.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "index_metadata",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false, defaultValueSql: "gen_random_uuid()"),
+                    workspace_path = table.Column<string>(type: "character varying(1024)", maxLength: 1024, nullable: false),
+                    index_type = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
+                    indexed_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    commit_sha = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: true),
+                    commit_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    files_indexed = table.Column<int>(type: "integer", nullable: false),
+                    items_created = table.Column<int>(type: "integer", nullable: false),
+                    stats = table.Column<string>(type: "jsonb", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_index_metadata", x => x.id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "rag_chunks",
                 columns: table => new
                 {
@@ -258,6 +277,22 @@ namespace Aura.Foundation.Data.Migrations
                 column: "created_at");
 
             migrationBuilder.CreateIndex(
+                name: "IX_index_metadata_index_type",
+                table: "index_metadata",
+                column: "index_type");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_index_metadata_workspace_path",
+                table: "index_metadata",
+                column: "workspace_path");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_index_metadata_workspace_path_index_type",
+                table: "index_metadata",
+                columns: new[] { "workspace_path", "index_type" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "IX_message_rag_contexts_content_id",
                 table: "message_rag_contexts",
                 column: "content_id");
@@ -297,6 +332,9 @@ namespace Aura.Foundation.Data.Migrations
 
             migrationBuilder.DropTable(
                 name: "code_edges");
+
+            migrationBuilder.DropTable(
+                name: "index_metadata");
 
             migrationBuilder.DropTable(
                 name: "message_rag_contexts");
