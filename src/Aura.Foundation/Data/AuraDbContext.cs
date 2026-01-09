@@ -57,6 +57,9 @@ public class AuraDbContext : DbContext
     /// <summary>Gets the index metadata for tracking index freshness.</summary>
     public DbSet<IndexMetadata> IndexMetadata => Set<IndexMetadata>();
 
+    /// <summary>Gets the workspaces (onboarded directories/repositories).</summary>
+    public DbSet<Workspace> Workspaces => Set<Workspace>();
+
     /// <inheritdoc/>
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -253,6 +256,26 @@ public class AuraDbContext : DbContext
             entity.HasIndex(e => e.WorkspacePath);
             entity.HasIndex(e => e.IndexType);
             entity.HasIndex(e => new { e.WorkspacePath, e.IndexType }).IsUnique();
+        });
+
+        // Workspace configuration for onboarded directories/repositories
+        modelBuilder.Entity<Workspace>(entity =>
+        {
+            entity.ToTable("workspaces");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id").HasMaxLength(16).IsRequired();
+            entity.Property(e => e.CanonicalPath).HasColumnName("canonical_path").HasMaxLength(1024).IsRequired();
+            entity.Property(e => e.Name).HasColumnName("name").HasMaxLength(255).IsRequired();
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+            entity.Property(e => e.LastAccessedAt).HasColumnName("last_accessed_at");
+            entity.Property(e => e.Status).HasColumnName("status").HasConversion<string>().HasMaxLength(20);
+            entity.Property(e => e.ErrorMessage).HasColumnName("error_message");
+            entity.Property(e => e.GitRemoteUrl).HasColumnName("git_remote_url").HasMaxLength(2048);
+            entity.Property(e => e.DefaultBranch).HasColumnName("default_branch").HasMaxLength(255);
+
+            entity.HasIndex(e => e.CanonicalPath).IsUnique();
+            entity.HasIndex(e => e.Status);
+            entity.HasIndex(e => e.LastAccessedAt);
         });
     }
 }
