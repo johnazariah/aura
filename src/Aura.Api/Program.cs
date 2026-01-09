@@ -1738,6 +1738,271 @@ app.MapDelete("/api/workspace", async (
 });
 
 
+// ==== New Workspaces API (Resource-Oriented) ====
+// These endpoints replace the legacy /api/workspace/* endpoints above
+// See: .project/features/design/api-harmonization-phase1-audit.md
+
+// List all workspaces
+app.MapGet("/api/workspaces", async (
+    AuraDbContext db,
+    [FromQuery] int? limit,
+    CancellationToken ct) =>
+{
+    var query = db.Workspaces.OrderByDescending(w => w.LastAccessedAt);
+    var workspaces = limit.HasValue
+        ? await query.Take(limit.Value).ToListAsync(ct)
+        : await query.ToListAsync(ct);
+
+    return Results.Ok(new
+    {
+        count = workspaces.Count,
+        workspaces = workspaces.Select(w => new
+        {
+            id = w.Id,
+            name = w.Name,
+            path = w.CanonicalPath,
+            status = w.Status.ToString().ToLowerInvariant(),
+            createdAt = w.CreatedAt,
+            lastAccessedAt = w.LastAccessedAt,
+            gitRemoteUrl = w.GitRemoteUrl,
+            defaultBranch = w.DefaultBranch
+        })
+    });
+});
+
+// Get workspace by ID
+app.MapGet("/api/workspaces/{id}", async (
+    string id,
+    AuraDbContext db,
+    IRagService ragService,
+    ICodeGraphService codeGraphService,
+    CancellationToken ct) =>
+{
+    if (!WorkspaceIdGenerator.IsValidId(id))
+    {
+        return Results.BadRequest(new { error = "Invalid workspace ID format" });
+    }
+
+    var workspace = await db.Workspaces.FindAsync([id], ct);
+    if (workspace is null)
+    {
+        return Results.NotFound(new { error = $"Workspace not found: {id}" });
+    }
+
+    // Update last accessed timestamp
+    workspace.LastAccessedAt = DateTimeOffset.UtcNow;
+    await db.SaveChangesAsync(ct);
+
+    // Get stats
+    var ragStats = await ragService.GetDirectoryStatsAsync(workspace.CanonicalPath, ct);
+    var graphStats = await codeGraphService.GetStatsAsync(workspace.CanonicalPath, ct);
+
+    return Results.Ok(new
+    {
+        id = workspace.Id,
+        name = workspace.Name,
+        path = workspace.CanonicalPath,
+        status = workspace.Status.ToString().ToLowerInvariant(),
+        errorMessage = workspace.ErrorMessage,
+        createdAt = workspace.CreatedAt,
+        lastAccessedAt = workspace.LastAccessedAt,
+        gitRemoteUrl = workspace.GitRemoteUrl,
+        defaultBranch = workspace.DefaultBranch,
+        stats = new
+        {
+            files = ragStats?.FileCount ?? 0,
+            chunks = ragStats?.ChunkCount ?? 0,
+            graphNodes = graphStats.TotalNodes,
+            graphEdges = graphStats.TotalEdges
+        }
+    });
+});
+
+// Onboard a new workspace (or get existing one)
+app.MapPost("/api/workspaces", async (
+    CreateWorkspaceRequest request,
+    AuraDbContext db,
+    Aura.Foundation.Rag.IBackgroundIndexer backgroundIndexer,
+    Aura.Foundation.Git.IGitService gitService,
+    CancellationToken ct) =>
+{
+    if (string.IsNullOrWhiteSpace(request.Path))
+    {
+        return Results.BadRequest(new { error = "path is required" });
+    }
+
+    if (!Directory.Exists(request.Path))
+    {
+        return Results.NotFound(new { error = $"Directory not found: {request.Path}" });
+    }
+
+    var normalizedPath = PathNormalizer.Normalize(Path.GetFullPath(request.Path));
+    var workspaceId = WorkspaceIdGenerator.GenerateId(request.Path);
+    var directoryName = Path.GetFileName(Path.GetFullPath(request.Path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)) ?? "Workspace";
+
+    // Check if workspace already exists
+    var existing = await db.Workspaces.FindAsync([workspaceId], ct);
+    if (existing is not null)
+    {
+        existing.LastAccessedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(ct);
+
+        return Results.Ok(new
+        {
+            id = existing.Id,
+            name = existing.Name,
+            path = existing.CanonicalPath,
+            status = existing.Status.ToString().ToLowerInvariant(),
+            isNew = false,
+            message = "Workspace already exists"
+        });
+    }
+
+    // Get git info if available
+    string? gitRemoteUrl = null;
+    string? defaultBranch = null;
+    var isRepo = await gitService.IsRepositoryAsync(request.Path, ct);
+    if (isRepo)
+    {
+        try
+        {
+            var gitResult = await gitService.GetStatusAsync(request.Path, ct);
+            if (gitResult.Success && gitResult.Value is not null)
+            {
+                defaultBranch = gitResult.Value.CurrentBranch;
+            }
+            // TODO: Get remote URL
+        }
+        catch
+        {
+            // Ignore git errors - it's optional info
+        }
+    }
+
+    // Create workspace
+    var workspace = new Workspace
+    {
+        Id = workspaceId,
+        CanonicalPath = normalizedPath,
+        Name = request.Name ?? directoryName,
+        Status = WorkspaceStatus.Pending,
+        GitRemoteUrl = gitRemoteUrl,
+        DefaultBranch = defaultBranch
+    };
+
+    db.Workspaces.Add(workspace);
+    await db.SaveChangesAsync(ct);
+
+    // Start indexing if requested
+    Guid? jobId = null;
+    if (request.StartIndexing ?? true)
+    {
+        var originalPath = Path.GetFullPath(request.Path);
+        var options = new RagIndexOptions
+        {
+            IncludePatterns = request.Options?.IncludePatterns,
+            ExcludePatterns = request.Options?.ExcludePatterns,
+            Recursive = true,
+            PreferGitTrackedFiles = true
+        };
+
+        var (id, _) = backgroundIndexer.QueueDirectory(originalPath, options);
+        jobId = id;
+
+        workspace.Status = WorkspaceStatus.Indexing;
+        await db.SaveChangesAsync(ct);
+    }
+
+    return Results.Created($"/api/workspaces/{workspaceId}", new
+    {
+        id = workspace.Id,
+        name = workspace.Name,
+        path = workspace.CanonicalPath,
+        status = workspace.Status.ToString().ToLowerInvariant(),
+        isNew = true,
+        jobId,
+        message = jobId.HasValue ? "Workspace created and indexing started" : "Workspace created"
+    });
+});
+
+// Delete workspace (remove all indexed data)
+app.MapDelete("/api/workspaces/{id}", async (
+    string id,
+    AuraDbContext db,
+    ICodeGraphService codeGraphService,
+    CancellationToken ct) =>
+{
+    if (!WorkspaceIdGenerator.IsValidId(id))
+    {
+        return Results.BadRequest(new { error = "Invalid workspace ID format" });
+    }
+
+    var workspace = await db.Workspaces.FindAsync([id], ct);
+    if (workspace is null)
+    {
+        return Results.NotFound(new { error = $"Workspace not found: {id}" });
+    }
+
+    var originalPath = workspace.CanonicalPath;
+
+    // Delete RAG chunks for this workspace
+    var chunksToDelete = await db.RagChunks
+        .Where(c => c.SourcePath != null && c.SourcePath.StartsWith(originalPath))
+        .ToListAsync(ct);
+    db.RagChunks.RemoveRange(chunksToDelete);
+
+    // Delete code graph data
+    await codeGraphService.ClearRepositoryGraphAsync(originalPath, ct);
+
+    // Delete index metadata
+    var metadataToDelete = await db.IndexMetadata
+        .Where(i => i.WorkspacePath == originalPath)
+        .ToListAsync(ct);
+    db.IndexMetadata.RemoveRange(metadataToDelete);
+
+    // Delete the workspace itself
+    db.Workspaces.Remove(workspace);
+
+    await db.SaveChangesAsync(ct);
+
+    return Results.Ok(new
+    {
+        success = true,
+        message = "Workspace deleted",
+        deletedChunks = chunksToDelete.Count,
+        deletedMetadata = metadataToDelete.Count
+    });
+});
+
+// Lookup workspace ID by path
+app.MapGet("/api/workspaces/lookup", async (
+    [FromQuery] string path,
+    AuraDbContext db,
+    CancellationToken ct) =>
+{
+    if (string.IsNullOrWhiteSpace(path))
+    {
+        return Results.BadRequest(new { error = "path query parameter is required" });
+    }
+
+    var workspaceId = WorkspaceIdGenerator.GenerateId(path);
+    var workspace = await db.Workspaces.FindAsync([workspaceId], ct);
+
+    if (workspace is null)
+    {
+        return Results.NotFound(new { error = "Workspace not found for this path", suggestedId = workspaceId });
+    }
+
+    return Results.Ok(new
+    {
+        id = workspace.Id,
+        name = workspace.Name,
+        path = workspace.CanonicalPath,
+        status = workspace.Status.ToString().ToLowerInvariant()
+    });
+});
+
+
 // ==== Tool Endpoints ====
 
 // List all tools
@@ -2769,6 +3034,13 @@ record FinalizeWorkflowRequest(
 // Workspace onboarding request
 record OnboardWorkspaceRequest(
     string Path,
+    OnboardingOptions? Options = null);
+
+// Create workspace request (new API)
+record CreateWorkspaceRequest(
+    string Path,
+    string? Name = null,
+    bool? StartIndexing = true,
     OnboardingOptions? Options = null);
 
 record OnboardingOptions(
