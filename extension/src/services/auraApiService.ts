@@ -556,6 +556,68 @@ export class AuraApiService {
         );
         return response.data;
     }
+
+    // =====================
+    // Workspace Onboarding Methods
+    // =====================
+
+    /**
+     * Get the onboarding status of a workspace.
+     */
+    async getWorkspaceStatus(path: string): Promise<WorkspaceStatus> {
+        const response = await this.httpClient.get(
+            `${this.getBaseUrl()}/api/workspace/status`,
+            { params: { path }, timeout: 5000 }
+        );
+        return response.data;
+    }
+
+    /**
+     * Onboard a workspace (configure and start indexing).
+     */
+    async onboardWorkspace(path: string, options?: {
+        includePatterns?: string[];
+        excludePatterns?: string[];
+    }): Promise<OnboardResult> {
+        const response = await this.httpClient.post(
+            `${this.getBaseUrl()}/api/workspace/onboard`,
+            { path, options },
+            { timeout: 30000 }
+        );
+        return response.data;
+    }
+
+    /**
+     * Remove a workspace from Aura (delete all indexed data).
+     */
+    async removeWorkspace(path: string): Promise<{ success: boolean; message: string }> {
+        const response = await this.httpClient.delete(
+            `${this.getBaseUrl()}/api/workspace`,
+            { params: { path }, timeout: 30000 }
+        );
+        return response.data;
+    }
+}
+
+export interface WorkspaceStatus {
+    path: string;
+    isOnboarded: boolean;
+    onboardedAt?: string;
+    lastIndexedAt?: string;
+    indexHealth: string;
+    stats: {
+        files: number;
+        chunks: number;
+        graphNodes: number;
+        graphEdges: number;
+    };
+}
+
+export interface OnboardResult {
+    success: boolean;
+    jobId?: string;
+    message: string;
+    setupActions?: string[];
 }
 
 export interface FinalizeResult {

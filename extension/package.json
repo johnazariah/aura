@@ -31,16 +31,26 @@
     "views": {
       "aura": [
         {
+          "id": "aura.welcome",
+          "name": "Welcome",
+          "icon": "$(rocket)",
+          "when": "!aura.workspaceOnboarded"
+        },
+        {
           "id": "aura.status",
-          "name": "System Status"
+          "name": "System Status",
+          "icon": "$(pulse)"
         },
         {
           "id": "aura.workflows",
-          "name": "Workflows"
+          "name": "Workflows",
+          "icon": "$(tasklist)",
+          "when": "aura.workspaceOnboarded"
         },
         {
           "id": "aura.agents",
-          "name": "Agents"
+          "name": "Agents",
+          "icon": "$(hubot)"
         }
       ]
     },
@@ -139,6 +149,11 @@
         "command": "aura.openGettingStarted",
         "title": "Aura: Getting Started",
         "icon": "$(rocket)"
+      },
+      {
+        "command": "aura.onboardWorkspace",
+        "title": "Aura: Enable for Workspace",
+        "icon": "$(add)"
       }
     ],
     "menus": {

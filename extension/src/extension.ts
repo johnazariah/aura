@@ -4,6 +4,7 @@ import { AgentTreeProvider, AgentItem, setExtensionPath } from './providers/agen
 import { ChatWindowProvider } from './providers/chatWindowProvider';
 import { WorkflowTreeProvider } from './providers/workflowTreeProvider';
 import { WorkflowPanelProvider } from './providers/workflowPanelProvider';
+import { WelcomeViewProvider } from './providers/welcomeViewProvider';
 import { HealthCheckService } from './services/healthCheckService';
 import { AuraApiService, AgentInfo } from './services/auraApiService';
 
@@ -12,6 +13,7 @@ let healthCheckService: HealthCheckService;
 let statusTreeProvider: StatusTreeProvider;
 let agentTreeProvider: AgentTreeProvider;
 let workflowTreeProvider: WorkflowTreeProvider;
+let welcomeViewProvider: WelcomeViewProvider;
 let chatWindowProvider: ChatWindowProvider;
 let workflowPanelProvider: WorkflowPanelProvider;
 let statusBarItem: vscode.StatusBarItem;
@@ -19,6 +21,11 @@ let refreshInterval: NodeJS.Timeout | undefined;
 
 export async function activate(context: vscode.ExtensionContext) {
     console.log('Aura extension activating...');
+
+    // Set default context values immediately - assume not onboarded until we check
+    // This ensures views with when clauses behave correctly from the start
+    await vscode.commands.executeCommand('setContext', 'aura.workspaceOnboarded', false);
+    await vscode.commands.executeCommand('setContext', 'aura.workspaceNotOnboarded', true);
 
     // Set extension path for resource loading
     setExtensionPath(context.extensionPath);
@@ -31,12 +38,18 @@ export async function activate(context: vscode.ExtensionContext) {
     statusTreeProvider = new StatusTreeProvider(healthCheckService);
     agentTreeProvider = new AgentTreeProvider(auraApiService);
     workflowTreeProvider = new WorkflowTreeProvider(auraApiService);
+    welcomeViewProvider = new WelcomeViewProvider(auraApiService);
     chatWindowProvider = new ChatWindowProvider(context.extensionUri, auraApiService);
     workflowPanelProvider = new WorkflowPanelProvider(context.extensionUri, auraApiService);
 
     // Register tree views
     const statusView = vscode.window.createTreeView('aura.status', {
         treeDataProvider: statusTreeProvider,
+        showCollapseAll: false
+    });
+
+    const welcomeView = vscode.window.createTreeView('aura.welcome', {
+        treeDataProvider: welcomeViewProvider,
         showCollapseAll: false
     });
 
@@ -149,6 +162,11 @@ export async function activate(context: vscode.ExtensionContext) {
         await showIndexingProgress();
     });
 
+    // Workspace onboarding command
+    const onboardWorkspaceCommand = vscode.commands.registerCommand('aura.onboardWorkspace', async () => {
+        await onboardWorkspace();
+    });
+
     // Workflow commands
     const createWorkflowCommand = vscode.commands.registerCommand('aura.createWorkflow', async () => {
         await createWorkflow();
@@ -216,6 +234,7 @@ export async function activate(context: vscode.ExtensionContext) {
     // Add disposables
     context.subscriptions.push(
         statusView,
+        welcomeView,
         workflowView,
         agentView,
         statusBarItem,
@@ -230,6 +249,7 @@ export async function activate(context: vscode.ExtensionContext) {
         showRagStatsCommand,
         clearRagIndexCommand,
         showIndexingProgressCommand,
+        onboardWorkspaceCommand,
         createWorkflowCommand,
         openWorkflowCommand,
         executeStepCommand,
@@ -244,6 +264,9 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // Initial refresh
     await refreshAll();
+
+    // Check workspace onboarding status and set context for view visibility
+    await checkOnboardingStatus();
 
     // Setup auto-refresh
     setupAutoRefresh();
@@ -285,6 +308,86 @@ async function indexWorkspace(): Promise<void> {
     }
 }
 
+/**
+ * Check if the current workspace is onboarded and set VS Code context accordingly.
+ * This controls which views are shown (welcome vs workflows).
+ */
+async function checkOnboardingStatus(): Promise<void> {
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (!workspaceFolders || workspaceFolders.length === 0) {
+        // No workspace - show welcome to guide user
+        console.log('[Aura] No workspace folders, setting not onboarded');
+        await vscode.commands.executeCommand('setContext', 'aura.workspaceOnboarded', false);
+        await vscode.commands.executeCommand('setContext', 'aura.workspaceNotOnboarded', true);
+        return;
+    }
+
+    const workspacePath = workspaceFolders[0].uri.fsPath;
+    console.log('[Aura] Checking onboarding status for:', workspacePath);
+
+    try {
+        const status = await auraApiService.getWorkspaceStatus(workspacePath);
+        console.log('[Aura] API returned status:', JSON.stringify(status));
+        
+        if (status.isOnboarded) {
+            console.log('[Aura] Workspace IS onboarded, hiding welcome view');
+            await vscode.commands.executeCommand('setContext', 'aura.workspaceOnboarded', true);
+            await vscode.commands.executeCommand('setContext', 'aura.workspaceNotOnboarded', false);
+            console.log(`Workspace onboarded: ${workspacePath} (${status.stats.files} files, ${status.stats.chunks} chunks)`);
+        } else {
+            console.log('[Aura] Workspace NOT onboarded, showing welcome view');
+            await vscode.commands.executeCommand('setContext', 'aura.workspaceOnboarded', false);
+            await vscode.commands.executeCommand('setContext', 'aura.workspaceNotOnboarded', true);
+            console.log(`Workspace not onboarded: ${workspacePath}`);
+        }
+    } catch (error) {
+        // If API call fails, assume not onboarded (will show welcome view)
+        console.log('[Aura] Failed to check onboarding status:', error);
+        await vscode.commands.executeCommand('setContext', 'aura.workspaceOnboarded', false);
+        await vscode.commands.executeCommand('setContext', 'aura.workspaceNotOnboarded', true);
+    }
+}
+
+async function onboardWorkspace(): Promise<void> {
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (!workspaceFolders || workspaceFolders.length === 0) {
+        vscode.window.showWarningMessage('No workspace folder open');
+        return;
+    }
+
+    const workspacePath = workspaceFolders[0].uri.fsPath;
+
+    try {
+        vscode.window.showInformationMessage('🚀 Enabling Aura for this workspace...');
+
+        // Call the onboard API
+        const result = await auraApiService.onboardWorkspace(workspacePath);
+
+        if (result.success) {
+            // Update context to show onboarded views
+            await vscode.commands.executeCommand('setContext', 'aura.workspaceOnboarded', true);
+            await vscode.commands.executeCommand('setContext', 'aura.workspaceNotOnboarded', false);
+
+            // Show progress for indexing
+            if (result.jobId) {
+                updateIndexingStatusBar(result.jobId);
+            }
+
+            // Show setup actions
+            const actions = result.setupActions?.join(', ') || 'Indexing started';
+            vscode.window.showInformationMessage(`✓ Aura enabled: ${actions}`);
+
+            // Refresh views
+            statusTreeProvider.refresh();
+            workflowTreeProvider.refresh();
+            welcomeViewProvider.refresh();
+        }
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        vscode.window.showErrorMessage(`Failed to enable Aura: ${message}`);
+    }
+}
+
 let indexingStatusBarItem: vscode.StatusBarItem | undefined;
 let indexingPollInterval: NodeJS.Timeout | undefined;
 
@@ -310,6 +413,9 @@ function updateIndexingStatusBar(jobId: string): void {
                     : 0;
                 indexingStatusBarItem!.text = `$(sync~spin) Indexing ${percent}%`;
                 indexingStatusBarItem!.tooltip = `Indexing: ${status.processedItems}/${status.totalItems} files`;
+                
+                // Refresh status tree to keep panel in sync
+                statusTreeProvider.refresh();
             } else if (status.state === 'Completed') {
                 clearInterval(indexingPollInterval);
                 indexingPollInterval = undefined;
