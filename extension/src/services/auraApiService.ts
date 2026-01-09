@@ -558,45 +558,138 @@ export class AuraApiService {
     }
 
     // =====================
-    // Workspace Onboarding Methods
+    // Workspace Methods
     // =====================
 
     /**
-     * Get the onboarding status of a workspace.
+     * List all workspaces.
      */
-    async getWorkspaceStatus(path: string): Promise<WorkspaceStatus> {
+    async listWorkspaces(limit?: number): Promise<{ count: number; workspaces: WorkspaceInfo[] }> {
         const response = await this.httpClient.get(
-            `${this.getBaseUrl()}/api/workspace/status`,
-            { params: { path }, timeout: 5000 }
+            `${this.getBaseUrl()}/api/workspaces`,
+            { params: limit ? { limit } : undefined, timeout: 5000 }
         );
         return response.data;
     }
 
     /**
-     * Onboard a workspace (configure and start indexing).
+     * Get workspace by ID.
+     */
+    async getWorkspace(id: string): Promise<WorkspaceInfo> {
+        const response = await this.httpClient.get(
+            `${this.getBaseUrl()}/api/workspaces/${id}`,
+            { timeout: 5000 }
+        );
+        return response.data;
+    }
+
+    /**
+     * Lookup workspace ID by path.
+     */
+    async lookupWorkspace(path: string): Promise<{ id: string; name: string; path: string; status: string } | null> {
+        try {
+            const response = await this.httpClient.get(
+                `${this.getBaseUrl()}/api/workspaces/lookup`,
+                { params: { path }, timeout: 5000 }
+            );
+            return response.data;
+        } catch (error: unknown) {
+            if (error && typeof error === 'object' && 'response' in error) {
+                const axiosError = error as { response?: { status?: number } };
+                if (axiosError.response?.status === 404) {
+                    return null;
+                }
+            }
+            throw error;
+        }
+    }
+
+    /**
+     * Get the onboarding status of a workspace by path.
+     * Returns a status object (with isOnboarded=false if not found).
+     */
+    async getWorkspaceStatus(path: string): Promise<WorkspaceStatus> {
+        const lookup = await this.lookupWorkspace(path);
+        if (!lookup) {
+            return {
+                path,
+                isOnboarded: false,
+                indexHealth: 'not-indexed',
+                stats: { files: 0, chunks: 0, graphNodes: 0, graphEdges: 0 }
+            };
+        }
+        const workspace = await this.getWorkspace(lookup.id);
+        return {
+            path: workspace.path,
+            isOnboarded: workspace.status === 'ready' || workspace.status === 'indexing',
+            onboardedAt: workspace.createdAt,
+            lastIndexedAt: workspace.lastAccessedAt,
+            indexHealth: workspace.status === 'ready' ? 'fresh' : workspace.status,
+            stats: workspace.stats ?? { files: 0, chunks: 0, graphNodes: 0, graphEdges: 0 }
+        };
+    }
+
+    /**
+     * Onboard a workspace (create and start indexing).
      */
     async onboardWorkspace(path: string, options?: {
+        name?: string;
         includePatterns?: string[];
         excludePatterns?: string[];
     }): Promise<OnboardResult> {
         const response = await this.httpClient.post(
-            `${this.getBaseUrl()}/api/workspace/onboard`,
-            { path, options },
+            `${this.getBaseUrl()}/api/workspaces`,
+            {
+                path,
+                name: options?.name,
+                startIndexing: true,
+                options: options?.includePatterns || options?.excludePatterns ? {
+                    includePatterns: options?.includePatterns,
+                    excludePatterns: options?.excludePatterns
+                } : undefined
+            },
             { timeout: 30000 }
         );
-        return response.data;
+        return {
+            success: true,
+            jobId: response.data.jobId,
+            message: response.data.message,
+            workspaceId: response.data.id
+        };
     }
 
     /**
      * Remove a workspace from Aura (delete all indexed data).
      */
     async removeWorkspace(path: string): Promise<{ success: boolean; message: string }> {
+        const lookup = await this.lookupWorkspace(path);
+        if (!lookup) {
+            return { success: true, message: 'Workspace not found (already removed)' };
+        }
         const response = await this.httpClient.delete(
-            `${this.getBaseUrl()}/api/workspace`,
-            { params: { path }, timeout: 30000 }
+            `${this.getBaseUrl()}/api/workspaces/${lookup.id}`,
+            { timeout: 30000 }
         );
         return response.data;
     }
+}
+
+export interface WorkspaceInfo {
+    id: string;
+    name: string;
+    path: string;
+    status: string;
+    errorMessage?: string;
+    createdAt?: string;
+    lastAccessedAt?: string;
+    gitRemoteUrl?: string;
+    defaultBranch?: string;
+    stats?: {
+        files: number;
+        chunks: number;
+        graphNodes: number;
+        graphEdges: number;
+    };
 }
 
 export interface WorkspaceStatus {
@@ -617,6 +710,7 @@ export interface OnboardResult {
     success: boolean;
     jobId?: string;
     message: string;
+    workspaceId?: string;
     setupActions?: string[];
 }
 

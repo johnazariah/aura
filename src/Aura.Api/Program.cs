@@ -1553,193 +1553,8 @@ app.MapGet("/api/index/jobs/{jobId:guid}", (
 });
 
 
-// ==== Workspace Endpoints ====
-
-// Get workspace onboarding status
-app.MapGet("/api/workspace/status", async (
-    [FromQuery] string path,
-    AuraDbContext db,
-    IRagService ragService,
-    ICodeGraphService codeGraphService,
-    CancellationToken ct) =>
-{
-    if (string.IsNullOrWhiteSpace(path))
-    {
-        return Results.BadRequest(new { error = "path query parameter is required" });
-    }
-
-    var normalizedPath = Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-
-    // On Windows, paths are case-insensitive, so normalize to a consistent case for comparison
-    var pathForComparison = OperatingSystem.IsWindows()
-        ? normalizedPath.ToLowerInvariant()
-        : normalizedPath;
-
-    // Check if workspace has any index metadata (means it's been onboarded)
-    // Use case-insensitive comparison on Windows
-    var ragIndex = await db.IndexMetadata
-        .Where(i => i.IndexType == IndexTypes.Rag)
-        .ToListAsync(ct);
-    var matchingRagIndex = ragIndex.FirstOrDefault(i =>
-        string.Equals(i.WorkspacePath, normalizedPath,
-            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal));
-
-    var graphIndex = await db.IndexMetadata
-        .Where(i => i.IndexType == IndexTypes.Graph)
-        .ToListAsync(ct);
-    var matchingGraphIndex = graphIndex.FirstOrDefault(i =>
-        string.Equals(i.WorkspacePath, normalizedPath,
-            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal));
-
-    var isOnboarded = matchingRagIndex is not null || matchingGraphIndex is not null;
-
-    if (!isOnboarded)
-    {
-        return Results.Ok(new
-        {
-            path = normalizedPath,
-            isOnboarded = false,
-            onboardedAt = (DateTimeOffset?)null,
-            lastIndexedAt = (DateTimeOffset?)null,
-            indexHealth = "not-indexed",
-            stats = new { files = 0, chunks = 0, graphNodes = 0, graphEdges = 0 }
-        });
-    }
-
-    // Get stats for onboarded workspace
-    var ragStats = await ragService.GetDirectoryStatsAsync(normalizedPath, ct);
-    var graphStats = await codeGraphService.GetStatsAsync(normalizedPath, ct);
-
-    var lastIndexedAt = new[] { matchingRagIndex?.IndexedAt, matchingGraphIndex?.IndexedAt }
-        .Where(d => d.HasValue)
-        .OrderByDescending(d => d)
-        .FirstOrDefault();
-
-    var onboardedAt = new[] { matchingRagIndex?.IndexedAt, matchingGraphIndex?.IndexedAt }
-        .Where(d => d.HasValue)
-        .OrderBy(d => d)
-        .FirstOrDefault();
-
-    return Results.Ok(new
-    {
-        path = normalizedPath,
-        isOnboarded = true,
-        onboardedAt,
-        lastIndexedAt,
-        indexHealth = "fresh", // TODO: compute actual health
-        stats = new
-        {
-            files = ragStats?.FileCount ?? 0,
-            chunks = ragStats?.ChunkCount ?? 0,
-            graphNodes = graphStats.TotalNodes,
-            graphEdges = graphStats.TotalEdges
-        }
-    });
-});
-
-// Onboard a workspace (configure and trigger indexing)
-app.MapPost("/api/workspace/onboard", async (
-    OnboardWorkspaceRequest request,
-    Aura.Foundation.Rag.IBackgroundIndexer backgroundIndexer,
-    Aura.Foundation.Git.IGitService gitService,
-    CancellationToken ct) =>
-{
-    if (string.IsNullOrWhiteSpace(request.Path))
-    {
-        return Results.BadRequest(new { error = "path is required" });
-    }
-
-    if (!Directory.Exists(request.Path))
-    {
-        return Results.NotFound(new { error = $"Directory not found: {request.Path}" });
-    }
-
-    var normalizedPath = Path.GetFullPath(request.Path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-    var setupActions = new List<string>();
-
-    // Check if it's a git repo and handle safe.directory if needed
-    var isRepo = await gitService.IsRepositoryAsync(normalizedPath, ct);
-    if (isRepo)
-    {
-        setupActions.Add("Detected git repository");
-    }
-
-    // Queue RAG indexing (this also extracts symbols via ingesters)
-    var options = new RagIndexOptions
-    {
-        IncludePatterns = request.Options?.IncludePatterns,
-        ExcludePatterns = request.Options?.ExcludePatterns,
-        Recursive = true,
-        PreferGitTrackedFiles = true
-    };
-
-    var (jobId, isNew) = backgroundIndexer.QueueDirectory(normalizedPath, options);
-
-    if (isNew)
-    {
-        setupActions.Add("Started RAG indexing");
-    }
-    else
-    {
-        setupActions.Add("RAG indexing already in progress");
-    }
-
-    // TODO: Auto-detect .sln file and trigger code graph indexing
-    // For now, code graph must be built separately via POST /api/code-graph/build
-    // See: .project/features/upcoming/api-review-harmonization.md for unified indexing plans
-
-    return Results.Ok(new
-    {
-        success = true,
-        jobId,
-        message = isNew ? "Workspace onboarded and indexing started" : "Indexing already in progress",
-        setupActions
-    });
-});
-
-// Remove workspace from Aura (delete all indexed data)
-app.MapDelete("/api/workspace", async (
-    [FromQuery] string path,
-    AuraDbContext db,
-    ICodeGraphService codeGraphService,
-    CancellationToken ct) =>
-{
-    if (string.IsNullOrWhiteSpace(path))
-    {
-        return Results.BadRequest(new { error = "path query parameter is required" });
-    }
-
-    var normalizedPath = Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-
-    // Delete RAG chunks for this workspace (chunks where SourcePath starts with workspace path)
-    var chunksToDelete = await db.RagChunks
-        .Where(c => c.SourcePath != null && c.SourcePath.StartsWith(normalizedPath))
-        .ToListAsync(ct);
-    db.RagChunks.RemoveRange(chunksToDelete);
-
-    // Delete code graph data for this workspace
-    await codeGraphService.ClearRepositoryGraphAsync(normalizedPath, ct);
-
-    // Delete index metadata
-    var metadataToDelete = await db.IndexMetadata
-        .Where(i => i.WorkspacePath == normalizedPath)
-        .ToListAsync(ct);
-
-    db.IndexMetadata.RemoveRange(metadataToDelete);
-    await db.SaveChangesAsync(ct);
-
-    return Results.Ok(new
-    {
-        success = true,
-        message = $"Workspace removed from Aura",
-        deletedChunks = chunksToDelete.Count,
-        deletedMetadata = metadataToDelete.Count
-    });
-});
-
-
-// ==== New Workspaces API (Resource-Oriented) ====
-// These endpoints replace the legacy /api/workspace/* endpoints above
+// ==== Workspaces API ====
+// Resource-oriented workspace management
 // See: .project/features/design/api-harmonization-phase1-audit.md
 
 // List all workspaces
@@ -3031,19 +2846,14 @@ record FinalizeWorkflowRequest(
     string? BaseBranch = null,
     bool Draft = true);
 
-// Workspace onboarding request
-record OnboardWorkspaceRequest(
-    string Path,
-    OnboardingOptions? Options = null);
-
-// Create workspace request (new API)
+// Create workspace request
 record CreateWorkspaceRequest(
     string Path,
     string? Name = null,
     bool? StartIndexing = true,
-    OnboardingOptions? Options = null);
+    WorkspaceIndexingOptions? Options = null);
 
-record OnboardingOptions(
+record WorkspaceIndexingOptions(
     IReadOnlyList<string>? IncludePatterns = null,
     IReadOnlyList<string>? ExcludePatterns = null);
 
