@@ -166,19 +166,12 @@ public sealed class WorkflowService(
 
         if (!string.IsNullOrEmpty(repositoryPath))
         {
-            // Normalize path for comparison (handle trailing slashes, case-insensitive on Windows)
-            // Also handle double-escaped backslashes from JSON
-            var normalizedPath = repositoryPath
-                .Replace("\\\\", "\\")  // Handle double-escaped backslashes
-                .TrimEnd('\\', '/')
-                .Replace('/', '\\')
-                .ToLowerInvariant();
+            // Use PathNormalizer for consistent cross-platform path comparison
+            var normalizedPath = Aura.Foundation.Rag.PathNormalizer.Normalize(repositoryPath);
             query = query.Where(w => w.RepositoryPath != null &&
-                w.RepositoryPath
-                    .Replace("\\\\", "\\")  // Handle double-escaped backslashes in DB
-                    .Replace("/", "\\")
-                    .TrimEnd('\\')
-                    .ToLower() == normalizedPath);
+                EF.Functions.ILike(
+                    w.RepositoryPath.Replace("\\", "/").ToLower(),
+                    normalizedPath));
         }
 
         return await query
@@ -288,17 +281,82 @@ public sealed class WorkflowService(
                 ragQueries.Count,
                 codebaseContext?.ProjectStructure is not null);
 
-            var context = new AgentContext(prompt, WorkspacePath: workflow.WorktreePath)
+            // Check if tools are defined for this prompt
+            var promptToolNames = _promptRegistry.GetTools("workflow-enrich");
+            _logger.LogWarning("[ANALYZE-DEBUG] Prompt tool names from registry: [{Tools}]", string.Join(", ", promptToolNames));
+
+            var availableTools = promptToolNames
+                .Select(name => _toolRegistry.GetTool(name))
+                .Where(t => t is not null)
+                .Cast<ToolDefinition>()
+                .ToList();
+
+            _logger.LogWarning("[ANALYZE-DEBUG] Available tools resolved: {Count} - [{Tools}]",
+                availableTools.Count,
+                string.Join(", ", availableTools.Select(t => t.ToolId)));
+
+            string analysisContent;
+            int tokensUsed;
+            IReadOnlyList<ReActStep>? toolSteps = null;
+
+            if (availableTools.Count > 0)
             {
-                RagContext = ragContext,
-            };
-            var output = await analyzer.ExecuteAsync(context, ct);
+                // Use ReAct executor for tool-enabled exploration
+                _logger.LogInformation(
+                    "Analyze has {ToolCount} tools available: {Tools}",
+                    availableTools.Count,
+                    string.Join(", ", availableTools.Select(t => t.ToolId)));
+
+                var llmProvider = _llmProviderRegistry.GetDefaultProvider()
+                    ?? throw new InvalidOperationException("No LLM provider available");
+
+                var taskWithContext = ragContext is not null
+                    ? $"{prompt}\n\n## Relevant Context from Knowledge Base\n{ragContext}"
+                    : prompt;
+
+                var reactOptions = new ReActOptions
+                {
+                    WorkingDirectory = workflow.WorktreePath,
+                    MaxSteps = 10, // Limit exploration steps
+                    Temperature = 0.2,
+                    RequireConfirmation = false,
+                };
+
+                var reactResult = await _reactExecutor.ExecuteAsync(
+                    taskWithContext,
+                    availableTools,
+                    llmProvider,
+                    reactOptions,
+                    ct);
+
+                analysisContent = reactResult.FinalAnswer ?? "Analysis could not be completed";
+                tokensUsed = reactResult.TotalTokensUsed;
+                toolSteps = reactResult.Steps;
+
+                _logger.LogInformation(
+                    "Agentic analysis completed: {Success}, steps={StepCount}, tokens={Tokens}",
+                    reactResult.Success,
+                    reactResult.Steps.Count,
+                    reactResult.TotalTokensUsed);
+            }
+            else
+            {
+                // Fallback to simple agent execution (no tools)
+                var context = new AgentContext(prompt, WorkspacePath: workflow.WorktreePath)
+                {
+                    RagContext = ragContext,
+                };
+                var output = await analyzer.ExecuteAsync(context, ct);
+                analysisContent = output.Content;
+                tokensUsed = output.TokensUsed;
+            }
 
             workflow.AnalyzedContext = JsonSerializer.Serialize(new
             {
                 agentId = analyzer.AgentId,
-                analysis = output.Content,
-                tokensUsed = output.TokensUsed,
+                analysis = analysisContent,
+                tokensUsed,
+                toolSteps = toolSteps?.Select(s => new { s.StepNumber, s.Action, s.Observation }),
                 timestamp = DateTimeOffset.UtcNow,
             });
 
@@ -498,6 +556,25 @@ public sealed class WorkflowService(
             if (step.Capability == "review")
             {
                 promptName = "step-review";
+
+                // Extract the analysis from enriched context for review steps too
+                var analysis = string.Empty;
+                if (workflow.AnalyzedContext is not null)
+                {
+                    try
+                    {
+                        var enriched = JsonSerializer.Deserialize<JsonElement>(workflow.AnalyzedContext);
+                        if (enriched.TryGetProperty("analysis", out var analysisElement))
+                        {
+                            analysis = analysisElement.GetString() ?? string.Empty;
+                        }
+                    }
+                    catch
+                    {
+                        // Ignore parse errors
+                    }
+                }
+
                 // For review capability, gather outputs from previous coding steps
                 var codeToReview = new System.Text.StringBuilder();
                 // Include both coding and documentation steps in review
@@ -530,6 +607,7 @@ public sealed class WorkflowService(
                     stepDescription = step.Description ?? "No additional description.",
                     issueTitle = workflow.Title,
                     codeToReview = codeToReview.ToString(),
+                    analysis, // Include enriched context for review steps
                 });
 
                 // Use RAG queries from prompt template if defined
@@ -889,7 +967,8 @@ public sealed class WorkflowService(
             if (hasChanges.Success && hasChanges.Value)
             {
                 var commitMessage = $"WIP: Final uncommitted changes for {workflow.Title}";
-                var commitResult = await _gitService.CommitAsync(workflow.WorktreePath, commitMessage, ct);
+                // Skip hooks for automated workflow commits
+                var commitResult = await _gitService.CommitAsync(workflow.WorktreePath, commitMessage, skipHooks: true, ct);
                 if (!commitResult.Success)
                 {
                     _logger.LogWarning("Failed to commit final changes: {Error}", commitResult.Error);
