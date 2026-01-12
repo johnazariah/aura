@@ -51,6 +51,12 @@ public record ToolInput
         if (value is T typed)
             return typed;
 
+        // Handle JsonElement from JSON deserialization
+        if (value is System.Text.Json.JsonElement jsonElement)
+        {
+            return ConvertJsonElement<T>(jsonElement, defaultValue);
+        }
+
         try
         {
             return (T)Convert.ChangeType(value, typeof(T));
@@ -70,7 +76,29 @@ public record ToolInput
         if (value is T typed)
             return typed;
 
+        // Handle JsonElement from JSON deserialization
+        if (value is System.Text.Json.JsonElement jsonElement)
+        {
+            var result = ConvertJsonElement<T>(jsonElement, default);
+            if (result is null)
+                throw new ArgumentException($"Cannot convert parameter '{name}' to {typeof(T).Name}");
+            return result;
+        }
+
         return (T)Convert.ChangeType(value, typeof(T));
+    }
+
+    private static T? ConvertJsonElement<T>(System.Text.Json.JsonElement element, T? defaultValue)
+    {
+        try
+        {
+            // Use System.Text.Json to deserialize the JsonElement to the target type
+            return System.Text.Json.JsonSerializer.Deserialize<T>(element.GetRawText());
+        }
+        catch
+        {
+            return defaultValue;
+        }
     }
 }
 
