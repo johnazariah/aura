@@ -156,7 +156,7 @@ export class StatusTreeProvider implements vscode.TreeDataProvider<StatusItem> {
             children.push(healthItem);
         }
 
-        // Code Graph stats (Roslyn semantic index)
+        // Code Graph stats (Roslyn semantic index) - current workspace only
         if (status.graphNodes !== undefined && status.graphNodes > 0) {
             const graphItem = new StatusItem(
                 'Code Graph',
@@ -175,10 +175,14 @@ export class StatusTreeProvider implements vscode.TreeDataProvider<StatusItem> {
             children.push(noGraphItem);
         }
 
+        // Current workspace stats (use repo-filtered counts, fall back to totals if not available)
+        const docCount = status.repoDocuments ?? status.totalDocuments ?? 0;
+        const chunkCount = status.repoChunks ?? status.totalChunks ?? 0;
+
         // Symbols count (each class, method, section is a "document" in RAG terms)
         const docItem = new StatusItem(
             'Symbols',
-            { status: 'healthy', details: `${status.totalDocuments || 0}` },
+            { status: 'healthy', details: `${docCount}` },
             'info'
         );
         docItem.iconPath = new vscode.ThemeIcon('symbol-class');
@@ -187,7 +191,7 @@ export class StatusTreeProvider implements vscode.TreeDataProvider<StatusItem> {
         // Embeddings count (vector representations for similarity search)
         const chunkItem = new StatusItem(
             'Embeddings',
-            { status: 'healthy', details: `${status.totalChunks || 0}` },
+            { status: 'healthy', details: `${chunkCount}` },
             'info'
         );
         chunkItem.iconPath = new vscode.ThemeIcon('symbol-array');

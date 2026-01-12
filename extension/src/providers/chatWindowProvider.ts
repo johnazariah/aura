@@ -1,6 +1,18 @@
 import * as vscode from 'vscode';
 import { AuraApiService, AgentInfo, IndexHealthResponse } from '../services/auraApiService';
 
+/**
+ * Normalizes a file path for consistent API calls.
+ * Matches the C# PathNormalizer: forward slashes, lowercase.
+ */
+function normalizePath(path: string): string {
+    if (!path) return path;
+    return path
+        .replace(/\\\\/g, '/')  // Handle escaped backslashes
+        .replace(/\\/g, '/')     // Convert backslashes to forward slashes
+        .toLowerCase();
+}
+
 export type ContextMode = 'none' | 'text' | 'graph' | 'full';
 
 interface ChatMessage {
@@ -135,10 +147,11 @@ export class ChatWindowProvider {
         });
 
         // Show typing indicator
-        panel.webview.postMessage({ type: 'typing', isTyping: true });
+        panel.webview.postMessage({ type: 'typing', isTyping: true, status: 'Thinking and exploring codebase...' });
 
         try {
-            const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+            const rawPath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+            const workspacePath = rawPath ? normalizePath(rawPath) : undefined;
             let response: { content: string; tokensUsed: number; durationMs?: number };
 
             const startTime = Date.now();
@@ -146,18 +159,19 @@ export class ChatWindowProvider {
             const useCodeGraph = contextMode === 'graph' || contextMode === 'full';
 
             if (contextMode !== 'none') {
-                const ragResponse = await this._apiService.executeAgentWithRag(
+                // Use agentic chat for multi-step exploration
+                const agenticResponse = await this._apiService.executeAgentAgentic(
                     agent.id,
                     message,
                     workspacePath,
-                    5,
+                    10, // maxSteps
                     useRag,
                     useCodeGraph
                 );
                 response = {
-                    content: ragResponse.content,
-                    tokensUsed: ragResponse.tokensUsed,
-                    durationMs: ragResponse.durationMs
+                    content: agenticResponse.content,
+                    tokensUsed: agenticResponse.tokensUsed,
+                    durationMs: agenticResponse.durationMs
                 };
             } else {
                 const content = await this._apiService.executeAgent(
@@ -482,6 +496,12 @@ export class ChatWindowProvider {
             border-bottom-left-radius: 4px;
         }
 
+        .typing-status {
+            font-size: 12px;
+            color: var(--vscode-descriptionForeground);
+            margin-bottom: 8px;
+        }
+
         .typing-dots {
             display: flex;
             gap: 4px;
@@ -694,6 +714,7 @@ export class ChatWindowProvider {
     <div class="typing-indicator" id="typingIndicator">
         <div class="message-avatar">🤖</div>
         <div class="typing-bubble">
+            <div class="typing-status" id="typingStatus">Exploring codebase...</div>
             <div class="typing-dots">
                 <span></span>
                 <span></span>
@@ -779,6 +800,7 @@ export class ChatWindowProvider {
                     typingIndicator.classList.toggle('visible', message.isTyping);
                     sendButton.disabled = message.isTyping;
                     if (message.isTyping) {
+                        document.getElementById('typingStatus').textContent = message.status || 'Exploring codebase...';
                         scrollToBottom();
                     }
                     break;

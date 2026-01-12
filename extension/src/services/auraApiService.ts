@@ -1,6 +1,18 @@
 import * as vscode from 'vscode';
 import axios, { AxiosInstance } from 'axios';
 
+/**
+ * Normalizes a file path for consistent API calls.
+ * Matches the C# PathNormalizer: forward slashes, lowercase.
+ */
+function normalizePath(path: string): string {
+    if (!path) return path;
+    return path
+        .replace(/\\\\/g, '/')  // Handle escaped backslashes
+        .replace(/\\/g, '/')     // Convert backslashes to forward slashes
+        .toLowerCase();
+}
+
 export interface AgentInfo {
     id: string;
     name: string;
@@ -98,6 +110,19 @@ export interface RagExecuteResult {
     tokensUsed: number;
     ragEnriched: boolean;
     durationMs: number;
+}
+
+export interface AgenticResult {
+    content: string;
+    tokensUsed: number;
+    stepCount: number;
+    durationMs: number;
+    toolSteps: Array<{
+        toolId: string;
+        input: string;
+        output: string;
+        success: boolean;
+    }>;
 }
 
 // =====================
@@ -248,21 +273,6 @@ export class AuraApiService {
     // RAG Methods
     // =====================
 
-    async indexDirectory(
-        path: string,
-        includePatterns?: string[],
-        excludePatterns?: string[],
-        recursive: boolean = true
-    ): Promise<RagIndexResult> {
-        // Use semantic indexer which builds both code graph and text embeddings
-        const response = await this.httpClient.post(
-            `${this.getBaseUrl()}/api/semantic/index`,
-            { directoryPath: path, recursive },
-            { timeout: this.getIndexingTimeout() }
-        );
-        return response.data;
-    }
-
     async queryRag(query: string, topK: number = 5): Promise<RagQueryResult[]> {
         const response = await this.httpClient.post(
             `${this.getBaseUrl()}/api/rag/query`,
@@ -288,44 +298,28 @@ export class AuraApiService {
         return response.data;
     }
 
+    /**
+     * Execute an agent with agentic chat (multi-step tool use).
+     * The agent can explore the codebase using tools before answering.
+     */
+    async executeAgentAgentic(
+        agentId: string,
+        prompt: string,
+        workspacePath?: string,
+        maxSteps: number = 10,
+        useRag: boolean = true,
+        useCodeGraph: boolean = true
+    ): Promise<AgenticResult> {
+        const response = await this.httpClient.post(
+            `${this.getBaseUrl()}/api/agents/${agentId}/execute/agentic`,
+            { prompt, workspacePath, useRag, useCodeGraph, maxSteps },
+            { timeout: this.getExecutionTimeout() * 2 } // Allow more time for multi-step
+        );
+        return response.data;
+    }
+
     async getRagStats(): Promise<{ totalDocuments: number; totalChunks: number }> {
         const response = await this.httpClient.get(`${this.getBaseUrl()}/api/rag/stats`);
-        return response.data;
-    }
-
-    async getDirectoryIndexStatus(directoryPath: string): Promise<{
-        isIndexed: boolean;
-        directoryPath: string;
-        chunkCount: number;
-        fileCount: number;
-        lastIndexedAt: string | null;
-    }> {
-        const response = await this.httpClient.get(
-            `${this.getBaseUrl()}/api/rag/stats/directory`,
-            { params: { path: directoryPath } }
-        );
-        return response.data;
-    }
-
-    async clearRagIndex(): Promise<void> {
-        await this.httpClient.delete(`${this.getBaseUrl()}/api/rag`);
-    }
-
-    // =====================
-    // Background Indexing Methods
-    // =====================
-
-    async startBackgroundIndex(
-        directory: string,
-        recursive: boolean = true,
-        includePatterns?: string[],
-        excludePatterns?: string[]
-    ): Promise<BackgroundIndexJob> {
-        const response = await this.httpClient.post(
-            `${this.getBaseUrl()}/api/index/background`,
-            { directory, recursive, includePatterns, excludePatterns },
-            { timeout: 10000 }
-        );
         return response.data;
     }
 
@@ -355,23 +349,6 @@ export class AuraApiService {
         const response = await this.httpClient.get(
             `${this.getBaseUrl()}/api/graph/stats`,
             { params, timeout: 5000 }
-        );
-        return response.data;
-    }
-
-    /**
-     * Index a solution/project into the code graph using Roslyn semantic analysis.
-     * This provides structural queries (implementations, callers, etc.).
-     */
-    async indexCodeGraph(
-        solutionPath: string,
-        repositoryPath: string,
-        reindex: boolean = false
-    ): Promise<CodeGraphIndexResult> {
-        const response = await this.httpClient.post(
-            `${this.getBaseUrl()}/api/graph/index`,
-            { solutionPath, repositoryPath, reindex },
-            { timeout: this.getIndexingTimeout() }
         );
         return response.data;
     }
@@ -573,35 +550,21 @@ export class AuraApiService {
     }
 
     /**
-     * Get workspace by ID.
+     * Get workspace by ID or path.
+     * The API accepts either a 16-char hex ID or a URL-encoded filesystem path.
      */
-    async getWorkspace(id: string): Promise<WorkspaceInfo> {
+    async getWorkspace(idOrPath: string): Promise<WorkspaceInfo> {
+        // URL-encode the path if it's not already an ID (16 hex chars)
+        const isId = /^[0-9a-f]{16}$/i.test(idOrPath);
+        // Normalize paths to match API expectations (forward slashes, lowercase)
+        const normalizedValue = isId ? idOrPath : normalizePath(idOrPath);
+        const param = isId ? idOrPath : encodeURIComponent(normalizedValue);
+        
         const response = await this.httpClient.get(
-            `${this.getBaseUrl()}/api/workspaces/${id}`,
+            `${this.getBaseUrl()}/api/workspaces/${param}`,
             { timeout: 5000 }
         );
         return response.data;
-    }
-
-    /**
-     * Lookup workspace ID by path.
-     */
-    async lookupWorkspace(path: string): Promise<{ id: string; name: string; path: string; status: string } | null> {
-        try {
-            const response = await this.httpClient.get(
-                `${this.getBaseUrl()}/api/workspaces/lookup`,
-                { params: { path }, timeout: 5000 }
-            );
-            return response.data;
-        } catch (error: unknown) {
-            if (error && typeof error === 'object' && 'response' in error) {
-                const axiosError = error as { response?: { status?: number } };
-                if (axiosError.response?.status === 404) {
-                    return null;
-                }
-            }
-            throw error;
-        }
     }
 
     /**
@@ -609,24 +572,30 @@ export class AuraApiService {
      * Returns a status object (with isOnboarded=false if not found).
      */
     async getWorkspaceStatus(path: string): Promise<WorkspaceStatus> {
-        const lookup = await this.lookupWorkspace(path);
-        if (!lookup) {
+        try {
+            const workspace = await this.getWorkspace(path);
             return {
-                path,
-                isOnboarded: false,
-                indexHealth: 'not-indexed',
-                stats: { files: 0, chunks: 0, graphNodes: 0, graphEdges: 0 }
+                path: workspace.path,
+                isOnboarded: workspace.status === 'ready' || workspace.status === 'indexing',
+                onboardedAt: workspace.createdAt,
+                lastIndexedAt: workspace.lastAccessedAt,
+                indexHealth: workspace.status === 'ready' ? 'fresh' : workspace.status,
+                stats: workspace.stats ?? { files: 0, chunks: 0, graphNodes: 0, graphEdges: 0 }
             };
+        } catch (error: unknown) {
+            if (error && typeof error === 'object' && 'response' in error) {
+                const axiosError = error as { response?: { status?: number } };
+                if (axiosError.response?.status === 404) {
+                    return {
+                        path,
+                        isOnboarded: false,
+                        indexHealth: 'not-indexed',
+                        stats: { files: 0, chunks: 0, graphNodes: 0, graphEdges: 0 }
+                    };
+                }
+            }
+            throw error;
         }
-        const workspace = await this.getWorkspace(lookup.id);
-        return {
-            path: workspace.path,
-            isOnboarded: workspace.status === 'ready' || workspace.status === 'indexing',
-            onboardedAt: workspace.createdAt,
-            lastIndexedAt: workspace.lastAccessedAt,
-            indexHealth: workspace.status === 'ready' ? 'fresh' : workspace.status,
-            stats: workspace.stats ?? { files: 0, chunks: 0, graphNodes: 0, graphEdges: 0 }
-        };
     }
 
     /**
@@ -637,10 +606,12 @@ export class AuraApiService {
         includePatterns?: string[];
         excludePatterns?: string[];
     }): Promise<OnboardResult> {
+        // Normalize path for consistent storage
+        const normalizedPath = normalizePath(path);
         const response = await this.httpClient.post(
             `${this.getBaseUrl()}/api/workspaces`,
             {
-                path,
+                path: normalizedPath,
                 name: options?.name,
                 startIndexing: true,
                 options: options?.includePatterns || options?.excludePatterns ? {
@@ -662,15 +633,34 @@ export class AuraApiService {
      * Remove a workspace from Aura (delete all indexed data).
      */
     async removeWorkspace(path: string): Promise<{ success: boolean; message: string }> {
-        const lookup = await this.lookupWorkspace(path);
-        if (!lookup) {
+        const workspace = await this.getWorkspace(path);
+        if (!workspace) {
             return { success: true, message: 'Workspace not found (already removed)' };
         }
         const response = await this.httpClient.delete(
-            `${this.getBaseUrl()}/api/workspaces/${lookup.id}`,
+            `${this.getBaseUrl()}/api/workspaces/${workspace.id}`,
             { timeout: 30000 }
         );
         return response.data;
+    }
+
+    /**
+     * Re-index an existing workspace.
+     */
+    async reindexWorkspace(path: string): Promise<{ jobId: string; message: string }> {
+        const workspace = await this.getWorkspace(path);
+        if (!workspace) {
+            throw new Error('Workspace not found. Please onboard the workspace first.');
+        }
+        const response = await this.httpClient.post(
+            `${this.getBaseUrl()}/api/workspaces/${workspace.id}/reindex`,
+            {},
+            { timeout: 30000 }
+        );
+        return {
+            jobId: response.data.jobId,
+            message: response.data.message
+        };
     }
 }
 

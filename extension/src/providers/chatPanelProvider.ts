@@ -173,7 +173,7 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
         this._updateState();
 
         // Show typing indicator
-        this._view?.webview.postMessage({ type: 'typing', isTyping: true });
+        this._view?.webview.postMessage({ type: 'typing', isTyping: true, status: 'Thinking and exploring codebase...' });
 
         try {
             const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
@@ -183,12 +183,16 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
             const useRag = this._contextMode === 'text' || this._contextMode === 'full';
             
             if (useRag) {
-                response = await this._apiService.executeAgentWithRag(
+                // Use agentic chat for multi-step exploration
+                const agenticResponse = await this._apiService.executeAgentAgentic(
                     this._currentAgent.id,
                     message,
                     workspacePath,
-                    5
+                    10, // maxSteps
+                    true, // useRag
+                    true  // useCodeGraph
                 );
+                response = { content: agenticResponse.content, tokensUsed: agenticResponse.tokensUsed };
             } else {
                 const content = await this._apiService.executeAgent(
                     this._currentAgent.id,
@@ -438,6 +442,12 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
             display: block;
         }
         
+        .typing-status {
+            font-size: 11px;
+            color: var(--vscode-descriptionForeground);
+            margin-bottom: 6px;
+        }
+        
         .typing-dots {
             display: flex;
             gap: 4px;
@@ -578,6 +588,7 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
     </div>
     
     <div class="typing-indicator" id="typingIndicator">
+        <div class="typing-status" id="typingStatus">Exploring codebase...</div>
         <div class="typing-dots">
             <span></span>
             <span></span>
@@ -626,6 +637,7 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
                     typingIndicator.classList.toggle('visible', message.isTyping);
                     sendButton.disabled = message.isTyping;
                     if (message.isTyping) {
+                        document.getElementById('typingStatus').textContent = message.status || 'Exploring codebase...';
                         scrollToBottom();
                     }
                     break;

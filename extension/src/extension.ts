@@ -18,6 +18,9 @@ let chatWindowProvider: ChatWindowProvider;
 let workflowPanelProvider: WorkflowPanelProvider;
 let statusBarItem: vscode.StatusBarItem;
 let refreshInterval: NodeJS.Timeout | undefined;
+let currentRefreshRate: number = 10000; // Default 10 second refresh
+const FAST_REFRESH_RATE = 1000; // 1 second when indexing
+const NORMAL_REFRESH_RATE = 10000; // 10 seconds normally
 
 export async function activate(context: vscode.ExtensionContext) {
     console.log('Aura extension activating...');
@@ -158,6 +161,10 @@ export async function activate(context: vscode.ExtensionContext) {
         await clearRagIndex();
     });
 
+    const clearAndReindexCommand = vscode.commands.registerCommand('aura.clearAndReindex', async () => {
+        await clearAndReindex();
+    });
+
     const showIndexingProgressCommand = vscode.commands.registerCommand('aura.showIndexingProgress', async () => {
         await showIndexingProgress();
     });
@@ -248,6 +255,7 @@ export async function activate(context: vscode.ExtensionContext) {
         indexWorkspaceCommand,
         showRagStatsCommand,
         clearRagIndexCommand,
+        clearAndReindexCommand,
         showIndexingProgressCommand,
         onboardWorkspaceCommand,
         createWorkflowCommand,
@@ -286,22 +294,31 @@ async function indexWorkspace(): Promise<void> {
     }
 
     const workspacePath = workspaceFolders[0].uri.fsPath;
-    const excludePatterns = ['**/node_modules/**', '**/bin/**', '**/obj/**', '**/.git/**'];
 
     try {
-        // Start background indexing
-        const job = await auraApiService.startBackgroundIndex(
-            workspacePath,
-            true,
-            undefined,
-            excludePatterns
-        );
-
-        vscode.window.showInformationMessage(`Indexing started in background (Job: ${job.jobId.slice(0, 8)}...)`);
-
-        // Update status bar to show indexing
-        updateIndexingStatusBar(job.jobId);
-
+        // Check if workspace is already onboarded
+        const status = await auraApiService.getWorkspaceStatus(workspacePath);
+        
+        if (!status.isOnboarded) {
+            // Not onboarded - use onboardWorkspace to create workspace record and start indexing
+            const result = await auraApiService.onboardWorkspace(workspacePath, {
+                excludePatterns: ['**/node_modules/**', '**/bin/**', '**/obj/**', '**/.git/**']
+            });
+            
+            if (result.success && result.jobId) {
+                vscode.window.showInformationMessage(`Indexing started (Job: ${result.jobId.slice(0, 8)}...)`);
+                updateIndexingStatusBar(result.jobId);
+                
+                // Update context
+                await vscode.commands.executeCommand('setContext', 'aura.workspaceOnboarded', true);
+                await vscode.commands.executeCommand('setContext', 'aura.workspaceNotOnboarded', false);
+            }
+        } else {
+            // Already onboarded - trigger a re-index through workspace API
+            const result = await auraApiService.reindexWorkspace(workspacePath);
+            vscode.window.showInformationMessage(`Re-indexing started (Job: ${result.jobId.slice(0, 8)}...)`);
+            updateIndexingStatusBar(result.jobId);
+        }
     } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error';
         vscode.window.showErrorMessage(`Failed to start indexing: ${message}`);
@@ -472,8 +489,17 @@ async function showRagStats(): Promise<void> {
 }
 
 async function clearRagIndex(): Promise<void> {
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (!workspaceFolders || workspaceFolders.length === 0) {
+        vscode.window.showWarningMessage('No workspace folder open');
+        return;
+    }
+
+    const workspacePath = workspaceFolders[0].uri.fsPath;
+    const workspaceName = workspaceFolders[0].name;
+
     const confirm = await vscode.window.showWarningMessage(
-        'Clear the entire RAG index? This cannot be undone.',
+        `Clear all indexed data for "${workspaceName}"? This cannot be undone.`,
         { modal: true },
         'Clear Index'
     );
@@ -481,12 +507,59 @@ async function clearRagIndex(): Promise<void> {
     if (confirm !== 'Clear Index') return;
 
     try {
-        await auraApiService.clearRagIndex();
-        vscode.window.showInformationMessage('RAG index cleared');
+        await auraApiService.removeWorkspace(workspacePath);
+        vscode.window.showInformationMessage(`Index cleared for ${workspaceName}`);
+        statusTreeProvider.refresh();
+        await checkOnboardingStatus();
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        vscode.window.showErrorMessage(`Failed to clear index: ${message}`);
+    }
+}
+
+async function clearAndReindex(): Promise<void> {
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (!workspaceFolders || workspaceFolders.length === 0) {
+        vscode.window.showWarningMessage('No workspace folder open');
+        return;
+    }
+
+    const workspacePath = workspaceFolders[0].uri.fsPath;
+    const workspaceName = workspaceFolders[0].name;
+
+    const confirm = await vscode.window.showWarningMessage(
+        `Clear and reindex "${workspaceName}"? This will delete all indexed data and rebuild from scratch.`,
+        { modal: true },
+        'Clear & Reindex'
+    );
+
+    if (confirm !== 'Clear & Reindex') return;
+
+    try {
+        // First, try to remove existing workspace (ignore if not found)
+        try {
+            await auraApiService.removeWorkspace(workspacePath);
+        } catch {
+            // Workspace may not exist yet, that's fine
+        }
+
+        // Now onboard fresh
+        const result = await auraApiService.onboardWorkspace(workspacePath, {
+            excludePatterns: ['**/node_modules/**', '**/bin/**', '**/obj/**', '**/.git/**']
+        });
+
+        if (result.success && result.jobId) {
+            vscode.window.showInformationMessage(`Reindexing started (Job: ${result.jobId.slice(0, 8)}...)`);
+            updateIndexingStatusBar(result.jobId);
+            
+            await vscode.commands.executeCommand('setContext', 'aura.workspaceOnboarded', true);
+            await vscode.commands.executeCommand('setContext', 'aura.workspaceNotOnboarded', false);
+        }
+        
         statusTreeProvider.refresh();
     } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error';
-        vscode.window.showErrorMessage(`Failed to clear RAG index: ${message}`);
+        vscode.window.showErrorMessage(`Failed to clear and reindex: ${message}`);
     }
 }
 
@@ -521,6 +594,11 @@ async function refreshAll(): Promise<void> {
 
         const status = healthCheckService.getOverallStatus();
         updateStatusBar(status);
+        
+        // Check if indexing is in progress and adjust refresh rate
+        const ragStatus = healthCheckService.getStatuses().rag;
+        const isIndexing = ragStatus?.isIndexing === true;
+        adjustRefreshRate(isIndexing);
     } catch (error) {
         console.error('Error refreshing status:', error);
         updateStatusBar('error');
@@ -557,7 +635,26 @@ function setupAutoRefresh(): void {
     const autoRefresh = config.get<boolean>('autoRefresh', true);
 
     if (autoRefresh) {
-        refreshInterval = setInterval(refreshAll, 10000);
+        currentRefreshRate = NORMAL_REFRESH_RATE;
+        refreshInterval = setInterval(refreshAll, currentRefreshRate);
+    }
+}
+
+function adjustRefreshRate(isIndexing: boolean): void {
+    const config = vscode.workspace.getConfiguration('aura');
+    const autoRefresh = config.get<boolean>('autoRefresh', true);
+    if (!autoRefresh) return;
+
+    const targetRate = isIndexing ? FAST_REFRESH_RATE : NORMAL_REFRESH_RATE;
+    
+    // Only change if rate is different
+    if (currentRefreshRate !== targetRate) {
+        if (refreshInterval) {
+            clearInterval(refreshInterval);
+        }
+        currentRefreshRate = targetRate;
+        refreshInterval = setInterval(refreshAll, currentRefreshRate);
+        console.log(`[Aura] Adjusted refresh rate to ${currentRefreshRate}ms (indexing: ${isIndexing})`);
     }
 }
 

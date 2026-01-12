@@ -565,12 +565,12 @@ export class WorkflowPanelProvider {
                 return;
             }
 
-            // Check if codebase is indexed
+            // Check if codebase is indexed using workspace status
             console.log(`[Enrich] Checking index status for ${repoPath}`);
-            const indexStatus = await this.apiService.getDirectoryIndexStatus(repoPath);
-            console.log(`[Enrich] Index status: isIndexed=${indexStatus.isIndexed}`);
+            const workspaceStatus = await this.apiService.getWorkspaceStatus(repoPath);
+            console.log(`[Enrich] Workspace status: isOnboarded=${workspaceStatus.isOnboarded}`);
 
-            if (!indexStatus.isIndexed) {
+            if (!workspaceStatus.isOnboarded) {
                 // Send message to show confirmation dialog
                 console.log('[Enrich] Codebase not indexed - sending confirmIndexAndEnrich message');
                 panel.webview.postMessage({
@@ -605,25 +605,38 @@ export class WorkflowPanelProvider {
 
             panel.webview.postMessage({ type: 'loading', action: 'index' });
 
-            // Pass 1: RAG indexing (file-level, for semantic search)
-            const job = await this.apiService.startBackgroundIndex(repoPath);
+            // Check if workspace exists, onboard if not, reindex if it does
+            const workspaceStatus = await this.apiService.getWorkspaceStatus(repoPath);
+            let jobId: string;
+
+            if (!workspaceStatus.isOnboarded) {
+                // Onboard new workspace (creates record + starts indexing)
+                const result = await this.apiService.onboardWorkspace(repoPath);
+                if (!result.jobId) {
+                    throw new Error('Failed to start indexing');
+                }
+                jobId = result.jobId;
+            } else {
+                // Reindex existing workspace
+                const result = await this.apiService.reindexWorkspace(repoPath);
+                jobId = result.jobId;
+            }
 
             await vscode.window.withProgress(
                 {
                     location: vscode.ProgressLocation.Notification,
-                    title: 'Indexing codebase (RAG)',
+                    title: 'Indexing codebase',
                     cancellable: false
                 },
                 async (progress) => {
                     progress.report({ message: `Starting: ${repoPath}` });
 
                     // Poll for completion
-                    let status = await this.apiService.getBackgroundJobStatus(job.jobId);
+                    let status = await this.apiService.getBackgroundJobStatus(jobId);
                     while (status.state === 'Queued' || status.state === 'Processing') {
                         await new Promise(resolve => setTimeout(resolve, 1000)); // Poll every second
-                        status = await this.apiService.getBackgroundJobStatus(job.jobId);
+                        status = await this.apiService.getBackgroundJobStatus(jobId);
                         
-                        // Files are processed one at a time, but each file produces multiple symbols (classes, methods, etc.)
                         progress.report({
                             message: `Processing file ${status.processedItems}/${status.totalItems}...`,
                             increment: status.progressPercent > 0 ? 1 : 0
@@ -631,40 +644,10 @@ export class WorkflowPanelProvider {
                     }
 
                     if (status.state === 'Failed') {
-                        throw new Error(status.error || 'RAG indexing failed');
+                        throw new Error(status.error || 'Indexing failed');
                     }
                 }
             );
-
-            // Pass 2: Code graph indexing (solution-level, for structural queries)
-            // Find .sln or .csproj file
-            const solutionPath = await this.findSolutionPath(repoPath);
-            if (solutionPath) {
-                await vscode.window.withProgress(
-                    {
-                        location: vscode.ProgressLocation.Notification,
-                        title: 'Building code graph (Roslyn)',
-                        cancellable: false
-                    },
-                    async (progress) => {
-                        progress.report({ message: 'Analyzing C# solution...' });
-                        try {
-                            const graphResult = await this.apiService.indexCodeGraph(solutionPath, repoPath);
-                            if (!graphResult.success) {
-                                vscode.window.showWarningMessage(`Code graph indexing: ${graphResult.error}`);
-                            } else {
-                                progress.report({ 
-                                    message: `Indexed ${graphResult.typesIndexed} types, ${graphResult.filesIndexed} files` 
-                                });
-                            }
-                        } catch (error) {
-                            // Code graph is optional - don't fail the whole operation
-                            const message = error instanceof Error ? error.message : 'Unknown error';
-                            vscode.window.showWarningMessage(`Code graph skipped: ${message}`);
-                        }
-                    }
-                );
-            }
 
             await this.refreshPanel(workflowId);
             panel.webview.postMessage({ type: 'success', message: 'Codebase indexed successfully' });
@@ -707,23 +690,36 @@ export class WorkflowPanelProvider {
                 return;
             }
 
-            // Pass 1: RAG indexing
+            // Index using workspace API
             panel.webview.postMessage({ type: 'loading', action: 'index' });
-            const job = await this.apiService.startBackgroundIndex(repoPath);
+            
+            const workspaceStatus = await this.apiService.getWorkspaceStatus(repoPath);
+            let jobId: string;
+
+            if (!workspaceStatus.isOnboarded) {
+                const result = await this.apiService.onboardWorkspace(repoPath);
+                if (!result.jobId) {
+                    throw new Error('Failed to start indexing');
+                }
+                jobId = result.jobId;
+            } else {
+                const result = await this.apiService.reindexWorkspace(repoPath);
+                jobId = result.jobId;
+            }
 
             await vscode.window.withProgress(
                 {
                     location: vscode.ProgressLocation.Notification,
-                    title: 'Indexing codebase (RAG)',
+                    title: 'Indexing codebase',
                     cancellable: false
                 },
                 async (progress) => {
                     progress.report({ message: `Starting: ${repoPath}` });
 
-                    let status = await this.apiService.getBackgroundJobStatus(job.jobId);
+                    let status = await this.apiService.getBackgroundJobStatus(jobId);
                     while (status.state === 'Queued' || status.state === 'Processing') {
                         await new Promise(resolve => setTimeout(resolve, 1000));
-                        status = await this.apiService.getBackgroundJobStatus(job.jobId);
+                        status = await this.apiService.getBackgroundJobStatus(jobId);
                         progress.report({
                             message: `Processing file ${status.processedItems}/${status.totalItems}...`,
                             increment: status.progressPercent > 0 ? 1 : 0
@@ -731,32 +727,10 @@ export class WorkflowPanelProvider {
                     }
 
                     if (status.state === 'Failed') {
-                        throw new Error(status.error || 'RAG indexing failed');
+                        throw new Error(status.error || 'Indexing failed');
                     }
                 }
             );
-
-            // Pass 2: Code graph indexing (optional)
-            const solutionPath = await this.findSolutionPath(repoPath);
-            if (solutionPath) {
-                await vscode.window.withProgress(
-                    {
-                        location: vscode.ProgressLocation.Notification,
-                        title: 'Building code graph (Roslyn)',
-                        cancellable: false
-                    },
-                    async (progress) => {
-                        progress.report({ message: 'Analyzing C# solution...' });
-                        try {
-                            await this.apiService.indexCodeGraph(solutionPath, repoPath);
-                        } catch (error) {
-                            // Code graph is optional
-                            const message = error instanceof Error ? error.message : 'Unknown error';
-                            vscode.window.showWarningMessage(`Code graph skipped: ${message}`);
-                        }
-                    }
-                );
-            }
 
             // Then enrich
             panel.webview.postMessage({ type: 'loading', action: 'enrich' });
@@ -1144,7 +1118,32 @@ export class WorkflowPanelProvider {
             padding: 12px;
             background: var(--vscode-textBlockQuote-background);
             border-radius: 4px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .chat-user-message {
+            margin-bottom: 8px;
+            padding: 8px;
+            background: var(--vscode-input-background);
+            border-radius: 4px;
+        }
+        .chat-assistant-message {
+            margin-bottom: 8px;
+            padding: 8px;
+            background: var(--vscode-editor-background);
+            border-radius: 4px;
             white-space: pre-wrap;
+        }
+        .chat-status {
+            margin-top: 8px;
+            color: var(--vscode-descriptionForeground);
+        }
+        .chat-error {
+            margin-bottom: 8px;
+            padding: 8px;
+            background: var(--vscode-inputValidation-errorBackground);
+            border: 1px solid var(--vscode-inputValidation-errorBorder);
+            border-radius: 4px;
         }
 
         .timeline {
@@ -1956,8 +1955,26 @@ export class WorkflowPanelProvider {
             const text = input.value.trim();
             if (!text) return;
             
+            // Show the user's message in the chat area
+            const responseDiv = document.getElementById('chatResponse');
+            responseDiv.innerHTML = '<div class="chat-user-message"><strong>You:</strong> ' + escapeHtml(text) + '</div>';
+            responseDiv.style.display = 'block';
+            
+            // Show loading indicator
+            document.getElementById('chatLoading').classList.add('active');
+            
+            // Disable input while processing
+            input.disabled = true;
+            document.getElementById('chatSend').disabled = true;
+            
             vscode.postMessage({ type: 'chat', text });
             input.value = '';
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
         }
 
         document.getElementById('chatInput').addEventListener('keypress', (e) => {
@@ -2472,23 +2489,32 @@ export class WorkflowPanelProvider {
                     break;
                 case 'chatLoading':
                     document.getElementById('chatLoading').classList.add('active');
-                    document.getElementById('chatResponse').style.display = 'none';
                     break;
                 case 'chatResponse':
                     document.getElementById('chatLoading').classList.remove('active');
+                    // Re-enable inputs
+                    document.getElementById('chatInput').disabled = false;
+                    document.getElementById('chatSend').disabled = false;
+                    
                     const responseDiv = document.getElementById('chatResponse');
-                    responseDiv.textContent = message.response;
+                    // Append the assistant's response after the user's message
+                    responseDiv.innerHTML += '<div class="chat-assistant-message"><strong>Assistant:</strong> ' + escapeHtml(message.response) + '</div>';
                     responseDiv.style.display = 'block';
                     if (message.analysisUpdated) {
-                        responseDiv.innerHTML += '<br><br><em>✨ Analysis updated with new context. Refreshing...</em>';
+                        responseDiv.innerHTML += '<div class="chat-status"><em>✨ Analysis updated with new context. Refreshing...</em></div>';
                     } else if (message.planModified) {
-                        responseDiv.innerHTML += '<br><br><em>Plan was modified. Refreshing...</em>';
+                        responseDiv.innerHTML += '<div class="chat-status"><em>📋 Plan was modified. Refreshing...</em></div>';
                     }
                     break;
                 case 'chatError':
                     document.getElementById('chatLoading').classList.remove('active');
-                    document.getElementById('chatResponse').textContent = 'Error: ' + message.message;
-                    document.getElementById('chatResponse').style.display = 'block';
+                    // Re-enable inputs
+                    document.getElementById('chatInput').disabled = false;
+                    document.getElementById('chatSend').disabled = false;
+                    
+                    const errResponseDiv = document.getElementById('chatResponse');
+                    errResponseDiv.innerHTML += '<div class="chat-error"><strong>Error:</strong> ' + escapeHtml(message.message) + '</div>';
+                    errResponseDiv.style.display = 'block';
                     break;
                 case 'loading':
                     setLoading(message.action, true, message.stepId);

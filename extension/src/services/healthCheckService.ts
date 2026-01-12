@@ -1,6 +1,18 @@
 import * as vscode from 'vscode';
 import axios, { AxiosInstance } from 'axios';
 
+/**
+ * Normalizes a file path for consistent API calls.
+ * Matches the C# PathNormalizer: forward slashes, lowercase.
+ */
+function normalizePath(path: string): string {
+    if (!path) return path;
+    return path
+        .replace(/\\\\/g, '/')  // Handle escaped backslashes
+        .replace(/\\/g, '/')     // Convert backslashes to forward slashes
+        .toLowerCase();
+}
+
 export interface ServiceStatus {
     status: 'healthy' | 'unhealthy' | 'checking' | 'unknown';
     url?: string;
@@ -244,11 +256,10 @@ export class HealthCheckService {
             const totalDocuments = response.data?.totalDocuments || 0;
             const totalChunks = response.data?.totalChunks || 0;
 
-            // Get current repository path (first workspace folder, which is typically the git root)
-            // This matches how indexing works - we index by repository path, not VS Code workspace
-            const repositoryPath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+            // Get current workspace path (first workspace folder)
+            const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
 
-            // Fetch repository-filtered stats if we have a repository open
+            // Fetch workspace stats if we have a workspace open
             let repoDocuments = 0;
             let repoChunks = 0;
             let graphNodes = 0;
@@ -261,57 +272,39 @@ export class HealthCheckService {
             let indexingProgress = 0;
 
             try {
-                if (repositoryPath) {
-                    // Get RAG stats filtered by repository path
-                    const dirStatsResponse = await this.httpClient.get(
-                        `${url}/api/rag/stats/directory`,
-                        { params: { path: repositoryPath } }
-                    );
-                    repoChunks = dirStatsResponse.data?.chunkCount || 0;
-                    repoDocuments = dirStatsResponse.data?.fileCount || 0;
+                if (workspacePath) {
+                    // Normalize path to match API expectations (forward slashes, lowercase)
+                    const normalizedPath = normalizePath(workspacePath);
+                    const encodedPath = encodeURIComponent(normalizedPath);
+                    const workspaceResponse = await this.httpClient.get(
+                        `${url}/api/workspaces/${encodedPath}`
+                    ).catch(() => null);
 
-                    // Get code graph stats filtered by repository path
-                    const graphStatsResponse = await this.httpClient.get(
-                        `${url}/api/graph/stats`,
-                        { params: { workspacePath: repositoryPath } }
-                    );
-                    graphNodes = graphStatsResponse.data?.totalNodes || 0;
-                    graphEdges = graphStatsResponse.data?.totalEdges || 0;
-
-                    // Get index health (freshness based on git commits)
-                    try {
-                        const healthResponse = await this.httpClient.get(
-                            `${url}/api/index/health`,
-                            { params: { workspacePath: repositoryPath } }
-                        );
-                        const overallStatus = healthResponse.data?.overallStatus || 'not-indexed';
-                        // Map API status to our enum
-                        if (overallStatus === 'fresh') {
+                    if (workspaceResponse?.data?.id) {
+                        const workspace = workspaceResponse.data;
+                        repoChunks = workspace.stats?.chunks || 0;
+                        repoDocuments = workspace.stats?.files || 0;
+                        graphNodes = workspace.stats?.graphNodes || 0;
+                        graphEdges = workspace.stats?.graphEdges || 0;
+                        
+                        // Map workspace status to index health
+                        if (workspace.status === 'ready') {
                             indexHealth = 'fresh';
-                        } else if (overallStatus === 'stale') {
+                        } else if (workspace.status === 'stale') {
+                            indexHealth = 'stale';
+                        } else if (workspace.status === 'indexing') {
+                            isIndexing = true;
                             indexHealth = 'stale';
                         } else {
                             indexHealth = 'not-indexed';
                         }
-                        commitsBehind = healthResponse.data?.rag?.commitsBehind || healthResponse.data?.graph?.commitsBehind || 0;
-                        lastIndexedAt = healthResponse.data?.rag?.indexedAt;
-                    } catch {
-                        // Health endpoint might not exist or fail
-                    }
-
-                    // Check if indexing is in progress
-                    try {
-                        const indexStatusResponse = await this.httpClient.get(`${url}/api/index/status`);
-                        if (indexStatusResponse.data?.isProcessing) {
+                        lastIndexedAt = workspace.lastAccessedAt;
+                        
+                        // Use per-workspace indexing job info if available
+                        if (workspace.indexingJob) {
                             isIndexing = true;
-                            const processed = indexStatusResponse.data?.processedItems || 0;
-                            const total = indexStatusResponse.data?.queuedItems || 0;
-                            if (total > 0) {
-                                indexingProgress = Math.round((processed / (processed + total)) * 100);
-                            }
+                            indexingProgress = workspace.indexingJob.progressPercent || 0;
                         }
-                    } catch {
-                        // Index status endpoint might not exist
                     }
                 }
 
@@ -322,28 +315,28 @@ export class HealthCheckService {
                 // Stats endpoints might fail, continue anyway
             }
 
-            // Build details string based on whether we have repository filtering
+            // Build details string for current workspace only
             let details: string;
             if (isIndexing) {
                 details = `Indexing... ${indexingProgress}%`;
-            } else if (repositoryPath && (repoDocuments > 0 || repoChunks > 0 || graphNodes > 0)) {
+            } else if (workspacePath && (repoDocuments > 0 || repoChunks > 0 || graphNodes > 0)) {
                 details = `${repoDocuments} files, ${repoChunks} chunks, ${graphNodes} graph nodes`;
-            } else if (repositoryPath) {
-                details = `Not indexed (${totalDocuments} symbols in other repos)`;
+            } else if (workspacePath) {
+                details = 'Not indexed';
             } else {
-                details = `${totalDocuments} symbols, ${totalChunks} embeddings (all repos)`;
+                details = 'No workspace open';
             }
 
             this.statuses.rag = {
                 status: response.data?.healthy ? 'healthy' : 'unhealthy',
                 responseTime,
                 details,
-                totalDocuments,
-                totalChunks,
+                totalDocuments: repoDocuments || totalDocuments,
+                totalChunks: repoChunks || totalChunks,
                 chunksByType,
                 repoDocuments,
                 repoChunks,
-                repositoryPath,
+                repositoryPath: workspacePath,
                 graphNodes,
                 graphEdges,
                 indexHealth,
