@@ -1018,6 +1018,7 @@ public sealed class WorkflowService(
                     prBody,
                     baseBranch: null, // Use default branch
                     draft: true,
+                    labels: ["aura-generated"],
                     ct);
 
                 if (prResult.Success && prResult.Value is not null)

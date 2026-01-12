@@ -44,12 +44,20 @@ public interface IGitService
     Task<GitResult<RepositoryStatus>> GetStatusAsync(string repoPath, CancellationToken ct = default);
 
     /// <summary>Create a pull request using GitHub CLI</summary>
+    /// <param name="repoPath">Path to the repository</param>
+    /// <param name="title">PR title</param>
+    /// <param name="body">PR body/description</param>
+    /// <param name="baseBranch">Target branch for the PR</param>
+    /// <param name="draft">Whether to create as draft PR</param>
+    /// <param name="labels">Labels to add to the PR</param>
+    /// <param name="ct">Cancellation token</param>
     Task<GitResult<PullRequestInfo>> CreatePullRequestAsync(
         string repoPath,
         string title,
         string? body = null,
         string? baseBranch = null,
         bool draft = true,
+        IEnumerable<string>? labels = null,
         CancellationToken ct = default);
 
     /// <summary>Get the remote URL for origin</summary>
