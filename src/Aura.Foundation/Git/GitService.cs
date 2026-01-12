@@ -115,15 +115,18 @@ public class GitService(IProcessRunner process, ILogger<GitService> logger) : IG
         return GitResult<Unit>.Ok(Unit.Value);
     }
 
-    public async Task<GitResult<string>> CommitAsync(string repoPath, string message, CancellationToken ct = default)
+    public async Task<GitResult<string>> CommitAsync(string repoPath, string message, bool skipHooks = false, CancellationToken ct = default)
     {
         // Stage all changes
         var stageResult = await RunGitAsync(repoPath, ["add", "-A"], ct);
         if (!stageResult.Success)
             return GitResult<string>.Fail($"Failed to stage: {stageResult.StandardError}");
 
-        // Commit
-        var commitResult = await RunGitAsync(repoPath, ["commit", "-m", message], ct);
+        // Commit (--no-verify skips pre-commit and commit-msg hooks for automated workflows)
+        var commitArgs = skipHooks
+            ? new[] { "commit", "--no-verify", "-m", message }
+            : new[] { "commit", "-m", message };
+        var commitResult = await RunGitAsync(repoPath, commitArgs, ct);
         if (!commitResult.Success)
         {
             // git commit returns exit code 1 with message in stdout when nothing to commit

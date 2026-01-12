@@ -36,7 +36,7 @@ public static class GitTools
             Categories = ["git"],
             Handler = async (input, ct) =>
             {
-                var path = input.GetParameter<string?>("path") ?? input.WorkingDirectory;
+                var path = ResolvePath(input.GetParameter<string?>("path"), input.WorkingDirectory);
                 if (string.IsNullOrEmpty(path))
                 {
                     return ToolResult.Fail("No repository path specified and no working directory set");
@@ -104,7 +104,7 @@ public static class GitTools
             Handler = async (input, ct) =>
             {
                 var message = input.GetRequiredParameter<string>("message");
-                var path = input.GetParameter<string?>("path") ?? input.WorkingDirectory;
+                var path = ResolvePath(input.GetParameter<string?>("path"), input.WorkingDirectory);
 
                 if (string.IsNullOrEmpty(path))
                 {
@@ -116,7 +116,8 @@ public static class GitTools
                     return ToolResult.Fail("Commit message cannot be empty");
                 }
 
-                var result = await gitService.CommitAsync(path, message, ct);
+                // Skip hooks for automated tool execution (pre-commit hooks can timeout/block)
+                var result = await gitService.CommitAsync(path, message, skipHooks: true, ct);
                 if (!result.Success)
                 {
                     return ToolResult.Fail(result.Error ?? "Failed to commit");
@@ -148,7 +149,7 @@ public static class GitTools
             {
                 var name = input.GetParameter<string?>("name");
                 var baseBranch = input.GetParameter<string?>("baseBranch");
-                var path = input.GetParameter<string?>("path") ?? input.WorkingDirectory;
+                var path = ResolvePath(input.GetParameter<string?>("path"), input.WorkingDirectory);
 
                 if (string.IsNullOrEmpty(path))
                 {
@@ -198,7 +199,7 @@ public static class GitTools
             Handler = async (input, ct) =>
             {
                 var branch = input.GetRequiredParameter<string>("branch");
-                var path = input.GetParameter<string?>("path") ?? input.WorkingDirectory;
+                var path = ResolvePath(input.GetParameter<string?>("path"), input.WorkingDirectory);
 
                 if (string.IsNullOrEmpty(path))
                 {
@@ -235,7 +236,7 @@ public static class GitTools
             Handler = async (input, ct) =>
             {
                 var setUpstream = input.GetParameter("setUpstream", true);
-                var path = input.GetParameter<string?>("path") ?? input.WorkingDirectory;
+                var path = ResolvePath(input.GetParameter<string?>("path"), input.WorkingDirectory);
 
                 if (string.IsNullOrEmpty(path))
                 {
@@ -270,7 +271,7 @@ public static class GitTools
             Categories = ["git"],
             Handler = async (input, ct) =>
             {
-                var path = input.GetParameter<string?>("path") ?? input.WorkingDirectory;
+                var path = ResolvePath(input.GetParameter<string?>("path"), input.WorkingDirectory);
 
                 if (string.IsNullOrEmpty(path))
                 {
@@ -286,5 +287,32 @@ public static class GitTools
                 return ToolResult.Ok("Pull successful");
             }
         });
+    }
+
+    /// <summary>
+    /// Resolves a path parameter against the working directory.
+    /// </summary>
+    private static string ResolvePath(string? path, string? workingDirectory)
+    {
+        // If no path specified, use working directory
+        if (string.IsNullOrEmpty(path))
+        {
+            return workingDirectory ?? string.Empty;
+        }
+
+        // If path is already absolute, return as-is
+        if (Path.IsPathRooted(path))
+        {
+            return path;
+        }
+
+        // Resolve relative path (like ".") against working directory
+        if (!string.IsNullOrEmpty(workingDirectory))
+        {
+            return Path.GetFullPath(Path.Combine(workingDirectory, path));
+        }
+
+        // Fall back to resolving against current directory
+        return Path.GetFullPath(path);
     }
 }

@@ -28,7 +28,11 @@ public interface IGitService
     Task<GitResult<Unit>> DeleteBranchAsync(string repoPath, string branchName, bool force = false, CancellationToken ct = default);
 
     /// <summary>Stage and commit all changes</summary>
-    Task<GitResult<string>> CommitAsync(string repoPath, string message, CancellationToken ct = default);
+    /// <param name="repoPath">Path to the repository</param>
+    /// <param name="message">Commit message</param>
+    /// <param name="skipHooks">Skip pre-commit and commit-msg hooks (for automated workflows)</param>
+    /// <param name="ct">Cancellation token</param>
+    Task<GitResult<string>> CommitAsync(string repoPath, string message, bool skipHooks = false, CancellationToken ct = default);
 
     /// <summary>Push the current branch</summary>
     Task<GitResult<Unit>> PushAsync(string repoPath, bool setUpstream = false, CancellationToken ct = default);
