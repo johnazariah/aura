@@ -10,8 +10,21 @@ ragQueries:
   - "configuration settings options appsettings"
   - "documentation comments summary description usage"
   - "examples sample code demonstration how to use"
+tools:
+  - file.list
+  - file.read
+  - file.exists
+  - search.grep
 ---
 Analyze this development task and extract key requirements, constraints, and implementation notes.
+
+You have access to tools to explore the codebase. Use them to:
+- Find specific files mentioned in the task (use search.grep to find class names)
+- Read file contents to understand existing code structure  
+- List directories to understand project layout
+
+**IMPORTANT: Use RELATIVE paths** like `src/Aura.Foundation/Rag/PathNormalizer.cs` when calling file tools.
+Do NOT use absolute paths or include any folder names from the workspace path below.
 
 ## Issue Title
 {{title}}
@@ -19,8 +32,10 @@ Analyze this development task and extract key requirements, constraints, and imp
 ## Issue Description
 {{description}}
 
-## Repository
+## Workspace
 {{workspacePath}}
+
+(Note: The workspace path above is for reference only. When calling file tools, use relative paths starting with `src/`, `tests/`, etc.)
 
 Based on the codebase context provided, give a structured analysis including:
 1. **Core requirements** - What specifically needs to be built or changed

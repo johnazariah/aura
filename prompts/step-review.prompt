@@ -6,6 +6,8 @@ ragQueries:
   - "test unit integration patterns"
 tools:
   - file.read
+  - file.list
+  - file.exists
 ---
 Execute this code review step:
 
@@ -15,6 +17,11 @@ Description: {{stepDescription}}
 
 ## Workflow Context
 Issue: {{issueTitle}}
+
+{{#if analysis}}
+## Analysis (Key Context)
+{{analysis}}
+{{/if}}
 
 ## Previous Step Outputs
 {{codeToReview}}
@@ -28,8 +35,14 @@ You are a **code reviewer**. Your job is to:
 
 ## IMPORTANT Rules
 
-- You have ONLY `file.read` available - you CANNOT write or modify files
+- You have `file.read`, `file.list`, and `file.exists` available - you CANNOT write or modify files
 - Do NOT try to use `file.write` or `file.modify` - they are not available for review steps
+- **Use RELATIVE paths** like `src/Aura.Foundation/Rag/PathNormalizer.cs`
+- **Paths are CASE-SENSITIVE** - `Aura.Foundation` not `aura.foundation`
+- **If a file is not found**: 
+  1. FIRST try `file.list` with `path="src"`, `recursive=true`, `pattern="*PathNormalizer*"` to find it
+  2. Then use the correct path from the listing
+  3. Do NOT give up after one failed read attempt
 - After reading and analyzing, use `finish` with your review summary
 - Your output should be the review feedback, not file modifications
 

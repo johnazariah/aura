@@ -26,6 +26,12 @@ Issue: {{issueTitle}}
 
 **Your task is ONLY what the step description says.** Do not jump ahead to later steps.
 
+**CRITICAL: Path Format**
+- Always use **RELATIVE paths** like `src/Aura.Foundation/Rag/PathNormalizer.cs`
+- Do NOT include worktree folder names, branch names, or absolute paths
+- Do NOT use paths like `workflow-add-xml.../src/...` - just use `src/...`
+- Forward slashes work on all platforms
+
 ### Step Type Guidelines
 
 If the step says **"Review"** or **"Analyze"** or **"Examine"**:
