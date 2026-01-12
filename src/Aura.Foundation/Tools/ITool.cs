@@ -96,19 +96,25 @@ public abstract class TypedToolBase<TInput, TOutput> : ITool<TInput, TOutput>
             InputSchema = GenerateInputSchema(),
             Handler = async (input, ct) =>
             {
-                // Inject WorkingDirectory into parameters if not already present
-                // Use case-insensitive check since LLM might use different casing
+                // Always inject the WorkingDirectory from ToolInput, overriding any LLM-provided value.
+                // The LLM should not control the working directory - it's set by the framework.
                 var parameters = input.Parameters;
-                var hasWorkingDir = parameters.Keys.Any(k =>
-                    k.Equals("workingDirectory", StringComparison.OrdinalIgnoreCase));
 
-                if (!string.IsNullOrEmpty(input.WorkingDirectory) && !hasWorkingDir)
+                // DEBUG: Trace WorkingDirectory injection
+                Console.WriteLine($"[TYPED-TOOL-DEBUG] Tool={ToolId}, input.WorkingDirectory='{input.WorkingDirectory}'");
+
+                if (!string.IsNullOrEmpty(input.WorkingDirectory))
                 {
                     var mutableParams = new Dictionary<string, object?>(parameters)
                     {
                         ["workingDirectory"] = input.WorkingDirectory
                     };
                     parameters = mutableParams;
+                    Console.WriteLine($"[TYPED-TOOL-DEBUG] Injected workingDirectory='{input.WorkingDirectory}'");
+                }
+                else
+                {
+                    Console.WriteLine($"[TYPED-TOOL-DEBUG] WARNING: WorkingDirectory was empty/null, not injecting!");
                 }
 
                 // Deserialize from dictionary to typed input

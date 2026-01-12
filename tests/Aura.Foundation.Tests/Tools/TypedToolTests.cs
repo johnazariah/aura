@@ -221,7 +221,7 @@ public class TypedToolTests
     }
 
     [Fact]
-    public async Task ToToolDefinition_DoesNotOverrideExplicitWorkingDirectory()
+    public async Task ToToolDefinition_AlwaysUsesInjectedWorkingDirectory()
     {
         // Arrange
         var tool = new WorkingDirTool();
@@ -229,21 +229,21 @@ public class TypedToolTests
         var input = new ToolInput
         {
             ToolId = "workingdir.test",
-            WorkingDirectory = @"C:\work\injected-path",  // This would be injected normally
+            WorkingDirectory = @"C:\work\injected-path",  // This is injected by the system
             Parameters = new Dictionary<string, object?>
             {
                 ["name"] = "TestProject",
-                ["workingDirectory"] = @"C:\work\explicit-path"  // But LLM provided explicit value
+                ["workingDirectory"] = @"C:\work\explicit-path"  // LLM tried to override - should be ignored
             }
         };
 
         // Act
         var result = await definition.Handler!(input, CancellationToken.None);
 
-        // Assert
+        // Assert - injected WorkingDirectory always wins (LLM cannot control working directory)
         Assert.True(result.Success);
         var output = Assert.IsType<WorkingDirOutput>(result.Output);
-        Assert.Equal(@"C:\work\explicit-path", output.ResolvedPath);  // Should use explicit
+        Assert.Equal(@"C:\work\injected-path", output.ResolvedPath);  // Should use injected, not LLM-provided
     }
 }
 
