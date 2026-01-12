@@ -319,6 +319,7 @@ public sealed class ConfigurableAgent : IAgent
             },
             // Also expose at top level for simpler templates
             ragContext = context.RagContext ?? string.Empty,
+            codeGraphContext = context.CodeGraphContext ?? string.Empty,
         };
 
         // Render system prompt using Handlebars
@@ -328,6 +329,12 @@ public sealed class ConfigurableAgent : IAgent
         if (!string.IsNullOrEmpty(context.RagContext) && !_definition.SystemPrompt.Contains("RagContext"))
         {
             systemPrompt = AppendRagContext(systemPrompt, context.RagContext);
+        }
+
+        // If Code Graph context wasn't included in template but is available, append it
+        if (!string.IsNullOrEmpty(context.CodeGraphContext) && !_definition.SystemPrompt.Contains("CodeGraphContext"))
+        {
+            systemPrompt = AppendCodeGraphContext(systemPrompt, context.CodeGraphContext);
         }
 
         messages.Add(new ChatMessage(ChatRole.System, systemPrompt));
@@ -351,6 +358,20 @@ public sealed class ConfigurableAgent : IAgent
         sb.AppendLine("The following information may be relevant to the user's request:");
         sb.AppendLine();
         sb.Append(ragContext);
+
+        return sb.ToString();
+    }
+
+    private static string AppendCodeGraphContext(string systemPrompt, string codeGraphContext)
+    {
+        var sb = new StringBuilder(systemPrompt);
+        sb.AppendLine();
+        sb.AppendLine();
+        sb.AppendLine("## Code Structure Analysis");
+        sb.AppendLine();
+        sb.AppendLine("The following code structure information was found in the codebase:");
+        sb.AppendLine();
+        sb.Append(codeGraphContext);
 
         return sb.ToString();
     }
