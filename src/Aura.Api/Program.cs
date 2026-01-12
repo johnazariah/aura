@@ -39,6 +39,9 @@ builder.Host.UseSerilog((context, services, configuration) =>
     configuration
         .MinimumLevel.Information()
         .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
+        .MinimumLevel.Override("System.Net.Http.HttpClient", LogEventLevel.Warning)
+        .MinimumLevel.Override("Microsoft.Extensions.Http", LogEventLevel.Warning)
+        .MinimumLevel.Override("Polly", LogEventLevel.Warning)
         .Enrich.FromLogContext()
         .WriteTo.Console(formatProvider: CultureInfo.InvariantCulture)
         .WriteTo.File(
@@ -501,6 +504,57 @@ app.MapPost("/api/agents/{agentId}/execute/rag", async (
     }
 });
 
+// Agentic RAG execution - uses tools to explore codebase
+app.MapPost("/api/agents/{agentId}/execute/agentic", async (
+    string agentId,
+    ExecuteAgenticRequest request,
+    IRagEnrichedExecutor executor,
+    CancellationToken cancellationToken) =>
+{
+    var stopwatch = Stopwatch.StartNew();
+
+    try
+    {
+        var output = await executor.ExecuteAgenticAsync(
+            agentId,
+            request.Prompt,
+            request.WorkspacePath,
+            request.UseRag,
+            request.UseCodeGraph,
+            request.MaxSteps ?? 10,
+            cancellationToken);
+
+        stopwatch.Stop();
+
+        return Results.Ok(new
+        {
+            content = output.Content,
+            tokensUsed = output.TokensUsed,
+            toolSteps = output.ToolSteps.Select(s => new
+            {
+                toolId = s.ToolId,
+                input = s.Input,
+                output = s.Output,
+                success = s.Success
+            }),
+            stepCount = output.ToolSteps.Count,
+            durationMs = stopwatch.ElapsedMilliseconds
+        });
+    }
+    catch (AgentException ex)
+    {
+        return Results.BadRequest(new
+        {
+            error = ex.Message,
+            code = ex.Code.ToString()
+        });
+    }
+    catch (OperationCanceledException)
+    {
+        return Results.StatusCode(499);
+    }
+});
+
 // Conversation endpoints
 app.MapGet("/api/conversations", async (AuraDbContext db, int? limit) =>
 {
@@ -728,52 +782,6 @@ app.MapPost("/api/rag/index", async (
     }
 });
 
-// Index a directory (delegates to background indexer - always async)
-app.MapPost("/api/rag/index/directory", (
-    IndexDirectoryRequest request,
-    Aura.Foundation.Rag.IBackgroundIndexer backgroundIndexer) =>
-{
-    if (!Directory.Exists(request.Path))
-    {
-        return Results.NotFound(new
-        {
-            success = false,
-            error = "Directory not found: " + request.Path
-        });
-    }
-
-    var options = new RagIndexOptions
-    {
-        IncludePatterns = request.IncludePatterns,
-        ExcludePatterns = request.ExcludePatterns,
-        Recursive = request.Recursive ?? true,
-    };
-
-    var (jobId, isNew) = backgroundIndexer.QueueDirectory(request.Path, options);
-
-    if (!isNew)
-    {
-        var existingStatus = backgroundIndexer.GetJobStatus(jobId);
-        return Results.Ok(new
-        {
-            success = true,
-            path = request.Path,
-            jobId,
-            message = "Indexing already in progress",
-            state = existingStatus?.State.ToString() ?? "Unknown",
-            progressPercent = existingStatus?.ProgressPercent ?? 0
-        });
-    }
-
-    return Results.Accepted($"/api/index/jobs/{jobId}", new
-    {
-        success = true,
-        path = request.Path,
-        jobId,
-        message = "Indexing queued. Check status at /api/index/jobs/{jobId}"
-    });
-});
-
 // Query the RAG index
 app.MapPost("/api/rag/query", async (
     RagQueryRequest request,
@@ -841,46 +849,6 @@ app.MapGet("/api/rag/stats", async (IRagService ragService, CancellationToken ca
     }
 });
 
-// Get directory-specific RAG stats
-app.MapGet("/api/rag/stats/directory", async (
-    string path,
-    IRagService ragService,
-    CancellationToken cancellationToken) =>
-{
-    try
-    {
-        var stats = await ragService.GetDirectoryStatsAsync(path, cancellationToken);
-
-        if (stats is null)
-        {
-            return Results.Ok(new
-            {
-                isIndexed = false,
-                directoryPath = path,
-                chunkCount = 0,
-                fileCount = 0,
-                lastIndexedAt = (DateTimeOffset?)null
-            });
-        }
-
-        return Results.Ok(new
-        {
-            isIndexed = stats.IsIndexed,
-            directoryPath = stats.DirectoryPath,
-            chunkCount = stats.ChunkCount,
-            fileCount = stats.FileCount,
-            lastIndexedAt = stats.LastIndexedAt
-        });
-    }
-    catch (Exception ex)
-    {
-        return Results.BadRequest(new
-        {
-            error = ex.Message
-        });
-    }
-});
-
 // Remove content from index
 app.MapDelete("/api/rag/{contentId}", async (
     string contentId,
@@ -919,29 +887,6 @@ app.MapDelete("/api/rag/{contentId}", async (
     }
 });
 
-// Clear entire RAG index
-app.MapDelete("/api/rag", async (IRagService ragService, CancellationToken cancellationToken) =>
-{
-    try
-    {
-        await ragService.ClearAsync(cancellationToken);
-
-        return Results.Ok(new
-        {
-            success = true,
-            message = "RAG index cleared"
-        });
-    }
-    catch (Exception ex)
-    {
-        return Results.BadRequest(new
-        {
-            success = false,
-            error = ex.Message
-        });
-    }
-});
-
 
 // ==== Graph RAG Endpoints ====
 
@@ -967,58 +912,6 @@ app.MapGet("/api/graph/stats", async (
     catch (Exception ex)
     {
         return Results.BadRequest(new { error = ex.Message });
-    }
-});
-
-// Index a solution/project into the code graph
-app.MapPost("/api/graph/index", async (
-    IndexCodeGraphRequest request,
-    IServiceScopeFactory scopeFactory,
-    CancellationToken ct) =>
-{
-    try
-    {
-        using var scope = scopeFactory.CreateScope();
-        var indexer = scope.ServiceProvider.GetRequiredService<Aura.Module.Developer.Services.ICodeGraphIndexer>();
-
-        Aura.Module.Developer.Services.CodeGraphIndexResult result;
-        if (request.Reindex)
-        {
-            result = await indexer.ReindexAsync(request.SolutionPath, request.RepositoryPath, ct);
-        }
-        else
-        {
-            result = await indexer.IndexAsync(request.SolutionPath, request.RepositoryPath, ct);
-        }
-
-        if (!result.Success)
-        {
-            return Results.BadRequest(new
-            {
-                success = false,
-                error = result.ErrorMessage
-            });
-        }
-
-        return Results.Ok(new
-        {
-            success = true,
-            nodesCreated = result.NodesCreated,
-            edgesCreated = result.EdgesCreated,
-            projectsIndexed = result.ProjectsIndexed,
-            filesIndexed = result.FilesIndexed,
-            typesIndexed = result.TypesIndexed,
-            durationMs = (int)result.Duration.TotalMilliseconds,
-            warnings = result.Warnings
-        });
-    }
-    catch (Exception ex)
-    {
-        return Results.BadRequest(new
-        {
-            success = false,
-            error = ex.Message
-        });
     }
 });
 
@@ -1209,178 +1102,7 @@ app.MapGet("/api/graph/find/{name}", async (
     }
 });
 
-// Clear graph for a repository
-app.MapDelete("/api/graph/{repositoryPath}", async (
-    string repositoryPath,
-    Aura.Foundation.Rag.ICodeGraphService graphService,
-    CancellationToken ct) =>
-{
-    try
-    {
-        await graphService.ClearRepositoryGraphAsync(Uri.UnescapeDataString(repositoryPath), ct);
-
-        return Results.Ok(new
-        {
-            success = true,
-            message = $"Graph cleared for repository: {repositoryPath}"
-        });
-    }
-    catch (Exception ex)
-    {
-        return Results.BadRequest(new { error = ex.Message });
-    }
-});
-
-// Semantic index a directory (code graph + selective embeddings)
-// DEPRECATED: This endpoint now delegates to the unified background indexer.
-// Prefer using /api/index/background for new integrations.
-app.MapPost("/api/semantic/index", async (
-    SemanticIndexRequest request,
-    Aura.Foundation.Rag.IBackgroundIndexer backgroundIndexer,
-    CancellationToken ct) =>
-{
-    try
-    {
-        if (string.IsNullOrWhiteSpace(request.DirectoryPath))
-        {
-            return Results.BadRequest(new { success = false, error = "'directoryPath' is required" });
-        }
-
-        if (!System.IO.Directory.Exists(request.DirectoryPath))
-        {
-            return Results.BadRequest(new { success = false, error = $"Directory does not exist: {request.DirectoryPath}" });
-        }
-
-        var options = new Aura.Foundation.Rag.RagIndexOptions
-        {
-            Recursive = request.Recursive ?? true,
-        };
-
-        // Queue for background indexing (which now includes code graph via RoslynCodeIngestor)
-        var (jobId, isNew) = backgroundIndexer.QueueDirectory(request.DirectoryPath, options);
-
-        // Poll for completion (maintain backward compatibility with sync callers)
-        var startTime = DateTime.UtcNow;
-        var timeout = TimeSpan.FromMinutes(10);
-        Aura.Foundation.Rag.IndexJobStatus? status = null;
-
-        while (DateTime.UtcNow - startTime < timeout)
-        {
-            ct.ThrowIfCancellationRequested();
-
-            status = backgroundIndexer.GetJobStatus(jobId);
-            if (status?.State is Aura.Foundation.Rag.IndexJobState.Completed
-                              or Aura.Foundation.Rag.IndexJobState.Failed
-                              or Aura.Foundation.Rag.IndexJobState.Cancelled)
-            {
-                break;
-            }
-
-            await Task.Delay(500, ct);
-        }
-
-        if (status?.State == Aura.Foundation.Rag.IndexJobState.Completed)
-        {
-            var durationMs = status.CompletedAt.HasValue && status.StartedAt.HasValue
-                ? (int)(status.CompletedAt.Value - status.StartedAt.Value).TotalMilliseconds
-                : 0;
-
-            return Results.Ok(new
-            {
-                success = true,
-                filesIndexed = status.ProcessedItems,
-                chunksCreated = status.ProcessedItems, // Approximation
-                durationMs,
-                warnings = new List<string>()
-            });
-        }
-        else if (status?.State == Aura.Foundation.Rag.IndexJobState.Failed)
-        {
-            return Results.BadRequest(new
-            {
-                success = false,
-                error = status.Error ?? "Indexing failed"
-            });
-        }
-        else
-        {
-            // Timeout - return job ID for async tracking
-            return Results.Ok(new
-            {
-                success = true,
-                message = "Indexing still in progress",
-                jobId = jobId,
-                checkStatus = $"/api/index/jobs/{jobId}"
-            });
-        }
-    }
-    catch (OperationCanceledException)
-    {
-        return Results.BadRequest(new { success = false, error = "Request cancelled" });
-    }
-    catch (Exception ex)
-    {
-        return Results.BadRequest(new
-        {
-            success = false,
-            error = ex.Message
-        });
-    }
-});
-
 // ==== Background Indexing Endpoints ====
-
-// Queue a directory for background indexing (non-blocking)
-app.MapPost("/api/index/background", (
-    BackgroundIndexRequest request,
-    Aura.Foundation.Rag.IBackgroundIndexer backgroundIndexer) =>
-{
-    if (string.IsNullOrWhiteSpace(request.Directory))
-    {
-        return Results.BadRequest(new
-        {
-            error = "'directory' is required",
-            hint = "POST body should be: { \"directory\": \"C:\\path\\to\\folder\" }"
-        });
-    }
-
-    if (!System.IO.Directory.Exists(request.Directory))
-    {
-        return Results.BadRequest(new
-        {
-            error = $"Directory does not exist: {request.Directory}"
-        });
-    }
-
-    var options = new Aura.Foundation.Rag.RagIndexOptions
-    {
-        Recursive = request.Recursive ?? true,
-        IncludePatterns = request.IncludePatterns?.ToArray(),
-        ExcludePatterns = request.ExcludePatterns?.ToArray(),
-    };
-
-    var (jobId, isNew) = backgroundIndexer.QueueDirectory(request.Directory, options);
-
-    if (!isNew)
-    {
-        var existingStatus = backgroundIndexer.GetJobStatus(jobId);
-        return Results.Ok(new
-        {
-            jobId,
-            message = "Indexing already in progress",
-            directory = request.Directory,
-            state = existingStatus?.State.ToString() ?? "Unknown",
-            progressPercent = existingStatus?.ProgressPercent ?? 0
-        });
-    }
-
-    return Results.Accepted($"/api/index/jobs/{jobId}", new
-    {
-        jobId,
-        message = "Indexing queued. Check status at /api/index/jobs/{jobId}",
-        directory = request.Directory
-    });
-});
 
 // Get background indexer status
 app.MapGet("/api/index/status", (Aura.Foundation.Rag.IBackgroundIndexer backgroundIndexer) =>
@@ -1586,31 +1308,59 @@ app.MapGet("/api/workspaces", async (
 });
 
 // Get workspace by ID
-app.MapGet("/api/workspaces/{id}", async (
-    string id,
+// Get workspace by ID or path
+// - If idOrPath is 16 hex chars, treat as workspace ID
+// - Otherwise, treat as a filesystem path and derive the ID
+app.MapGet("/api/workspaces/{idOrPath}", async (
+    string idOrPath,
     AuraDbContext db,
     IRagService ragService,
     ICodeGraphService codeGraphService,
+    Aura.Foundation.Rag.IBackgroundIndexer backgroundIndexer,
     CancellationToken ct) =>
 {
-    if (!WorkspaceIdGenerator.IsValidId(id))
+    // Determine if this is an ID or a path
+    string workspaceId;
+    if (WorkspaceIdGenerator.IsValidId(idOrPath))
     {
-        return Results.BadRequest(new { error = "Invalid workspace ID format" });
+        workspaceId = idOrPath;
+    }
+    else
+    {
+        // Treat as path - URL decode and generate ID
+        var decodedPath = Uri.UnescapeDataString(idOrPath);
+        workspaceId = WorkspaceIdGenerator.GenerateId(decodedPath);
     }
 
-    var workspace = await db.Workspaces.FindAsync([id], ct);
+    var workspace = await db.Workspaces.FindAsync([workspaceId], ct);
     if (workspace is null)
     {
-        return Results.NotFound(new { error = $"Workspace not found: {id}" });
+        return Results.NotFound(new { error = $"Workspace not found: {idOrPath}", suggestedId = workspaceId });
     }
 
     // Update last accessed timestamp
     workspace.LastAccessedAt = DateTimeOffset.UtcNow;
-    await db.SaveChangesAsync(ct);
 
     // Get stats
     var ragStats = await ragService.GetDirectoryStatsAsync(workspace.CanonicalPath, ct);
     var graphStats = await codeGraphService.GetStatsAsync(workspace.CanonicalPath, ct);
+
+    // Check for active indexing job for this workspace
+    var activeJob = backgroundIndexer.GetActiveJobs()
+        .FirstOrDefault(j =>
+            (j.State == IndexJobState.Queued || j.State == IndexJobState.Processing) &&
+            string.Equals(
+                Path.GetFullPath(j.Source).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                Path.GetFullPath(workspace.CanonicalPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                StringComparison.OrdinalIgnoreCase));
+
+    // Auto-fix status: if marked as indexing but no active job, transition to ready
+    if (workspace.Status == WorkspaceStatus.Indexing && activeJob is null)
+    {
+        workspace.Status = WorkspaceStatus.Ready;
+    }
+
+    await db.SaveChangesAsync(ct);
 
     return Results.Ok(new
     {
@@ -1629,6 +1379,14 @@ app.MapGet("/api/workspaces/{id}", async (
             chunks = ragStats?.ChunkCount ?? 0,
             graphNodes = graphStats.TotalNodes,
             graphEdges = graphStats.TotalEdges
+        },
+        indexingJob = activeJob is null ? null : new
+        {
+            jobId = activeJob.JobId,
+            state = activeJob.State.ToString(),
+            processedItems = activeJob.ProcessedItems,
+            totalItems = activeJob.TotalItems,
+            progressPercent = activeJob.ProgressPercent
         }
     });
 });
@@ -1740,6 +1498,44 @@ app.MapPost("/api/workspaces", async (
     });
 });
 
+// Trigger re-indexing for an existing workspace
+app.MapPost("/api/workspaces/{id}/reindex", async (
+    string id,
+    AuraDbContext db,
+    Aura.Foundation.Rag.IBackgroundIndexer backgroundIndexer,
+    CancellationToken ct) =>
+{
+    if (!WorkspaceIdGenerator.IsValidId(id))
+    {
+        return Results.BadRequest(new { error = "Invalid workspace ID format" });
+    }
+
+    var workspace = await db.Workspaces.FindAsync([id], ct);
+    if (workspace is null)
+    {
+        return Results.NotFound(new { error = $"Workspace not found: {id}" });
+    }
+
+    // Queue for background indexing
+    var options = new Aura.Foundation.Rag.RagIndexOptions { Recursive = true };
+    var (jobId, isNew) = backgroundIndexer.QueueDirectory(workspace.CanonicalPath, options);
+
+    // Update workspace status
+    workspace.Status = WorkspaceStatus.Indexing;
+    workspace.LastAccessedAt = DateTimeOffset.UtcNow;
+    await db.SaveChangesAsync(ct);
+
+    return Results.Accepted($"/api/index/jobs/{jobId}", new
+    {
+        id = workspace.Id,
+        path = workspace.CanonicalPath,
+        status = "indexing",
+        jobId,
+        isNewJob = isNew,
+        message = isNew ? "Re-indexing started" : "Indexing already in progress"
+    });
+});
+
 // Delete workspace (remove all indexed data)
 app.MapDelete("/api/workspaces/{id}", async (
     string id,
@@ -1786,34 +1582,6 @@ app.MapDelete("/api/workspaces/{id}", async (
         message = "Workspace deleted",
         deletedChunks = chunksToDelete.Count,
         deletedMetadata = metadataToDelete.Count
-    });
-});
-
-// Lookup workspace ID by path
-app.MapGet("/api/workspaces/lookup", async (
-    [FromQuery] string path,
-    AuraDbContext db,
-    CancellationToken ct) =>
-{
-    if (string.IsNullOrWhiteSpace(path))
-    {
-        return Results.BadRequest(new { error = "path query parameter is required" });
-    }
-
-    var workspaceId = WorkspaceIdGenerator.GenerateId(path);
-    var workspace = await db.Workspaces.FindAsync([workspaceId], ct);
-
-    if (workspace is null)
-    {
-        return Results.NotFound(new { error = "Workspace not found for this path", suggestedId = workspaceId });
-    }
-
-    return Results.Ok(new
-    {
-        id = workspace.Id,
-        name = workspace.Name,
-        path = workspace.CanonicalPath,
-        status = workspace.Status.ToString().ToLowerInvariant()
     });
 });
 
@@ -2021,7 +1789,8 @@ app.MapPost("/api/git/commit", async (
     Aura.Foundation.Git.IGitService gitService,
     CancellationToken ct) =>
 {
-    var result = await gitService.CommitAsync(request.RepoPath, request.Message, ct);
+    // Manual API commits respect hooks (skipHooks: false)
+    var result = await gitService.CommitAsync(request.RepoPath, request.Message, skipHooks: false, ct);
 
     if (result.Success)
     {
@@ -2115,6 +1884,12 @@ app.MapPost("/api/developer/workflows", async (
     IWorkflowService workflowService,
     CancellationToken ct) =>
 {
+    // Validate required fields
+    if (string.IsNullOrWhiteSpace(request.Title))
+    {
+        return Results.BadRequest(new { error = "Title is required. Expected: { title: string, description?: string, repositoryPath?: string }" });
+    }
+
     try
     {
         var workflow = await workflowService.CreateAsync(
@@ -2600,7 +2375,8 @@ app.MapPost("/api/developer/workflows/{id:guid}/finalize", async (
         if (statusResult.Success && statusResult.Value?.IsDirty == true)
         {
             var commitMessage = request.CommitMessage ?? $"feat: {workflow.Title}";
-            var commitResult = await gitService.CommitAsync(workflow.WorktreePath, commitMessage, ct);
+            // Skip hooks for automated workflow commits
+            var commitResult = await gitService.CommitAsync(workflow.WorktreePath, commitMessage, skipHooks: true, ct);
             if (!commitResult.Success)
                 return Results.BadRequest(new { error = $"Commit failed: {commitResult.Error}" });
 
@@ -2730,6 +2506,12 @@ record ExecuteWithRagRequest(
     bool? UseRag = null,
     bool? UseCodeGraph = null,
     int? TopK = null);
+record ExecuteAgenticRequest(
+    string Prompt,
+    string? WorkspacePath = null,
+    bool? UseRag = null,
+    bool? UseCodeGraph = null,
+    int? MaxSteps = null);
 record CreateConversationRequest(string AgentId, string? Title = null, string? WorkspacePath = null);
 record AddMessageRequest(string Content);
 
@@ -2741,38 +2523,11 @@ record IndexContentRequest(
     string? SourcePath = null,
     string? Language = null);
 
-record IndexDirectoryRequest(
-    string Path,
-    IReadOnlyList<string>? IncludePatterns = null,
-    IReadOnlyList<string>? ExcludePatterns = null,
-    bool? Recursive = null);
-
 record RagQueryRequest(
     string Query,
     int? TopK = null,
     double? MinScore = null,
     string? SourcePathPrefix = null);
-
-// Graph RAG request models
-record IndexCodeGraphRequest(
-    string SolutionPath,
-    string RepositoryPath,
-    bool Reindex = false);
-
-// Semantic indexing request models
-record SemanticIndexRequest(
-    string DirectoryPath,
-    bool? Recursive = null,
-    bool? Parallel = null);
-
-// Background indexing request models
-record BackgroundIndexRequest(
-    string Directory,
-    bool? Recursive = null,
-    IReadOnlyList<string>? IncludePatterns = null,
-    IReadOnlyList<string>? ExcludePatterns = null);
-
-// Make Program accessible for WebApplicationFactory
 
 // Tool request models
 record ExecuteToolRequest(
@@ -2807,7 +2562,7 @@ record CreateWorktreeRequest(
 
 // Developer Module request models
 record CreateWorkflowRequest(
-    string Title,
+    string? Title = null,
     string? Description = null,
     string? RepositoryPath = null);
 
