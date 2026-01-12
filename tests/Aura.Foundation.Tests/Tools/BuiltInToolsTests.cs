@@ -234,7 +234,8 @@ public class BuiltInToolsTests
         var input = new ToolInput
         {
             ToolId = "file.list",
-            Parameters = new Dictionary<string, object?> { ["path"] = "/mydir" }
+            WorkingDirectory = "/mydir",  // Set working directory so relative paths work
+            Parameters = new Dictionary<string, object?> { ["path"] = "." }
         };
 
         // Act

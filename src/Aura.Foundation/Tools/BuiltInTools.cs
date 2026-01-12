@@ -157,16 +157,15 @@ public static class BuiltInTools
         {
             ToolId = "file.modify",
             Name = "Modify File",
-            Description = "Modify a file by replacing text. Use for targeted edits to existing files.",
+            Description = "Modify a file by replacing text. Use for targeted edits to existing files. IMPORTANT: Preserve exact indentation and whitespace in both oldText and newText.",
             InputSchema = """
                 {
                     "type": "object",
                     "properties": {
                         "path": { "type": "string", "description": "Path to the file (relative or absolute)" },
-                        "oldText": { "type": "string", "description": "The exact text to find and replace" },
-                        "newText": { "type": "string", "description": "The text to replace with" },
-                        "replaceAll": { "type": "boolean", "description": "If true, replace all occurrences. Default is false (first only)." },
-                        "createBackup": { "type": "boolean", "description": "If true, create a .bak backup before modifying. Default is false." }
+                        "oldText": { "type": "string", "description": "The EXACT text to find, including all whitespace and indentation" },
+                        "newText": { "type": "string", "description": "The replacement text. MUST preserve the same indentation as oldText" },
+                        "replaceAll": { "type": "boolean", "description": "If true, replace all occurrences. Default is false (first only)." }
                     },
                     "required": ["path", "oldText", "newText"]
                 }
@@ -178,7 +177,6 @@ public static class BuiltInTools
                 var oldText = input.GetRequiredParameter<string>("oldText");
                 var newText = input.GetRequiredParameter<string>("newText");
                 var replaceAll = input.GetParameter("replaceAll", false);
-                var createBackup = input.GetParameter("createBackup", false);
 
                 // Resolve relative paths against WorkingDirectory
                 var resolvedPath = ResolvePath(path, input.WorkingDirectory);
@@ -199,12 +197,6 @@ public static class BuiltInTools
                 {
                     var preview = oldText.Length > 50 ? oldText.Substring(0, 50) + "..." : oldText;
                     return ToolResult.Fail($"Text not found in file: {preview}");
-                }
-
-                // Create backup if requested
-                if (createBackup)
-                {
-                    await fileSystem.File.WriteAllTextAsync(resolvedPath + ".bak", content, ct);
                 }
 
                 // Perform replacement
@@ -254,6 +246,7 @@ public static class BuiltInTools
 
                 // Resolve relative paths against WorkingDirectory
                 var resolvedPath = ResolvePath(path, input.WorkingDirectory);
+                var workingDir = input.WorkingDirectory ?? Environment.CurrentDirectory;
 
                 if (!fileSystem.Directory.Exists(resolvedPath))
                 {
@@ -263,21 +256,48 @@ public static class BuiltInTools
                 var searchOption = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
                 var entries = new List<string>();
 
-                // Get directories
-                foreach (var dir in fileSystem.Directory.GetDirectories(resolvedPath, "*", searchOption))
+                // Return paths relative to WorkingDirectory so they can be used directly with file.read
+                // Return paths relative to WorkingDirectory so they can be used directly with file.read
+                // Only list directories when pattern is "*" (no specific file filter)
+                if (pattern == "*")
                 {
-                    var relativePath = fileSystem.Path.GetRelativePath(resolvedPath, dir);
-                    entries.Add(relativePath.Replace('\\', '/') + "/");
+                    foreach (var dir in fileSystem.Directory.GetDirectories(resolvedPath, "*", searchOption))
+                    {
+                        var relativePath = fileSystem.Path.GetRelativePath(workingDir, dir);
+                        // Skip hidden/ignored directories
+                        if (relativePath.StartsWith('.') || relativePath.Contains("/.") ||
+                            relativePath.StartsWith("node_modules") || relativePath.Contains("/node_modules"))
+                        {
+                            continue;
+                        }
+                        entries.Add(relativePath.Replace('\\', '/') + "/");
+                    }
                 }
 
                 // Get files matching pattern
                 foreach (var file in fileSystem.Directory.GetFiles(resolvedPath, pattern, searchOption))
                 {
-                    var relativePath = fileSystem.Path.GetRelativePath(resolvedPath, file);
+                    var relativePath = fileSystem.Path.GetRelativePath(workingDir, file);
+                    // Skip files in hidden/ignored directories
+                    if (relativePath.StartsWith('.') || relativePath.Contains("/.") ||
+                        relativePath.StartsWith("node_modules") || relativePath.Contains("/node_modules"))
+                    {
+                        continue;
+                    }
                     entries.Add(relativePath.Replace('\\', '/'));
                 }
 
                 entries.Sort();
+
+                // Limit output to prevent token explosion
+                const int maxEntries = 200;
+                if (entries.Count > maxEntries)
+                {
+                    var truncated = entries.Take(maxEntries).ToList();
+                    truncated.Add($"... ({entries.Count - maxEntries} more entries, use a more specific pattern)");
+                    return Task.FromResult(ToolResult.Ok(string.Join("\n", truncated)));
+                }
+
                 return Task.FromResult(ToolResult.Ok(string.Join("\n", entries)));
             }
         });
@@ -320,6 +340,104 @@ public static class BuiltInTools
                 {
                     return Task.FromResult(ToolResult.Ok($"Does not exist: {path}"));
                 }
+            }
+        });
+
+        // search.grep - Search for text in files
+        registry.RegisterTool(new ToolDefinition
+        {
+            ToolId = "search.grep",
+            Name = "Search Files",
+            Description = "Search for a pattern in files. Returns matching lines with file paths and line numbers.",
+            InputSchema = """
+                {
+                    "type": "object",
+                    "properties": {
+                        "pattern": { "type": "string", "description": "Text or regex pattern to search for" },
+                        "path": { "type": "string", "description": "Directory or file to search in (defaults to working directory)" },
+                        "filePattern": { "type": "string", "description": "File pattern to match (e.g., '*.cs', '*.ts'). Default is all files." },
+                        "recursive": { "type": "boolean", "description": "Search recursively in subdirectories. Default is true." },
+                        "caseSensitive": { "type": "boolean", "description": "Case sensitive search. Default is false." },
+                        "maxResults": { "type": "integer", "description": "Maximum number of results to return. Default is 50." }
+                    },
+                    "required": ["pattern"]
+                }
+                """,
+            Categories = ["search", "file"],
+            Handler = async (input, ct) =>
+            {
+                var pattern = input.GetRequiredParameter<string>("pattern");
+                var path = input.GetParameter<string>("path") ?? ".";
+                var filePattern = input.GetParameter<string>("filePattern") ?? "*";
+                var recursive = input.GetParameter("recursive", true);
+                var caseSensitive = input.GetParameter("caseSensitive", false);
+                var maxResults = input.GetParameter("maxResults", 50);
+
+                var resolvedPath = ResolvePath(path, input.WorkingDirectory);
+
+                if (!fileSystem.Directory.Exists(resolvedPath) && !fileSystem.File.Exists(resolvedPath))
+                {
+                    return ToolResult.Fail($"Path not found: {path}");
+                }
+
+                var results = new List<string>();
+                var comparison = caseSensitive ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
+                var searchOption = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
+
+                IEnumerable<string> filesToSearch;
+                if (fileSystem.File.Exists(resolvedPath))
+                {
+                    filesToSearch = [resolvedPath];
+                }
+                else
+                {
+                    filesToSearch = fileSystem.Directory.GetFiles(resolvedPath, filePattern, searchOption)
+                        .Where(f => !f.Contains("/.") && !f.Contains("\\.") &&
+                                   !f.Contains("/node_modules/") && !f.Contains("\\node_modules\\") &&
+                                   !f.Contains("/bin/") && !f.Contains("\\bin\\") &&
+                                   !f.Contains("/obj/") && !f.Contains("\\obj\\"));
+                }
+
+                foreach (var file in filesToSearch)
+                {
+                    if (ct.IsCancellationRequested) break;
+                    if (results.Count >= maxResults) break;
+
+                    try
+                    {
+                        var lines = await fileSystem.File.ReadAllLinesAsync(file, ct);
+                        for (var lineNum = 0; lineNum < lines.Length && results.Count < maxResults; lineNum++)
+                        {
+                            if (lines[lineNum].Contains(pattern, comparison))
+                            {
+                                var relativePath = fileSystem.Path.GetRelativePath(resolvedPath, file).Replace('\\', '/');
+                                var linePreview = lines[lineNum].Trim();
+                                if (linePreview.Length > 120)
+                                {
+                                    linePreview = linePreview.Substring(0, 120) + "...";
+                                }
+                                results.Add($"{relativePath}:{lineNum + 1}: {linePreview}");
+                            }
+                        }
+                    }
+                    catch
+                    {
+                        // Skip files that can't be read (binary, locked, etc.)
+                    }
+                }
+
+                if (results.Count == 0)
+                {
+                    return ToolResult.Ok($"No matches found for '{pattern}'");
+                }
+
+                var output = string.Join("\n", results);
+                if (results.Count >= maxResults)
+                {
+                    output += $"\n... (truncated at {maxResults} results, use more specific pattern)";
+                }
+
+                return ToolResult.Ok(output);
             }
         });
 
@@ -435,6 +553,9 @@ public static class BuiltInTools
     /// </summary>
     private static string ResolvePath(string? path, string? workingDirectory)
     {
+        // DEBUG: Trace path resolution
+        Console.WriteLine($"[BUILTIN-TOOL-DEBUG] ResolvePath: path='{path}', workingDirectory='{workingDirectory}'");
+
         if (string.IsNullOrEmpty(path))
         {
             return path ?? string.Empty;
@@ -443,17 +564,22 @@ public static class BuiltInTools
         // If path is already absolute, return as-is
         if (Path.IsPathRooted(path))
         {
+            Console.WriteLine($"[BUILTIN-TOOL-DEBUG] Path is absolute, returning as-is: '{path}'");
             return path;
         }
 
         // If we have a working directory, combine with relative path
         if (!string.IsNullOrEmpty(workingDirectory))
         {
-            return Path.Combine(workingDirectory, path);
+            var resolved = Path.Combine(workingDirectory, path);
+            Console.WriteLine($"[BUILTIN-TOOL-DEBUG] Combined with workingDirectory: '{resolved}'");
+            return resolved;
         }
 
         // Fall back to resolving against current directory
-        return Path.GetFullPath(path);
+        var fallback = Path.GetFullPath(path);
+        Console.WriteLine($"[BUILTIN-TOOL-DEBUG] WARNING: Falling back to current directory: '{fallback}'");
+        return fallback;
     }
 
     private static int CountOccurrences(string text, string pattern)
