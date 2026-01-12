@@ -28,6 +28,9 @@ TestResults/
 *.log
 logs/
 
+# Backup files (created by file.modify tool)
+*.bak
+
 # OS
 .DS_Store
 Thumbs.db

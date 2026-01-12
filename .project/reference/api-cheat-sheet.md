@@ -80,23 +80,30 @@ curl -X POST "http://localhost:5300/api/developer/workflows/{wfId}/steps/{stepId
 | POST | `/api/tools/{toolId}/execute` | Execute a single tool |
 | POST | `/api/tools/react` | Run ReAct loop with tools |
 
+## Workspaces
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/workspaces` | Onboard workspace (registers + indexes) |
+| GET | `/api/workspaces` | List all workspaces |
+| GET | `/api/workspaces/{id}` | Get workspace details with stats |
+| POST | `/api/workspaces/{id}/reindex` | Reindex existing workspace |
+| DELETE | `/api/workspaces/{id}` | Remove workspace and its data |
+| GET | `/api/workspaces/lookup?path=X` | Look up workspace by path |
+
 ## RAG (Retrieval-Augmented Generation)
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | POST | `/api/rag/index` | Index a single file |
-| POST | `/api/rag/index/directory` | Index entire directory |
 | POST | `/api/rag/query` | Query indexed content |
 | GET | `/api/rag/stats` | Get RAG statistics |
-| GET | `/api/rag/stats/directory?path=X` | Stats for specific directory |
-| DELETE | `/api/rag` | Clear all RAG data |
 | DELETE | `/api/rag/{contentId}` | Delete specific content |
 
 ## Background Indexing
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/api/index/background` | Start background indexing job |
 | GET | `/api/index/jobs/{jobId}` | Check job status |
 | GET | `/api/index/status` | Overall indexing status |
 
@@ -104,19 +111,12 @@ curl -X POST "http://localhost:5300/api/developer/workflows/{wfId}/steps/{stepId
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/api/graph/index` | Index solution for code graph |
 | GET | `/api/graph/find/{name}` | Find symbol by name |
 | GET | `/api/graph/members/{typeName}` | Get type members |
 | GET | `/api/graph/callers/{methodName}` | Find method callers |
 | GET | `/api/graph/implementations/{interface}` | Find implementations |
 | GET | `/api/graph/namespace/{ns}` | List namespace contents |
 | DELETE | `/api/graph/{workspacePath}` | Clear graph for workspace |
-
-## Semantic Index
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/semantic/index` | Index file semantically |
 
 ## Git Operations
 

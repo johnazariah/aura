@@ -69,13 +69,13 @@ curl -X POST http://localhost:5300/api/agents/coding-agent/execute/rag -H "Conte
 
 Check if indexed:
 ```powershell
-curl "http://localhost:5300/api/rag/stats/directory?path=C:\work\Brightsword"
+curl "http://localhost:5300/api/workspaces/lookup?path=C%3A%5Cwork%5CBrightsword"
 ```
 
-Index if needed:
+Onboard if needed:
 ```powershell
-$body = @{ path = "C:\work\Brightsword"; recursive = $true } | ConvertTo-Json
-Invoke-RestMethod -Uri "http://localhost:5300/api/rag/index/directory" -Method Post -Body $body -ContentType "application/json"
+$body = @{ path = "C:\work\Brightsword" } | ConvertTo-Json
+Invoke-RestMethod -Uri "http://localhost:5300/api/workspaces" -Method Post -Body $body -ContentType "application/json"
 ```
 
 ## Response

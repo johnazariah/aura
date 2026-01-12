@@ -25,20 +25,27 @@
 | POST | `/api/developer/workflows/{id}/steps/{stepId}/reassign` | Reassign step to different agent |
 | PUT | `/api/developer/workflows/{id}/steps/{stepId}/description` | Update step description |
 
+### Workspace Endpoints (`/api/workspaces`)
+
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| POST | `/api/workspaces` | Onboard workspace (registers + starts RAG + code graph) |
+| GET | `/api/workspaces` | List all workspaces |
+| GET | `/api/workspaces/{id}` | Get workspace details with stats |
+| POST | `/api/workspaces/{id}/reindex` | Reindex existing workspace |
+| DELETE | `/api/workspaces/{id}` | Remove workspace and its indexed data |
+| GET | `/api/workspaces/lookup?path=...` | Look up workspace by path |
+
 ### RAG Endpoints (`/api/rag`)
 
 | Method | Endpoint | Purpose |
 |--------|----------|---------|
-| POST | `/api/rag/index/directory` | Index directory (text embeddings ONLY) |
 | POST | `/api/rag/search` | Search RAG index |
-| GET | `/api/rag/stats/directory?path=...` | Get indexing stats for a directory |
 
-### Semantic/Graph Endpoints (Code Analysis)
+### Graph Endpoints (Code Analysis)
 
 | Method | Endpoint | Purpose |
 |--------|----------|---------|
-| POST | `/api/semantic/index` | **PREFERRED**: Index with code graph + embeddings |
-| POST | `/api/graph/index` | Index solution into code graph (Roslyn) |
 | GET | `/api/graph/find/{name}` | Find nodes by name |
 | GET | `/api/graph/implementations/{interface}` | Find implementations |
 | GET | `/api/graph/callers/{method}` | Find method callers |
@@ -104,14 +111,14 @@ curl -s http://localhost:5300/health
 # List workflows
 curl -s http://localhost:5300/api/developer/workflows | ConvertFrom-Json | ConvertTo-Json -Depth 3
 
-# Check RAG index stats
-curl -s "http://localhost:5300/api/rag/stats/directory?path=C%3A%5Cwork%5CYourRepo"
+# Check workspace status (use URL-encoded path)
+curl -s "http://localhost:5300/api/workspaces/lookup?path=C%3A%5Cwork%5CYourRepo"
 
 # Check if code graph is indexed
 curl -s "http://localhost:5300/api/graph/find/YourClassName?workspacePath=c%3A%2Fwork%2Fyourrepo"
 
-# Trigger semantic indexing (graph + embeddings)
-curl -s -X POST "http://localhost:5300/api/semantic/index" -H "Content-Type: application/json" -d '{"directoryPath":"C:\\work\\YourRepo","recursive":true}'
+# Onboard a workspace (registers + starts indexing)
+curl -s -X POST "http://localhost:5300/api/workspaces" -H "Content-Type: application/json" -d '{"path":"C:\\work\\YourRepo"}'
 ```
 
 ## Architecture Patterns

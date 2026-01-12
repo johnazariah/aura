@@ -46,11 +46,13 @@ agents/                       # Agent definitions (.md files)
 - `POST /api/developer/workflows/{id}/plan` - Generate steps
 - `POST /api/developer/workflows/{id}/steps/{stepId}/execute` - Execute step
 
-### RAG Indexing
-- `POST /api/rag/index/directory` - Text embeddings only (old)
-- `POST /api/semantic/index` - **Code graph + embeddings** (preferred)
-- `POST /api/graph/index` - Code graph only (Roslyn)
-- `GET /api/rag/stats/directory?path=...` - Check index status
+### Workspace Indexing (`/api/workspaces`)
+- `POST /api/workspaces` - Onboard workspace (registers + starts RAG + code graph indexing)
+- `GET /api/workspaces` - List all workspaces
+- `GET /api/workspaces/{id}` - Get workspace details with stats
+- `POST /api/workspaces/{id}/reindex` - Reindex existing workspace
+- `DELETE /api/workspaces/{id}` - Remove workspace and its indexed data
+- `GET /api/workspaces/lookup?path=...` - Look up workspace by path
 
 ### Code Graph Queries
 - `GET /api/graph/find/{name}` - Find nodes by name
@@ -115,8 +117,8 @@ You are an expert...
 # Check workflow exists
 curl -s "http://localhost:5300/api/developer/workflows" | ConvertFrom-Json
 
-# Check RAG index status
-curl -s "http://localhost:5300/api/rag/stats/directory?path=C%3A%5Cwork%5CMyRepo"
+# Check workspace status (use URL-encoded path)
+curl -s "http://localhost:5300/api/workspaces/lookup?path=C%3A%5Cwork%5CMyRepo"
 
 # Check graph index
 curl -s "http://localhost:5300/api/graph/find/ClassName?workspacePath=c%3A/work/myrepo"

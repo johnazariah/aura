@@ -369,28 +369,51 @@ Returns the workspace ID for a given path (creates if not exists, or 404).
 
 ### Phase 2: Implement New Endpoints
 
-1. [ ] Create `Workspace` entity and EF configuration
-2. [ ] Create migration
-3. [ ] Implement `WorkspaceIdGenerator`
-4. [ ] Add `GET/POST /api/workspaces` endpoints
-5. [ ] Add `GET /api/workspaces/{id}` endpoint
-6. [ ] Add `DELETE /api/workspaces/{id}` endpoint
-7. [ ] Add `GET/POST/DELETE /api/workspaces/{id}/index` endpoints
-8. [ ] Add `POST /api/workspaces/{id}/search` endpoint
-9. [ ] Add `GET /api/workspaces/lookup` endpoint
+1. [x] Create `Workspace` entity and EF configuration
+2. [x] Create migration
+3. [x] Implement `WorkspaceIdGenerator`
+4. [x] Add `GET/POST /api/workspaces` endpoints
+5. [x] Add `GET /api/workspaces/{id}` endpoint
+6. [x] Add `DELETE /api/workspaces/{id}` endpoint
+7. [x] Add `POST /api/workspaces/{id}/reindex` endpoint
+8. [x] Add `GET /api/workspaces/lookup` endpoint
+9. [x] Add `indexingJob` to workspace responses with live progress
 
 ### Phase 3: Migration & Deprecation
 
-1. [ ] Backfill workspace_id in existing tables
-2. [ ] Add `X-Deprecated` header to old endpoints
-3. [ ] Update extension to use new endpoints
-4. [ ] Update documentation
+1. [x] Update extension to use new endpoints
+2. [x] Remove deprecated path-based endpoints
+3. [x] Update documentation
 
-### Phase 4: Cleanup
+### Phase 4: API Response Consistency
 
-1. [ ] Remove deprecated endpoints
-2. [ ] Remove redundant path columns
-3. [ ] Bump API version
+**Goal:** All workspace-related endpoints return consistent response shapes.
+
+| Endpoint | Response Fields | Status |
+|----------|-----------------|--------|
+| `GET /api/workspaces` | `{count, workspaces: [...]}` | ✅ |
+| `GET /api/workspaces/{id}` | Full workspace with stats + indexingJob | ✅ |
+| `GET /api/workspaces/lookup` | Same fields as `GET /{id}` | ⏳ TODO |
+| `POST /api/workspaces` | Same as `GET /{id}` + `{isNew, jobId, message}` | ⏳ TODO |
+| `POST /api/workspaces/{id}/reindex` | `{jobId, message}` | ✅ |
+| `DELETE /api/workspaces/{id}` | `{success, message, deletedChunks}` | ✅ |
+
+**Consistency rules:**
+1. All single-workspace responses include full stats when available
+2. All indexing-capable endpoints include `indexingJob` when active
+3. Use consistent field naming (camelCase throughout)
+4. Error responses: `{error: string, details?: object}`
+
+Tasks:
+1. [ ] Unify `/api/workspaces/lookup` response to match `/api/workspaces/{id}`
+2. [ ] Unify `POST /api/workspaces` response to include full stats
+3. [ ] Add OpenAPI schema validation for response contracts
+4. [ ] Add integration tests for response shape consistency
+
+### Phase 5: Cleanup
+
+1. [ ] Remove any remaining redundant path columns
+2. [ ] Bump API version if breaking changes needed
 
 ---
 

@@ -1,8 +1,9 @@
 # Path Normalization Code Review
 
-**Status:** 📋 Planned  
+**Status:** � In Progress  
 **Priority:** High  
 **Created:** 2025-01-09
+**Updated:** 2026-01-10
 
 ## Problem Statement
 
@@ -19,59 +20,59 @@ Path handling throughout the codebase is inconsistent and has caused several bug
 - DELETE workspace endpoint returned 0 deleted items due to case mismatch
 - Extension sends lowercase paths, database may store different case
 
-## Scope
+## Solution Implemented
 
-Review all instances of path handling in:
-- `src/Aura.Api/Program.cs` - All endpoint path parameters
-- `src/Aura.Foundation/Rag/` - Indexer path handling
-- `src/Aura.Foundation/Git/GitService.cs` - Repository paths
-- `src/Aura.Foundation/CodeGraph/` - Graph storage paths
-- `src/Aura.Module.Developer/` - Workflow workspace paths
+### PathNormalizer (Foundation)
 
-## Proposed Solution
+The canonical `PathNormalizer` exists at `src/Aura.Foundation/Rag/PathNormalizer.cs`:
 
-1. **Create `PathNormalizer` utility class**
-   ```csharp
-   public static class PathNormalizer
-   {
-       public static string Normalize(string path)
-       {
-           var full = Path.GetFullPath(path);
-           var trimmed = full.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-           return OperatingSystem.IsWindows() ? trimmed.ToLowerInvariant() : trimmed;
-       }
-       
-       public static bool AreEqual(string path1, string path2)
-       {
-           return string.Equals(
-               Normalize(path1), 
-               Normalize(path2),
-               OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
-       }
-   }
-   ```
+```csharp
+// Rules applied:
+// 1. Replace escaped backslashes (\\) with /
+// 2. Replace backslashes (\) with /
+// 3. ToLowerInvariant()
+// 4. Collapse multiple slashes (//) into single (/)
+// 5. Preserve URI schemes (file://)
+```
 
-2. **Use normalized paths consistently**
-   - Normalize on input at API boundary
-   - Store normalized paths in database
-   - Use `PathNormalizer.AreEqual()` for comparisons
+### Components Updated
 
-3. **Database migration** (if needed)
-   - Update existing paths to normalized form
-   - Add index on normalized path columns
+| Component | Status | Notes |
+|-----------|--------|-------|
+| `WorkflowService` | ✅ Fixed | Now uses `PathNormalizer.Normalize()` + `EF.Functions.ILike()` |
+| `BackgroundIndexer` | ✅ Fixed | Now uses `PathNormalizer.Normalize()` |
+| `RagService` | ✅ Already correct | Uses `PathNormalizer` |
+| `CodeGraphService` | ✅ Already correct | Uses `PathNormalizer` |
+| `RoslynCodeIngestor` | ✅ Already correct | Uses `PathNormalizer` |
+| `WorkspaceIdGenerator` | ✅ Already correct | Uses `PathNormalizer` |
+| Extension (TypeScript) | ✅ Fixed | Added `normalizePath()` function matching C# behavior |
 
-## Tasks
+### Extension Changes
 
-- [ ] Audit all `Path.GetFullPath` calls
-- [ ] Audit all path string comparisons
-- [ ] Create `PathNormalizer` utility
-- [ ] Update API endpoints to use normalizer
-- [ ] Update RAG indexer
-- [ ] Update code graph service
-- [ ] Update git service
-- [ ] Add unit tests for path normalization
-- [ ] Consider database migration for existing data
+Added `normalizePath()` function to both `healthCheckService.ts` and `auraApiService.ts`:
+
+```typescript
+function normalizePath(path: string): string {
+    if (!path) return path;
+    return path
+        .replace(/\\\\/g, '/')  // Handle escaped backslashes
+        .replace(/\\/g, '/')     // Convert backslashes to forward slashes
+        .toLowerCase();
+}
+```
+
+Applied to:
+- `getWorkspace()` - normalizes path before URL encoding
+- `onboardWorkspace()` - normalizes path in request body
+- `checkRagHealth()` - normalizes workspace path before API call
+
+## Remaining Tasks
+
+- [ ] Consider database migration for existing paths (if any inconsistent data exists)
+- [ ] Add unit tests for TypeScript `normalizePath()` function
+- [ ] Consider extracting TypeScript `normalizePath()` to shared utility file
 
 ## Related
 
 - [api-review-harmonization.md](api-review-harmonization.md) - API consistency review
+- ADR-017: Case-Insensitive Path Handling

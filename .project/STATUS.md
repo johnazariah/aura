@@ -78,14 +78,22 @@ POST   /api/developer/workflows/{id}/steps/{stepId}/skip
 POST   /api/developer/workflows/{id}/steps/{stepId}/chat
 POST   /api/developer/workflows/{id}/steps/{stepId}/reassign
 
-# RAG
-POST   /api/rag/index/directory
-POST   /api/rag/search
-GET    /api/rag/stats/directory?path=...
+# Workspaces (indexing + code graph)
+POST   /api/workspaces                 # Onboard (registers + indexes)
+GET    /api/workspaces                 # List all
+GET    /api/workspaces/{id}            # Get details + stats
+POST   /api/workspaces/{id}/reindex    # Reindex existing
+DELETE /api/workspaces/{id}            # Remove + clean data
+GET    /api/workspaces/lookup?path=... # Look up by path
 
-# Code Graph
-POST   /api/semantic/index    # Preferred: graph + embeddings
-POST   /api/graph/index       # Roslyn only
+# RAG
+POST   /api/rag/search
+
+# Code Graph Queries
+GET    /api/graph/find/{name}
+GET    /api/graph/implementations/{interface}
+GET    /api/graph/callers/{method}
+GET    /api/graph/members/{type}
 ```
 
 ## Configuration
