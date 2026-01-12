@@ -5,10 +5,12 @@ var builder = DistributedApplication.CreateBuilder(args);
 
 // PostgreSQL with pgvector extension for RAG embeddings
 // Using pgvector/pgvector image which has the extension pre-installed
+// Fixed port 5432 ensures dev and production use the same database
 var postgres = builder.AddPostgres("postgres")
     .WithImage("pgvector/pgvector", "pg17")
     .WithContainerName("aura-postgres")
     .WithDataVolume("aura-postgres-data")
+    .WithHostPort(5432)
     .WithPgAdmin();
 
 var auraDb = postgres.AddDatabase("auradb");

@@ -124,12 +124,12 @@ if ($containerExists -eq "aura-postgres") {
     Write-Step "Creating PostgreSQL container with pgvector..."
     podman run -d `
         --name aura-postgres `
-        -e POSTGRES_USER=aura `
+        -e POSTGRES_USER=postgres `
         -e POSTGRES_PASSWORD=aura `
-        -e POSTGRES_DB=aura `
+        -e POSTGRES_DB=auradb `
         -p 5432:5432 `
         -v aura-pgdata:/var/lib/postgresql/data `
-        pgvector/pgvector:pg16
+        pgvector/pgvector:pg17
     
     Write-Step "Waiting for PostgreSQL to be ready..."
     Start-Sleep -Seconds 10
@@ -138,7 +138,7 @@ if ($containerExists -eq "aura-postgres") {
 # Enable pgvector extension
 Write-Step "Enabling pgvector extension..."
 $env:PGPASSWORD = "aura"
-podman exec aura-postgres psql -U aura -d aura -c "CREATE EXTENSION IF NOT EXISTS vector;" 2>$null
+podman exec aura-postgres psql -U postgres -d auradb -c "CREATE EXTENSION IF NOT EXISTS vector;" 2>$null
 
 # =============================================================================
 # Check .NET SDK (for development)
