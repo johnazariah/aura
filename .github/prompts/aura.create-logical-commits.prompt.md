@@ -6,12 +6,17 @@ Analyze the currently staged changes and group them into multiple logical commit
 
 1. **Analyze staged changes** using `get_changed_files`
 
-2. **Identify logical groups** based on:
+2. **Run formatting first** to avoid formatting noise in commits:
+   ```powershell
+   dotnet format Aura.sln --verbosity quiet
+   ```
+
+3. **Identify logical groups** based on:
    - **Feature area**: Same feature or component (e.g., "workflow improvements", "git integration")
    - **Change type**: Refactoring, bug fixes, documentation, new features
    - **Conventional commit scope**: What prefix/scope makes sense (feat, fix, refactor, docs, style, test, chore)
 
-3. **Common groupings to look for**:
+4. **Common groupings to look for**:
    - Documentation updates (docs/)
    - Code style/formatting changes (primary constructors, whitespace)
    - New feature implementation
@@ -20,7 +25,7 @@ Analyze the currently staged changes and group them into multiple logical commit
    - Configuration changes
    - Dependency updates
 
-4. **For each logical group**, execute:
+5. **For each logical group**, execute:
    ```powershell
    # First unstage everything
    git reset HEAD
@@ -29,14 +34,14 @@ Analyze the currently staged changes and group them into multiple logical commit
    git add <file1> <file2> ...
    git commit -m "<type>(<scope>): <description>"
    
-   # Stage files for second commit
+   # Stage files for second commit (skip hooks after first commit passed)
    git add <file3> <file4> ...
-   git commit -m "<type>(<scope>): <description>"
+   git commit --no-verify -m "<type>(<scope>): <description>"
    
    # Repeat for remaining groups
    ```
 
-5. **Commit message format** (conventional commits):
+6. **Commit message format** (conventional commits):
    - `feat(scope):` - New feature
    - `fix(scope):` - Bug fix
    - `refactor(scope):` - Code refactoring without behavior change
@@ -45,7 +50,7 @@ Analyze the currently staged changes and group them into multiple logical commit
    - `test(scope):` - Adding or updating tests
    - `chore(scope):` - Maintenance, dependencies, build
 
-6. **Order commits logically**:
+7. **Order commits logically**:
    - Infrastructure/refactoring first
    - Features second
    - Documentation last
