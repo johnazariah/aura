@@ -187,10 +187,13 @@ public partial class ReActExecutor(IToolRegistry toolRegistry, ILogger<ReActExec
                     Duration = DateTime.UtcNow - stepStart
                 });
 
+                // Extract the final answer - unwrap JSON if the LLM wrapped it
+                var finalAnswer = ExtractFinalAnswer(parsed.ActionInput);
+
                 return new ReActResult
                 {
                     Success = true,
-                    FinalAnswer = parsed.ActionInput,
+                    FinalAnswer = finalAnswer,
                     Steps = steps,
                     TotalDuration = DateTime.UtcNow - startTime,
                     TotalTokensUsed = totalTokens
@@ -350,7 +353,7 @@ public partial class ReActExecutor(IToolRegistry toolRegistry, ILogger<ReActExec
               Example 3 - Completing the task (IMPORTANT):
               Thought: I have finished reading and updating the file. The task is complete.
               Action: finish
-              Action Input: {"result": "Successfully updated the README with new content."}
+              Action Input: Your final answer in plain text. Do NOT wrap in JSON. Just write the answer directly.
 
               IMPORTANT - HANDLING FILE NOT FOUND:
               If file.read returns "Error: File not found", this means you need to CREATE the file.
@@ -364,21 +367,23 @@ public partial class ReActExecutor(IToolRegistry toolRegistry, ILogger<ReActExec
               CRITICAL RULES:
               1. Action MUST be EXACTLY one of: {{toolIds}}, finish
               2. Do NOT invent tool names like "Review", "Manually", "Validate", etc.
-              3. Action Input MUST be a valid JSON object - never prose or markdown
-              4. When you have completed all necessary tool operations, use "finish"
-              5. If you cannot proceed with available tools, use "finish" to explain why
-              6. If your task is to CREATE or DRAFT a file, you MUST call file.write before finishing
-              7. Do NOT finish with "file will need to be created" - actually CREATE it with file.write
+              3. For TOOLS: Action Input MUST be a valid JSON object
+              4. For FINISH: Action Input is your plain text answer (NO JSON wrapping)
+              5. When you have completed all necessary tool operations, use "finish"
+              6. If you cannot proceed with available tools, use "finish" to explain why
+              7. If your task is to CREATE or DRAFT a file, you MUST call file.write before finishing
+              8. Do NOT finish with "file will need to be created" - actually CREATE it with file.write
 
               WRONG (will cause errors):
               - Action: Review  ← ERROR: Not a valid tool. Use "finish" to complete the task
               - Action: Modify  ← ERROR: Not a valid tool. Use "file.modify" instead
               - Action: Manually  ← ERROR: Not a valid tool
               - Action: Validate  ← ERROR: Not a valid tool. Use "finish" to complete the task
-              - Action Input: README.md  ← ERROR: Must be JSON object
+              - Action Input: README.md  ← ERROR: Must be JSON object for tools
+              - Action Input: {"result": "..."}  ← ERROR for finish: Don't wrap in JSON, just write the answer
               
               REMEMBER: The ONLY valid actions are: {{toolIds}}, finish
-              If you want to review/validate, just use "finish" with your analysis in the result.
+              If you want to review/validate, just use "finish" with your analysis as plain text.
               """; var prompt = $"""
             You are an AI assistant that can use tools to accomplish tasks.
             You should think step by step and use tools when needed.
@@ -397,6 +402,38 @@ public partial class ReActExecutor(IToolRegistry toolRegistry, ILogger<ReActExec
             """;
 
         return prompt;
+    }
+
+    /// <summary>
+    /// Extracts the final answer from the action input.
+    /// If the LLM wrapped the answer in JSON like {"result": "..."}, unwrap it.
+    /// Otherwise, return the input as-is.
+    /// </summary>
+    private static string ExtractFinalAnswer(string actionInput)
+    {
+        if (string.IsNullOrWhiteSpace(actionInput))
+            return actionInput;
+
+        var trimmed = actionInput.Trim();
+
+        // If it looks like JSON with a "result" field, try to unwrap it
+        if (trimmed.StartsWith("{") && trimmed.EndsWith("}"))
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(trimmed);
+                if (doc.RootElement.TryGetProperty("result", out var resultElement))
+                {
+                    return resultElement.GetString() ?? actionInput;
+                }
+            }
+            catch (JsonException)
+            {
+                // Not valid JSON, return as-is
+            }
+        }
+
+        return actionInput;
     }
 
     private static (string Thought, string Action, string ActionInput) ParseResponse(string response)
