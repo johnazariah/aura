@@ -11,6 +11,7 @@ tools:
   - git.commit
   - git.branch
   - roslyn.validate_compilation
+  - shell.execute
 ---
 Execute this development step:
 
@@ -92,12 +93,16 @@ If the step says **"Commit"** or **"Apply"**:
 - Follow existing code patterns and conventions from the codebase
 - Include necessary imports and dependencies
 - Base your implementation on the ACTUAL code you read, not assumptions
+- **CRITICAL: Preserve EXACT indentation** - when adding code (like XML doc comments), match the indentation of surrounding code
+  - If a method starts with 4 spaces, your `/// <summary>` must also start with 4 spaces
+  - Every line of the XML doc block must have the same leading whitespace
 - **CRITICAL: After writing C# code, you MUST call roslyn.validate_compilation with the project name (e.g., "Aura.Foundation.Tests") to verify it compiles**
 - If roslyn.validate_compilation returns ANY errors, you MUST fix the code with file.modify and validate again
 - Do NOT call git.commit or finish until roslyn.validate_compilation returns success with ZERO errors
 - If roslyn.validate_compilation fails with "No solution file found", provide the full project path
 - **CRITICAL: After compilation succeeds, you MUST call git.commit to commit your changes before finishing**
-  - Use a descriptive commit message that summarizes what was created/changed
+  - **FIRST**: Run `shell.execute` with command `dotnet format` to fix any formatting issues
+  - Then use git.commit with a descriptive commit message that summarizes what was created/changed
   - Example: `git.commit` with message "Add unit tests for DynamicExpression class"
 
 **CRITICAL: All file paths are RELATIVE to your working directory**
