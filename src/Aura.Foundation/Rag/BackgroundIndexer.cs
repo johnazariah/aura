@@ -80,16 +80,13 @@ public sealed class BackgroundIndexer : BackgroundService, IBackgroundIndexer
     /// <inheritdoc/>
     public (Guid JobId, bool IsNew) QueueDirectory(string directoryPath, RagIndexOptions? options = null)
     {
-        // Normalize path for consistent comparison
-        var normalizedPath = Path.GetFullPath(directoryPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        // Use PathNormalizer for consistent cross-platform path handling
+        var normalizedPath = PathNormalizer.Normalize(directoryPath);
 
         // Check if there's already an active job for this path
         var existingJob = _jobs.Values.FirstOrDefault(j =>
             (j.State == IndexJobState.Queued || j.State == IndexJobState.Processing) &&
-            string.Equals(
-                Path.GetFullPath(j.Source).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
-                normalizedPath,
-                StringComparison.OrdinalIgnoreCase));
+            string.Equals(PathNormalizer.Normalize(j.Source), normalizedPath, StringComparison.Ordinal));
 
         if (existingJob is not null)
         {
@@ -160,6 +157,14 @@ public sealed class BackgroundIndexer : BackgroundService, IBackgroundIndexer
         }
         _logger.LogWarning("GetJobStatus {JobId}: NOT FOUND", jobId);
         return null;
+    }
+
+    /// <inheritdoc/>
+    public IReadOnlyCollection<IndexJobStatus> GetActiveJobs()
+    {
+        return _jobs.Values
+            .Where(j => j.State is IndexJobState.Queued or IndexJobState.Processing)
+            .ToList();
     }
 
     /// <inheritdoc/>
@@ -449,9 +454,8 @@ public sealed class BackgroundIndexer : BackgroundService, IBackgroundIndexer
     {
         try
         {
-            // Normalize the workspace path
-            var normalizedPath = Path.GetFullPath(directoryPath)
-                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            // Use PathNormalizer for consistent cross-platform path handling
+            var normalizedPath = PathNormalizer.Normalize(directoryPath);
 
             // Get git commit info if available
             string? commitSha = null;

@@ -38,6 +38,12 @@ public interface IBackgroundIndexer
     /// <param name="jobId">The job ID.</param>
     /// <returns>Job status, or null if not found.</returns>
     IndexJobStatus? GetJobStatus(Guid jobId);
+
+    /// <summary>
+    /// Gets all active jobs (queued or processing).
+    /// </summary>
+    /// <returns>Collection of active job statuses.</returns>
+    IReadOnlyCollection<IndexJobStatus> GetActiveJobs();
 }
 
 /// <summary>
