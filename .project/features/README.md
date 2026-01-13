@@ -56,6 +56,7 @@ features/
 | [Streaming Responses](completed/streaming-responses.md) | Token-by-token streaming for chat | 2026-01-13 |
 | [Unified Database](completed/unified-database.md) | Standardized PostgreSQL config across dev/prod | 2026-01-13 |
 | [Workflow Step Debugging UX](completed/workflow-step-debugging-ux.md) | Enhanced step debugging and review UI | 2026-01-13 |
+| [Workspace Onboarding](completed/workspace-onboarding.md) | Explicit workspace setup flow with consent | 2026-01-13 |
 
 ## Upcoming Features
 
@@ -63,10 +64,7 @@ features/
 
 | Feature | Description |
 |---------|-------------|
-| [Workspace Onboarding](upcoming/workspace-onboarding.md) | Explicit workspace setup flow with consent |
 | [Chat Context Modes](upcoming/chat-context-modes.md) | Context mode selector for RAG/Graph chat |
-| [Index Health Dashboard](upcoming/index-health-dashboard.md) | Index coverage, freshness, and actions |
-| [Unified Indexing Backend](upcoming/unified-indexing-backend.md) | Single pipeline for RAG + Code Graph |
 | [Indexing UX](upcoming/indexing-ux.md) | Progress UI, prompts, query commands |
 
 ### Medium Priority (User Experience)
@@ -82,12 +80,9 @@ features/
 
 | Feature | Description |
 |---------|-------------|
-
 | [Condensed Export](upcoming/condensed-export.md) | Export indexed context |
 | [Specialist Agents](upcoming/specialist-coding-agents.md) | Language-specific coding agents |
 | [Internationalization](upcoming/internationalization.md) | Multi-language UI support |
-| [Generic Language Agent](upcoming/generic-language-agent.md) | Language-agnostic coding agent |
-| [Unified Capability Model](upcoming/unified-capability-model.md) | Consolidate language capabilities |
 | [Unified Software Development](upcoming/unified-software-development-capability.md) | Universal dev capability |
 
 ### Unplanned (Backlog)
