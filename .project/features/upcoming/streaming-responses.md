@@ -1,8 +1,21 @@
 # Streaming Responses
 
-**Status:** 📋 Planned  
+**Status:** 🔄 In Progress (Phase 1-5 Complete)
 **Priority:** High  
 **Estimated Effort:** Medium (2-3 days)
+
+## Implementation Progress
+
+### ✅ Completed
+- **Phase 1**: Added `StreamChatAsync` to `ILlmProvider` interface with `LlmToken` record
+- **Phase 2**: Implemented streaming for Ollama provider (uses native NDJSON streaming)
+- **Phase 3**: Implemented streaming for Azure OpenAI and OpenAI providers (uses SDK streaming)
+- **Phase 4**: Added `/api/agents/{agentId}/chat/stream` SSE endpoint
+- **Phase 5**: Updated extension to consume SSE stream in chat panel
+
+### ⏳ Remaining
+- Add integration tests for streaming endpoint
+- Test end-to-end with live LLM providers
 
 ## Overview
 

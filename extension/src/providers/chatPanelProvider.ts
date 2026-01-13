@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { AuraApiService, AgentInfo, IndexHealthResponse } from '../services/auraApiService';
+import { AuraApiService, AgentInfo, IndexHealthResponse, StreamChatMessage } from '../services/auraApiService';
 
 // Context modes for chat - determines what context is included with prompts
 export type ContextMode = 'none' | 'text' | 'graph' | 'full';
@@ -30,6 +30,8 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
     private _currentAgent?: AgentInfo;
     private _contextMode: ContextMode = 'full';
     private _indexHealth?: IndexHealthResponse;
+    private _streamAbortController?: AbortController;
+    private _useStreaming: boolean = true;
 
     constructor(
         private readonly _extensionUri: vscode.Uri,
@@ -163,6 +165,10 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
             return;
         }
 
+        // Cancel any ongoing stream
+        this._streamAbortController?.abort();
+        this._streamAbortController = new AbortController();
+
         // Add user message
         const userMessage: ChatMessage = {
             role: 'user',
@@ -172,6 +178,76 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
         this._currentConversation.messages.push(userMessage);
         this._updateState();
 
+        // Use RAG-based agentic mode for context modes that need it
+        const useRag = this._contextMode === 'text' || this._contextMode === 'full';
+        
+        // For simple chat without RAG, use streaming if available
+        if (!useRag && this._useStreaming) {
+            await this._handleStreamingMessage(message);
+        } else {
+            await this._handleNonStreamingMessage(message, useRag);
+        }
+    }
+
+    private async _handleStreamingMessage(message: string) {
+        // Create a placeholder assistant message for streaming
+        const assistantMessage: ChatMessage = {
+            role: 'assistant',
+            content: '',
+            timestamp: new Date(),
+            model: this._currentAgent!.model
+        };
+        this._currentConversation!.messages.push(assistantMessage);
+        
+        // Show streaming indicator
+        this._view?.webview.postMessage({ type: 'typing', isTyping: true, status: 'Streaming response...' });
+        this._view?.webview.postMessage({ type: 'streamStart' });
+
+        // Build conversation history for the API
+        const history: StreamChatMessage[] = this._currentConversation!.messages
+            .slice(0, -1) // Exclude the empty assistant message we just added
+            .filter(m => m.role !== 'system')
+            .map(m => ({ role: m.role, content: m.content }));
+
+        let totalTokens = 0;
+
+        try {
+            await this._apiService.executeAgentStreaming(
+                this._currentAgent!.id,
+                message,
+                history,
+                {
+                    onToken: (content: string) => {
+                        // Append to assistant message
+                        assistantMessage.content += content;
+                        // Send incremental update to webview
+                        this._view?.webview.postMessage({
+                            type: 'streamToken',
+                            content: content,
+                            fullContent: assistantMessage.content
+                        });
+                    },
+                    onDone: (tokens: number, _finishReason: string) => {
+                        totalTokens = tokens;
+                        assistantMessage.tokensUsed = tokens;
+                    },
+                    onError: (errorMessage: string, _code?: string) => {
+                        assistantMessage.content += `\n\n❌ Error: ${errorMessage}`;
+                    }
+                },
+                this._streamAbortController
+            );
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            assistantMessage.content = `❌ Error: ${errorMessage}`;
+        }
+
+        this._view?.webview.postMessage({ type: 'streamEnd', totalTokens });
+        this._view?.webview.postMessage({ type: 'typing', isTyping: false });
+        this._updateState();
+    }
+
+    private async _handleNonStreamingMessage(message: string, useRag: boolean) {
         // Show typing indicator
         this._view?.webview.postMessage({ type: 'typing', isTyping: true, status: 'Thinking and exploring codebase...' });
 
@@ -179,13 +255,10 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
             const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
             let response: { content: string; tokensUsed: number; ragEnriched?: boolean };
 
-            // Use RAG based on context mode (text or full mode)
-            const useRag = this._contextMode === 'text' || this._contextMode === 'full';
-            
             if (useRag) {
                 // Use agentic chat for multi-step exploration
                 const agenticResponse = await this._apiService.executeAgentAgentic(
-                    this._currentAgent.id,
+                    this._currentAgent!.id,
                     message,
                     workspacePath,
                     10, // maxSteps
@@ -195,7 +268,7 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
                 response = { content: agenticResponse.content, tokensUsed: agenticResponse.tokensUsed };
             } else {
                 const content = await this._apiService.executeAgent(
-                    this._currentAgent.id,
+                    this._currentAgent!.id,
                     message,
                     workspacePath
                 );
@@ -207,9 +280,9 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
                 content: response.content,
                 timestamp: new Date(),
                 tokensUsed: response.tokensUsed,
-                model: this._currentAgent.model
+                model: this._currentAgent!.model
             };
-            this._currentConversation.messages.push(assistantMessage);
+            this._currentConversation!.messages.push(assistantMessage);
 
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -218,7 +291,7 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
                 content: `❌ Error: ${errorMessage}`,
                 timestamp: new Date()
             };
-            this._currentConversation.messages.push(assistantMessage);
+            this._currentConversation!.messages.push(assistantMessage);
         }
 
         this._view?.webview.postMessage({ type: 'typing', isTyping: false });
@@ -429,6 +502,21 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
             margin-top: 6px;
         }
         
+        .streaming-cursor {
+            display: inline-block;
+            animation: blink 1s step-end infinite;
+            color: var(--vscode-editorCursor-foreground);
+        }
+        
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+        }
+        
+        .message.streaming .message-content {
+            min-height: 20px;
+        }
+        
         .typing-indicator {
             padding: 10px 12px;
             background: var(--vscode-input-background);
@@ -623,6 +711,7 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
         const errorBanner = document.getElementById('errorBanner');
         
         let currentState = null;
+        let streamingMessageEl = null;  // Reference to the streaming message element
         
         // Handle messages from extension
         window.addEventListener('message', event => {
@@ -641,6 +730,25 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
                         scrollToBottom();
                     }
                     break;
+                case 'streamStart':
+                    // Create streaming message element
+                    streamingMessageEl = createStreamingMessage();
+                    scrollToBottom();
+                    break;
+                case 'streamToken':
+                    // Append token to streaming message
+                    if (streamingMessageEl) {
+                        updateStreamingMessage(streamingMessageEl, message.fullContent);
+                        scrollToBottom();
+                    }
+                    break;
+                case 'streamEnd':
+                    // Finalize streaming message
+                    if (streamingMessageEl && message.totalTokens > 0) {
+                        addTokenMeta(streamingMessageEl, message.totalTokens);
+                    }
+                    streamingMessageEl = null;
+                    break;
                 case 'error':
                     showError(message.message);
                     break;
@@ -649,6 +757,44 @@ export class ChatPanelProvider implements vscode.WebviewViewProvider {
                     break;
             }
         });
+        
+        function createStreamingMessage() {
+            // Hide empty state
+            emptyStateEl.style.display = 'none';
+            
+            const div = document.createElement('div');
+            div.className = 'message assistant streaming';
+            
+            const content = document.createElement('div');
+            content.className = 'message-content';
+            content.innerHTML = '<span class="streaming-cursor">▌</span>';
+            div.appendChild(content);
+            
+            messagesEl.appendChild(div);
+            return div;
+        }
+        
+        function updateStreamingMessage(el, fullContent) {
+            const contentEl = el.querySelector('.message-content');
+            if (contentEl) {
+                contentEl.innerHTML = formatContent(fullContent) + '<span class="streaming-cursor">▌</span>';
+            }
+        }
+        
+        function addTokenMeta(el, tokens) {
+            // Remove cursor
+            const cursor = el.querySelector('.streaming-cursor');
+            if (cursor) cursor.remove();
+            
+            // Remove streaming class
+            el.classList.remove('streaming');
+            
+            // Add meta info
+            const meta = document.createElement('div');
+            meta.className = 'message-meta';
+            meta.textContent = tokens + ' tokens';
+            el.appendChild(meta);
+        }
         
         function renderState() {
             if (!currentState) return;

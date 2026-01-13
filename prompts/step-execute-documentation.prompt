@@ -24,6 +24,15 @@ Execute this documentation step:
 Name: {{stepName}}
 Description: {{stepDescription}}
 
+{{#if revisionFeedback}}
+## ⚠️ Revision Required
+This step was previously completed but rejected. The reviewer provided this feedback:
+
+> {{revisionFeedback}}
+
+**Address this feedback specifically in your documentation.**
+{{/if}}
+
 ## Workflow Context
 Issue: {{issueTitle}}
 {{analysis}}

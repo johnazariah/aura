@@ -39,6 +39,9 @@ public sealed class OllamaProvider(
     public string ProviderId => "ollama";
 
     /// <inheritdoc/>
+    public bool SupportsStreaming => true;
+
+    /// <inheritdoc/>
     public async Task<LlmResponse> GenerateAsync(
         string? model,
         string prompt,
@@ -165,6 +168,210 @@ public sealed class OllamaProvider(
         {
             _logger.LogError(ex, "Ollama chat error");
             throw LlmException.GenerationFailed(ex.Message, ex);
+        }
+    }
+
+    /// <inheritdoc/>
+    public async Task<LlmResponse> ChatAsync(
+        string? model,
+        IReadOnlyList<ChatMessage> messages,
+        ChatOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        var effectiveModel = model ?? _options.DefaultModel;
+
+        _logger.LogDebug(
+            "Ollama chat with options: model={Model}, messages={MessageCount}, hasSchema={HasSchema}",
+            effectiveModel, messages.Count, options.ResponseSchema is not null);
+
+        try
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(_options.TimeoutSeconds));
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(cts.Token, cancellationToken);
+
+            // If schema is provided, add JSON mode and inject schema into system prompt
+            var effectiveMessages = messages.ToList();
+            string? format = null;
+
+            if (options.ResponseSchema is not null)
+            {
+                // Ollama only supports basic JSON mode, not full schema enforcement
+                format = "json";
+
+                // Inject schema requirement into system prompt
+                var schemaInstruction = $"\n\nIMPORTANT: You MUST respond with valid JSON matching this schema:\n{options.ResponseSchema.Schema}";
+
+                // Find or create system message
+                var systemIdx = effectiveMessages.FindIndex(m => m.Role == ChatRole.System);
+                if (systemIdx >= 0)
+                {
+                    effectiveMessages[systemIdx] = new ChatMessage(ChatRole.System, effectiveMessages[systemIdx].Content + schemaInstruction);
+                }
+                else
+                {
+                    effectiveMessages.Insert(0, new ChatMessage(ChatRole.System, schemaInstruction));
+                }
+            }
+
+            var request = new OllamaChatRequest
+            {
+                Model = effectiveModel,
+                Messages = effectiveMessages.Select(m => new OllamaChatMessage { Role = m.Role.ToString().ToLowerInvariant(), Content = m.Content }).ToList(),
+                Stream = false,
+                Options = new OllamaModelOptions { Temperature = options.Temperature },
+                Format = format,
+            };
+
+            var response = await _httpClient.PostAsJsonAsync(
+                _options.BaseUrl + "/api/chat",
+                request,
+                JsonOptions,
+                linked.Token).ConfigureAwait(false);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await response.Content.ReadAsStringAsync(linked.Token).ConfigureAwait(false);
+                _logger.LogError("Ollama chat failed: {StatusCode} - {Error}", response.StatusCode, errorContent);
+                throw LlmException.GenerationFailed("HTTP " + response.StatusCode + ": " + errorContent);
+            }
+
+            var result = await response.Content.ReadFromJsonAsync<OllamaChatResponse>(JsonOptions, linked.Token).ConfigureAwait(false);
+
+            if (result is null)
+            {
+                throw LlmException.GenerationFailed("Empty response from Ollama");
+            }
+
+            return new LlmResponse(
+                Content: result.Message?.Content ?? string.Empty,
+                TokensUsed: (result.PromptEvalCount ?? 0) + (result.EvalCount ?? 0),
+                Model: result.Model ?? effectiveModel,
+                FinishReason: result.Done ? "stop" : null);
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (LlmException) { throw; }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogError(ex, "Ollama connection failed");
+            throw LlmException.Unavailable("ollama");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Ollama chat with options error");
+            throw LlmException.GenerationFailed(ex.Message, ex);
+        }
+    }
+
+    /// <inheritdoc/>
+    public async IAsyncEnumerable<LlmToken> StreamChatAsync(
+        string? model,
+        IReadOnlyList<ChatMessage> messages,
+        double temperature = 0.7,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        var effectiveModel = model ?? _options.DefaultModel;
+        _logger.LogDebug("Ollama streaming chat: model={Model}, messages={MessageCount}", effectiveModel, messages.Count);
+
+        var request = new OllamaChatRequest
+        {
+            Model = effectiveModel,
+            Messages = messages.Select(m => new OllamaChatMessage
+            {
+                Role = m.Role.ToString().ToLowerInvariant(),
+                Content = m.Content,
+            }).ToList(),
+            Stream = true,
+            Options = new OllamaModelOptions { Temperature = temperature },
+        };
+
+        HttpResponseMessage? response = null;
+        Stream? stream = null;
+        StreamReader? reader = null;
+
+        try
+        {
+            using var cts = CreateTimeoutCts(cancellationToken);
+
+            var httpRequest = new HttpRequestMessage(HttpMethod.Post, _options.BaseUrl + "/api/chat")
+            {
+                Content = JsonContent.Create(request, options: JsonOptions),
+            };
+
+            response = await _httpClient.SendAsync(httpRequest, HttpCompletionOption.ResponseHeadersRead, cts.Token).ConfigureAwait(false);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await response.Content.ReadAsStringAsync(cts.Token).ConfigureAwait(false);
+                _logger.LogError("Ollama streaming chat failed: {StatusCode} - {Error}", response.StatusCode, errorContent);
+                throw LlmException.GenerationFailed("HTTP " + response.StatusCode + ": " + errorContent);
+            }
+
+            stream = await response.Content.ReadAsStreamAsync(cts.Token).ConfigureAwait(false);
+            reader = new StreamReader(stream);
+
+            int totalPromptTokens = 0;
+            int totalEvalTokens = 0;
+
+            string? line;
+            while ((line = await reader.ReadLineAsync(cts.Token).ConfigureAwait(false)) is not null)
+            {
+                cts.Token.ThrowIfCancellationRequested();
+
+                if (string.IsNullOrWhiteSpace(line))
+                {
+                    continue;
+                }
+
+                OllamaChatResponse? chunk;
+                try
+                {
+                    chunk = JsonSerializer.Deserialize<OllamaChatResponse>(line, JsonOptions);
+                }
+                catch (JsonException)
+                {
+                    _logger.LogWarning("Failed to parse streaming chunk: {Line}", line);
+                    continue;
+                }
+
+                if (chunk is null)
+                {
+                    continue;
+                }
+
+                // Track token counts from the final message
+                if (chunk.PromptEvalCount.HasValue)
+                {
+                    totalPromptTokens = chunk.PromptEvalCount.Value;
+                }
+
+                if (chunk.EvalCount.HasValue)
+                {
+                    totalEvalTokens = chunk.EvalCount.Value;
+                }
+
+                var content = chunk.Message?.Content ?? string.Empty;
+
+                if (chunk.Done)
+                {
+                    yield return new LlmToken(
+                        Content: content,
+                        IsComplete: true,
+                        FinishReason: "stop",
+                        TokensUsed: totalPromptTokens + totalEvalTokens);
+                    yield break;
+                }
+
+                if (!string.IsNullOrEmpty(content))
+                {
+                    yield return new LlmToken(Content: content);
+                }
+            }
+        }
+        finally
+        {
+            reader?.Dispose();
+            stream?.Dispose();
+            response?.Dispose();
         }
     }
 
@@ -484,6 +691,10 @@ public sealed class OllamaProvider(
         public required List<OllamaChatMessage> Messages { get; init; }
         public bool Stream { get; init; }
         public OllamaModelOptions? Options { get; init; }
+
+        /// <summary>Format for structured output. Set to "json" for JSON mode.</summary>
+        [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+        public string? Format { get; init; }
     }
 
     private sealed record OllamaChatMessage

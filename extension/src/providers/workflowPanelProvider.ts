@@ -548,6 +548,71 @@ export class WorkflowPanelProvider {
             case 'updateStepDescription':
                 await this.handleUpdateStepDescription(workflowId, message.stepId, message.description, panel);
                 break;
+            case 'openFile':
+                await this.handleOpenFile(message.filePath, message.worktreePath);
+                break;
+            case 'openDiff':
+                await this.handleOpenDiff(message.filePath, message.worktreePath);
+                break;
+            case 'getWorktreeChanges':
+                await this.handleGetWorktreeChanges(message.worktreePath, panel);
+                break;
+            case 'openWorktreeInExplorer':
+                await this.handleOpenWorktreeInExplorer(message.worktreePath);
+                break;
+        }
+    }
+
+    private async handleOpenFile(filePath: string, worktreePath?: string): Promise<void> {
+        try {
+            // Resolve path - if relative, use worktree path
+            let fullPath = filePath;
+            if (!filePath.match(/^[a-zA-Z]:/) && !filePath.startsWith('/') && worktreePath) {
+                fullPath = `${worktreePath}/${filePath}`.replace(/\\/g, '/');
+            }
+            const uri = vscode.Uri.file(fullPath);
+            await vscode.window.showTextDocument(uri);
+        } catch (error) {
+            vscode.window.showErrorMessage(`Failed to open file: ${filePath}`);
+        }
+    }
+
+    private async handleOpenDiff(filePath: string, worktreePath?: string): Promise<void> {
+        try {
+            // Open git diff for the file
+            let fullPath = filePath;
+            if (!filePath.match(/^[a-zA-Z]:/) && !filePath.startsWith('/') && worktreePath) {
+                fullPath = `${worktreePath}/${filePath}`.replace(/\\/g, '/');
+            }
+            const uri = vscode.Uri.file(fullPath);
+            await vscode.commands.executeCommand('git.openChange', uri);
+        } catch (error) {
+            // Fallback to just opening the file
+            await this.handleOpenFile(filePath, worktreePath);
+        }
+    }
+
+    private async handleGetWorktreeChanges(worktreePath: string, panel: vscode.WebviewPanel): Promise<void> {
+        try {
+            const status = await this.apiService.getGitStatus(worktreePath);
+            panel.webview.postMessage({
+                type: 'worktreeChanges',
+                status: status
+            });
+        } catch (error) {
+            panel.webview.postMessage({
+                type: 'worktreeChanges',
+                status: { success: false, error: 'Failed to get git status' }
+            });
+        }
+    }
+
+    private async handleOpenWorktreeInExplorer(worktreePath: string): Promise<void> {
+        try {
+            const uri = vscode.Uri.file(worktreePath);
+            await vscode.commands.executeCommand('revealFileInOS', uri);
+        } catch (error) {
+            vscode.window.showErrorMessage(`Failed to open worktree: ${worktreePath}`);
         }
     }
 
@@ -1758,6 +1823,162 @@ export class WorkflowPanelProvider {
             text-decoration: underline;
         }
 
+        /* Artifacts section */
+        .artifacts-section {
+            margin-top: 10px;
+            border: 1px solid var(--vscode-panel-border);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .artifacts-header {
+            padding: 8px 12px;
+            background: var(--vscode-editor-inactiveSelectionBackground);
+            font-size: 0.85em;
+            color: var(--vscode-descriptionForeground);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .artifacts-files {
+            padding: 8px 12px;
+            background: var(--vscode-textCodeBlock-background);
+        }
+        .artifact-file {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 6px 8px;
+            border-radius: 4px;
+            margin-bottom: 4px;
+        }
+        .artifact-file:hover {
+            background: var(--vscode-list-hoverBackground);
+        }
+        .artifact-file:last-child {
+            margin-bottom: 0;
+        }
+        .artifact-file-path {
+            font-family: var(--vscode-editor-font-family);
+            font-size: 12px;
+            color: var(--vscode-foreground);
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .artifact-file-actions {
+            display: flex;
+            gap: 4px;
+            flex-shrink: 0;
+        }
+        .artifact-btn {
+            padding: 3px 8px;
+            border: 1px solid var(--vscode-button-secondaryBackground);
+            background: transparent;
+            color: var(--vscode-foreground);
+            border-radius: 3px;
+            font-size: 11px;
+            cursor: pointer;
+            opacity: 0.8;
+        }
+        .artifact-btn:hover {
+            opacity: 1;
+            background: var(--vscode-button-secondaryBackground);
+        }
+        .artifact-btn.diff {
+            color: var(--vscode-gitDecoration-modifiedResourceForeground);
+            border-color: var(--vscode-gitDecoration-modifiedResourceForeground);
+        }
+
+        /* Worktree changes section */
+        .changes-section {
+            margin: 16px 0;
+            border: 1px solid var(--vscode-panel-border);
+            border-radius: 6px;
+            overflow: hidden;
+        }
+        .changes-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 14px;
+            background: var(--vscode-editor-inactiveSelectionBackground);
+            cursor: pointer;
+        }
+        .changes-header:hover {
+            background: var(--vscode-list-hoverBackground);
+        }
+        .changes-title {
+            font-weight: 600;
+            font-size: 0.9em;
+        }
+        .changes-count {
+            font-size: 0.8em;
+            background: var(--vscode-badge-background);
+            color: var(--vscode-badge-foreground);
+            padding: 2px 8px;
+            border-radius: 10px;
+        }
+        .changes-content {
+            padding: 12px;
+            display: none;
+        }
+        .changes-content.expanded {
+            display: block;
+        }
+        .changes-group {
+            margin-bottom: 12px;
+        }
+        .changes-group:last-child {
+            margin-bottom: 0;
+        }
+        .changes-group-title {
+            font-size: 0.8em;
+            color: var(--vscode-descriptionForeground);
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .change-file {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-size: 12px;
+            font-family: var(--vscode-editor-font-family);
+        }
+        .change-file:hover {
+            background: var(--vscode-list-hoverBackground);
+        }
+        .change-file-path {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .change-file.modified .change-file-path {
+            color: var(--vscode-gitDecoration-modifiedResourceForeground);
+        }
+        .change-file.added .change-file-path {
+            color: var(--vscode-gitDecoration-addedResourceForeground);
+        }
+        .change-file.deleted .change-file-path {
+            color: var(--vscode-gitDecoration-deletedResourceForeground);
+        }
+        .change-file.staged .change-file-path::after {
+            content: ' (staged)';
+            font-size: 0.85em;
+            color: var(--vscode-descriptionForeground);
+        }
+        .changes-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid var(--vscode-panel-border);
+        }
+
         .approval-buttons {
             display: flex;
             gap: 4px;
@@ -2067,6 +2288,20 @@ export class WorkflowPanelProvider {
         ${workflow.gitBranch ? `<div class="meta-item">🌿 ${workflow.gitBranch}</div>` : ''}
         ${workflow.worktreePath ? `<div class="meta-item">📁 ${workflow.worktreePath}</div>` : ''}
     </div>
+
+    ${workflow.worktreePath ? `
+    <div class="changes-section" id="changesSection">
+        <div class="changes-header" onclick="toggleChanges()">
+            <span class="changes-title">📝 Worktree Changes</span>
+            <span class="changes-count" id="changesCount">loading...</span>
+        </div>
+        <div class="changes-content" id="changesContent">
+            <div id="changesLoading" style="text-align: center; padding: 20px; color: var(--vscode-descriptionForeground);">
+                Loading changes...
+            </div>
+        </div>
+    </div>
+    ` : ''}
 
     <div class="action-bar" id="actionBar">
         ${this.getActionButtons(workflow)}
@@ -2497,6 +2732,99 @@ export class WorkflowPanelProvider {
             });
         }
 
+        // Worktree changes functionality
+        let changesExpanded = false;
+        let changesLoaded = false;
+
+        function toggleChanges() {
+            changesExpanded = !changesExpanded;
+            const content = document.getElementById('changesContent');
+            if (content) {
+                content.classList.toggle('expanded', changesExpanded);
+            }
+            if (changesExpanded && !changesLoaded) {
+                loadWorktreeChanges();
+            }
+        }
+
+        function loadWorktreeChanges() {
+            if (workflow.worktreePath) {
+                vscode.postMessage({
+                    type: 'getWorktreeChanges',
+                    worktreePath: workflow.worktreePath
+                });
+            }
+        }
+
+        function openWorktreeInExplorer() {
+            vscode.postMessage({
+                type: 'openWorktreeInExplorer',
+                worktreePath: workflow.worktreePath
+            });
+        }
+
+        function renderWorktreeChanges(status) {
+            changesLoaded = true;
+            const content = document.getElementById('changesContent');
+            const countEl = document.getElementById('changesCount');
+            
+            if (!status.success) {
+                if (content) content.innerHTML = '<div style="color: var(--vscode-errorForeground); padding: 10px;">Failed to load changes: ' + escapeHtml(status.error || 'Unknown error') + '</div>';
+                if (countEl) countEl.textContent = 'error';
+                return;
+            }
+
+            const modified = status.modifiedFiles || [];
+            const untracked = status.untrackedFiles || [];
+            const staged = status.stagedFiles || [];
+            const total = modified.length + untracked.length + staged.length;
+
+            if (countEl) countEl.textContent = total > 0 ? total + ' files' : 'clean';
+
+            if (total === 0) {
+                if (content) content.innerHTML = '<div style="color: var(--vscode-descriptionForeground); padding: 10px; text-align: center;">No changes in worktree</div>';
+                return;
+            }
+
+            let html = '';
+            
+            if (staged.length > 0) {
+                html += '<div class="changes-group"><div class="changes-group-title">Staged</div>';
+                staged.forEach(f => {
+                    html += '<div class="change-file staged modified"><span class="change-file-path">' + escapeHtml(f) + '</span>' +
+                        '<button class="artifact-btn" onclick="openFile(\\'' + escapeHtml(f) + '\\')">Open</button>' +
+                        '<button class="artifact-btn diff" onclick="openDiff(\\'' + escapeHtml(f) + '\\')">Diff</button></div>';
+                });
+                html += '</div>';
+            }
+            
+            if (modified.length > 0) {
+                html += '<div class="changes-group"><div class="changes-group-title">Modified</div>';
+                modified.forEach(f => {
+                    html += '<div class="change-file modified"><span class="change-file-path">' + escapeHtml(f) + '</span>' +
+                        '<button class="artifact-btn" onclick="openFile(\\'' + escapeHtml(f) + '\\')">Open</button>' +
+                        '<button class="artifact-btn diff" onclick="openDiff(\\'' + escapeHtml(f) + '\\')">Diff</button></div>';
+                });
+                html += '</div>';
+            }
+            
+            if (untracked.length > 0) {
+                html += '<div class="changes-group"><div class="changes-group-title">Untracked</div>';
+                untracked.forEach(f => {
+                    html += '<div class="change-file added"><span class="change-file-path">' + escapeHtml(f) + '</span>' +
+                        '<button class="artifact-btn" onclick="openFile(\\'' + escapeHtml(f) + '\\')">Open</button></div>';
+                });
+                html += '</div>';
+            }
+
+            html += '<div class="changes-actions">' +
+                '<button class="btn btn-small" onclick="openWorktreeInExplorer()">📂 Open in Explorer</button>' +
+                '<button class="btn btn-small" onclick="loadWorktreeChanges()">🔄 Refresh</button>' +
+                '</div>';
+
+            if (content) content.innerHTML = html;
+        }
+
         function toggleOutput(stepId) {
             const el = document.getElementById('output-section-' + stepId);
             if (el) {
@@ -2521,6 +2849,21 @@ export class WorkflowPanelProvider {
             if (el) {
                 el.style.display = el.style.display === 'none' ? 'block' : 'none';
             }
+        }
+
+        function toggleArtifacts(stepId) {
+            const el = document.getElementById('artifacts-section-' + stepId);
+            if (el) {
+                el.style.display = el.style.display === 'none' ? 'block' : 'none';
+            }
+        }
+
+        function openFile(filePath) {
+            vscode.postMessage({ type: 'openFile', filePath: filePath, worktreePath: worktreePath });
+        }
+
+        function openDiff(filePath) {
+            vscode.postMessage({ type: 'openDiff', filePath: filePath, worktreePath: worktreePath });
         }
 
         function togglePreviousOutput(stepId) {
@@ -2785,6 +3128,9 @@ export class WorkflowPanelProvider {
                         chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
                     }
                     break;
+                case 'worktreeChanges':
+                    renderWorktreeChanges(message.status);
+                    break;
             }
         });
     </script>
@@ -2836,6 +3182,7 @@ export class WorkflowPanelProvider {
             // Parse output if available
             let outputHtml = '';
             let toolStepsHtml = '';
+            let artifactsHtml = '';
             let tokenInfo = '';
             if (step.output) {
                 try {
@@ -2905,6 +3252,77 @@ export class WorkflowPanelProvider {
                             </div>
                         </div>`;
                     }
+
+                    // Artifacts section (files created/modified)
+                    if (parsed.artifacts && Object.keys(parsed.artifacts).length > 0) {
+                        const artifactEntries = Object.entries(parsed.artifacts);
+                        
+                        // Extract modified_files as a special case
+                        const modifiedFilesEntry = artifactEntries.find(([k]) => k === 'modified_files');
+                        const modifiedFiles = modifiedFilesEntry 
+                            ? (modifiedFilesEntry[1] as string).split('\n').filter(f => f.trim())
+                            : [];
+                        
+                        // Parse file paths from modified_files JSON entries
+                        const filePaths: string[] = [];
+                        for (const fileJson of modifiedFiles) {
+                            try {
+                                const parsed = JSON.parse(fileJson);
+                                if (parsed.path) {
+                                    filePaths.push(parsed.path);
+                                }
+                            } catch {
+                                // Not JSON, might be a plain path
+                                if (fileJson.includes('/') || fileJson.includes('\\')) {
+                                    filePaths.push(fileJson);
+                                }
+                            }
+                        }
+
+                        const fileListHtml = filePaths.length > 0 
+                            ? `<div class="artifacts-files">
+                                <div class="artifacts-label">Modified Files:</div>
+                                ${filePaths.map(f => `
+                                    <div class="artifact-file">
+                                        <span class="artifact-file-path">${this.escapeHtml(f)}</span>
+                                        <div class="artifact-file-actions">
+                                            <button class="btn-icon small" onclick="openFile('${this.escapeHtml(f.replace(/\\/g, '\\\\'))}')" title="Open file">📄</button>
+                                            <button class="btn-icon small" onclick="openDiff('${this.escapeHtml(f.replace(/\\/g, '\\\\'))}')" title="View diff">📊</button>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                               </div>`
+                            : '';
+
+                        // Other artifacts (excluding modified_files and internal ones)
+                        const otherArtifacts = artifactEntries.filter(([k]) => 
+                            !['modified_files', 'success', 'steps', 'duration_ms', 'reasoning_trace'].includes(k)
+                        );
+                        
+                        const otherArtifactsHtml = otherArtifacts.length > 0
+                            ? `<div class="artifacts-other">
+                                ${otherArtifacts.map(([key, value]) => `
+                                    <div class="artifact-item">
+                                        <div class="artifact-key">${this.escapeHtml(key)}:</div>
+                                        <pre class="artifact-value">${this.escapeHtml(String(value).substring(0, 500))}${String(value).length > 500 ? '...' : ''}</pre>
+                                    </div>
+                                `).join('')}
+                               </div>`
+                            : '';
+
+                        if (fileListHtml || otherArtifactsHtml) {
+                            artifactsHtml = `
+                            <div class="step-section artifacts-section" id="artifacts-section-${step.id}" style="display: none;">
+                                <div class="section-header">
+                                    <span>📁 Artifacts${filePaths.length > 0 ? ` (${filePaths.length} files)` : ''}</span>
+                                </div>
+                                <div class="section-content">
+                                    ${fileListHtml}
+                                    ${otherArtifactsHtml}
+                                </div>
+                            </div>`;
+                        }
+                    }
                 } catch {
                     outputHtml = `
                     <div class="step-section output-section" id="output-section-${step.id}" style="display: none;">
@@ -2914,12 +3332,26 @@ export class WorkflowPanelProvider {
                 }
             }
 
+            // Parse chat history and render existing messages
+            let chatHistoryHtml = '';
+            if (step.chatHistory) {
+                try {
+                    const chatMessages = JSON.parse(step.chatHistory) as Array<{Role: string, Content: string}>;
+                    chatHistoryHtml = chatMessages.map(msg => {
+                        const role = msg.Role.toLowerCase();
+                        return `<div class="chat-message ${role}">${this.escapeHtml(msg.Content)}</div>`;
+                    }).join('');
+                } catch {
+                    // Ignore parse errors
+                }
+            }
+
             // Chat section (always available)
             const chatHtml = `
             <div class="step-section chat-section" id="chat-section-${step.id}" style="display: none;">
                 <div class="section-header"><span>Chat with ${step.assignedAgentId || 'agent'}</span></div>
                 <div class="section-content">
-                    <div class="chat-messages" id="chat-messages-${step.id}"></div>
+                    <div class="chat-messages" id="chat-messages-${step.id}">${chatHistoryHtml}</div>
                     <div class="chat-input-row">
                         <input type="text" class="chat-input" id="chat-input-${step.id}" 
                             placeholder="Refine this step..." 
@@ -2931,13 +3363,21 @@ export class WorkflowPanelProvider {
 
             // Action buttons (right side of header)
             const actionButtons = [];
-            actionButtons.push(`<button class="btn-icon" onclick="toggleChat('${step.id}')" title="Chat with agent">💬</button>`);
+            const hasChatHistory = chatHistoryHtml !== '';
+            const chatIcon = hasChatHistory ? '💬' : '💭';
+            const chatTitle = hasChatHistory ? 'Chat with agent (has history)' : 'Chat with agent';
+            actionButtons.push(`<button class="btn-icon${hasChatHistory ? ' has-history' : ''}" onclick="toggleChat('${step.id}')" title="${chatTitle}">${chatIcon}</button>`);
             
             // Check if we have tool steps to show
             const hasToolSteps = toolStepsHtml !== '';
+            const hasArtifacts = artifactsHtml !== '';
             
             if (hasToolSteps) {
                 actionButtons.push(`<button class="btn-icon" onclick="toggleToolSteps('${step.id}')" title="View tool steps">🔧</button>`);
+            }
+
+            if (hasArtifacts) {
+                actionButtons.push(`<button class="btn-icon" onclick="toggleArtifacts('${step.id}')" title="View artifacts">📁</button>`);
             }
             
             if (hasOutput) {
@@ -3047,6 +3487,7 @@ export class WorkflowPanelProvider {
                 </div>` : ''}
                 ${previousOutputHtml}
                 ${toolStepsHtml}
+                ${artifactsHtml}
                 ${outputHtml}
                 ${chatHtml}
             </div>

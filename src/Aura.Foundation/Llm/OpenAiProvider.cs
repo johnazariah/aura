@@ -43,6 +43,9 @@ public sealed class OpenAiProvider : ILlmProvider
     public string ProviderId => "openai";
 
     /// <inheritdoc/>
+    public bool SupportsStreaming => true;
+
+    /// <inheritdoc/>
     public async Task<LlmResponse> GenerateAsync(
         string? model,
         string prompt,
@@ -124,6 +127,150 @@ public sealed class OpenAiProvider : ILlmProvider
             _logger.LogError(ex, "OpenAI error");
             throw LlmException.GenerationFailed(ex.Message, ex);
         }
+    }
+
+    /// <inheritdoc/>
+    public async Task<LlmResponse> ChatAsync(
+        string? model,
+        IReadOnlyList<Agents.ChatMessage> messages,
+        ChatOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        var modelName = model ?? _options.DefaultModel;
+        var callStart = DateTime.UtcNow;
+
+        _logger.LogDebug(
+            "OpenAI chat with options: model={Model}, messages={MessageCount}, hasSchema={HasSchema}",
+            modelName, messages.Count, options.ResponseSchema is not null);
+
+        try
+        {
+            var chatClient = _client.GetChatClient(modelName);
+
+            var chatMessages = messages.Select(m => ConvertMessage(m)).ToList();
+
+            var chatOptions = new ChatCompletionOptions
+            {
+                Temperature = (float)options.Temperature,
+                MaxOutputTokenCount = _options.MaxTokens,
+            };
+
+            // Add structured output schema if specified
+            if (options.ResponseSchema is not null)
+            {
+                var schema = options.ResponseSchema;
+                chatOptions.ResponseFormat = ChatResponseFormat.CreateJsonSchemaFormat(
+                    schema.Name,
+                    BinaryData.FromString(schema.Schema.GetRawText()),
+                    jsonSchemaFormatDescription: schema.Description,
+                    jsonSchemaIsStrict: schema.Strict);
+            }
+
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(_options.TimeoutSeconds));
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(cts.Token, cancellationToken);
+
+            var response = await chatClient.CompleteChatAsync(chatMessages, chatOptions, linked.Token).ConfigureAwait(false);
+            var completion = response.Value;
+
+            var content = string.Join(string.Empty, completion.Content.Select(c => c.Text));
+            var tokensUsed = (completion.Usage?.InputTokenCount ?? 0) + (completion.Usage?.OutputTokenCount ?? 0);
+            var callDuration = DateTime.UtcNow - callStart;
+
+            _logger.LogDebug(
+                "OpenAI chat with options completed in {Duration:F1}s: tokens={Tokens}",
+                callDuration.TotalSeconds, tokensUsed);
+
+            return new LlmResponse(
+                Content: content,
+                TokensUsed: tokensUsed,
+                Model: modelName,
+                FinishReason: completion.FinishReason.ToString());
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (ClientResultException ex)
+        {
+            _logger.LogError(ex, "OpenAI request failed: {Status}", ex.Status);
+            throw LlmException.GenerationFailed($"OpenAI error: {ex.Message}", ex);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "OpenAI error");
+            throw LlmException.GenerationFailed(ex.Message, ex);
+        }
+    }
+
+    /// <inheritdoc/>
+    public async IAsyncEnumerable<LlmToken> StreamChatAsync(
+        string? model,
+        IReadOnlyList<Agents.ChatMessage> messages,
+        double temperature = 0.7,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        var modelName = ResolveModelName(model);
+
+        _logger.LogDebug(
+            "OpenAI streaming chat: model={Model}, messages={MessageCount}",
+            modelName, messages.Count);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(_options.TimeoutSeconds));
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cts.Token, cancellationToken);
+
+        AsyncCollectionResult<StreamingChatCompletionUpdate>? streamingResult = null;
+
+        try
+        {
+            var chatClient = _client.GetChatClient(modelName);
+            var chatMessages = messages.Select(m => ConvertMessage(m)).ToList();
+
+            var chatOptions = new ChatCompletionOptions
+            {
+                Temperature = (float)temperature,
+                MaxOutputTokenCount = _options.MaxTokens,
+            };
+
+            streamingResult = chatClient.CompleteChatStreamingAsync(chatMessages, chatOptions, linked.Token);
+        }
+        catch (ClientResultException ex)
+        {
+            _logger.LogError(ex, "OpenAI streaming request failed: {Status}", ex.Status);
+            throw LlmException.GenerationFailed($"OpenAI error: {ex.Message}", ex);
+        }
+
+        int totalTokens = 0;
+        string? finishReason = null;
+
+        await foreach (var update in streamingResult.WithCancellation(linked.Token).ConfigureAwait(false))
+        {
+            // Track completion info
+            if (update.FinishReason.HasValue)
+            {
+                finishReason = update.FinishReason.Value.ToString();
+            }
+
+            if (update.Usage is not null)
+            {
+                totalTokens = (update.Usage.InputTokenCount) + (update.Usage.OutputTokenCount);
+            }
+
+            // Yield content deltas
+            foreach (var part in update.ContentUpdate)
+            {
+                if (!string.IsNullOrEmpty(part.Text))
+                {
+                    yield return new LlmToken(Content: part.Text);
+                }
+            }
+        }
+
+        // Yield the final completion token
+        yield return new LlmToken(
+            Content: string.Empty,
+            IsComplete: true,
+            FinishReason: finishReason ?? "stop",
+            TokensUsed: totalTokens);
     }
 
     /// <inheritdoc/>

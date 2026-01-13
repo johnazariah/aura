@@ -52,6 +52,7 @@ features/
 | [Tool Execution for Agents](completed/tool-execution-for-agents.md) | Agent tool invocation via LLM function calling | 2026-01-03 |
 | [Language Specialist Agents](completed/generic-language-agent.md) | YAML-configurable language coding agents | 2026-01-03 |
 | [Index Health Dashboard](completed/index-health-dashboard.md) | Workspace indexing visibility and health | 2026-01-03 |
+| [Structured Output](completed/structured-output.md) | Schema-enforced JSON output for LLM responses | 2026-01-13 |
 
 ## Upcoming Features
 

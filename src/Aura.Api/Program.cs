@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json;
 using Serilog;
 using Serilog.Events;
 using Aura.Foundation;
@@ -454,6 +455,109 @@ app.MapPost("/api/agents/{agentId}/execute", async (
         }
 
         return Results.StatusCode(499); // Client Closed Request
+    }
+});
+
+// Streaming chat endpoint using Server-Sent Events
+app.MapPost("/api/agents/{agentId}/chat/stream", async (
+    string agentId,
+    StreamChatRequest request,
+    IAgentRegistry registry,
+    ILlmProviderRegistry llmRegistry,
+    HttpContext httpContext,
+    CancellationToken cancellationToken) =>
+{
+    var agent = registry.GetAgent(agentId);
+    if (agent is null)
+    {
+        return Results.NotFound(new { error = "Agent '" + agentId + "' not found" });
+    }
+
+    // Get the LLM provider
+    var providerId = agent.Metadata.Provider ?? "ollama";
+    var provider = llmRegistry.GetProvider(providerId);
+    if (provider is null)
+    {
+        return Results.BadRequest(new { error = $"LLM provider '{providerId}' not found" });
+    }
+
+    if (!provider.SupportsStreaming)
+    {
+        return Results.BadRequest(new { error = $"Provider '{providerId}' does not support streaming" });
+    }
+
+    // Set up SSE response
+    httpContext.Response.Headers.ContentType = "text/event-stream";
+    httpContext.Response.Headers.CacheControl = "no-cache";
+    httpContext.Response.Headers.Connection = "keep-alive";
+
+    var messages = new List<ChatMessage>();
+
+    // Add a basic system prompt based on agent description
+    // (Agent's full system prompt is internal to the ConfigurableAgent implementation)
+    var systemPrompt = $"You are {agent.Metadata.Name}. {agent.Metadata.Description}";
+    messages.Add(new ChatMessage(ChatRole.System, systemPrompt));
+
+    // Add conversation history if provided
+    if (request.History is not null)
+    {
+        foreach (var msg in request.History)
+        {
+            var role = msg.Role?.ToLowerInvariant() switch
+            {
+                "user" => ChatRole.User,
+                "assistant" => ChatRole.Assistant,
+                "system" => ChatRole.System,
+                _ => ChatRole.User
+            };
+            messages.Add(new ChatMessage(role, msg.Content ?? string.Empty));
+        }
+    }
+
+    // Add the current message
+    messages.Add(new ChatMessage(ChatRole.User, request.Message ?? string.Empty));
+
+    try
+    {
+        await foreach (var token in provider.StreamChatAsync(
+            agent.Metadata.Model,
+            messages,
+            agent.Metadata.Temperature,
+            cancellationToken))
+        {
+            // Write SSE event
+            if (!string.IsNullOrEmpty(token.Content))
+            {
+                var tokenEvent = JsonSerializer.Serialize(new { content = token.Content });
+                await httpContext.Response.WriteAsync($"event: token\ndata: {tokenEvent}\n\n", cancellationToken);
+                await httpContext.Response.Body.FlushAsync(cancellationToken);
+            }
+
+            if (token.IsComplete)
+            {
+                var doneEvent = JsonSerializer.Serialize(new
+                {
+                    totalTokens = token.TokensUsed ?? 0,
+                    finishReason = token.FinishReason ?? "stop"
+                });
+                await httpContext.Response.WriteAsync($"event: done\ndata: {doneEvent}\n\n", cancellationToken);
+                await httpContext.Response.Body.FlushAsync(cancellationToken);
+            }
+        }
+
+        return Results.Empty;
+    }
+    catch (LlmException ex)
+    {
+        var errorEvent = JsonSerializer.Serialize(new { message = ex.Message, code = ex.Code.ToString() });
+        await httpContext.Response.WriteAsync($"event: error\ndata: {errorEvent}\n\n", cancellationToken);
+        await httpContext.Response.Body.FlushAsync(cancellationToken);
+        return Results.Empty;
+    }
+    catch (OperationCanceledException)
+    {
+        // Client disconnected - this is normal
+        return Results.Empty;
     }
 });
 
@@ -1989,7 +2093,8 @@ app.MapGet("/api/developer/workflows/{id:guid}", async (
             completedAt = s.CompletedAt,
             needsRework = s.NeedsRework,
             previousOutput = s.PreviousOutput,
-            approval = s.Approval?.ToString()
+            approval = s.Approval?.ToString(),
+            chatHistory = s.ChatHistory
         }),
         createdAt = workflow.CreatedAt,
         updatedAt = workflow.UpdatedAt,
@@ -2501,6 +2606,10 @@ app.Run();
 
 // Request models
 record ExecuteAgentRequest(string Prompt, string? WorkspacePath = null);
+record StreamChatRequest(
+    string? Message,
+    IReadOnlyList<StreamChatMessage>? History = null);
+record StreamChatMessage(string? Role, string? Content);
 record ExecuteWithRagRequest(
     string Prompt,
     string? WorkspacePath = null,

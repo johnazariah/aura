@@ -125,6 +125,17 @@ export interface AgenticResult {
     }>;
 }
 
+export interface StreamChatMessage {
+    role: 'user' | 'assistant' | 'system';
+    content: string;
+}
+
+export interface StreamChatCallbacks {
+    onToken: (content: string) => void;
+    onDone: (totalTokens: number, finishReason: string) => void;
+    onError: (message: string, code?: string) => void;
+}
+
 // =====================
 // Developer Module Types
 // =====================
@@ -145,6 +156,7 @@ export interface WorkflowStep {
     needsRework?: boolean;
     previousOutput?: string;
     approval?: string;
+    chatHistory?: string;
 }
 
 export interface Workflow {
@@ -316,6 +328,116 @@ export class AuraApiService {
             { timeout: this.getExecutionTimeout() * 2 } // Allow more time for multi-step
         );
         return response.data;
+    }
+
+    /**
+     * Execute an agent with streaming responses using Server-Sent Events.
+     * Tokens are delivered incrementally via callbacks.
+     * @param agentId The agent to execute
+     * @param message The user's message
+     * @param history Optional conversation history
+     * @param callbacks Callbacks for token, done, and error events
+     * @param abortController Optional AbortController to cancel the stream
+     */
+    async executeAgentStreaming(
+        agentId: string,
+        message: string,
+        history: StreamChatMessage[] = [],
+        callbacks: StreamChatCallbacks,
+        abortController?: AbortController
+    ): Promise<void> {
+        const url = `${this.getBaseUrl()}/api/agents/${agentId}/chat/stream`;
+        
+        try {
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'text/event-stream'
+                },
+                body: JSON.stringify({ message, history }),
+                signal: abortController?.signal
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                try {
+                    const errorJson = JSON.parse(errorText);
+                    callbacks.onError(errorJson.error || 'Request failed', response.status.toString());
+                } catch {
+                    callbacks.onError(`Request failed: ${response.statusText}`, response.status.toString());
+                }
+                return;
+            }
+
+            const reader = response.body?.getReader();
+            if (!reader) {
+                callbacks.onError('No response body');
+                return;
+            }
+
+            const decoder = new TextDecoder();
+            let buffer = '';
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+                
+                // Process complete SSE events (lines ending with \n\n)
+                const events = buffer.split('\n\n');
+                buffer = events.pop() || ''; // Keep incomplete event in buffer
+
+                for (const event of events) {
+                    if (!event.trim()) continue;
+                    
+                    const lines = event.split('\n');
+                    let eventType = '';
+                    let eventData = '';
+
+                    for (const line of lines) {
+                        if (line.startsWith('event: ')) {
+                            eventType = line.slice(7);
+                        } else if (line.startsWith('data: ')) {
+                            eventData = line.slice(6);
+                        }
+                    }
+
+                    if (!eventType || !eventData) continue;
+
+                    try {
+                        const data = JSON.parse(eventData);
+                        
+                        switch (eventType) {
+                            case 'token':
+                                if (data.content) {
+                                    callbacks.onToken(data.content);
+                                }
+                                break;
+                            case 'done':
+                                callbacks.onDone(data.totalTokens || 0, data.finishReason || 'stop');
+                                break;
+                            case 'error':
+                                callbacks.onError(data.message || 'Unknown error', data.code);
+                                break;
+                        }
+                    } catch (parseError) {
+                        console.error('Failed to parse SSE event:', eventData, parseError);
+                    }
+                }
+            }
+        } catch (error) {
+            if (error instanceof Error) {
+                if (error.name === 'AbortError') {
+                    // Request was cancelled - this is normal
+                    return;
+                }
+                callbacks.onError(error.message);
+            } else {
+                callbacks.onError('Unknown error during streaming');
+            }
+        }
     }
 
     async getRagStats(): Promise<{ totalDocuments: number; totalChunks: number }> {
@@ -534,6 +656,21 @@ export class AuraApiService {
         return response.data;
     }
 
+    async getGitStatus(path: string): Promise<GitStatusResponse> {
+        try {
+            const response = await this.httpClient.get(
+                `${this.getBaseUrl()}/api/git/status`,
+                { params: { path }, timeout: 10000 }
+            );
+            return response.data;
+        } catch (error) {
+            return {
+                success: false,
+                error: error instanceof Error ? error.message : 'Failed to get git status'
+            };
+        }
+    }
+
     // =====================
     // Workspace Methods
     // =====================
@@ -711,4 +848,14 @@ export interface FinalizeResult {
     prNumber?: number;
     prUrl?: string;
     message: string;
+}
+
+export interface GitStatusResponse {
+    success: boolean;
+    branch?: string;
+    isDirty?: boolean;
+    modifiedFiles?: string[];
+    untrackedFiles?: string[];
+    stagedFiles?: string[];
+    error?: string;
 }

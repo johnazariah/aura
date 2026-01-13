@@ -49,6 +49,26 @@ public interface ILlmProvider
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Generates a completion from a chat conversation with additional options.
+    /// </summary>
+    /// <param name="model">The model to use. If null, uses provider's default.</param>
+    /// <param name="messages">The conversation messages.</param>
+    /// <param name="options">Additional options including structured output schema.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The generated response.</returns>
+    /// <exception cref="LlmException">Thrown when generation fails.</exception>
+    /// <exception cref="OperationCanceledException">Thrown when cancelled.</exception>
+    Task<LlmResponse> ChatAsync(
+        string? model,
+        IReadOnlyList<ChatMessage> messages,
+        ChatOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        // Default implementation: fall back to temperature-only version
+        return ChatAsync(model, messages, options.Temperature, cancellationToken);
+    }
+
+    /// <summary>
     /// Generates a completion from a chat conversation with function calling support.
     /// </summary>
     /// <param name="model">The model to use. If null, uses provider's default.</param>
@@ -82,6 +102,31 @@ public interface ILlmProvider
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>List of available models.</returns>
     Task<IReadOnlyList<ModelInfo>> ListModelsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets whether this provider supports streaming responses.
+    /// </summary>
+    bool SupportsStreaming => false;
+
+    /// <summary>
+    /// Streams a chat completion token by token.
+    /// </summary>
+    /// <param name="model">The model to use. If null, uses provider's default.</param>
+    /// <param name="messages">The conversation messages.</param>
+    /// <param name="temperature">Temperature for sampling.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>An async enumerable of tokens.</returns>
+    /// <exception cref="LlmException">Thrown when streaming fails.</exception>
+    /// <exception cref="OperationCanceledException">Thrown when cancelled.</exception>
+    /// <exception cref="NotSupportedException">Thrown when provider doesn't support streaming.</exception>
+    IAsyncEnumerable<LlmToken> StreamChatAsync(
+        string? model,
+        IReadOnlyList<ChatMessage> messages,
+        double temperature = 0.7,
+        CancellationToken cancellationToken = default)
+    {
+        throw new NotSupportedException($"Provider does not support streaming");
+    }
 }
 
 /// <summary>
@@ -159,3 +204,16 @@ public enum LlmErrorCode
 /// <param name="Size">Model size in bytes.</param>
 /// <param name="ModifiedAt">When the model was last modified.</param>
 public sealed record ModelInfo(string Name, long? Size = null, DateTimeOffset? ModifiedAt = null);
+
+/// <summary>
+/// A single token from a streaming LLM response.
+/// </summary>
+/// <param name="Content">The token content (may be empty for metadata-only tokens).</param>
+/// <param name="IsComplete">True if this is the final token in the stream.</param>
+/// <param name="FinishReason">Reason generation stopped (only set on final token).</param>
+/// <param name="TokensUsed">Total tokens used (only set on final token).</param>
+public sealed record LlmToken(
+    string Content,
+    bool IsComplete = false,
+    string? FinishReason = null,
+    int? TokensUsed = null);

@@ -410,11 +410,45 @@ public sealed class WorkflowService(
                 enrichedContext = workflow.AnalyzedContext ?? "No analysis available.",
             });
 
-            var context = new AgentContext(prompt, WorkspacePath: workflow.WorktreePath);
-            var output = await planner.ExecuteAsync(context, ct);
+            // Try to use structured output if the provider supports it
+            List<StepDefinition> steps;
+            string rawResponse;
+            int tokensUsed;
 
-            // Parse the steps from the response
-            var steps = ParseStepsFromResponse(output.Content);
+            var providerId = planner.Metadata.Provider ?? "ollama";
+            var provider = _llmProviderRegistry.GetProvider(providerId);
+
+            if (provider is not null && CanUseStructuredOutput(provider))
+            {
+                // Use ChatAsync with schema for reliable JSON parsing
+                var messages = new List<Aura.Foundation.Agents.ChatMessage>
+                {
+                    new(Aura.Foundation.Agents.ChatRole.System, "You are a workflow planning assistant. Create a structured plan with clear steps."),
+                    new(Aura.Foundation.Agents.ChatRole.User, prompt),
+                };
+
+                var chatOptions = new ChatOptions
+                {
+                    ResponseSchema = WellKnownSchemas.WorkflowPlan,
+                    Temperature = planner.Metadata.Temperature,
+                };
+
+                var response = await provider.ChatAsync(planner.Metadata.Model, messages, chatOptions, ct);
+                rawResponse = response.Content;
+                tokensUsed = response.TokensUsed;
+                steps = ParseStepsFromStructuredResponse(rawResponse);
+
+                _logger.LogDebug("Used structured output for workflow planning");
+            }
+            else
+            {
+                // Fallback to regular agent execution
+                var context = new AgentContext(prompt, WorkspacePath: workflow.WorktreePath);
+                var output = await planner.ExecuteAsync(context, ct);
+                rawResponse = output.Content;
+                tokensUsed = output.TokensUsed;
+                steps = ParseStepsFromResponse(rawResponse);
+            }
 
             // Clear existing steps and add new ones
             var existingSteps = await _db.WorkflowSteps
@@ -442,9 +476,9 @@ public sealed class WorkflowService(
             workflow.ExecutionPlan = JsonSerializer.Serialize(new
             {
                 agentId = planner.AgentId,
-                rawResponse = output.Content,
+                rawResponse,
                 stepCount = steps.Count,
-                tokensUsed = output.TokensUsed,
+                tokensUsed,
                 timestamp = DateTimeOffset.UtcNow,
             });
 
@@ -641,12 +675,16 @@ public sealed class WorkflowService(
                     _ => "step-execute"
                 };
 
+                // Include revision feedback if this is a re-execution after rejection
+                var revisionFeedback = step.ApprovalFeedback;
+
                 prompt = _promptRegistry.Render(promptName, new
                 {
                     stepName = step.Name,
                     stepDescription = step.Description ?? "No additional description.",
                     issueTitle = workflow.Title,
                     analysis,
+                    revisionFeedback,
                 });
 
                 // Use RAG queries from prompt template if defined, otherwise use defaults
@@ -1432,6 +1470,63 @@ public sealed class WorkflowService(
     }
 
     private record ChatMessage(string Role, string Content);
+
+    /// <summary>
+    /// Determines if a provider supports structured output well enough to use for workflow planning.
+    /// OpenAI and Azure OpenAI have full schema support; Ollama has basic JSON mode only.
+    /// </summary>
+    private static bool CanUseStructuredOutput(ILlmProvider provider)
+    {
+        // Azure OpenAI and OpenAI have full schema enforcement
+        var providerId = provider.ProviderId.ToLowerInvariant();
+        return providerId is "azureopenai" or "openai";
+    }
+
+    /// <summary>
+    /// Parses workflow steps from a structured JSON response (from providers with schema support).
+    /// </summary>
+    private static List<StepDefinition> ParseStepsFromStructuredResponse(string response)
+    {
+        var steps = new List<StepDefinition>();
+
+        try
+        {
+            using var doc = JsonDocument.Parse(response);
+            var root = doc.RootElement;
+
+            if (root.TryGetProperty("steps", out var stepsArray) && stepsArray.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var stepEl in stepsArray.EnumerateArray())
+                {
+                    var name = stepEl.TryGetProperty("name", out var nameProp) ? nameProp.GetString() ?? "Unnamed step" : "Unnamed step";
+                    var capability = stepEl.TryGetProperty("capability", out var capProp) ? capProp.GetString() ?? "coding" : "coding";
+                    var description = stepEl.TryGetProperty("description", out var descProp) ? descProp.GetString() : null;
+                    var language = stepEl.TryGetProperty("language", out var langProp) ? langProp.GetString() : null;
+
+                    steps.Add(new StepDefinition
+                    {
+                        Name = name,
+                        Capability = capability.ToLowerInvariant(),
+                        Description = description,
+                        Language = language,
+                    });
+                }
+            }
+        }
+        catch (JsonException)
+        {
+            // Fall back to text parsing if JSON parsing fails
+            return ParseStepsFromResponse(response);
+        }
+
+        // If no steps were parsed, fall back to text parsing
+        if (steps.Count == 0)
+        {
+            return ParseStepsFromResponse(response);
+        }
+
+        return steps;
+    }
 
     private static List<StepDefinition> ParseStepsFromResponse(string response)
     {

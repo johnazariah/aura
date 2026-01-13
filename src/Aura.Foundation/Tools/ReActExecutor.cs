@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Aura.Foundation.Agents;
 using Aura.Foundation.Llm;
 using Microsoft.Extensions.Logging;
 
@@ -48,6 +49,13 @@ public record ReActOptions
 
     /// <summary>Callback for user confirmation (returns true to proceed)</summary>
     public Func<ToolDefinition, ToolInput, Task<bool>>? ConfirmationCallback { get; init; }
+
+    /// <summary>
+    /// Whether to use structured JSON output mode when the provider supports it.
+    /// When enabled, uses JSON schema enforcement for more reliable parsing.
+    /// Default is false for backward compatibility.
+    /// </summary>
+    public bool UseStructuredOutput { get; init; } = false;
 }
 
 /// <summary>
@@ -118,12 +126,23 @@ public partial class ReActExecutor(IToolRegistry toolRegistry, ILogger<ReActExec
         var totalTokens = 0;
         var startTime = DateTime.UtcNow;
 
-        var systemPrompt = BuildSystemPrompt(availableTools, options.AdditionalContext);
+        var systemPrompt = BuildSystemPrompt(availableTools, options.AdditionalContext, options.UseStructuredOutput);
+        
+        // For structured output mode, we use chat messages
+        var chatMessages = new List<ChatMessage>();
+        if (options.UseStructuredOutput)
+        {
+            chatMessages.Add(new ChatMessage(ChatRole.System, systemPrompt));
+            chatMessages.Add(new ChatMessage(ChatRole.User, $"Task: {task}"));
+        }
+        
+        // For legacy mode, we use conversation history string
         var conversationHistory = new StringBuilder();
         conversationHistory.AppendLine($"Task: {task}");
         conversationHistory.AppendLine();
 
-        _logger.LogWarning("[REACT-DEBUG] Starting ReAct loop with MaxSteps={MaxSteps}", options.MaxSteps);
+        _logger.LogWarning("[REACT-DEBUG] Starting ReAct loop with MaxSteps={MaxSteps}, UseStructuredOutput={UseStructured}", 
+            options.MaxSteps, options.UseStructuredOutput);
         var loopStartTime = DateTime.UtcNow;
 
         for (int step = 1; step <= options.MaxSteps; step++)
@@ -134,15 +153,27 @@ public partial class ReActExecutor(IToolRegistry toolRegistry, ILogger<ReActExec
             var elapsedSinceStart = DateTime.UtcNow - loopStartTime;
             _logger.LogWarning("[REACT-DEBUG] Step {Step}/{MaxSteps} starting at {Elapsed:F1}s elapsed", step, options.MaxSteps, elapsedSinceStart.TotalSeconds);
 
-            // Build prompt with conversation history
-            var prompt = $"{systemPrompt}\n\n{conversationHistory}\nStep {step}:";
-
             // Call LLM for next action
             LlmResponse llmResponse;
             try
             {
-                // Pass model as-is (null = use provider's default from config)
-                llmResponse = await llm.GenerateAsync(options.Model, prompt, options.Temperature, ct);
+                if (options.UseStructuredOutput)
+                {
+                    // Use ChatAsync with structured output schema
+                    var chatOptions = new ChatOptions
+                    {
+                        ResponseSchema = WellKnownSchemas.ReActResponse,
+                        Temperature = options.Temperature
+                    };
+                    
+                    llmResponse = await llm.ChatAsync(options.Model, chatMessages, chatOptions, ct);
+                }
+                else
+                {
+                    // Legacy: use GenerateAsync with text prompt
+                    var prompt = $"{systemPrompt}\n\n{conversationHistory}\nStep {step}:";
+                    llmResponse = await llm.GenerateAsync(options.Model, prompt, options.Temperature, ct);
+                }
             }
             catch (LlmException ex)
             {
@@ -162,8 +193,10 @@ public partial class ReActExecutor(IToolRegistry toolRegistry, ILogger<ReActExec
             var llmDuration = DateTime.UtcNow - stepStart;
             _logger.LogWarning("[REACT-DEBUG] Step {Step}: LLM call completed in {Duration:F1}s, tokens={Tokens}", step, llmDuration.TotalSeconds, llmResponse.TokensUsed);
 
-            // Parse the response
-            var parsed = ParseResponse(llmResponse.Content);
+            // Parse the response (structured or text-based)
+            var parsed = options.UseStructuredOutput 
+                ? ParseStructuredResponse(llmResponse.Content)
+                : ParseResponse(llmResponse.Content);
 
             _logger.LogWarning("[REACT-DEBUG] Step {Step}: Action={Action}", step, parsed.Action);
             _logger.LogDebug("Thought: {Thought}", parsed.Thought);
@@ -266,11 +299,21 @@ public partial class ReActExecutor(IToolRegistry toolRegistry, ILogger<ReActExec
             steps.Add(reactStep);
 
             // Add to conversation history
-            conversationHistory.AppendLine($"Thought: {parsed.Thought}");
-            conversationHistory.AppendLine($"Action: {parsed.Action}");
-            conversationHistory.AppendLine($"Action Input: {parsed.ActionInput}");
-            conversationHistory.AppendLine($"Observation: {observation}");
-            conversationHistory.AppendLine();
+            if (options.UseStructuredOutput)
+            {
+                // For structured output, add assistant response and observation as messages
+                chatMessages.Add(new ChatMessage(ChatRole.Assistant, llmResponse.Content));
+                chatMessages.Add(new ChatMessage(ChatRole.User, $"Observation: {observation}"));
+            }
+            else
+            {
+                // Legacy text-based history
+                conversationHistory.AppendLine($"Thought: {parsed.Thought}");
+                conversationHistory.AppendLine($"Action: {parsed.Action}");
+                conversationHistory.AppendLine($"Action Input: {parsed.ActionInput}");
+                conversationHistory.AppendLine($"Observation: {observation}");
+                conversationHistory.AppendLine();
+            }
         }
 
         // Max steps reached
@@ -323,7 +366,7 @@ public partial class ReActExecutor(IToolRegistry toolRegistry, ILogger<ReActExec
         }
     }
 
-    private static string BuildSystemPrompt(IReadOnlyList<ToolDefinition> tools, string? additionalContext)
+    private static string BuildSystemPrompt(IReadOnlyList<ToolDefinition> tools, string? additionalContext, bool useStructuredOutput = false)
     {
         var toolDescriptions = new StringBuilder();
         foreach (var tool in tools)
@@ -336,6 +379,28 @@ public partial class ReActExecutor(IToolRegistry toolRegistry, ILogger<ReActExec
         }
 
         var toolIds = string.Join(", ", tools.Select(t => t.ToolId));
+
+        // When using structured output, the schema enforces the format, so we use a simpler prompt
+        if (useStructuredOutput)
+        {
+            return $"""
+                You are an AI assistant that can use tools to accomplish tasks.
+                Think step by step and use tools when needed.
+
+                Available tools:
+                {toolDescriptions}
+
+                Valid action values: {toolIds}, finish
+                
+                RULES:
+                1. "action" must be exactly one of: {toolIds}, finish
+                2. "action_input" should be a JSON object with tool parameters (for tools) or a string (for finish)
+                3. Use "finish" when the task is complete, with your final answer as action_input
+                4. If file.read returns "Error: File not found", use file.write to create the file
+
+                {(additionalContext is not null ? $"\nAdditional context:\n{additionalContext}" : "")}
+                """;
+        }
 
         var jsonExamples = $$"""
               EXAMPLES of correct format:
@@ -473,6 +538,46 @@ public partial class ReActExecutor(IToolRegistry toolRegistry, ILogger<ReActExec
         }
 
         return (thought, action, actionInput);
+    }
+
+    private static (string Thought, string Action, string ActionInput) ParseStructuredResponse(string response)
+    {
+        // Parse JSON response from structured output mode
+        try
+        {
+            using var doc = JsonDocument.Parse(response);
+            var root = doc.RootElement;
+
+            var thought = root.TryGetProperty("thought", out var thoughtProp) 
+                ? thoughtProp.GetString() ?? "" 
+                : "";
+            var action = root.TryGetProperty("action", out var actionProp) 
+                ? actionProp.GetString() ?? "" 
+                : "";
+            
+            // action_input can be an object or a string
+            var actionInput = "";
+            if (root.TryGetProperty("action_input", out var actionInputProp))
+            {
+                actionInput = actionInputProp.ValueKind == JsonValueKind.String
+                    ? actionInputProp.GetString() ?? ""
+                    : actionInputProp.GetRawText();
+            }
+
+            // If action is empty, treat as finish
+            if (string.IsNullOrEmpty(action))
+            {
+                action = "finish";
+                actionInput = thought;
+            }
+
+            return (thought, action, actionInput);
+        }
+        catch (JsonException)
+        {
+            // If JSON parsing fails, fall back to text parsing
+            return ParseResponse(response);
+        }
     }
 
     private static IReadOnlyDictionary<string, object?> ParseActionInput(string actionInput)
