@@ -251,6 +251,40 @@ export async function activate(context: vscode.ExtensionContext) {
         }
     });
 
+    // Register MCP (Model Context Protocol) server definition provider
+    // This exposes Aura's RAG and Code Graph context to GitHub Copilot
+    let mcpProvider: vscode.Disposable | undefined;
+    try {
+        // Check if the MCP API is available (VS Code 1.100+)
+        if ('lm' in vscode && typeof (vscode as any).lm?.registerMcpServerDefinitionProvider === 'function') {
+            const apiUrl = vscode.workspace.getConfiguration('aura').get<string>('apiUrl') || 'http://localhost:5300';
+            
+            mcpProvider = (vscode as any).lm.registerMcpServerDefinitionProvider('aura.context', {
+                onDidChangeMcpServerDefinitions: new vscode.EventEmitter<void>().event,
+                
+                provideMcpServerDefinitions: async (_token: vscode.CancellationToken) => {
+                    // Return Aura as an HTTP MCP server
+                    return [
+                        new (vscode as any).McpHttpServerDefinition(
+                            'Aura Codebase Context',
+                            vscode.Uri.parse(`${apiUrl}/mcp`),
+                            {}, // headers
+                            '1.2.0'
+                        )
+                    ];
+                },
+                
+                resolveMcpServerDefinition: async (server: any, _token: vscode.CancellationToken) => server
+            });
+            
+            console.log('Aura MCP server provider registered');
+        } else {
+            console.log('MCP API not available - GitHub Copilot integration disabled');
+        }
+    } catch (err) {
+        console.warn('Failed to register MCP provider:', err);
+    }
+
     // Add disposables
     context.subscriptions.push(
         statusView,
@@ -285,6 +319,11 @@ export async function activate(context: vscode.ExtensionContext) {
         showTypeMembersCommand,
         configWatcher
     );
+    
+    // Add MCP provider if available
+    if (mcpProvider) {
+        context.subscriptions.push(mcpProvider);
+    }
 
     // Initial refresh
     await refreshAll();
