@@ -1,597 +1,355 @@
-# Task: MCP Server for Agent Access
+# MCP Server Integration
+
+**Status:** Proposed  
+**Priority:** High  
+**Estimated Effort:** 2-3 days  
+**Created:** 2025-12-12  
+**Updated:** 2026-01-13
 
 ## Overview
 
-Expose `ICodeGraphService` as an MCP (Model Context Protocol) server so AI assistants can directly query the code graph.
+Expose Aura's RAG and Code Graph context to GitHub Copilot and other AI assistants via Model Context Protocol (MCP). This enables Copilot to query Aura for deep codebase context during conversations.
 
-## Parent Spec
+## Strategic Context
 
-`.project/spec/15-graph-and-indexing-enhancements.md` - Gap 4
+Per [ADR-021](../../adr/021-session-infrastructure-pivot.md), Aura is pivoting to "development session infrastructure that extends GitHub Copilot." MCP is the critical integration point—it lets Copilot call Aura for context without Aura needing to run the agent.
 
-## Goals
+## Key Discovery: VS Code Native MCP Support
 
-1. Create `Aura.Mcp` project with MCP server implementation
-2. Expose core graph queries as MCP tools
-3. Support stdio transport for VS Code extension integration
-4. Enable natural language queries via LLM + graph
+VS Code now has built-in MCP support via `vscode.lm.registerMcpServerDefinitionProvider`. This means:
 
-## MCP Protocol Overview
+1. **No separate Aura.Mcp project needed** — extend existing API + extension
+2. **Extension registers Aura as MCP provider** — Copilot discovers automatically
+3. **HTTP transport works** — point to running Aura.Api server
+4. **Dynamic registration** — no user configuration required
 
-MCP uses JSON-RPC 2.0 over stdio (or SSE/WebSocket). Key concepts:
+## Architecture
 
-- **Tools**: Functions the server exposes for the client to call
-- **Resources**: Data the server can provide (like file contents)
-- **Prompts**: Pre-built prompts the server offers
-
-For Aura, we primarily need **Tools**.
-
-## Project Structure
-
-```text
-src/
-  Aura.Mcp/
-    Aura.Mcp.csproj
-    Program.cs
-    McpServer.cs
-    Tools/
-      SearchNodesTool.cs
-      FindImplementationsTool.cs
-      FindCallersTool.cs
-      GetNodeContentTool.cs
-      FindTestsTool.cs
-      FindDocumentationTool.cs
-    Transport/
-      StdioTransport.cs
-      JsonRpcHandler.cs
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    GitHub Copilot                           │
+│                  (Agent Mode / Chat)                        │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              │ MCP Protocol (JSON-RPC)
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                   Aura VS Code Extension                    │
+│          registerMcpServerDefinitionProvider()              │
+│                  ↓ points to ↓                              │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              │ HTTP
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                      Aura.Api                               │
+│                   POST /mcp/rpc                             │
+├─────────────────────────────────────────────────────────────┤
+│  Tools:                                                     │
+│  • aura_search_code - RAG semantic search                   │
+│  • aura_find_implementations - Code Graph query             │
+│  • aura_find_callers - Code Graph query                     │
+│  • aura_get_type_members - Code Graph query                 │
+│  • aura_get_story_context - Active story info               │
+│  • aura_list_stories - Stories in flight                    │
+└─────────────────────────────────────────────────────────────┘
+                              │
+              ┌───────────────┴───────────────┐
+              ▼                               ▼
+    ┌──────────────────┐            ┌──────────────────┐
+    │   RAG Service    │            │ Code Graph       │
+    │   (pgvector)     │            │ Service          │
+    └──────────────────┘            └──────────────────┘
 ```
 
-## Project File
+## Implementation
 
-**File:** `src/Aura.Mcp/Aura.Mcp.csproj`
+### Phase 1: Extension MCP Registration
 
-```xml
-<Project Sdk="Microsoft.NET.Sdk">
+**File:** `extension/src/extension.ts`
 
-  <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <TargetFramework>net10.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-    <RootNamespace>Aura.Mcp</RootNamespace>
-  </PropertyGroup>
+```typescript
+import * as vscode from 'vscode';
 
-  <ItemGroup>
-    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.0-*" />
-    <PackageReference Include="System.Text.Json" Version="10.0.0-*" />
-  </ItemGroup>
+// In activate()
+const mcpProvider = vscode.lm.registerMcpServerDefinitionProvider('aura.context', {
+    onDidChangeMcpServerDefinitions: new vscode.EventEmitter<void>().event,
+    
+    provideMcpServerDefinitions: async () => {
+        const apiUrl = vscode.workspace.getConfiguration('aura').get<string>('apiUrl') 
+            || 'http://localhost:5300';
+        
+        return [
+            new vscode.McpHttpServerDefinition({
+                label: 'Aura Codebase Context',
+                uri: `${apiUrl}/mcp`,
+                version: '1.0.0'
+            })
+        ];
+    },
+    
+    resolveMcpServerDefinition: async (server) => server
+});
 
-  <ItemGroup>
-    <ProjectReference Include="..\Aura.Foundation\Aura.Foundation.csproj" />
-  </ItemGroup>
-
-</Project>
+context.subscriptions.push(mcpProvider);
 ```
 
-## JSON-RPC Handler
+**File:** `extension/package.json` (add contribution)
 
-**File:** `src/Aura.Mcp/Transport/JsonRpcHandler.cs`
+```json
+{
+  "contributes": {
+    "mcpServerDefinitionProviders": [
+      {
+        "id": "aura.context",
+        "label": "Aura Codebase Context"
+      }
+    ]
+  }
+}
+```
+
+### Phase 2: API MCP Endpoint
+
+**File:** `src/Aura.Api/Program.cs` (add endpoint group)
 
 ```csharp
-public sealed class JsonRpcHandler
+// MCP JSON-RPC endpoint
+app.MapPost("/mcp", async (HttpContext ctx, McpHandler handler) =>
 {
-    private readonly Dictionary<string, Func<JsonElement?, Task<object?>>> _methods = new();
+    using var reader = new StreamReader(ctx.Request.Body);
+    var json = await reader.ReadToEndAsync();
+    var response = await handler.HandleAsync(json);
+    ctx.Response.ContentType = "application/json";
+    await ctx.Response.WriteAsync(response);
+});
+```
 
-    public void RegisterMethod(string name, Func<JsonElement?, Task<object?>> handler)
-    {
-        _methods[name] = handler;
-    }
+**File:** `src/Aura.Foundation/Mcp/McpHandler.cs`
 
-    public async Task<JsonRpcResponse> HandleAsync(JsonRpcRequest request)
+```csharp
+public class McpHandler
+{
+    private readonly IRagService _ragService;
+    private readonly ICodeGraphService _graphService;
+    private readonly IWorkflowRepository _workflowRepo;
+    
+    private readonly Dictionary<string, Func<JsonElement?, Task<object>>> _tools;
+    
+    public McpHandler(
+        IRagService ragService, 
+        ICodeGraphService graphService,
+        IWorkflowRepository workflowRepo)
     {
-        if (!_methods.TryGetValue(request.Method, out var handler))
+        _ragService = ragService;
+        _graphService = graphService;
+        _workflowRepo = workflowRepo;
+        
+        _tools = new()
         {
-            return new JsonRpcResponse
-            {
-                Id = request.Id,
-                Error = new JsonRpcError
-                {
-                    Code = -32601,
-                    Message = $"Method not found: {request.Method}",
-                },
-            };
+            ["aura_search_code"] = SearchCodeAsync,
+            ["aura_find_implementations"] = FindImplementationsAsync,
+            ["aura_find_callers"] = FindCallersAsync,
+            ["aura_get_type_members"] = GetTypeMembersAsync,
+            ["aura_get_story_context"] = GetStoryContextAsync,
+            ["aura_list_stories"] = ListStoriesAsync,
+        };
+    }
+    
+    public async Task<string> HandleAsync(string json)
+    {
+        var request = JsonSerializer.Deserialize<JsonRpcRequest>(json);
+        
+        var response = request.Method switch
+        {
+            "initialize" => HandleInitialize(request),
+            "tools/list" => HandleToolsList(request),
+            "tools/call" => await HandleToolCallAsync(request),
+            _ => ErrorResponse(request.Id, -32601, $"Method not found: {request.Method}")
+        };
+        
+        return JsonSerializer.Serialize(response);
+    }
+    
+    private object HandleInitialize(JsonRpcRequest request) => new
+    {
+        jsonrpc = "2.0",
+        id = request.Id,
+        result = new
+        {
+            protocolVersion = "2024-11-05",
+            capabilities = new { tools = new { } },
+            serverInfo = new { name = "Aura", version = "1.2.0" }
         }
-
+    };
+    
+    private object HandleToolsList(JsonRpcRequest request) => new
+    {
+        jsonrpc = "2.0",
+        id = request.Id,
+        result = new
+        {
+            tools = new[]
+            {
+                new { name = "aura_search_code", description = "Semantic search across codebase", 
+                      inputSchema = new { type = "object", properties = new { query = new { type = "string" } }, required = new[] { "query" } } },
+                new { name = "aura_find_implementations", description = "Find implementations of an interface or abstract class",
+                      inputSchema = new { type = "object", properties = new { typeName = new { type = "string" } }, required = new[] { "typeName" } } },
+                new { name = "aura_find_callers", description = "Find methods that call a given method",
+                      inputSchema = new { type = "object", properties = new { methodName = new { type = "string" } }, required = new[] { "methodName" } } },
+                new { name = "aura_get_type_members", description = "Get all members of a type",
+                      inputSchema = new { type = "object", properties = new { typeName = new { type = "string" } }, required = new[] { "typeName" } } },
+                new { name = "aura_list_stories", description = "List active development stories",
+                      inputSchema = new { type = "object", properties = new { } } },
+                new { name = "aura_get_story_context", description = "Get context for current story",
+                      inputSchema = new { type = "object", properties = new { storyId = new { type = "string" } } } },
+            }
+        }
+    };
+    
+    private async Task<object> HandleToolCallAsync(JsonRpcRequest request)
+    {
+        var toolName = request.Params?.GetProperty("name").GetString();
+        var args = request.Params?.GetProperty("arguments");
+        
+        if (toolName == null || !_tools.TryGetValue(toolName, out var handler))
+        {
+            return ErrorResponse(request.Id, -32602, $"Unknown tool: {toolName}");
+        }
+        
         try
         {
-            var result = await handler(request.Params);
-            return new JsonRpcResponse
-            {
-                Id = request.Id,
-                Result = result,
-            };
+            var result = await handler(args);
+            return new { jsonrpc = "2.0", id = request.Id, result = new { content = new[] { new { type = "text", text = JsonSerializer.Serialize(result) } } } };
         }
         catch (Exception ex)
         {
-            return new JsonRpcResponse
-            {
-                Id = request.Id,
-                Error = new JsonRpcError
-                {
-                    Code = -32000,
-                    Message = ex.Message,
-                },
-            };
+            return ErrorResponse(request.Id, -32000, ex.Message);
         }
     }
-}
-
-public record JsonRpcRequest
-{
-    [JsonPropertyName("jsonrpc")]
-    public string JsonRpc { get; init; } = "2.0";
     
-    [JsonPropertyName("id")]
-    public object? Id { get; init; }
+    // Tool implementations...
+    private async Task<object> SearchCodeAsync(JsonElement? args)
+    {
+        var query = args?.GetProperty("query").GetString() ?? "";
+        var results = await _ragService.SearchAsync(query, limit: 10);
+        return results.Select(r => new { r.Content, r.FilePath, r.Score });
+    }
     
-    [JsonPropertyName("method")]
-    public required string Method { get; init; }
+    private async Task<object> FindImplementationsAsync(JsonElement? args)
+    {
+        var typeName = args?.GetProperty("typeName").GetString() ?? "";
+        var results = await _graphService.FindImplementationsAsync(typeName);
+        return results;
+    }
     
-    [JsonPropertyName("params")]
-    public JsonElement? Params { get; init; }
-}
-
-public record JsonRpcResponse
-{
-    [JsonPropertyName("jsonrpc")]
-    public string JsonRpc { get; init; } = "2.0";
-    
-    [JsonPropertyName("id")]
-    public object? Id { get; init; }
-    
-    [JsonPropertyName("result")]
-    public object? Result { get; init; }
-    
-    [JsonPropertyName("error")]
-    public JsonRpcError? Error { get; init; }
-}
-
-public record JsonRpcError
-{
-    [JsonPropertyName("code")]
-    public int Code { get; init; }
-    
-    [JsonPropertyName("message")]
-    public required string Message { get; init; }
-    
-    [JsonPropertyName("data")]
-    public object? Data { get; init; }
+    // ... other tool implementations
 }
 ```
 
-## Stdio Transport
+### Phase 3: Tool Implementations
 
-**File:** `src/Aura.Mcp/Transport/StdioTransport.cs`
+Each tool maps to existing services:
 
-```csharp
-public sealed class StdioTransport : BackgroundService
-{
-    private readonly JsonRpcHandler _handler;
-    private readonly ILogger<StdioTransport> _logger;
+| MCP Tool | Existing Service | Method |
+|----------|------------------|--------|
+| `aura_search_code` | `IRagService` | `SearchAsync` |
+| `aura_find_implementations` | `ICodeGraphService` | `FindImplementationsAsync` |
+| `aura_find_callers` | `ICodeGraphService` | `FindCallersAsync` |
+| `aura_get_type_members` | `ICodeGraphService` | `GetTypeMembersAsync` |
+| `aura_list_stories` | `IWorkflowRepository` | `GetActiveAsync` |
+| `aura_get_story_context` | `IWorkflowRepository` | `GetByIdAsync` + enrichment |
 
-    public StdioTransport(JsonRpcHandler handler, ILogger<StdioTransport> logger)
-    {
-        _handler = handler;
-        _logger = logger;
-    }
+## Files to Modify
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        using var stdin = Console.OpenStandardInput();
-        using var stdout = Console.OpenStandardOutput();
-        using var reader = new StreamReader(stdin);
-        using var writer = new StreamWriter(stdout) { AutoFlush = true };
-
-        _logger.LogInformation("MCP server started on stdio");
-
-        while (!stoppingToken.IsCancellationRequested)
-        {
-            var line = await reader.ReadLineAsync(stoppingToken);
-            if (line == null) break;
-
-            try
-            {
-                var request = JsonSerializer.Deserialize<JsonRpcRequest>(line);
-                if (request != null)
-                {
-                    var response = await _handler.HandleAsync(request);
-                    var responseJson = JsonSerializer.Serialize(response);
-                    await writer.WriteLineAsync(responseJson);
-                }
-            }
-            catch (JsonException ex)
-            {
-                _logger.LogError(ex, "Failed to parse JSON-RPC request");
-                var error = new JsonRpcResponse
-                {
-                    Error = new JsonRpcError
-                    {
-                        Code = -32700,
-                        Message = "Parse error",
-                    },
-                };
-                await writer.WriteLineAsync(JsonSerializer.Serialize(error));
-            }
-        }
-    }
-}
-```
-
-## MCP Server
-
-**File:** `src/Aura.Mcp/McpServer.cs`
-
-```csharp
-public sealed class McpServer
-{
-    private readonly JsonRpcHandler _handler;
-    private readonly ICodeGraphService _graphService;
-    private readonly IRagService _ragService;
-    private readonly ISmartContentService? _smartContentService;
-
-    public McpServer(
-        JsonRpcHandler handler,
-        ICodeGraphService graphService,
-        IRagService ragService,
-        ISmartContentService? smartContentService = null)
-    {
-        _handler = handler;
-        _graphService = graphService;
-        _ragService = ragService;
-        _smartContentService = smartContentService;
-
-        RegisterMcpMethods();
-        RegisterTools();
-    }
-
-    private void RegisterMcpMethods()
-    {
-        // MCP protocol methods
-        _handler.RegisterMethod("initialize", HandleInitialize);
-        _handler.RegisterMethod("tools/list", HandleListTools);
-        _handler.RegisterMethod("tools/call", HandleCallTool);
-        _handler.RegisterMethod("resources/list", HandleListResources);
-    }
-
-    private Task<object?> HandleInitialize(JsonElement? _)
-    {
-        return Task.FromResult<object?>(new
-        {
-            protocolVersion = "2024-11-05",
-            serverInfo = new
-            {
-                name = "aura-mcp",
-                version = "1.0.0",
-            },
-            capabilities = new
-            {
-                tools = new { },
-                resources = new { },
-            },
-        });
-    }
-
-    private Task<object?> HandleListTools(JsonElement? _)
-    {
-        var tools = new[]
-        {
-            new
-            {
-                name = "search_nodes",
-                description = "Search for code elements by name, pattern, or semantic similarity",
-                inputSchema = new
-                {
-                    type = "object",
-                    properties = new
-                    {
-                        query = new { type = "string", description = "Search query" },
-                        nodeType = new { type = "string", description = "Filter by node type (class, method, interface, etc.)" },
-                        limit = new { type = "integer", description = "Maximum results", @default = 10 },
-                        semantic = new { type = "boolean", description = "Use semantic search", @default = false },
-                    },
-                    required = new[] { "query" },
-                },
-            },
-            new
-            {
-                name = "find_implementations",
-                description = "Find all types that implement a given interface",
-                inputSchema = new
-                {
-                    type = "object",
-                    properties = new
-                    {
-                        interfaceName = new { type = "string", description = "Interface name" },
-                    },
-                    required = new[] { "interfaceName" },
-                },
-            },
-            new
-            {
-                name = "find_callers",
-                description = "Find all methods that call a given method",
-                inputSchema = new
-                {
-                    type = "object",
-                    properties = new
-                    {
-                        methodName = new { type = "string", description = "Method name" },
-                        containingType = new { type = "string", description = "Optional containing type" },
-                    },
-                    required = new[] { "methodName" },
-                },
-            },
-            new
-            {
-                name = "find_dependencies",
-                description = "Find what a method depends on (calls, uses)",
-                inputSchema = new
-                {
-                    type = "object",
-                    properties = new
-                    {
-                        methodName = new { type = "string", description = "Method name" },
-                        containingType = new { type = "string", description = "Optional containing type" },
-                    },
-                    required = new[] { "methodName" },
-                },
-            },
-            new
-            {
-                name = "get_node_content",
-                description = "Get full content and smart summary for a code element",
-                inputSchema = new
-                {
-                    type = "object",
-                    properties = new
-                    {
-                        nodeName = new { type = "string", description = "Node name or full name" },
-                    },
-                    required = new[] { "nodeName" },
-                },
-            },
-            new
-            {
-                name = "find_tests",
-                description = "Find tests that cover a code element",
-                inputSchema = new
-                {
-                    type = "object",
-                    properties = new
-                    {
-                        symbolName = new { type = "string", description = "Symbol name" },
-                    },
-                    required = new[] { "symbolName" },
-                },
-            },
-            new
-            {
-                name = "find_documentation",
-                description = "Find documentation that references a code element",
-                inputSchema = new
-                {
-                    type = "object",
-                    properties = new
-                    {
-                        symbolName = new { type = "string", description = "Symbol name" },
-                    },
-                    required = new[] { "symbolName" },
-                },
-            },
-        };
-
-        return Task.FromResult<object?>(new { tools });
-    }
-
-    private async Task<object?> HandleCallTool(JsonElement? paramsElement)
-    {
-        if (!paramsElement.HasValue) throw new ArgumentException("Missing params");
-        
-        var name = paramsElement.Value.GetProperty("name").GetString();
-        var arguments = paramsElement.Value.GetProperty("arguments");
-
-        return name switch
-        {
-            "search_nodes" => await SearchNodesAsync(arguments),
-            "find_implementations" => await FindImplementationsAsync(arguments),
-            "find_callers" => await FindCallersAsync(arguments),
-            "find_dependencies" => await FindDependenciesAsync(arguments),
-            "get_node_content" => await GetNodeContentAsync(arguments),
-            "find_tests" => await FindTestsAsync(arguments),
-            "find_documentation" => await FindDocumentationAsync(arguments),
-            _ => throw new ArgumentException($"Unknown tool: {name}"),
-        };
-    }
-
-    private async Task<object> SearchNodesAsync(JsonElement args)
-    {
-        var query = args.GetProperty("query").GetString()!;
-        var nodeType = args.TryGetProperty("nodeType", out var nt) ? nt.GetString() : null;
-        var limit = args.TryGetProperty("limit", out var l) ? l.GetInt32() : 10;
-        var semantic = args.TryGetProperty("semantic", out var s) && s.GetBoolean();
-
-        if (semantic)
-        {
-            var results = await _ragService.SearchAsync(query, limit);
-            return new
-            {
-                content = new[]
-                {
-                    new
-                    {
-                        type = "text",
-                        text = FormatSearchResults(results),
-                    },
-                },
-            };
-        }
-        else
-        {
-            CodeNodeType? type = nodeType != null 
-                ? Enum.Parse<CodeNodeType>(nodeType, ignoreCase: true) 
-                : null;
-            var nodes = await _graphService.FindNodesAsync(query, type);
-            return new
-            {
-                content = new[]
-                {
-                    new
-                    {
-                        type = "text",
-                        text = FormatNodes(nodes.Take(limit)),
-                    },
-                },
-            };
-        }
-    }
-
-    private async Task<object> FindImplementationsAsync(JsonElement args)
-    {
-        var interfaceName = args.GetProperty("interfaceName").GetString()!;
-        var nodes = await _graphService.FindImplementationsAsync(interfaceName);
-        return new
-        {
-            content = new[]
-            {
-                new { type = "text", text = FormatNodes(nodes) },
-            },
-        };
-    }
-
-    // ... similar implementations for other tools ...
-
-    private static string FormatNodes(IEnumerable<CodeNode> nodes)
-    {
-        var sb = new StringBuilder();
-        foreach (var node in nodes)
-        {
-            sb.AppendLine($"- **{node.Name}** ({node.NodeType})");
-            if (node.FullName != null) sb.AppendLine($"  Full name: `{node.FullName}`");
-            if (node.FilePath != null) sb.AppendLine($"  File: `{node.FilePath}`:{node.LineNumber}");
-            if (node.SmartSummary != null) sb.AppendLine($"  Summary: {node.SmartSummary}");
-            sb.AppendLine();
-        }
-        return sb.ToString();
-    }
-}
-```
-
-## Program Entry Point
-
-**File:** `src/Aura.Mcp/Program.cs`
-
-```csharp
-var builder = Host.CreateApplicationBuilder(args);
-
-// Configuration
-builder.Configuration.AddJsonFile("appsettings.json", optional: true);
-
-// Database context
-builder.Services.AddDbContext<AuraDbContext>(options =>
-{
-    var connectionString = builder.Configuration.GetConnectionString("Aura");
-    options.UseNpgsql(connectionString, npgsql => npgsql.UseVector());
-});
-
-// Core services
-builder.Services.AddScoped<ICodeGraphService, CodeGraphService>();
-builder.Services.AddScoped<IRagService, RagService>();
-
-// MCP
-builder.Services.AddSingleton<JsonRpcHandler>();
-builder.Services.AddSingleton<McpServer>();
-builder.Services.AddHostedService<StdioTransport>();
-
-var host = builder.Build();
-
-// Initialize MCP server (registers tools)
-_ = host.Services.GetRequiredService<McpServer>();
-
-await host.RunAsync();
-```
-
-## VS Code Extension Integration
-
-The MCP server is invoked via stdio. VS Code's MCP support (or Claude Desktop) can be configured:
-
-**mcp.json / settings.json**:
-
-```json
-{
-  "mcpServers": {
-    "aura": {
-      "command": "dotnet",
-      "args": ["run", "--project", "path/to/Aura.Mcp"],
-      "env": {
-        "ConnectionStrings__Aura": "Host=localhost;Database=aura;..."
-      }
-    }
-  }
-}
-```
-
-Or with a published executable:
-
-```json
-{
-  "mcpServers": {
-    "aura": {
-      "command": "path/to/Aura.Mcp.exe"
-    }
-  }
-}
-```
+| File | Change |
+|------|--------|
+| `extension/src/extension.ts` | Register MCP server definition provider |
+| `extension/package.json` | Add `mcpServerDefinitionProviders` contribution |
+| `src/Aura.Api/Program.cs` | Add `/mcp` endpoint |
+| `src/Aura.Foundation/Mcp/McpHandler.cs` | New file: JSON-RPC handler |
+| `src/Aura.Foundation/Mcp/JsonRpcTypes.cs` | New file: Request/response types |
 
 ## Testing
 
-### Unit Tests
-
-- `JsonRpcHandlerTests.cs` - Request parsing, method dispatch
-- `McpServerTests.cs` - Tool registration, response formatting
-
-### Integration Tests
-
-- Start MCP server, send JSON-RPC requests via pipe
-- Verify tool responses match graph queries
-
 ### Manual Testing
 
-```bash
-# Test with echo
-echo '{"jsonrpc":"2.0","id":1,"method":"initialize"}' | dotnet run --project src/Aura.Mcp
+1. Start Aura API (`Start-Api`)
+2. Reload extension
+3. Open Copilot Chat
+4. Ask: "Using Aura, find implementations of ILlmProvider"
+5. Verify Copilot calls the MCP tool and shows results
+
+### Unit Tests
+
+```csharp
+[Fact]
+public async Task HandleToolsList_ReturnsAllTools()
+{
+    var handler = new McpHandler(...);
+    var response = await handler.HandleAsync("""{"jsonrpc":"2.0","id":1,"method":"tools/list"}""");
+    var result = JsonDocument.Parse(response);
+    result.RootElement.GetProperty("result").GetProperty("tools").GetArrayLength().Should().Be(6);
+}
+
+[Fact]
+public async Task SearchCode_ReturnsRagResults()
+{
+    var mockRag = new Mock<IRagService>();
+    mockRag.Setup(r => r.SearchAsync("test", 10)).ReturnsAsync(new[] { new RagResult { Content = "...", FilePath = "test.cs" } });
+    
+    var handler = new McpHandler(mockRag.Object, ...);
+    var response = await handler.HandleAsync("""{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"aura_search_code","arguments":{"query":"test"}}}""");
+    
+    response.Should().Contain("test.cs");
+}
 ```
 
-## Rollout Plan
+### Integration Test with Claude Desktop
 
-1. **Phase 1**: Create `Aura.Mcp` project with stdio transport
-2. **Phase 2**: Implement JSON-RPC handler
-3. **Phase 3**: Register core MCP methods (initialize, tools/list)
-4. **Phase 4**: Implement tool handlers
-5. **Phase 5**: Test with VS Code / Claude Desktop
+MCP also works with Claude Desktop. Test by adding to Claude's config:
 
-## Dependencies
-
-- `Aura.Foundation` for graph/RAG services
-- No external MCP library (protocol is simple)
-
-## Estimated Effort
-
-- **Medium complexity**, **Medium effort**
-- MCP protocol is simple, main work is tool formatting
+```json
+{
+  "mcpServers": {
+    "aura": {
+      "command": "curl",
+      "args": ["-X", "POST", "http://localhost:5300/mcp", "-d", "@-"]
+    }
+  }
+}
+```
 
 ## Success Criteria
 
-- [ ] `initialize` returns valid capabilities
-- [ ] `tools/list` returns all registered tools
-- [ ] `tools/call` for `search_nodes` returns formatted results
-- [ ] VS Code can connect and invoke tools
-- [ ] Claude Desktop can query the code graph
+- [ ] Extension registers MCP provider on activation
+- [ ] `/mcp` endpoint responds to `initialize` request
+- [ ] `tools/list` returns all 6 tools
+- [ ] `tools/call` for `aura_search_code` returns RAG results
+- [ ] `tools/call` for `aura_find_implementations` returns graph results
+- [ ] Copilot can invoke tools during conversation
+- [ ] Claude Desktop can invoke tools (bonus)
+
+## Future Enhancements
+
+1. **Story-aware context** — include current worktree/story in tool responses
+2. **Streaming results** — for large search results
+3. **Resources** — expose file contents as MCP resources
+4. **Prompts** — pre-built prompts for common queries
+
+## Dependencies
+
+- VS Code 1.96+ (MCP support)
+- GitHub Copilot with MCP tool calling enabled
+- Running Aura.Api server
+
+## Estimated Effort
+
+| Task | Effort |
+|------|--------|
+| Extension MCP registration | 2 hours |
+| API endpoint + handler | 4 hours |
+| Tool implementations | 4 hours |
+| Testing | 4 hours |
+| Documentation | 2 hours |
+| **Total** | **~2 days** |
