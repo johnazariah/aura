@@ -53,6 +53,7 @@ features/
 | [Language Specialist Agents](completed/generic-language-agent.md) | YAML-configurable language coding agents | 2026-01-03 |
 | [Index Health Dashboard](completed/index-health-dashboard.md) | Workspace indexing visibility and health | 2026-01-03 |
 | [Structured Output](completed/structured-output.md) | Schema-enforced JSON output for LLM responses | 2026-01-13 |
+| [Streaming Responses](completed/streaming-responses.md) | Token-by-token streaming for chat | 2026-01-13 |
 
 ## Upcoming Features
 
