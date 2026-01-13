@@ -152,6 +152,40 @@ public class MarkdownAgentLoaderTests
     }
 
     [Fact]
+    public void Parse_ExtractsToolNamesWithDots()
+    {
+        // Arrange - dotted tool names like file.read, shell.exec
+        var content = """
+            # Test Agent
+
+            ## Metadata
+
+            - **Name**: Test Agent
+            - **Description**: Test
+
+            ## Tools Available
+
+            - **file.read(path)**: Read a file from the workspace
+            - **file.write(path, content)**: Write content to a file
+            - **shell.exec(command)**: Execute a shell command
+
+            ## System Prompt
+
+            You are a test agent.
+            """;
+
+        // Act
+        var definition = _loader.Parse("test-agent", content);
+
+        // Assert
+        definition.Should().NotBeNull();
+        definition!.Tools.Should().HaveCount(3);
+        definition.Tools.Should().Contain("file.read");
+        definition.Tools.Should().Contain("file.write");
+        definition.Tools.Should().Contain("shell.exec");
+    }
+
+    [Fact]
     public void Parse_ExtractsSystemPrompt()
     {
         // Arrange

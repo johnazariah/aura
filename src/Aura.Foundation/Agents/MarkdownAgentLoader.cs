@@ -210,6 +210,6 @@ public sealed partial class MarkdownAgentLoader(
     [GeneratedRegex(@"^\s*[-*]\s+(.+)$")]
     private static partial Regex ListItemRegex();
 
-    [GeneratedRegex(@"\*\*(\w+)\s*\(")]
+    [GeneratedRegex(@"\*\*([\w.]+)\s*\(")]
     private static partial Regex ToolNameRegex();
 }
