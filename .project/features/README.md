@@ -57,6 +57,7 @@ features/
 | [Unified Database](completed/unified-database.md) | Standardized PostgreSQL config across dev/prod | 2026-01-13 |
 | [Workflow Step Debugging UX](completed/workflow-step-debugging-ux.md) | Enhanced step debugging and review UI | 2026-01-13 |
 | [Workspace Onboarding](completed/workspace-onboarding.md) | Explicit workspace setup flow with consent | 2026-01-13 |
+| [Chat Context Modes](completed/chat-context-modes.md) | Context mode selector for RAG/Graph chat | 2026-01-13 |
 
 ## Upcoming Features
 
@@ -64,7 +65,6 @@ features/
 
 | Feature | Description |
 |---------|-------------|
-| [Chat Context Modes](upcoming/chat-context-modes.md) | Context mode selector for RAG/Graph chat |
 | [Indexing UX](upcoming/indexing-ux.md) | Progress UI, prompts, query commands |
 
 ### Medium Priority (User Experience)
