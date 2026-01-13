@@ -1547,6 +1547,108 @@ export class WorkflowPanelProvider {
             color: #d13438;
             font-size: 0.85em;
         }
+        .step-error-details {
+            margin-top: 8px;
+            font-size: 0.8em;
+            opacity: 0.9;
+        }
+        .step-error-actions {
+            margin-top: 8px;
+            display: flex;
+            gap: 8px;
+        }
+        .step-error-actions button {
+            padding: 4px 12px;
+            border: 1px solid #d13438;
+            background: transparent;
+            color: #d13438;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.85em;
+        }
+        .step-error-actions button:hover {
+            background: rgba(209, 52, 56, 0.2);
+        }
+        .step-error-actions button.primary {
+            background: #d13438;
+            color: white;
+        }
+        .step-error-actions button.primary:hover {
+            background: #c02020;
+        }
+
+        .step-meta {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 4px;
+            font-size: 0.75em;
+            color: var(--vscode-descriptionForeground);
+            flex-wrap: wrap;
+        }
+        .step-meta-badge {
+            background: var(--vscode-badge-background);
+            color: var(--vscode-badge-foreground);
+            padding: 2px 6px;
+            border-radius: 8px;
+        }
+        .step-meta-badge.attempts {
+            background: rgba(240, 173, 78, 0.2);
+            color: #f0ad4e;
+        }
+        .step-meta-badge.failed {
+            background: rgba(209, 52, 56, 0.2);
+            color: #d13438;
+        }
+        .step-meta-timestamp {
+            font-family: var(--vscode-editor-font-family);
+            font-size: 0.9em;
+        }
+        .step-meta-sep {
+            color: var(--vscode-descriptionForeground);
+            opacity: 0.5;
+        }
+
+        .copy-btn {
+            background: transparent;
+            border: 1px solid var(--vscode-button-secondaryBackground);
+            color: var(--vscode-foreground);
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-size: 0.8em;
+            cursor: pointer;
+            opacity: 0.7;
+        }
+        .copy-btn:hover {
+            opacity: 1;
+            background: var(--vscode-button-secondaryBackground);
+        }
+        .copy-btn.copied {
+            color: #107c10;
+            border-color: #107c10;
+        }
+
+        .previous-output-toggle {
+            font-size: 0.8em;
+            color: var(--vscode-textLink-foreground);
+            cursor: pointer;
+            margin-top: 8px;
+        }
+        .previous-output-toggle:hover {
+            text-decoration: underline;
+        }
+        .previous-output {
+            margin-top: 8px;
+            padding: 8px;
+            background: var(--vscode-editor-inactiveSelectionBackground);
+            border-radius: 4px;
+            border-left: 2px solid var(--vscode-descriptionForeground);
+        }
+        .previous-output-header {
+            font-size: 0.75em;
+            color: var(--vscode-descriptionForeground);
+            margin-bottom: 4px;
+        }
 
         .step-section {
             margin-top: 10px;
@@ -1576,6 +1678,84 @@ export class WorkflowPanelProvider {
             font-family: var(--vscode-editor-font-family);
             font-size: 12px;
             line-height: 1.4;
+        }
+        .section-content.tool-steps {
+            max-height: 400px;
+        }
+
+        /* Tool steps trace (ReAct visualization) */
+        .tool-step {
+            margin-bottom: 12px;
+            padding: 10px;
+            background: var(--vscode-editor-inactiveSelectionBackground);
+            border-radius: 4px;
+            border-left: 3px solid var(--vscode-textLink-foreground);
+        }
+        .tool-step.failed {
+            border-left-color: #d13438;
+        }
+        .tool-step-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 6px;
+        }
+        .tool-step-number {
+            font-size: 0.75em;
+            background: var(--vscode-badge-background);
+            color: var(--vscode-badge-foreground);
+            padding: 2px 6px;
+            border-radius: 8px;
+            min-width: 20px;
+            text-align: center;
+        }
+        .tool-step-action {
+            font-weight: 600;
+            font-size: 0.9em;
+            color: var(--vscode-textLink-foreground);
+        }
+        .tool-step-thought {
+            font-size: 0.85em;
+            color: var(--vscode-descriptionForeground);
+            font-style: italic;
+            margin-bottom: 6px;
+            line-height: 1.4;
+        }
+        .tool-step-details {
+            font-size: 0.8em;
+        }
+        .tool-step-label {
+            color: var(--vscode-descriptionForeground);
+            margin-top: 4px;
+            margin-bottom: 2px;
+        }
+        .tool-step-code {
+            background: var(--vscode-textCodeBlock-background);
+            padding: 6px 8px;
+            border-radius: 3px;
+            font-family: var(--vscode-editor-font-family);
+            font-size: 11px;
+            overflow-x: auto;
+            max-height: 100px;
+            overflow-y: auto;
+        }
+        .tool-step-observation {
+            border-left: 2px solid var(--vscode-textPreformat-foreground);
+            padding-left: 8px;
+            margin-top: 4px;
+        }
+        .tool-step-observation.truncated::after {
+            content: '...';
+            color: var(--vscode-descriptionForeground);
+        }
+        .tool-step-expand {
+            font-size: 0.75em;
+            color: var(--vscode-textLink-foreground);
+            cursor: pointer;
+            margin-top: 4px;
+        }
+        .tool-step-expand:hover {
+            text-decoration: underline;
         }
 
         .approval-buttons {
@@ -2336,6 +2516,60 @@ export class WorkflowPanelProvider {
             }
         }
 
+        function toggleToolSteps(stepId) {
+            const el = document.getElementById('tool-steps-section-' + stepId);
+            if (el) {
+                el.style.display = el.style.display === 'none' ? 'block' : 'none';
+            }
+        }
+
+        function togglePreviousOutput(stepId) {
+            const el = document.getElementById('previous-output-' + stepId);
+            if (el) {
+                el.style.display = el.style.display === 'none' ? 'block' : 'none';
+            }
+        }
+
+        function copyToClipboard(text, btnEl) {
+            navigator.clipboard.writeText(text).then(() => {
+                const original = btnEl.textContent;
+                btnEl.textContent = '✓ Copied';
+                btnEl.classList.add('copied');
+                setTimeout(() => {
+                    btnEl.textContent = original;
+                    btnEl.classList.remove('copied');
+                }, 1500);
+            });
+        }
+
+        function copyStepOutput(stepId) {
+            const outputEl = document.querySelector('#output-section-' + stepId + ' pre');
+            if (outputEl) {
+                copyToClipboard(outputEl.textContent, event.target);
+            }
+        }
+
+        // Store full observations for expansion
+        const fullObservations = {};
+        function toggleFullObservation(clickEl, stepId, toolIndex) {
+            const key = stepId + '-' + toolIndex;
+            const codeEl = clickEl.previousElementSibling?.querySelector('.tool-step-code');
+            if (!codeEl) return;
+            
+            if (fullObservations[key]) {
+                // Already expanded, collapse it
+                const truncated = fullObservations[key].substring(0, 500);
+                codeEl.textContent = truncated;
+                clickEl.textContent = 'Show more';
+                delete fullObservations[key];
+            } else {
+                // Need to fetch full observation - for now just indicate it's shown
+                // In future could fetch from API
+                clickEl.textContent = 'Show less';
+                fullObservations[key] = codeEl.textContent; // Store current (may still be truncated)
+            }
+        }
+
         function toggleStepMenu(stepId) {
             const el = document.getElementById('menu-' + stepId);
             if (el) {
@@ -2601,12 +2835,13 @@ export class WorkflowPanelProvider {
 
             // Parse output if available
             let outputHtml = '';
+            let toolStepsHtml = '';
             let tokenInfo = '';
             if (step.output) {
                 try {
                     const parsed = JSON.parse(step.output);
                     if (parsed.content) {
-                        tokenInfo = parsed.tokensUsed ? `${parsed.tokensUsed} tokens` : '';
+                        tokenInfo = parsed.tokensUsed ? `${parsed.tokensUsed.toLocaleString()} tokens` : '';
                         if (parsed.durationMs) {
                             tokenInfo += tokenInfo ? ` • ${(parsed.durationMs / 1000).toFixed(1)}s` : `${(parsed.durationMs / 1000).toFixed(1)}s`;
                         }
@@ -2614,13 +2849,59 @@ export class WorkflowPanelProvider {
                         <div class="step-section output-section" id="output-section-${step.id}" style="display: none;">
                             <div class="section-header">
                                 <span>Output</span>
-                                <div class="approval-buttons">
-                                    <button class="btn-icon approve" onclick="approveStep('${step.id}')" title="Approve">✓</button>
-                                    <button class="btn-icon reject" onclick="rejectStep('${step.id}')" title="Request Changes">✗</button>
+                                <div style="display: flex; gap: 8px; align-items: center;">
+                                    <button class="copy-btn" onclick="copyStepOutput('${step.id}')">📋 Copy</button>
+                                    <div class="approval-buttons">
+                                        <button class="btn-icon approve" onclick="approveStep('${step.id}')" title="Approve">✓</button>
+                                        <button class="btn-icon reject" onclick="rejectStep('${step.id}')" title="Request Changes">✗</button>
+                                    </div>
                                 </div>
                             </div>
                             <div class="section-content">
                                 <pre>${this.escapeHtml(parsed.content)}</pre>
+                            </div>
+                        </div>`;
+                    }
+
+                    // Tool steps trace (ReAct visualization)
+                    if (parsed.toolSteps && parsed.toolSteps.length > 0) {
+                        const toolStepsInnerHtml = parsed.toolSteps.map((ts: any, i: number) => {
+                            const isFailed = ts.observation?.startsWith('Error:') || ts.observation?.includes('failed');
+                            const thought = ts.thought || '';
+                            const action = ts.action || 'unknown';
+                            const actionInput = ts.actionInput || '';
+                            const observation = ts.observation || '';
+                            const truncatedObs = observation.length > 500 ? observation.substring(0, 500) : observation;
+                            const isTruncated = observation.length > 500;
+
+                            return `
+                            <div class="tool-step ${isFailed ? 'failed' : ''}">
+                                <div class="tool-step-header">
+                                    <span class="tool-step-number">${i + 1}</span>
+                                    <span class="tool-step-action">${this.escapeHtml(action)}</span>
+                                </div>
+                                ${thought ? `<div class="tool-step-thought">${this.escapeHtml(thought)}</div>` : ''}
+                                <div class="tool-step-details">
+                                    ${actionInput ? `
+                                    <div class="tool-step-label">Input:</div>
+                                    <div class="tool-step-code">${this.escapeHtml(actionInput)}</div>
+                                    ` : ''}
+                                    <div class="tool-step-label">Result:</div>
+                                    <div class="tool-step-observation ${isTruncated ? 'truncated' : ''}">
+                                        <div class="tool-step-code">${this.escapeHtml(truncatedObs)}</div>
+                                    </div>
+                                    ${isTruncated ? `<span class="tool-step-expand" onclick="toggleFullObservation(this, '${step.id}', ${i})">Show more</span>` : ''}
+                                </div>
+                            </div>`;
+                        }).join('');
+
+                        toolStepsHtml = `
+                        <div class="step-section tool-steps-section" id="tool-steps-section-${step.id}" style="display: none;">
+                            <div class="section-header">
+                                <span>🔧 Tool Steps (${parsed.toolSteps.length})</span>
+                            </div>
+                            <div class="section-content tool-steps">
+                                ${toolStepsInnerHtml}
                             </div>
                         </div>`;
                     }
@@ -2652,12 +2933,23 @@ export class WorkflowPanelProvider {
             const actionButtons = [];
             actionButtons.push(`<button class="btn-icon" onclick="toggleChat('${step.id}')" title="Chat with agent">💬</button>`);
             
+            // Check if we have tool steps to show
+            const hasToolSteps = toolStepsHtml !== '';
+            
+            if (hasToolSteps) {
+                actionButtons.push(`<button class="btn-icon" onclick="toggleToolSteps('${step.id}')" title="View tool steps">🔧</button>`);
+            }
+            
             if (hasOutput) {
                 actionButtons.push(`<button class="btn-icon" onclick="toggleOutput('${step.id}')" title="View output">👁</button>`);
             }
             
             if (canExecute) {
                 actionButtons.push(`<button class="btn-icon primary" onclick="executeStep('${step.id}')" title="Execute step">▶</button>`);
+            } else if (step.status === 'Failed') {
+                // For failed steps, show both Reset and Retry prominently
+                actionButtons.push(`<button class="btn-icon" onclick="resetStep('${step.id}')" title="Reset to pending">🔃</button>`);
+                actionButtons.push(`<button class="btn-icon primary" onclick="executeStep('${step.id}')" title="Retry step">▶</button>`);
             } else if (canRetry) {
                 actionButtons.push(`<button class="btn-icon" onclick="executeStep('${step.id}')" title="Retry step">🔄</button>`);
             }
@@ -2685,6 +2977,46 @@ export class WorkflowPanelProvider {
 
             // Rework badge if needed
             const reworkBadge = needsRework ? '<span class="rework-badge">needs rework</span>' : '';
+            
+            // Token info badge (shows usage and timing)
+            const tokenBadge = tokenInfo ? `<span class="step-meta-badge">${tokenInfo}</span>` : '';
+            
+            // Attempts badge (show if > 1)
+            const attemptsBadge = step.attempts > 1 
+                ? `<span class="step-meta-badge attempts">attempt ${step.attempts}</span>` 
+                : '';
+            
+            // Format timestamps for display
+            const formatTime = (iso: string | undefined) => {
+                if (!iso) return '';
+                const d = new Date(iso);
+                return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            };
+            const startTime = formatTime(step.startedAt);
+            const endTime = formatTime(step.completedAt);
+            const timestampInfo = startTime 
+                ? (endTime ? `${startTime} → ${endTime}` : `started ${startTime}`)
+                : '';
+            
+            // Build metadata row
+            const metaItems = [tokenBadge, attemptsBadge].filter(x => x);
+            const metaRow = metaItems.length > 0 || timestampInfo
+                ? `<div class="step-meta">
+                    ${metaItems.join('')}
+                    ${timestampInfo ? `<span class="step-meta-timestamp">${timestampInfo}</span>` : ''}
+                   </div>`
+                : '';
+            
+            // Previous output section (for retried steps)
+            const previousOutputHtml = step.previousOutput 
+                ? `<div class="previous-output-toggle" onclick="togglePreviousOutput('${step.id}')">
+                    📜 View previous attempt output
+                   </div>
+                   <div class="previous-output" id="previous-output-${step.id}" style="display: none;">
+                    <div class="previous-output-header">Previous attempt (${step.attempts - 1}):</div>
+                    <pre style="font-size: 11px; margin: 0; max-height: 150px; overflow-y: auto;">${this.escapeHtml(step.previousOutput.substring(0, 1000))}${step.previousOutput.length > 1000 ? '...' : ''}</pre>
+                   </div>`
+                : '';
 
             return `
             <div class="${cardClasses}" data-step-id="${step.id}">
@@ -2697,6 +3029,7 @@ export class WorkflowPanelProvider {
                             ${reworkBadge}
                         </div>
                         <div class="step-description">${step.description ? this.escapeHtml(step.description) : ''}</div>
+                        ${metaRow}
                     </div>
                     <div class="step-actions">
                         ${actionButtons.join('')}
@@ -2704,7 +3037,16 @@ export class WorkflowPanelProvider {
                     </div>
                 </div>
                 ${step.status === 'Running' ? '<div class="step-progress"><div class="progress-bar"></div></div>' : ''}
-                ${step.error ? `<div class="step-error">Error: ${this.escapeHtml(step.error)}</div>` : ''}
+                ${step.error ? `
+                <div class="step-error">
+                    <strong>Error:</strong> ${this.escapeHtml(step.error)}
+                    <div class="step-error-actions">
+                        <button class="primary" onclick="resetStep('${step.id}')">🔃 Reset</button>
+                        <button onclick="executeStep('${step.id}')">▶ Retry</button>
+                    </div>
+                </div>` : ''}
+                ${previousOutputHtml}
+                ${toolStepsHtml}
                 ${outputHtml}
                 ${chatHtml}
             </div>
