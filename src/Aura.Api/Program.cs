@@ -2400,6 +2400,7 @@ app.MapPost("/api/developer/workflows/{id:guid}/finalize", async (
                 prBody,
                 request.BaseBranch,
                 request.Draft,
+                labels: ["aura-generated"],
                 ct);
 
             if (!prResult.Success)
