@@ -18,7 +18,7 @@ Location: `C:\Program Files\Aura\api\`
 ```json
 {
   "ConnectionStrings": {
-    "auradb": "Host=localhost;Port=5433;Database=auradb;Username=postgres"
+    "auradb": "Host=localhost;Port=5432;Database=auradb;Username=postgres"
   }
 }
 ```
@@ -27,7 +27,7 @@ Location: `C:\Program Files\Aura\api\`
 |---------|---------|-------------|
 
 | `Host` | `localhost` | PostgreSQL server |
-| `Port` | `5433` | Port (5433 to avoid conflicts) |
+| `Port` | `5432` | PostgreSQL port |
 | `Database` | `auradb` | Database name |
 | `Username` | `postgres` | Database user |
 
@@ -201,7 +201,7 @@ $env:Aura__Llm__Providers__OpenAI__ApiKey = "sk-..."
 ```json
 {
   "ConnectionStrings": {
-    "auradb": "Host=localhost;Port=5433;Database=auradb;Username=postgres"
+    "auradb": "Host=localhost;Port=5432;Database=auradb;Username=postgres"
   },
   "Logging": {
     "LogLevel": {

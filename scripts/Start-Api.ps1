@@ -82,6 +82,32 @@ if (-not $SkipChecks) {
     }
     
     Write-Host "  Container runtime: $($containerCheck.Runtime)" -ForegroundColor Green
+    
+    # Check for port 5432 conflicts (PostgreSQL)
+    $existingContainer = $null
+    try {
+        if ($containerCheck.Runtime -eq "Podman") {
+            $existingContainer = podman ps -a --filter "name=aura-postgres" --format "{{.Names}}" 2>$null
+        } else {
+            $existingContainer = docker ps -a --filter "name=aura-postgres" --format "{{.Names}}" 2>$null
+        }
+    } catch { }
+    
+    $portCheck = Test-NetConnection -ComputerName localhost -Port 5432 -WarningAction SilentlyContinue -ErrorAction SilentlyContinue
+    if ($portCheck.TcpTestSucceeded -and -not $existingContainer) {
+        Write-Host ""
+        Write-Host "WARNING: Port 5432 is in use by another process!" -ForegroundColor Yellow
+        Write-Host ""
+        Write-Host "Aura needs port 5432 for PostgreSQL. Options:" -ForegroundColor White
+        Write-Host "  1. Stop the other PostgreSQL instance" -ForegroundColor Cyan
+        Write-Host "  2. Use -SkipChecks to proceed anyway (may fail)" -ForegroundColor Cyan
+        Write-Host ""
+        
+        $proceed = Read-Host "Continue anyway? (y/N)"
+        if ($proceed -ne 'y' -and $proceed -ne 'Y') {
+            exit 1
+        }
+    }
 }
 
 if ($InProcess) {

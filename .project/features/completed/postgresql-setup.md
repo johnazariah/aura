@@ -131,12 +131,12 @@ Filename: "{app}\pgsql\bin\pg_ctl.exe"; Parameters: "unregister -N AuraDB"; Flag
 ```json
 {
   "ConnectionStrings": {
-    "auradb": "Host=localhost;Port=5433;Database=auradb;Username=postgres"
+    "auradb": "Host=localhost;Port=5432;Database=auradb;Username=postgres"
   }
 }
 ```
 
-Use port 5433 to avoid conflicts with existing PostgreSQL installations.
+Port 5432 is the standard PostgreSQL port.
 
 #### 5. Update Publish Script
 

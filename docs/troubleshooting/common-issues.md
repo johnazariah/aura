@@ -80,7 +80,7 @@ Then reload VS Code.
 2. **Verify port:**
 
    ```powershell
-   Test-NetConnection localhost -Port 5433
+   Test-NetConnection localhost -Port 5432
    ```
 
 3. **Check connection string** in `appsettings.json`
