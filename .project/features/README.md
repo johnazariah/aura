@@ -58,14 +58,9 @@ features/
 | [Workflow Step Debugging UX](completed/workflow-step-debugging-ux.md) | Enhanced step debugging and review UI | 2026-01-13 |
 | [Workspace Onboarding](completed/workspace-onboarding.md) | Explicit workspace setup flow with consent | 2026-01-13 |
 | [Chat Context Modes](completed/chat-context-modes.md) | Context mode selector for RAG/Graph chat | 2026-01-13 |
+| [Indexing UX](completed/indexing-ux.md) | Progress UI, prompts, query commands | 2026-01-13 |
 
 ## Upcoming Features
-
-### High Priority (MVP Polish)
-
-| Feature | Description |
-|---------|-------------|
-| [Indexing UX](upcoming/indexing-ux.md) | Progress UI, prompts, query commands |
 
 ### Medium Priority (User Experience)
 

@@ -475,6 +475,58 @@ export class AuraApiService {
         return response.data;
     }
 
+    /**
+     * Find implementations of an interface or abstract class.
+     */
+    async findImplementations(interfaceName: string, repositoryPath?: string): Promise<CodeGraphNode[]> {
+        const params = repositoryPath ? { repositoryPath } : {};
+        const response = await this.httpClient.get(
+            `${this.getBaseUrl()}/api/graph/implementations/${encodeURIComponent(interfaceName)}`,
+            { params, timeout: 10000 }
+        );
+        return response.data.implementations || [];
+    }
+
+    /**
+     * Find callers of a method.
+     */
+    async findCallers(methodName: string, containingType?: string, repositoryPath?: string): Promise<CodeGraphNode[]> {
+        const params: Record<string, string> = {};
+        if (containingType) params.containingType = containingType;
+        if (repositoryPath) params.repositoryPath = repositoryPath;
+        const response = await this.httpClient.get(
+            `${this.getBaseUrl()}/api/graph/callers/${encodeURIComponent(methodName)}`,
+            { params, timeout: 10000 }
+        );
+        return response.data.callers || [];
+    }
+
+    /**
+     * Get members of a type (methods, properties, fields).
+     */
+    async getTypeMembers(typeName: string, repositoryPath?: string): Promise<CodeGraphNode[]> {
+        const params = repositoryPath ? { repositoryPath } : {};
+        const response = await this.httpClient.get(
+            `${this.getBaseUrl()}/api/graph/members/${encodeURIComponent(typeName)}`,
+            { params, timeout: 10000 }
+        );
+        return response.data.members || [];
+    }
+
+    /**
+     * Find nodes by name (fuzzy search).
+     */
+    async findNodes(name: string, nodeType?: string, repositoryPath?: string): Promise<CodeGraphNode[]> {
+        const params: Record<string, string> = {};
+        if (nodeType) params.nodeType = nodeType;
+        if (repositoryPath) params.repositoryPath = repositoryPath;
+        const response = await this.httpClient.get(
+            `${this.getBaseUrl()}/api/graph/find/${encodeURIComponent(name)}`,
+            { params, timeout: 10000 }
+        );
+        return response.data.nodes || [];
+    }
+
     // =====================
     // Developer Module Methods
     // =====================
@@ -858,4 +910,14 @@ export interface GitStatusResponse {
     untrackedFiles?: string[];
     stagedFiles?: string[];
     error?: string;
+}
+
+export interface CodeGraphNode {
+    name: string;
+    fullName: string;
+    nodeType?: string;
+    signature?: string;
+    modifiers?: string[];
+    filePath?: string;
+    lineNumber?: number;
 }

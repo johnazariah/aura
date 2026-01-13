@@ -11,6 +11,7 @@ Add a self-critique step where agents review their own output before returning i
 ## Problem Statement
 
 Agents sometimes produce responses with:
+
 - Incomplete implementations (missing edge cases)
 - Incorrect assumptions about the codebase
 - Formatting issues (wrong indentation, missing imports)

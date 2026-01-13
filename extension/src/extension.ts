@@ -231,6 +231,19 @@ export async function activate(context: vscode.ExtensionContext) {
         vscode.commands.executeCommand('workbench.action.openWalkthrough', 'aura.aura#aura.gettingStarted');
     });
 
+    // Code Graph query commands
+    const findImplementationsCommand = vscode.commands.registerCommand('aura.findImplementations', async () => {
+        await findImplementations();
+    });
+
+    const findCallersCommand = vscode.commands.registerCommand('aura.findCallers', async () => {
+        await findCallers();
+    });
+
+    const showTypeMembersCommand = vscode.commands.registerCommand('aura.showTypeMembers', async () => {
+        await showTypeMembers();
+    });
+
     // Subscribe to configuration changes
     const configWatcher = vscode.workspace.onDidChangeConfiguration(e => {
         if (e.affectsConfiguration('aura')) {
@@ -267,6 +280,9 @@ export async function activate(context: vscode.ExtensionContext) {
         openDocsCommand,
         showCheatSheetCommand,
         openGettingStartedCommand,
+        findImplementationsCommand,
+        findCallersCommand,
+        showTypeMembersCommand,
         configWatcher
     );
 
@@ -979,6 +995,146 @@ function getCheatSheetHtml(): string {
     <p><em>Press <strong>Ctrl+Shift+P</strong> and type "Aura" to see all commands.</em></p>
 </body>
 </html>`;
+}
+
+// =====================
+// Code Graph Query Functions
+// =====================
+
+async function findImplementations(): Promise<void> {
+    const typeName = await vscode.window.showInputBox({
+        prompt: 'Enter interface or abstract class name',
+        placeHolder: 'IWorkflowService'
+    });
+
+    if (!typeName) return;
+
+    try {
+        const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+        const implementations = await auraApiService.findImplementations(typeName, workspacePath);
+
+        if (implementations.length === 0) {
+            vscode.window.showInformationMessage(`No implementations found for ${typeName}`);
+            return;
+        }
+
+        const selected = await vscode.window.showQuickPick(
+            implementations.map(impl => ({
+                label: impl.name,
+                description: impl.filePath ? impl.filePath.replace(/.*[\\/]/, '') : '',
+                detail: impl.lineNumber ? `Line ${impl.lineNumber}` : impl.fullName,
+                impl
+            })),
+            { placeHolder: `Implementations of ${typeName} (${implementations.length} found)` }
+        );
+
+        if (selected && selected.impl.filePath) {
+            const doc = await vscode.workspace.openTextDocument(selected.impl.filePath);
+            const line = (selected.impl.lineNumber || 1) - 1;
+            await vscode.window.showTextDocument(doc, {
+                selection: new vscode.Range(line, 0, line, 0)
+            });
+        }
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to find implementations';
+        vscode.window.showErrorMessage(message);
+    }
+}
+
+async function findCallers(): Promise<void> {
+    const methodName = await vscode.window.showInputBox({
+        prompt: 'Enter method name',
+        placeHolder: 'ExecuteAsync'
+    });
+
+    if (!methodName) return;
+
+    const containingType = await vscode.window.showInputBox({
+        prompt: 'Enter containing type (optional)',
+        placeHolder: 'WorkflowService'
+    });
+
+    try {
+        const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+        const callers = await auraApiService.findCallers(methodName, containingType || undefined, workspacePath);
+
+        if (callers.length === 0) {
+            vscode.window.showInformationMessage(`No callers found for ${methodName}`);
+            return;
+        }
+
+        const selected = await vscode.window.showQuickPick(
+            callers.map(caller => ({
+                label: caller.name,
+                description: caller.filePath ? caller.filePath.replace(/.*[\\/]/, '') : '',
+                detail: caller.signature || caller.fullName,
+                caller
+            })),
+            { placeHolder: `Callers of ${methodName} (${callers.length} found)` }
+        );
+
+        if (selected && selected.caller.filePath) {
+            const doc = await vscode.workspace.openTextDocument(selected.caller.filePath);
+            const line = (selected.caller.lineNumber || 1) - 1;
+            await vscode.window.showTextDocument(doc, {
+                selection: new vscode.Range(line, 0, line, 0)
+            });
+        }
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to find callers';
+        vscode.window.showErrorMessage(message);
+    }
+}
+
+async function showTypeMembers(): Promise<void> {
+    const typeName = await vscode.window.showInputBox({
+        prompt: 'Enter type name',
+        placeHolder: 'WorkflowService'
+    });
+
+    if (!typeName) return;
+
+    try {
+        const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+        const members = await auraApiService.getTypeMembers(typeName, workspacePath);
+
+        if (members.length === 0) {
+            vscode.window.showInformationMessage(`No members found for ${typeName}`);
+            return;
+        }
+
+        const selected = await vscode.window.showQuickPick(
+            members.map(member => ({
+                label: `$(${getSymbolIcon(member.nodeType)}) ${member.name}`,
+                description: member.nodeType || '',
+                detail: member.signature || member.fullName,
+                member
+            })),
+            { placeHolder: `Members of ${typeName} (${members.length} found)` }
+        );
+
+        if (selected && selected.member.filePath) {
+            const doc = await vscode.workspace.openTextDocument(selected.member.filePath);
+            const line = (selected.member.lineNumber || 1) - 1;
+            await vscode.window.showTextDocument(doc, {
+                selection: new vscode.Range(line, 0, line, 0)
+            });
+        }
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to get type members';
+        vscode.window.showErrorMessage(message);
+    }
+}
+
+function getSymbolIcon(nodeType?: string): string {
+    switch (nodeType?.toLowerCase()) {
+        case 'method': return 'symbol-method';
+        case 'property': return 'symbol-property';
+        case 'field': return 'symbol-field';
+        case 'constructor': return 'symbol-constructor';
+        case 'event': return 'symbol-event';
+        default: return 'symbol-misc';
+    }
 }
 
 export function deactivate() {

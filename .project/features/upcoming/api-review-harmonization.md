@@ -42,6 +42,7 @@ The API has grown organically and now has overlapping/inconsistent endpoints:
 We have **two separate indexing systems** with different purposes:
 
 #### 1. RAG Index (Embeddings for Semantic Search)
+
 - **Purpose**: Semantic search - "find code related to authentication"
 - **Storage**: Text chunks + vector embeddings in pgvector
 - **Selection**: Dynamic via `IAgentRegistry.GetBestForCapability("ingest:{extension}")`
@@ -53,6 +54,7 @@ We have **two separate indexing systems** with different purposes:
 - **Result**: Chunks stored in `rag_chunks` table with embeddings
 
 #### 2. Code Graph (Symbols for Navigation)
+
 - **Purpose**: Structural navigation - "find all usages of UserService"
 - **Storage**: Nodes (classes, methods) + edges (calls, inherits) in `code_nodes`/`code_edges`
 - **Implementation**: `CodeGraphIndexer` - **Roslyn-only, C# only**
@@ -62,10 +64,12 @@ We have **two separate indexing systems** with different purposes:
 ### The Problem
 
 These are **two completely separate indexing passes**:
+
 1. RAG indexing calls the right ingester for each file type → embeddings
 2. Code graph indexing only works for C# → symbol graph
 
 For non-C# languages (Python, Rust, etc.):
+
 - ✅ RAG: Tree-sitter ingester extracts semantic chunks correctly
 - ❌ Code Graph: No symbol extraction (Roslyn doesn't understand them)
 
@@ -74,16 +78,19 @@ For non-C# languages (Python, Rust, etc.):
 The `TreeSitterIngesterAgent` already extracts AST nodes (functions, classes, etc.) for chunking. This same information could populate the code graph for non-C# languages.
 
 **Option A: Extract graph data during RAG indexing**
+
 - When Tree-sitter parses a file, also emit symbol definitions
 - Store in code graph alongside Roslyn-extracted C# symbols
 - Single pass, unified data
 
 **Option B: Separate Tree-sitter graph builder**
+
 - Create `TreeSitterCodeGraphIndexer` parallel to `CodeGraphIndexer`
 - Build graph for non-C# files
 - More duplication but clearer separation
 
 **Option C: Keep them separate, accept the limitation**
+
 - Code graph is C#-only feature for now
 - Document this clearly
 - Other languages get RAG search only
@@ -100,6 +107,7 @@ When indexing a workspace, we need to handle projects at various stages:
 | No git, no `.gitignore` | ❌ Indexes everything | Built-in excludes (node_modules, bin, obj, .venv, etc.) |
 
 **Proposed `DiscoverFilesAsync` logic:**
+
 ```csharp
 if (await gitService.HasCommitsAsync(path))
     return await gitService.GetTrackedFilesAsync(path);  // committed files
@@ -114,6 +122,7 @@ return GlobWithDefaultExcludes(path);  // sensible defaults
 ```
 
 **Default excludes:**
+
 - `**/node_modules/**`
 - `**/bin/**`, `**/obj/**`
 - `**/.venv/**`, `**/venv/**`, `**/__pycache__/**`

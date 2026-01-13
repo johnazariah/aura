@@ -1,12 +1,15 @@
 # Task: MCP Server for Agent Access
 
 ## Overview
+
 Expose `ICodeGraphService` as an MCP (Model Context Protocol) server so AI assistants can directly query the code graph.
 
 ## Parent Spec
+
 `.project/spec/15-graph-and-indexing-enhancements.md` - Gap 4
 
 ## Goals
+
 1. Create `Aura.Mcp` project with MCP server implementation
 2. Expose core graph queries as MCP tools
 3. Support stdio transport for VS Code extension integration
@@ -15,6 +18,7 @@ Expose `ICodeGraphService` as an MCP (Model Context Protocol) server so AI assis
 ## MCP Protocol Overview
 
 MCP uses JSON-RPC 2.0 over stdio (or SSE/WebSocket). Key concepts:
+
 - **Tools**: Functions the server exposes for the client to call
 - **Resources**: Data the server can provide (like file contents)
 - **Prompts**: Pre-built prompts the server offers
@@ -23,7 +27,7 @@ For Aura, we primarily need **Tools**.
 
 ## Project Structure
 
-```
+```text
 src/
   Aura.Mcp/
     Aura.Mcp.csproj
@@ -520,6 +524,7 @@ await host.RunAsync();
 The MCP server is invoked via stdio. VS Code's MCP support (or Claude Desktop) can be configured:
 
 **mcp.json / settings.json**:
+
 ```json
 {
   "mcpServers": {
@@ -535,6 +540,7 @@ The MCP server is invoked via stdio. VS Code's MCP support (or Claude Desktop) c
 ```
 
 Or with a published executable:
+
 ```json
 {
   "mcpServers": {
@@ -548,14 +554,17 @@ Or with a published executable:
 ## Testing
 
 ### Unit Tests
+
 - `JsonRpcHandlerTests.cs` - Request parsing, method dispatch
 - `McpServerTests.cs` - Tool registration, response formatting
 
 ### Integration Tests
+
 - Start MCP server, send JSON-RPC requests via pipe
 - Verify tool responses match graph queries
 
 ### Manual Testing
+
 ```bash
 # Test with echo
 echo '{"jsonrpc":"2.0","id":1,"method":"initialize"}' | dotnet run --project src/Aura.Mcp
@@ -570,14 +579,17 @@ echo '{"jsonrpc":"2.0","id":1,"method":"initialize"}' | dotnet run --project src
 5. **Phase 5**: Test with VS Code / Claude Desktop
 
 ## Dependencies
+
 - `Aura.Foundation` for graph/RAG services
 - No external MCP library (protocol is simple)
 
 ## Estimated Effort
+
 - **Medium complexity**, **Medium effort**
 - MCP protocol is simple, main work is tool formatting
 
 ## Success Criteria
+
 - [ ] `initialize` returns valid capabilities
 - [ ] `tools/list` returns all registered tools
 - [ ] `tools/call` for `search_nodes` returns formatted results

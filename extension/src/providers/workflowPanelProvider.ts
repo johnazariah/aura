@@ -645,6 +645,52 @@ export class WorkflowPanelProvider {
                 return;
             }
 
+            // Check if Code Graph is indexed (RAG is indexed but graph might not be)
+            try {
+                const graphStats = await this.apiService.getCodeGraphStats(repoPath);
+                console.log(`[Enrich] Code Graph stats: ${graphStats.totalNodes} nodes, ${graphStats.totalEdges} edges`);
+                
+                if (graphStats.totalNodes === 0) {
+                    // RAG is indexed but Code Graph is not - prompt user
+                    const choice = await vscode.window.showInformationMessage(
+                        'Code Graph not indexed. Index for better structural queries?',
+                        'Yes', 'Skip'
+                    );
+                    
+                    if (choice === 'Yes') {
+                        // Trigger re-indexing which will rebuild the graph
+                        panel.webview.postMessage({ type: 'loading', action: 'index' });
+                        const result = await this.apiService.reindexWorkspace(repoPath);
+                        
+                        await vscode.window.withProgress(
+                            {
+                                location: vscode.ProgressLocation.Notification,
+                                title: 'Indexing Code Graph',
+                                cancellable: false
+                            },
+                            async (progress) => {
+                                let status = await this.apiService.getBackgroundJobStatus(result.jobId);
+                                while (status.state === 'Queued' || status.state === 'Processing') {
+                                    await new Promise(resolve => setTimeout(resolve, 1000));
+                                    status = await this.apiService.getBackgroundJobStatus(result.jobId);
+                                    progress.report({
+                                        message: `Processing ${status.processedItems}/${status.totalItems}...`,
+                                        increment: status.progressPercent > 0 ? 1 : 0
+                                    });
+                                }
+                                if (status.state === 'Failed') {
+                                    throw new Error(status.error || 'Indexing failed');
+                                }
+                            }
+                        );
+                    }
+                    // Continue with enrichment whether they chose Yes or Skip
+                }
+            } catch (graphError) {
+                // Code Graph check is optional - log and continue
+                console.log('[Enrich] Could not check Code Graph status:', graphError);
+            }
+
             // Codebase is indexed, proceed with enrichment
             console.log('[Enrich] Codebase is indexed - proceeding with enrichment');
             panel.webview.postMessage({ type: 'loading', action: 'enrich' });
@@ -723,23 +769,50 @@ export class WorkflowPanelProvider {
     }
 
     /**
-     * Find a .sln or .csproj file in the repository path.
+     * Find a .sln or .csproj file in the repository path, searching recursively up to depth 3.
+     * Prefers the shallowest .sln file found; falls back to .csproj if no .sln exists.
      */
     private async findSolutionPath(repoPath: string): Promise<string | null> {
         const fs = await import('fs');
         const path = await import('path');
         
-        // Look for .sln first
-        const files = fs.readdirSync(repoPath);
-        const slnFile = files.find((f: string) => f.endsWith('.sln'));
-        if (slnFile) {
-            return path.join(repoPath, slnFile);
+        const ignoreDirs = new Set(['node_modules', 'bin', 'obj', '.git', 'dist', 'build', 'out', 'packages']);
+        
+        // Recursively collect files up to maxDepth
+        const collectFiles = (dir: string, extension: string, depth: number, maxDepth: number): string[] => {
+            if (depth > maxDepth) return [];
+            
+            const results: string[] = [];
+            try {
+                const entries = fs.readdirSync(dir, { withFileTypes: true });
+                for (const entry of entries) {
+                    if (entry.isDirectory()) {
+                        if (!ignoreDirs.has(entry.name)) {
+                            results.push(...collectFiles(path.join(dir, entry.name), extension, depth + 1, maxDepth));
+                        }
+                    } else if (entry.isFile() && entry.name.endsWith(extension)) {
+                        results.push(path.join(dir, entry.name));
+                    }
+                }
+            } catch {
+                // Ignore permission errors or inaccessible directories
+            }
+            return results;
+        };
+        
+        // Look for .sln files first (up to depth 3)
+        const slnFiles = collectFiles(repoPath, '.sln', 0, 3);
+        if (slnFiles.length > 0) {
+            // Prefer shallowest path (fewest path separators)
+            slnFiles.sort((a, b) => a.split(path.sep).length - b.split(path.sep).length);
+            return slnFiles[0];
         }
         
-        // Look for .csproj
-        const csprojFile = files.find((f: string) => f.endsWith('.csproj'));
-        if (csprojFile) {
-            return path.join(repoPath, csprojFile);
+        // Fall back to .csproj files
+        const csprojFiles = collectFiles(repoPath, '.csproj', 0, 3);
+        if (csprojFiles.length > 0) {
+            csprojFiles.sort((a, b) => a.split(path.sep).length - b.split(path.sep).length);
+            return csprojFiles[0];
         }
         
         return null;

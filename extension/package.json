@@ -159,6 +159,21 @@
         "command": "aura.onboardWorkspace",
         "title": "Aura: Enable for Workspace",
         "icon": "$(add)"
+      },
+      {
+        "command": "aura.findImplementations",
+        "title": "Aura: Find Implementations",
+        "icon": "$(symbol-interface)"
+      },
+      {
+        "command": "aura.findCallers",
+        "title": "Aura: Find Callers",
+        "icon": "$(call-outgoing)"
+      },
+      {
+        "command": "aura.showTypeMembers",
+        "title": "Aura: Show Type Members",
+        "icon": "$(symbol-class)"
       }
     ],
     "menus": {
