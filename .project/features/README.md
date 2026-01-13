@@ -59,6 +59,7 @@ features/
 | [Workspace Onboarding](completed/workspace-onboarding.md) | Explicit workspace setup flow with consent | 2026-01-13 |
 | [Chat Context Modes](completed/chat-context-modes.md) | Context mode selector for RAG/Graph chat | 2026-01-13 |
 | [Indexing UX](completed/indexing-ux.md) | Progress UI, prompts, query commands | 2026-01-13 |
+| [API Program Refactor](completed/api-program-refactor.md) | Extract Program.cs to organized endpoint files | 2026-01-13 |
 
 ## Upcoming Features
 
