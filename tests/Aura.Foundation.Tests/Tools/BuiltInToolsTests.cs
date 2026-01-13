@@ -1,5 +1,6 @@
 using System.IO.Abstractions;
 using System.IO.Abstractions.TestingHelpers;
+using System.Text.Json;
 using Aura.Foundation.Shell;
 using Aura.Foundation.Tools;
 using Microsoft.Extensions.Logging;
@@ -102,6 +103,35 @@ public class BuiltInToolsTests
         Assert.Contains("Line 4", output);
         Assert.DoesNotContain("Line 1", output);
         Assert.DoesNotContain("Line 5", output);
+    }
+
+    [Fact]
+    public async Task FileRead_WithLineRange_FromJsonElement_ReturnsSelectedLines()
+    {
+        // Arrange - Simulates real flow where parameters come from JSON deserialization
+        _fileSystem.AddFile("/test/lines.txt", new MockFileData("Line 1\nLine 2\nLine 3\nLine 4\nLine 5"));
+
+        // This is how ConfigurableAgent.ParseToolInput creates parameters
+        var argumentsJson = """{"path": "/test/lines.txt", "startLine": 2, "endLine": 4, "includeLineNumbers": true}""";
+        var parameters = JsonSerializer.Deserialize<Dictionary<string, object?>>(argumentsJson)!;
+
+        var input = new ToolInput
+        {
+            ToolId = "file.read",
+            Parameters = parameters
+        };
+
+        // Act
+        var result = await _registry.ExecuteAsync(input);
+
+        // Assert
+        Assert.True(result.Success);
+        var output = result.Output?.ToString() ?? "";
+        Assert.Contains("2: Line 2", output);
+        Assert.Contains("3: Line 3", output);
+        Assert.Contains("4: Line 4", output);
+        Assert.DoesNotContain("1: Line 1", output);
+        Assert.DoesNotContain("5: Line 5", output);
     }
 
     [Fact]

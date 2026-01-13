@@ -57,6 +57,21 @@ public record ToolInput
             return ConvertJsonElement<T>(jsonElement, defaultValue);
         }
 
+        // Handle numeric conversions (e.g., long to int?) - Convert.ChangeType doesn't work with Nullable types
+        var targetType = Nullable.GetUnderlyingType(typeof(T)) ?? typeof(T);
+        if (targetType.IsPrimitive && value is IConvertible)
+        {
+            try
+            {
+                var converted = Convert.ChangeType(value, targetType);
+                return (T)converted;
+            }
+            catch
+            {
+                return defaultValue;
+            }
+        }
+
         try
         {
             return (T)Convert.ChangeType(value, typeof(T));

@@ -49,6 +49,10 @@ public static class BuiltInTools
                 var endLine = input.GetParameter<int?>("endLine");
                 var includeLineNumbers = input.GetParameter<bool>("includeLineNumbers");
 
+                logger.LogWarning(
+                    "[FILE.READ-DEBUG] path={Path}, startLine={StartLine}, endLine={EndLine}, includeLineNumbers={IncludeLineNumbers}",
+                    path, startLine, endLine, includeLineNumbers);
+
                 // Resolve relative paths against WorkingDirectory
                 var resolvedPath = ResolvePath(path, input.WorkingDirectory);
 
@@ -66,12 +70,19 @@ public static class BuiltInTools
                     var start = Math.Max(1, startLine ?? 1) - 1; // Convert to 0-based
                     var end = Math.Min(lines.Length, endLine ?? lines.Length);
 
+                    logger.LogWarning(
+                        "[FILE.READ-DEBUG] applying range: start={Start} (0-based), end={End}, totalLines={TotalLines}",
+                        start, end, lines.Length);
+
                     if (start >= lines.Length)
                     {
                         return ToolResult.Fail($"Start line {startLine} is beyond file length ({lines.Length} lines)");
                     }
 
                     var selectedLines = lines.Skip(start).Take(end - start).ToArray();
+
+                    logger.LogWarning("[FILE.READ-DEBUG] selected {SelectedCount} lines, first line: {FirstLine}",
+                        selectedLines.Length, selectedLines.FirstOrDefault()?.Substring(0, Math.Min(50, selectedLines.FirstOrDefault()?.Length ?? 0)));
 
                     if (includeLineNumbers)
                     {
@@ -157,14 +168,14 @@ public static class BuiltInTools
         {
             ToolId = "file.modify",
             Name = "Modify File",
-            Description = "Modify a file by replacing text. Use for targeted edits to existing files. IMPORTANT: Preserve exact indentation and whitespace in both oldText and newText.",
+            Description = "Modify a file by replacing text. Use for targeted edits to existing files. CRITICAL: The newText MUST have the EXACT same indentation as the oldText - count the leading spaces and replicate them on every line of your replacement.",
             InputSchema = """
                 {
                     "type": "object",
                     "properties": {
                         "path": { "type": "string", "description": "Path to the file (relative or absolute)" },
-                        "oldText": { "type": "string", "description": "The EXACT text to find, including all whitespace and indentation" },
-                        "newText": { "type": "string", "description": "The replacement text. MUST preserve the same indentation as oldText" },
+                        "oldText": { "type": "string", "description": "The EXACT text to find, including all whitespace and leading indentation" },
+                        "newText": { "type": "string", "description": "The replacement text. CRITICAL: Every line must have the SAME leading spaces as oldText. If oldText starts with 12 spaces, newText lines must also start with 12 spaces." },
                         "replaceAll": { "type": "boolean", "description": "If true, replace all occurrences. Default is false (first only)." }
                     },
                     "required": ["path", "oldText", "newText"]

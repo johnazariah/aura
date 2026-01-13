@@ -81,4 +81,49 @@ public class ToolInputTests
         // Act & Assert
         Assert.Equal("/some/path", input.GetRequiredParameter<string>("path"));
     }
+
+    [Fact]
+    public void GetParameter_ConvertsLongToNullableInt()
+    {
+        // Arrange - This is the case from ReActExecutor's ConvertJsonElement which returns long for numbers
+        var input = new ToolInput
+        {
+            ToolId = "test",
+            Parameters = new Dictionary<string, object?>
+            {
+                ["startLine"] = 1440L,  // long value
+                ["endLine"] = 1455L     // long value
+            }
+        };
+
+        // Act
+        var startLine = input.GetParameter<int?>("startLine");
+        var endLine = input.GetParameter<int?>("endLine");
+
+        // Assert
+        Assert.NotNull(startLine);
+        Assert.NotNull(endLine);
+        Assert.Equal(1440, startLine);
+        Assert.Equal(1455, endLine);
+    }
+
+    [Fact]
+    public void GetParameter_ConvertsLongToInt()
+    {
+        // Arrange
+        var input = new ToolInput
+        {
+            ToolId = "test",
+            Parameters = new Dictionary<string, object?>
+            {
+                ["count"] = 42L  // long value
+            }
+        };
+
+        // Act
+        var count = input.GetParameter<int>("count");
+
+        // Assert
+        Assert.Equal(42, count);
+    }
 }
