@@ -127,7 +127,7 @@ public partial class ReActExecutor(IToolRegistry toolRegistry, ILogger<ReActExec
         var startTime = DateTime.UtcNow;
 
         var systemPrompt = BuildSystemPrompt(availableTools, options.AdditionalContext, options.UseStructuredOutput);
-        
+
         // For structured output mode, we use chat messages
         var chatMessages = new List<ChatMessage>();
         if (options.UseStructuredOutput)
@@ -135,13 +135,13 @@ public partial class ReActExecutor(IToolRegistry toolRegistry, ILogger<ReActExec
             chatMessages.Add(new ChatMessage(ChatRole.System, systemPrompt));
             chatMessages.Add(new ChatMessage(ChatRole.User, $"Task: {task}"));
         }
-        
+
         // For legacy mode, we use conversation history string
         var conversationHistory = new StringBuilder();
         conversationHistory.AppendLine($"Task: {task}");
         conversationHistory.AppendLine();
 
-        _logger.LogWarning("[REACT-DEBUG] Starting ReAct loop with MaxSteps={MaxSteps}, UseStructuredOutput={UseStructured}", 
+        _logger.LogWarning("[REACT-DEBUG] Starting ReAct loop with MaxSteps={MaxSteps}, UseStructuredOutput={UseStructured}",
             options.MaxSteps, options.UseStructuredOutput);
         var loopStartTime = DateTime.UtcNow;
 
@@ -165,7 +165,7 @@ public partial class ReActExecutor(IToolRegistry toolRegistry, ILogger<ReActExec
                         ResponseSchema = WellKnownSchemas.ReActResponse,
                         Temperature = options.Temperature
                     };
-                    
+
                     llmResponse = await llm.ChatAsync(options.Model, chatMessages, chatOptions, ct);
                 }
                 else
@@ -194,7 +194,7 @@ public partial class ReActExecutor(IToolRegistry toolRegistry, ILogger<ReActExec
             _logger.LogWarning("[REACT-DEBUG] Step {Step}: LLM call completed in {Duration:F1}s, tokens={Tokens}", step, llmDuration.TotalSeconds, llmResponse.TokensUsed);
 
             // Parse the response (structured or text-based)
-            var parsed = options.UseStructuredOutput 
+            var parsed = options.UseStructuredOutput
                 ? ParseStructuredResponse(llmResponse.Content)
                 : ParseResponse(llmResponse.Content);
 
@@ -548,13 +548,13 @@ public partial class ReActExecutor(IToolRegistry toolRegistry, ILogger<ReActExec
             using var doc = JsonDocument.Parse(response);
             var root = doc.RootElement;
 
-            var thought = root.TryGetProperty("thought", out var thoughtProp) 
-                ? thoughtProp.GetString() ?? "" 
+            var thought = root.TryGetProperty("thought", out var thoughtProp)
+                ? thoughtProp.GetString() ?? ""
                 : "";
-            var action = root.TryGetProperty("action", out var actionProp) 
-                ? actionProp.GetString() ?? "" 
+            var action = root.TryGetProperty("action", out var actionProp)
+                ? actionProp.GetString() ?? ""
                 : "";
-            
+
             // action_input can be an object or a string
             var actionInput = "";
             if (root.TryGetProperty("action_input", out var actionInputProp))

@@ -55,6 +55,7 @@ features/
 | [Structured Output](completed/structured-output.md) | Schema-enforced JSON output for LLM responses | 2026-01-13 |
 | [Streaming Responses](completed/streaming-responses.md) | Token-by-token streaming for chat | 2026-01-13 |
 | [Unified Database](completed/unified-database.md) | Standardized PostgreSQL config across dev/prod | 2026-01-13 |
+| [Workflow Step Debugging UX](completed/workflow-step-debugging-ux.md) | Enhanced step debugging and review UI | 2026-01-13 |
 
 ## Upcoming Features
 
