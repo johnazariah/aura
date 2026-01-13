@@ -191,6 +191,15 @@ public sealed class RoslynCodingAgent(
             - Use exact text matching for old_text in file.modify
             - Include enough context in old_text to be unique
             
+            **CRITICAL: Indentation in file.modify:**
+            - When using file.modify, the newText MUST preserve the EXACT same indentation as the oldText
+            - Look at how many spaces/tabs the original code uses and replicate that exactly
+            - Every line in newText must start with the same indentation as the code you're replacing
+            - If the original code is indented with 12 spaces, your new code must also be indented with 12 spaces
+            - WRONG: Writing code that starts at column 0 when replacing indented code
+            - RIGHT: Matching the indentation level of the surrounding code exactly
+            - Example: If replacing "            // TODO: something" (12 spaces), your replacement must also have 12 spaces
+            
             When you're done, provide a clear summary of what was changed.
             """);
 
