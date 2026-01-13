@@ -62,12 +62,17 @@ features/
 
 ## Upcoming Features
 
+### High Priority (Session Infrastructure)
+
+| Feature | Description |
+|---------|-------------|
+| [MCP Server](upcoming/mcp-server.md) | Expose RAG/Code Graph to Copilot via MCP |
+| [Story Model](upcoming/story-model.md) | GitHub Issue integration, conversational mode |
+
 ### Medium Priority (User Experience)
 
 | Feature | Description |
 |---------|-------------|
-
-| [MCP Server](upcoming/mcp-server.md) | Model Context Protocol integration |
 | [Multi-Workspace](upcoming/multi-workspace.md) | Multiple workspace support |
 | [macOS Support](upcoming/macos-support.md) | Native macOS build, installer, and CI |
 
