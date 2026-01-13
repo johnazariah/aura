@@ -8,6 +8,7 @@
 ## Overview
 
 Extend the existing Workflow model to support:
+
 1. **Mode** — structured (current) vs. conversational (new)
 2. **Issue linking** — import from GitHub Issues, post updates back
 3. **Parallel stories** — multiple stories in flight, each in isolated worktree

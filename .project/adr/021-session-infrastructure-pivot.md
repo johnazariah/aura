@@ -170,9 +170,69 @@ Before full commitment, validate:
 3. **Is the story model actually simpler?** — Don't add complexity
 4. **Will we use this ourselves?** — Dogfood immediately
 
+## Key Design Decisions (from 2026-01-13 discussion)
+
+### 1. VS Code Has Native MCP Support
+
+**Discovery:** VS Code now has `vscode.lm.registerMcpServerDefinitionProvider` API. This means:
+- No separate `Aura.Mcp` project needed
+- Extension registers Aura.Api as MCP server automatically
+- HTTP transport works (point to running API)
+- No user configuration required
+
+**Impact:** MCP implementation is dramatically simpler (~2 days vs. weeks).
+
+### 2. Workflow IS Story
+
+**Decision:** Don't create a new Story entity. Extend existing Workflow with:
+- `IssueUrl`, `IssueNumber`, `IssueOwner`, `IssueRepo` — issue linking
+- `Mode` enum — `Structured` (current) vs `Conversational` (new)
+
+**Rename:** User will rename `Workflow` → `Story` via compiler refactoring when ready.
+
+**Rationale:** Avoid migration complexity. Structured workflows are just stories with steps.
+
+### 3. Append-Only Issue Sync
+
+**Decision:** No bidirectional sync with conflict detection. Too complex, unnecessary.
+
+**Sync model:**
+- **Import:** Fetch issue title/body → create Story (on demand)
+- **Refresh:** Re-fetch issue → overwrite local (user-initiated)
+- **Update:** Append timestamped comment to issue
+- **Close:** Close issue when Story complete
+
+**Rationale:** There's no merge problem. We just add comments with timestamps. The issue is the source of truth for requirements; the Story is the source of truth for work state.
+
+### 4. Conversational Mode = GHCP + Aura Context
+
+**What Aura does:**
+- Creates worktree for story
+- Exposes context via MCP (RAG, Code Graph)
+- Tracks story state
+
+**What Aura doesn't do:**
+- Run the agent
+- Manage the conversation
+- Execute tools
+
+**Rationale:** Don't fight GHCP. Extend it.
+
+### 5. Structured Mode Remains Available
+
+**Decision:** Keep structured workflows as an option, not the default.
+
+**Use cases for structured:**
+- Batch automation
+- Well-defined tasks with known patterns
+- CI/CD integration
+
+**Default:** Conversational mode for interactive development.
+
 ## References
 
 - [ADR-009: Lessons from Previous Attempts](009-lessons-from-previous-attempts.md) — Why top-down failed before
-- [MCP Server Spec](../features/upcoming/mcp-server.md) — Existing detailed design
+- [MCP Server Spec](../features/upcoming/mcp-server.md) — Simplified design using VS Code native API
+- [Story Model Spec](../features/upcoming/story-model.md) — GitHub Issue integration
 - [MCP Protocol](https://modelcontextprotocol.io/) — Anthropic's context protocol
 - Discussion: 2026-01-13 design session on parallel story development
