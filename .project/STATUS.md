@@ -1,6 +1,6 @@
 # Aura Project Status
 
-> **Last Updated**: 2026-01-03
+> **Last Updated**: 2026-01-13
 > **Branch**: main
 > **Overall Status**: ✅ MVP Complete
 
@@ -154,6 +154,24 @@ prompts/                      # Handlebars prompt templates
 | [spec/12-developer-module.md](spec/12-developer-module.md) | Developer workflow design |
 | [spec/assisted-workflow-ui.md](spec/assisted-workflow-ui.md) | UI collaboration model |
 | [progress/2025-12-11.md](progress/2025-12-11.md) | Latest weekly progress |
+
+## Recent Changes (Jan 13, 2026)
+
+1. **Structured Output Mode (Complete)**
+   - Added `JsonSchema` and `ChatOptions` for declarative response schemas
+   - Implemented schema support in Azure OpenAI and OpenAI providers
+   - Added Ollama fallback with JSON mode + schema injection
+   - Created `WellKnownSchemas` (ReActResponse, WorkflowPlan, CodeModification)
+   - Integrated structured output in ReActExecutor with `UseStructuredOutput` option
+   - Integrated structured output in WorkflowService.PlanAsync for reliable step parsing
+
+2. **Streaming Responses (Complete)**
+   - Added `StreamChatAsync` to all LLM providers
+   - Implemented NDJSON streaming for Ollama
+   - Implemented SDK streaming for Azure OpenAI and OpenAI
+   - Added `/api/agents/{agentId}/chat/stream` SSE endpoint
+   - Updated extension chat panel to consume SSE stream
+   - Added streaming to workflow step execution
 
 ## Recent Changes (Jan 3, 2026)
 
