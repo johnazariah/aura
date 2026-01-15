@@ -65,6 +65,9 @@ public sealed class McpHandler
             ["aura_get_type_members"] = GetTypeMembersAsync,
             ["aura_find_derived_types"] = FindDerivedTypesAsync,
             ["aura_find_usages"] = FindUsagesAsync,
+            ["aura_find_by_attribute"] = FindByAttributeAsync,
+            ["aura_find_extension_methods"] = FindExtensionMethodsAsync,
+            ["aura_find_by_return_type"] = FindByReturnTypeAsync,
             ["aura_list_classes"] = ListClassesAsync,
             ["aura_validate_compilation"] = ValidateCompilationAsync,
             ["aura_run_tests"] = RunTestsAsync,
@@ -140,14 +143,20 @@ public sealed class McpHandler
             new McpToolDefinition
             {
                 Name = "aura_search_code",
-                Description = "Semantic search across the indexed codebase. Returns relevant code chunks with file paths and similarity scores.",
+                Description = "Semantic search across the indexed codebase. Returns relevant code chunks with file paths and similarity scores. Use contentType='code' to exclude documentation.",
                 InputSchema = new
                 {
                     type = "object",
                     properties = new
                     {
                         query = new { type = "string", description = "The search query" },
-                        limit = new { type = "integer", description = "Maximum results (default 10)" }
+                        limit = new { type = "integer", description = "Maximum results (default 10)" },
+                        contentType = new
+                        {
+                            type = "string",
+                            description = "Filter by content type: 'code' (source files), 'docs' (markdown/text), 'config' (json/yaml), or 'all' (default)",
+                            @enum = new[] { "code", "docs", "config", "all" }
+                        }
                     },
                     required = new[] { "query" }
                 }
@@ -314,6 +323,52 @@ public sealed class McpHandler
                     required = new[] { "issueUrl" }
                 }
             },
+            new McpToolDefinition
+            {
+                Name = "aura_find_by_attribute",
+                Description = "Find all methods, classes, or properties decorated with a specific attribute. Use for finding endpoints ([HttpGet]), tests ([Fact]), or other annotated code.",
+                InputSchema = new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        attributeName = new { type = "string", description = "The attribute name (e.g., 'HttpGet', 'Fact', 'Obsolete'). Don't include brackets." },
+                        solutionPath = new { type = "string", description = "Path to the solution file" },
+                        targetKind = new { type = "string", description = "Optional: filter by target kind: 'method', 'class', 'property', or 'all' (default)" }
+                    },
+                    required = new[] { "attributeName", "solutionPath" }
+                }
+            },
+            new McpToolDefinition
+            {
+                Name = "aura_find_extension_methods",
+                Description = "Find all extension methods for a given type (e.g., IServiceCollection, IApplicationBuilder).",
+                InputSchema = new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        extendedTypeName = new { type = "string", description = "The type being extended (e.g., 'IServiceCollection')" },
+                        solutionPath = new { type = "string", description = "Path to the solution file" }
+                    },
+                    required = new[] { "extendedTypeName", "solutionPath" }
+                }
+            },
+            new McpToolDefinition
+            {
+                Name = "aura_find_by_return_type",
+                Description = "Find all methods that return a specific type.",
+                InputSchema = new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        returnTypeName = new { type = "string", description = "The return type name (e.g., 'WebApplication', 'Task<User>')" },
+                        solutionPath = new { type = "string", description = "Path to the solution file" }
+                    },
+                    required = new[] { "returnTypeName", "solutionPath" }
+                }
+            },
         };
 
         return new JsonRpcResponse
@@ -398,16 +453,61 @@ public sealed class McpHandler
             limit = limitEl.GetInt32();
         }
 
-        var options = new RagQueryOptions { TopK = limit };
-        var results = await _ragService.QueryAsync(query, options, ct);
+        // Parse contentType filter
+        string? contentTypeFilter = null;
+        if (args.HasValue && args.Value.TryGetProperty("contentType", out var contentTypeEl))
+        {
+            contentTypeFilter = contentTypeEl.GetString();
+        }
 
-        return results.Select(r => new
+        // Map contentType string to RagContentType list
+        var contentTypes = contentTypeFilter switch
+        {
+            "code" => new[] { RagContentType.Code },
+            "docs" => new[] { RagContentType.Markdown, RagContentType.PlainText },
+            "config" => new[] { RagContentType.PlainText }, // JSON/YAML indexed as PlainText
+            _ => null // "all" or unspecified
+        };
+
+        var options = new RagQueryOptions
+        {
+            TopK = limit,
+            ContentTypes = contentTypes
+        };
+
+        // Phase 1.2: Check code graph for exact symbol match first
+        var exactMatches = await _graphService.FindNodesAsync(query, cancellationToken: ct);
+        var exactMatchResults = exactMatches
+            .Take(3) // Limit to top 3 exact matches
+            .Select(n => new
+            {
+                content = $"[EXACT MATCH] {n.NodeType}: {n.FullName}",
+                filePath = n.FilePath,
+                line = n.LineNumber,
+                score = 1.0, // Perfect match
+                contentType = "Code",
+                isExactMatch = true
+            })
+            .ToList();
+
+        var ragResults = await _ragService.QueryAsync(query, options, ct);
+        var semanticResults = ragResults.Select(r => new
         {
             content = r.Text,
             filePath = r.SourcePath,
+            line = (int?)null,
             score = r.Score,
-            contentType = r.ContentType.ToString()
+            contentType = r.ContentType.ToString(),
+            isExactMatch = false
         });
+
+        // Combine: exact matches first, then semantic results (deduplicated)
+        var exactFilePaths = exactMatchResults.Select(e => e.filePath).ToHashSet();
+        var combinedResults = exactMatchResults
+            .Concat(semanticResults.Where(s => !exactFilePaths.Contains(s.filePath)))
+            .Take(limit);
+
+        return combinedResults;
     }
 
     private async Task<object> FindImplementationsAsync(JsonElement? args, CancellationToken ct)
@@ -966,6 +1066,306 @@ public sealed class McpHandler
         catch (HttpRequestException ex)
         {
             return new { error = $"Failed to fetch issue from GitHub: {ex.Message}" };
+        }
+    }
+
+    private async Task<object> FindByAttributeAsync(JsonElement? args, CancellationToken ct)
+    {
+        var attributeName = args?.GetProperty("attributeName").GetString() ?? "";
+        var solutionPath = args?.GetProperty("solutionPath").GetString() ?? "";
+        string? targetKind = null;
+        if (args.HasValue && args.Value.TryGetProperty("targetKind", out var kindEl))
+        {
+            targetKind = kindEl.GetString();
+        }
+
+        if (string.IsNullOrEmpty(solutionPath) || !File.Exists(solutionPath))
+        {
+            return new { error = $"Solution file not found: {solutionPath}" };
+        }
+
+        // Normalize attribute name (remove Attribute suffix if present, add if not for matching)
+        var normalizedName = attributeName.EndsWith("Attribute", StringComparison.Ordinal)
+            ? attributeName[..^9]
+            : attributeName;
+
+        try
+        {
+            var solution = await _roslynService.GetSolutionAsync(solutionPath, ct);
+            var results = new List<object>();
+
+            foreach (var project in solution.Projects)
+            {
+                var compilation = await project.GetCompilationAsync(ct);
+                if (compilation is null) continue;
+
+                foreach (var syntaxTree in compilation.SyntaxTrees)
+                {
+                    var semanticModel = compilation.GetSemanticModel(syntaxTree);
+                    var root = await syntaxTree.GetRootAsync(ct);
+
+                    // Find all nodes with attributes
+                    var nodesWithAttributes = root.DescendantNodes()
+                        .Where(n => n is MemberDeclarationSyntax or ParameterSyntax)
+                        .Where(n =>
+                        {
+                            var attrs = n switch
+                            {
+                                MethodDeclarationSyntax m => m.AttributeLists,
+                                ClassDeclarationSyntax c => c.AttributeLists,
+                                PropertyDeclarationSyntax p => p.AttributeLists,
+                                FieldDeclarationSyntax f => f.AttributeLists,
+                                ParameterSyntax param => param.AttributeLists,
+                                _ => default
+                            };
+                            return attrs.Count > 0;
+                        });
+
+                    foreach (var node in nodesWithAttributes)
+                    {
+                        var attrs = node switch
+                        {
+                            MethodDeclarationSyntax m => m.AttributeLists,
+                            ClassDeclarationSyntax c => c.AttributeLists,
+                            PropertyDeclarationSyntax p => p.AttributeLists,
+                            FieldDeclarationSyntax f => f.AttributeLists,
+                            ParameterSyntax param => param.AttributeLists,
+                            _ => default
+                        };
+
+                        foreach (var attrList in attrs)
+                        {
+                            foreach (var attr in attrList.Attributes)
+                            {
+                                var attrName = attr.Name.ToString();
+                                // Match: HttpGet, HttpGetAttribute, [HttpGet], etc.
+                                if (attrName.Equals(normalizedName, StringComparison.OrdinalIgnoreCase) ||
+                                    attrName.Equals(normalizedName + "Attribute", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    var nodeKind = node switch
+                                    {
+                                        MethodDeclarationSyntax => "method",
+                                        ClassDeclarationSyntax => "class",
+                                        PropertyDeclarationSyntax => "property",
+                                        FieldDeclarationSyntax => "field",
+                                        ParameterSyntax => "parameter",
+                                        _ => "other"
+                                    };
+
+                                    // Apply target kind filter
+                                    if (targetKind != null && targetKind != "all" &&
+                                        !nodeKind.Equals(targetKind, StringComparison.OrdinalIgnoreCase))
+                                        continue;
+
+                                    var nodeName = node switch
+                                    {
+                                        MethodDeclarationSyntax m => m.Identifier.Text,
+                                        ClassDeclarationSyntax c => c.Identifier.Text,
+                                        PropertyDeclarationSyntax p => p.Identifier.Text,
+                                        FieldDeclarationSyntax f => f.Declaration.Variables.FirstOrDefault()?.Identifier.Text ?? "",
+                                        ParameterSyntax param => param.Identifier.Text,
+                                        _ => ""
+                                    };
+
+                                    var location = node.GetLocation();
+                                    var lineSpan = location.GetLineSpan();
+
+                                    results.Add(new
+                                    {
+                                        name = nodeName,
+                                        kind = nodeKind,
+                                        attribute = attrName,
+                                        filePath = syntaxTree.FilePath,
+                                        line = lineSpan.StartLinePosition.Line + 1
+                                    });
+
+                                    if (results.Count >= 100) break;
+                                }
+                            }
+                            if (results.Count >= 100) break;
+                        }
+                        if (results.Count >= 100) break;
+                    }
+                    if (results.Count >= 100) break;
+                }
+                if (results.Count >= 100) break;
+            }
+
+            return new
+            {
+                attributeName = normalizedName,
+                totalResults = results.Count,
+                wasTruncated = results.Count >= 100,
+                results
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to find by attribute {Attribute}", attributeName);
+            return new { error = $"Failed to find by attribute: {ex.Message}" };
+        }
+    }
+
+    private async Task<object> FindExtensionMethodsAsync(JsonElement? args, CancellationToken ct)
+    {
+        var extendedTypeName = args?.GetProperty("extendedTypeName").GetString() ?? "";
+        var solutionPath = args?.GetProperty("solutionPath").GetString() ?? "";
+
+        if (string.IsNullOrEmpty(solutionPath) || !File.Exists(solutionPath))
+        {
+            return new { error = $"Solution file not found: {solutionPath}" };
+        }
+
+        try
+        {
+            var solution = await _roslynService.GetSolutionAsync(solutionPath, ct);
+            var results = new List<object>();
+
+            foreach (var project in solution.Projects)
+            {
+                var compilation = await project.GetCompilationAsync(ct);
+                if (compilation is null) continue;
+
+                foreach (var syntaxTree in compilation.SyntaxTrees)
+                {
+                    var semanticModel = compilation.GetSemanticModel(syntaxTree);
+                    var root = await syntaxTree.GetRootAsync(ct);
+
+                    // Find all static classes (extension methods must be in static classes)
+                    var staticClasses = root.DescendantNodes()
+                        .OfType<ClassDeclarationSyntax>()
+                        .Where(c => c.Modifiers.Any(m => m.Text == "static"));
+
+                    foreach (var staticClass in staticClasses)
+                    {
+                        var extensionMethods = staticClass.Members
+                            .OfType<MethodDeclarationSyntax>()
+                            .Where(m => m.Modifiers.Any(mod => mod.Text == "static") &&
+                                       m.ParameterList.Parameters.Count > 0 &&
+                                       m.ParameterList.Parameters[0].Modifiers.Any(mod => mod.Text == "this"));
+
+                        foreach (var method in extensionMethods)
+                        {
+                            var firstParam = method.ParameterList.Parameters[0];
+                            var paramTypeName = firstParam.Type?.ToString() ?? "";
+
+                            // Check if this extends the requested type
+                            if (paramTypeName.Contains(extendedTypeName, StringComparison.OrdinalIgnoreCase))
+                            {
+                                var location = method.GetLocation();
+                                var lineSpan = location.GetLineSpan();
+
+                                results.Add(new
+                                {
+                                    methodName = method.Identifier.Text,
+                                    containingClass = staticClass.Identifier.Text,
+                                    extendedType = paramTypeName,
+                                    returnType = method.ReturnType.ToString(),
+                                    parameters = method.ParameterList.Parameters.Skip(1)
+                                        .Select(p => $"{p.Type} {p.Identifier}").ToList(),
+                                    filePath = syntaxTree.FilePath,
+                                    line = lineSpan.StartLinePosition.Line + 1
+                                });
+
+                                if (results.Count >= 100) break;
+                            }
+                        }
+                        if (results.Count >= 100) break;
+                    }
+                    if (results.Count >= 100) break;
+                }
+                if (results.Count >= 100) break;
+            }
+
+            return new
+            {
+                extendedTypeName,
+                totalResults = results.Count,
+                wasTruncated = results.Count >= 100,
+                results
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to find extension methods for {Type}", extendedTypeName);
+            return new { error = $"Failed to find extension methods: {ex.Message}" };
+        }
+    }
+
+    private async Task<object> FindByReturnTypeAsync(JsonElement? args, CancellationToken ct)
+    {
+        var returnTypeName = args?.GetProperty("returnTypeName").GetString() ?? "";
+        var solutionPath = args?.GetProperty("solutionPath").GetString() ?? "";
+
+        if (string.IsNullOrEmpty(solutionPath) || !File.Exists(solutionPath))
+        {
+            return new { error = $"Solution file not found: {solutionPath}" };
+        }
+
+        try
+        {
+            var solution = await _roslynService.GetSolutionAsync(solutionPath, ct);
+            var results = new List<object>();
+
+            foreach (var project in solution.Projects)
+            {
+                var compilation = await project.GetCompilationAsync(ct);
+                if (compilation is null) continue;
+
+                foreach (var syntaxTree in compilation.SyntaxTrees)
+                {
+                    var root = await syntaxTree.GetRootAsync(ct);
+
+                    // Find all methods
+                    var methods = root.DescendantNodes()
+                        .OfType<MethodDeclarationSyntax>();
+
+                    foreach (var method in methods)
+                    {
+                        var methodReturnType = method.ReturnType.ToString();
+
+                        // Check if return type matches (including Task<T> unwrapping)
+                        if (methodReturnType.Equals(returnTypeName, StringComparison.OrdinalIgnoreCase) ||
+                            methodReturnType.Contains(returnTypeName, StringComparison.OrdinalIgnoreCase))
+                        {
+                            var containingType = method.Ancestors()
+                                .OfType<TypeDeclarationSyntax>()
+                                .FirstOrDefault()?.Identifier.Text ?? "";
+
+                            var location = method.GetLocation();
+                            var lineSpan = location.GetLineSpan();
+
+                            results.Add(new
+                            {
+                                methodName = method.Identifier.Text,
+                                containingType,
+                                returnType = methodReturnType,
+                                parameters = method.ParameterList.Parameters
+                                    .Select(p => $"{p.Type} {p.Identifier}").ToList(),
+                                filePath = syntaxTree.FilePath,
+                                line = lineSpan.StartLinePosition.Line + 1
+                            });
+
+                            if (results.Count >= 100) break;
+                        }
+                    }
+                    if (results.Count >= 100) break;
+                }
+                if (results.Count >= 100) break;
+            }
+
+            return new
+            {
+                returnTypeName,
+                totalResults = results.Count,
+                wasTruncated = results.Count >= 100,
+                results
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to find by return type {Type}", returnTypeName);
+            return new { error = $"Failed to find by return type: {ex.Message}" };
         }
     }
 
