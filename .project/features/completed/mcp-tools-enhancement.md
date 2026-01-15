@@ -895,107 +895,11 @@ Consider caching the `MSBuildWorkspace` across tool invocations to avoid repeate
 
 ---
 
-## Multi-Language Support Strategy
+## Future: Multi-Language Support
 
-Phase 5 focuses on Roslyn for .NET languages, but the architecture should support other languages over time.
+Additional language support (TypeScript via ts-morph, Go/Rust/Java via LSP) is planned in a separate spec:
 
-### Technology Stack by Language
-
-| Language | Semantic Engine | Refactoring Capability | Status |
-|----------|-----------------|----------------------|--------|
-| **C#** | Roslyn | Full (rename, signature, extract, generate) | Phase 5 |
-| **F#** | Roslyn (FSharp.Compiler.Service) | Full | Phase 5 |
-| **VB.NET** | Roslyn | Full | Phase 5 |
-| **TypeScript/JavaScript** | `ts-morph` (TS Compiler API) | Full | Future |
-| **Python** | `rope` or `jedi` | Rename, extract, references | Future |
-| **Go** | `gopls` (LSP) | Rename, references | Future |
-| **Rust** | `rust-analyzer` (LSP) | Rename, references | Future |
-| **Other** | LSP `workspace/rename` | Rename only | Future |
-
-### Role of Each Technology
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        Aura MCP Tools                           │
-├─────────────────────────────────────────────────────────────────┤
-│  Discovery Layer (all languages)                                │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │  Tree-sitter: Parse → AST → Symbol locations            │   │
-│  │  - Find symbols in file                                  │   │
-│  │  - Query syntax patterns                                 │   │
-│  │  - Fast, incremental parsing                             │   │
-│  └─────────────────────────────────────────────────────────┘   │
-├─────────────────────────────────────────────────────────────────┤
-│  Semantic Layer (language-specific)                             │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐  │
-│  │   Roslyn     │  │   ts-morph   │  │   LSP Servers        │  │
-│  │   (.NET)     │  │   (TS/JS)    │  │   (Go, Rust, etc.)   │  │
-│  ├──────────────┤  ├──────────────┤  ├──────────────────────┤  │
-│  │ • Type info  │  │ • Type info  │  │ • References         │  │
-│  │ • References │  │ • References │  │ • Rename             │  │
-│  │ • Refactor   │  │ • Refactor   │  │ • (limited)          │  │
-│  └──────────────┘  └──────────────┘  └──────────────────────┘  │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-### What Tree-sitter Cannot Do
-
-Tree-sitter is a parser, not a semantic analyzer. It provides:
-
-| ✅ Tree-sitter Can | ❌ Tree-sitter Cannot |
-|-------------------|----------------------|
-| Find all method declarations | Know what type a variable has |
-| Locate symbol by name in file | Find all references across files |
-| Query syntax patterns | Determine if rename causes conflict |
-| Fast incremental re-parse | Resolve imports/dependencies |
-
-**Key insight:** Tree-sitter powers *discovery* (Phases 1-4), semantic engines power *editing* (Phase 5+).
-
-### LSP as Universal Fallback
-
-For languages without dedicated support, LSP provides baseline refactoring:
-
-```typescript
-// LSP requests we can use
-interface LspRefactoringCapabilities {
-  // Available in most language servers
-  "textDocument/rename": true,           // Rename symbol
-  "textDocument/references": true,       // Find all references
-  "textDocument/definition": true,       // Go to definition
-  
-  // Available in some language servers
-  "textDocument/codeAction": "varies",   // Quick fixes, extracts
-  "workspace/applyEdit": true,           // Apply multi-file edits
-}
-```
-
-**Implementation approach:**
-1. Detect language from file extension
-2. Check if we have a native semantic engine (Roslyn, ts-morph)
-3. Fall back to LSP if available
-4. Fall back to text-based (current behavior) as last resort
-
-### Phased Rollout
-
-| Phase | Languages | Engine |
-|-------|-----------|--------|
-| Phase 5 | C#, F#, VB.NET | Roslyn |
-| Phase 6 | Python | rope/jedi |
-| Phase 7 | TypeScript, JavaScript | ts-morph |
-| Phase 8 | Go, Rust, Java | LSP integration |
-
-### Tool Naming Convention
-
-Tools should indicate language scope in descriptions:
-
-```
-aura_rename_symbol
-  Description: "Rename a symbol and update all references. 
-                Supports: C#, F#, VB.NET (Roslyn), Python (rope).
-                Other languages: basic rename via LSP if available."
-```
-
-This allows the AI to understand capabilities and choose the right tool.
+→ **See:** [Multi-Language Refactoring](../upcoming/multi-language-refactoring.md)
 
 ---
 
@@ -1005,7 +909,7 @@ This roadmap covers the path from current state through Phase 5 (Roslyn refactor
 
 ### Current State (January 2026)
 
-- ✅ 12 MCP tools available (search, find implementations, callers, etc.)
+- ✅ 8 consolidated MCP tools (was 28)
 - ✅ Tree-sitter indexing for 13 languages
 - ✅ RAG semantic search
 - ✅ Code graph with relationships

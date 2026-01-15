@@ -76,6 +76,7 @@ features/
 
 | Feature | Description |
 |---------|-------------|
+| [Multi-Language Refactoring](upcoming/multi-language-refactoring.md) | TypeScript (ts-morph), Go/Rust/Java (LSP) support |
 | [Multi-Workspace](upcoming/multi-workspace.md) | Multiple workspace support |
 | [macOS Support](upcoming/macos-support.md) | Native macOS build, installer, and CI |
 
