@@ -5,6 +5,7 @@
 namespace Aura.Api.Mcp;
 
 using System.Text.Json;
+using Aura.Foundation.Git;
 using Aura.Foundation.Rag;
 using Aura.Module.Developer.Data.Entities;
 using Aura.Module.Developer.GitHub;
@@ -38,6 +39,7 @@ public sealed class McpHandler
     private readonly IRoslynWorkspaceService _roslynService;
     private readonly IRoslynRefactoringService _refactoringService;
     private readonly IPythonRefactoringService _pythonRefactoringService;
+    private readonly IGitWorktreeService _worktreeService;
     private readonly ILogger<McpHandler> _logger;
 
     private readonly Dictionary<string, Func<JsonElement?, CancellationToken, Task<object>>> _tools;
@@ -53,6 +55,7 @@ public sealed class McpHandler
         IRoslynWorkspaceService roslynService,
         IRoslynRefactoringService refactoringService,
         IPythonRefactoringService pythonRefactoringService,
+        IGitWorktreeService worktreeService,
         ILogger<McpHandler> logger)
     {
         _ragService = ragService;
@@ -62,6 +65,7 @@ public sealed class McpHandler
         _roslynService = roslynService;
         _refactoringService = refactoringService;
         _pythonRefactoringService = pythonRefactoringService;
+        _worktreeService = worktreeService;
         _logger = logger;
 
         // Phase 7: Consolidated meta-tools (28 tools → 8 tools)
@@ -155,6 +159,7 @@ public sealed class McpHandler
                     properties = new
                     {
                         query = new { type = "string", description = "The search query (concept, symbol name, or keyword)" },
+                        workspacePath = new { type = "string", description = "Path to the current workspace or worktree. Used to filter results to the correct repository." },
                         limit = new { type = "integer", description = "Maximum results (default 10)" },
                         contentType = new
                         {
@@ -754,6 +759,32 @@ public sealed class McpHandler
     // Existing Tool Implementations (used by meta-tool routers)
     // =========================================================================
 
+    /// <summary>
+    /// Resolves a workspacePath (which may be a worktree) to the main repository path.
+    /// This ensures RAG queries use the indexed base repository, not the worktree.
+    /// </summary>
+    private async Task<string?> ResolveToMainRepositoryAsync(string? workspacePath, CancellationToken ct)
+    {
+        if (string.IsNullOrEmpty(workspacePath))
+            return null;
+
+        var result = await _worktreeService.GetMainRepositoryPathAsync(workspacePath, ct);
+        if (result.Success && result.Value is not null)
+        {
+            if (!result.Value.Equals(workspacePath, StringComparison.OrdinalIgnoreCase))
+            {
+                _logger.LogDebug("Resolved worktree {WorktreePath} to main repository {MainRepoPath}",
+                    workspacePath, result.Value);
+            }
+
+            return result.Value;
+        }
+
+        // Not a git repo or failed to resolve - return original path
+        _logger.LogDebug("Could not resolve {WorkspacePath} to main repository, using as-is", workspacePath);
+        return workspacePath;
+    }
+
     private async Task<object> SearchCodeAsync(JsonElement? args, CancellationToken ct)
     {
         var query = args?.GetProperty("query").GetString() ?? "";
@@ -761,6 +792,14 @@ public sealed class McpHandler
         if (args.HasValue && args.Value.TryGetProperty("limit", out var limitEl))
         {
             limit = limitEl.GetInt32();
+        }
+
+        // Parse workspacePath and resolve to main repository if it's a worktree
+        string? sourcePathPrefix = null;
+        if (args.HasValue && args.Value.TryGetProperty("workspacePath", out var workspaceEl))
+        {
+            var workspacePath = workspaceEl.GetString();
+            sourcePathPrefix = await ResolveToMainRepositoryAsync(workspacePath, ct);
         }
 
         // Parse contentType filter
@@ -782,7 +821,8 @@ public sealed class McpHandler
         var options = new RagQueryOptions
         {
             TopK = limit,
-            ContentTypes = contentTypes
+            ContentTypes = contentTypes,
+            SourcePathPrefix = sourcePathPrefix
         };
 
         // Phase 1.2: Check code graph for exact symbol match first

@@ -22,6 +22,9 @@ public interface IGitWorktreeService
     /// <summary>Get worktree info by path</summary>
     Task<GitResult<WorktreeInfo>> GetAsync(string worktreePath, CancellationToken ct = default);
 
+    /// <summary>Get the main repository path for a given git path (works for both worktrees and main repos)</summary>
+    Task<GitResult<string>> GetMainRepositoryPathAsync(string gitPath, CancellationToken ct = default);
+
     /// <summary>Prune stale worktrees</summary>
     Task<GitResult<Unit>> PruneAsync(string repoPath, CancellationToken ct = default);
 }

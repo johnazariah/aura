@@ -206,6 +206,26 @@ public class GitWorktreeService(IProcessRunner process, ILogger<GitWorktreeServi
             : GitResult<WorktreeInfo>.Fail($"Worktree not found: {worktreePath}");
     }
 
+    public async Task<GitResult<string>> GetMainRepositoryPathAsync(string gitPath, CancellationToken ct = default)
+    {
+        // Get the common git directory (shared by main repo and all worktrees)
+        var gitDirResult = await RunGitAsync(gitPath, ["rev-parse", "--git-common-dir"], ct);
+        if (!gitDirResult.Success)
+            return GitResult<string>.Fail("Not a git repository");
+
+        var gitDir = Path.GetFullPath(Path.Combine(gitPath, gitDirResult.StandardOutput.Trim()));
+
+        // The main repo is the parent of the .git directory
+        // For main repos: gitDir = /path/to/repo/.git -> parent = /path/to/repo
+        // For worktrees: gitDir = /path/to/repo/.git -> already points to main .git
+        var mainRepoPath = Path.GetDirectoryName(gitDir);
+
+        if (string.IsNullOrEmpty(mainRepoPath) || !Directory.Exists(mainRepoPath))
+            return GitResult<string>.Fail($"Could not resolve main repository from: {gitPath}");
+
+        return GitResult<string>.Ok(mainRepoPath);
+    }
+
     public async Task<GitResult<Unit>> PruneAsync(string repoPath, CancellationToken ct = default)
     {
         var result = await RunGitAsync(repoPath, ["worktree", "prune"], ct);

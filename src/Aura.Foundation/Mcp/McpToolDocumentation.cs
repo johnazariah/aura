@@ -20,13 +20,16 @@ public static class McpToolDocumentation
 
         | Tool | Purpose | Example |
         |------|---------|---------|
-        | `aura_search` | Semantic code search | `aura_search(query: "authentication middleware")` |
+        | `aura_search` | Semantic code search | `aura_search(query: "authentication", workspacePath: "/path/to/workspace")` |
         | `aura_navigate` | Find code relationships | `aura_navigate(operation: "callers", symbolName: "UserService.GetAsync")` |
         | `aura_inspect` | Explore type structure | `aura_inspect(operation: "type_members", typeName: "UserService")` |
         | `aura_validate` | Check compilation/tests | `aura_validate(operation: "compilation", solutionPath: "...")` |
         | `aura_refactor` | Transform code | `aura_refactor(operation: "rename", filePath: "...", oldName: "x", newName: "y")` |
         | `aura_generate` | Generate code | `aura_generate(operation: "implement_interface", ...)` |
         | `aura_workflow` | Manage dev workflows | `aura_workflow(operation: "list")` |
+
+        **Important:** When in a worktree, pass the current workspace path to `aura_search`. It will automatically
+        resolve to the base repository's index (worktrees share the same indexed codebase).
 
         ### Operation Quick Reference
 
