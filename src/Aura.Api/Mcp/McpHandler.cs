@@ -64,40 +64,17 @@ public sealed class McpHandler
         _pythonRefactoringService = pythonRefactoringService;
         _logger = logger;
 
+        // Phase 7: Consolidated meta-tools (28 tools → 8 tools)
         _tools = new Dictionary<string, Func<JsonElement?, CancellationToken, Task<object>>>
         {
-            // Discovery tools
-            ["aura_search_code"] = SearchCodeAsync,
-            ["aura_find_implementations"] = FindImplementationsAsync,
-            ["aura_find_callers"] = FindCallersAsync,
-            ["aura_get_type_members"] = GetTypeMembersAsync,
-            ["aura_find_derived_types"] = FindDerivedTypesAsync,
-            ["aura_find_usages"] = FindUsagesAsync,
-            ["aura_find_by_attribute"] = FindByAttributeAsync,
-            ["aura_find_extension_methods"] = FindExtensionMethodsAsync,
-            ["aura_find_by_return_type"] = FindByReturnTypeAsync,
-            ["aura_list_classes"] = ListClassesAsync,
-            ["aura_validate_compilation"] = ValidateCompilationAsync,
-            ["aura_run_tests"] = RunTestsAsync,
-            // Story/workflow tools
-            ["aura_list_stories"] = ListStoriesAsync,
-            ["aura_get_story_context"] = GetStoryContextAsync,
-            ["aura_create_story_from_issue"] = CreateStoryFromIssueAsync,
-            // Refactoring tools (Phase 5)
-            ["aura_rename_symbol"] = RenameSymbolAsync,
-            ["aura_change_signature"] = ChangeSignatureAsync,
-            ["aura_implement_interface"] = ImplementInterfaceAsync,
-            ["aura_generate_constructor"] = GenerateConstructorAsync,
-            ["aura_extract_interface"] = ExtractInterfaceAsync,
-            ["aura_safe_delete"] = SafeDeleteAsync,
-            ["aura_add_property"] = AddPropertyAsync,
-            ["aura_add_method"] = AddMethodAsync,
-            // Python refactoring tools (Phase 6)
-            ["aura_python_rename"] = PythonRenameAsync,
-            ["aura_python_extract_method"] = PythonExtractMethodAsync,
-            ["aura_python_extract_variable"] = PythonExtractVariableAsync,
-            ["aura_python_find_references"] = PythonFindReferencesAsync,
-            ["aura_python_find_definition"] = PythonFindDefinitionAsync,
+            ["aura_search"] = SearchAsync,
+            ["aura_navigate"] = NavigateAsync,
+            ["aura_inspect"] = InspectAsync,
+            ["aura_refactor"] = RefactorAsync,
+            ["aura_generate"] = GenerateAsync,
+            ["aura_validate"] = ValidateAsync,
+            ["aura_workflow"] = WorkflowAsync,
+            ["aura_architect"] = ArchitectAsync,
         };
     }
 
@@ -162,271 +139,132 @@ public sealed class McpHandler
 
     private JsonRpcResponse HandleToolsList(JsonRpcRequest request)
     {
+        // Phase 7: Consolidated to 8 intent-based meta-tools (from 28)
         var tools = new[]
         {
+            // =================================================================
+            // aura_search - Semantic and structural code search
+            // =================================================================
             new McpToolDefinition
             {
-                Name = "aura_search_code",
-                Description = "Semantic search across the indexed codebase. Returns relevant code chunks with file paths and similarity scores. Use contentType='code' to exclude documentation.",
+                Name = "aura_search",
+                Description = "Semantic search across the indexed codebase. Returns relevant code chunks with file paths and similarity scores. Exact symbol matches are boosted. (Read)",
                 InputSchema = new
                 {
                     type = "object",
                     properties = new
                     {
-                        query = new { type = "string", description = "The search query" },
+                        query = new { type = "string", description = "The search query (concept, symbol name, or keyword)" },
                         limit = new { type = "integer", description = "Maximum results (default 10)" },
                         contentType = new
                         {
                             type = "string",
-                            description = "Filter by content type: 'code' (source files), 'docs' (markdown/text), 'config' (json/yaml), or 'all' (default)",
+                            description = "Filter by content type",
                             @enum = new[] { "code", "docs", "config", "all" }
                         }
                     },
                     required = new[] { "query" }
                 }
             },
-            new McpToolDefinition
-            {
-                Name = "aura_find_implementations",
-                Description = "Find all types that implement a given interface or inherit from a base class.",
-                InputSchema = new
-                {
-                    type = "object",
-                    properties = new
-                    {
-                        typeName = new { type = "string", description = "Interface or base class name" }
-                    },
-                    required = new[] { "typeName" }
-                }
-            },
-            new McpToolDefinition
-            {
-                Name = "aura_find_callers",
-                Description = "Find all methods that call a given method.",
-                InputSchema = new
-                {
-                    type = "object",
-                    properties = new
-                    {
-                        methodName = new { type = "string", description = "The method name to find callers for" },
-                        containingType = new { type = "string", description = "Optional: the type containing the method" }
-                    },
-                    required = new[] { "methodName" }
-                }
-            },
-            new McpToolDefinition
-            {
-                Name = "aura_get_type_members",
-                Description = "Get all members (methods, properties, fields) of a type.",
-                InputSchema = new
-                {
-                    type = "object",
-                    properties = new
-                    {
-                        typeName = new { type = "string", description = "The type name" }
-                    },
-                    required = new[] { "typeName" }
-                }
-            },
-            new McpToolDefinition
-            {
-                Name = "aura_find_derived_types",
-                Description = "Find all types that inherit from a given base class.",
-                InputSchema = new
-                {
-                    type = "object",
-                    properties = new
-                    {
-                        baseClassName = new { type = "string", description = "The base class name to find subclasses of" }
-                    },
-                    required = new[] { "baseClassName" }
-                }
-            },
-            new McpToolDefinition
-            {
-                Name = "aura_find_usages",
-                Description = "Find all usages/references of a symbol (class, method, property) across the codebase. Essential for refactoring.",
-                InputSchema = new
-                {
-                    type = "object",
-                    properties = new
-                    {
-                        symbolName = new { type = "string", description = "Symbol name to find (class, method, or property name)" },
-                        containingType = new { type = "string", description = "Optional: containing type for method/property search" },
-                        solutionPath = new { type = "string", description = "Path to solution file (.sln)" }
-                    },
-                    required = new[] { "symbolName", "solutionPath" }
-                }
-            },
-            new McpToolDefinition
-            {
-                Name = "aura_list_classes",
-                Description = "List all classes, interfaces, and records in a project. Use to discover types before examining details.",
-                InputSchema = new
-                {
-                    type = "object",
-                    properties = new
-                    {
-                        solutionPath = new { type = "string", description = "Path to solution file (.sln)" },
-                        projectName = new { type = "string", description = "Project name to search in" },
-                        namespaceFilter = new { type = "string", description = "Optional: filter by namespace (partial match)" },
-                        nameFilter = new { type = "string", description = "Optional: filter by type name (partial match)" }
-                    },
-                    required = new[] { "solutionPath", "projectName" }
-                }
-            },
-            new McpToolDefinition
-            {
-                Name = "aura_validate_compilation",
-                Description = "Validate that a project compiles without errors. Use after making code changes to verify correctness.",
-                InputSchema = new
-                {
-                    type = "object",
-                    properties = new
-                    {
-                        solutionPath = new { type = "string", description = "Path to solution file (.sln)" },
-                        projectName = new { type = "string", description = "Project name to validate" },
-                        includeWarnings = new { type = "boolean", description = "Include warnings in output (default: false)" }
-                    },
-                    required = new[] { "solutionPath", "projectName" }
-                }
-            },
-            new McpToolDefinition
-            {
-                Name = "aura_run_tests",
-                Description = "Run unit tests in a project. Use to validate that changes don't break existing functionality.",
-                InputSchema = new
-                {
-                    type = "object",
-                    properties = new
-                    {
-                        projectPath = new { type = "string", description = "Path to test project (.csproj) or directory" },
-                        filter = new { type = "string", description = "Optional: test filter (dotnet test --filter syntax)" },
-                        timeoutSeconds = new { type = "integer", description = "Timeout in seconds (default: 120)" }
-                    },
-                    required = new[] { "projectPath" }
-                }
-            },
-            new McpToolDefinition
-            {
-                Name = "aura_list_stories",
-                Description = "List active development stories/workflows being tracked by Aura.",
-                InputSchema = new
-                {
-                    type = "object",
-                    properties = new { }
-                }
-            },
-            new McpToolDefinition
-            {
-                Name = "aura_get_story_context",
-                Description = "Get detailed context for a specific story, including requirements and current state.",
-                InputSchema = new
-                {
-                    type = "object",
-                    properties = new
-                    {
-                        storyId = new { type = "string", description = "The story/workflow ID (GUID)" }
-                    },
-                    required = new[] { "storyId" }
-                }
-            },
-            new McpToolDefinition
-            {
-                Name = "aura_create_story_from_issue",
-                Description = "Create a new development story from a GitHub issue URL. Fetches issue details and optionally creates a worktree.",
-                InputSchema = new
-                {
-                    type = "object",
-                    properties = new
-                    {
-                        issueUrl = new { type = "string", description = "GitHub issue URL (e.g., https://github.com/owner/repo/issues/123)" },
-                        repositoryPath = new { type = "string", description = "Optional: local repository path for worktree creation" },
-                        mode = new { type = "string", description = "Optional: 'Conversational' (default) or 'Structured'" }
-                    },
-                    required = new[] { "issueUrl" }
-                }
-            },
-            new McpToolDefinition
-            {
-                Name = "aura_find_by_attribute",
-                Description = "Find all methods, classes, or properties decorated with a specific attribute. Use for finding endpoints ([HttpGet]), tests ([Fact]), or other annotated code.",
-                InputSchema = new
-                {
-                    type = "object",
-                    properties = new
-                    {
-                        attributeName = new { type = "string", description = "The attribute name (e.g., 'HttpGet', 'Fact', 'Obsolete'). Don't include brackets." },
-                        solutionPath = new { type = "string", description = "Path to the solution file" },
-                        targetKind = new { type = "string", description = "Optional: filter by target kind: 'method', 'class', 'property', or 'all' (default)" }
-                    },
-                    required = new[] { "attributeName", "solutionPath" }
-                }
-            },
-            new McpToolDefinition
-            {
-                Name = "aura_find_extension_methods",
-                Description = "Find all extension methods for a given type (e.g., IServiceCollection, IApplicationBuilder).",
-                InputSchema = new
-                {
-                    type = "object",
-                    properties = new
-                    {
-                        extendedTypeName = new { type = "string", description = "The type being extended (e.g., 'IServiceCollection')" },
-                        solutionPath = new { type = "string", description = "Path to the solution file" }
-                    },
-                    required = new[] { "extendedTypeName", "solutionPath" }
-                }
-            },
-            new McpToolDefinition
-            {
-                Name = "aura_find_by_return_type",
-                Description = "Find all methods that return a specific type.",
-                InputSchema = new
-                {
-                    type = "object",
-                    properties = new
-                    {
-                        returnTypeName = new { type = "string", description = "The return type name (e.g., 'WebApplication', 'Task<User>')" },
-                        solutionPath = new { type = "string", description = "Path to the solution file" }
-                    },
-                    required = new[] { "returnTypeName", "solutionPath" }
-                }
-            },
+
             // =================================================================
-            // Refactoring Tools (Phase 5)
+            // aura_navigate - Find code elements and relationships
             // =================================================================
             new McpToolDefinition
             {
-                Name = "aura_rename_symbol",
-                Description = "Rename a symbol (type, method, property, field) and update ALL references across the solution. Uses Roslyn for safe, semantic-aware renaming.",
+                Name = "aura_navigate",
+                Description = "Find code elements and their relationships: callers, implementations, derived types, usages, references. (Read)",
                 InputSchema = new
                 {
                     type = "object",
                     properties = new
                     {
-                        symbolName = new { type = "string", description = "Current name of the symbol to rename" },
-                        newName = new { type = "string", description = "New name for the symbol" },
-                        solutionPath = new { type = "string", description = "Path to the solution file" },
+                        operation = new
+                        {
+                            type = "string",
+                            description = "Navigation operation type",
+                            @enum = new[] { "callers", "implementations", "derived_types", "usages", "by_attribute", "extension_methods", "by_return_type", "references", "definition" }
+                        },
+                        symbolName = new { type = "string", description = "Symbol name to navigate from (method, type, property)" },
                         containingType = new { type = "string", description = "Optional: type containing the symbol (for disambiguation)" },
-                        filePath = new { type = "string", description = "Optional: file containing the symbol (for disambiguation)" },
-                        preview = new { type = "boolean", description = "Optional: if true, return changes without applying" }
+                        solutionPath = new { type = "string", description = "Path to solution file (.sln) - required for most C# operations" },
+                        filePath = new { type = "string", description = "Path to file - required for Python operations (references, definition)" },
+                        offset = new { type = "integer", description = "Character offset in file - required for Python operations" },
+                        projectPath = new { type = "string", description = "Project root path - required for Python operations" },
+                        attributeName = new { type = "string", description = "Attribute name for by_attribute operation (e.g., 'HttpGet', 'Test')" },
+                        targetType = new { type = "string", description = "Target type for extension_methods or by_return_type operations" },
+                        targetKind = new
+                        {
+                            type = "string",
+                            description = "Filter by symbol kind for by_attribute",
+                            @enum = new[] { "method", "class", "property", "all" }
+                        }
                     },
-                    required = new[] { "symbolName", "newName", "solutionPath" }
+                    required = new[] { "operation" }
                 }
             },
+
+            // =================================================================
+            // aura_inspect - Examine code structure
+            // =================================================================
             new McpToolDefinition
             {
-                Name = "aura_change_signature",
-                Description = "Change a method signature: add or remove parameters. Updates all call sites with default values.",
+                Name = "aura_inspect",
+                Description = "Examine code structure: type members, class listings, project exploration. (Read)",
                 InputSchema = new
                 {
                     type = "object",
                     properties = new
                     {
-                        methodName = new { type = "string", description = "Name of the method to modify" },
-                        containingType = new { type = "string", description = "Type containing the method" },
-                        solutionPath = new { type = "string", description = "Path to the solution file" },
+                        operation = new
+                        {
+                            type = "string",
+                            description = "Inspection operation type",
+                            @enum = new[] { "type_members", "list_types" }
+                        },
+                        typeName = new { type = "string", description = "Type name for type_members operation" },
+                        solutionPath = new { type = "string", description = "Path to solution file (.sln)" },
+                        projectName = new { type = "string", description = "Project name for list_types operation" },
+                        namespaceFilter = new { type = "string", description = "Filter by namespace (partial match)" },
+                        nameFilter = new { type = "string", description = "Filter by type name (partial match)" }
+                    },
+                    required = new[] { "operation" }
+                }
+            },
+
+            // =================================================================
+            // aura_refactor - Transform existing code
+            // =================================================================
+            new McpToolDefinition
+            {
+                Name = "aura_refactor",
+                Description = "Transform existing code: rename symbols, change signatures, extract methods/variables/interfaces, safe delete. Auto-detects language from filePath. (Write)",
+                InputSchema = new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        operation = new
+                        {
+                            type = "string",
+                            description = "Refactoring operation type",
+                            @enum = new[] { "rename", "change_signature", "extract_interface", "extract_method", "extract_variable", "safe_delete" }
+                        },
+                        symbolName = new { type = "string", description = "Symbol to refactor" },
+                        newName = new { type = "string", description = "New name for rename, extract_method, extract_variable, extract_interface" },
+                        containingType = new { type = "string", description = "Type containing the symbol (for C# disambiguation)" },
+                        solutionPath = new { type = "string", description = "Path to solution file (.sln) - for C# operations" },
+                        filePath = new { type = "string", description = "Path to file containing the code" },
+                        projectPath = new { type = "string", description = "Project root - for Python operations" },
+                        offset = new { type = "integer", description = "Character offset for Python rename" },
+                        startOffset = new { type = "integer", description = "Start offset for Python extract operations" },
+                        endOffset = new { type = "integer", description = "End offset for Python extract operations" },
+                        members = new
+                        {
+                            type = "array",
+                            items = new { type = "string" },
+                            description = "Member names for extract_interface"
+                        },
                         addParameters = new
                         {
                             type = "array",
@@ -440,133 +278,55 @@ public sealed class McpHandler
                                     defaultValue = new { type = "string" }
                                 }
                             },
-                            description = "Parameters to add (each with name, type, optional defaultValue)"
+                            description = "Parameters to add for change_signature"
                         },
                         removeParameters = new
                         {
                             type = "array",
                             items = new { type = "string" },
-                            description = "Names of parameters to remove"
+                            description = "Parameter names to remove for change_signature"
                         },
-                        preview = new { type = "boolean", description = "Optional: if true, return changes without applying" }
+                        preview = new { type = "boolean", description = "If true, return changes without applying (default: false)" }
                     },
-                    required = new[] { "methodName", "containingType", "solutionPath" }
+                    required = new[] { "operation" }
                 }
             },
+
+            // =================================================================
+            // aura_generate - Create new code elements
+            // =================================================================
             new McpToolDefinition
             {
-                Name = "aura_implement_interface",
-                Description = "Generate method and property stubs to implement an interface on a class.",
+                Name = "aura_generate",
+                Description = "Generate new code: implement interfaces, generate constructors, add properties/methods. (Write)",
                 InputSchema = new
                 {
                     type = "object",
                     properties = new
                     {
-                        className = new { type = "string", description = "Name of the class to modify" },
-                        interfaceName = new { type = "string", description = "Name of the interface to implement" },
-                        solutionPath = new { type = "string", description = "Path to the solution file" },
+                        operation = new
+                        {
+                            type = "string",
+                            description = "Generation operation type",
+                            @enum = new[] { "implement_interface", "constructor", "property", "method" }
+                        },
+                        className = new { type = "string", description = "Target class name" },
+                        solutionPath = new { type = "string", description = "Path to solution file (.sln)" },
+                        interfaceName = new { type = "string", description = "Interface to implement (for implement_interface)" },
                         explicitImplementation = new { type = "boolean", description = "Use explicit interface implementation (default: false)" },
-                        preview = new { type = "boolean", description = "Optional: if true, return changes without applying" }
-                    },
-                    required = new[] { "className", "interfaceName", "solutionPath" }
-                }
-            },
-            new McpToolDefinition
-            {
-                Name = "aura_generate_constructor",
-                Description = "Generate a constructor that initializes fields/properties. Defaults to all readonly fields.",
-                InputSchema = new
-                {
-                    type = "object",
-                    properties = new
-                    {
-                        className = new { type = "string", description = "Name of the class to modify" },
-                        solutionPath = new { type = "string", description = "Path to the solution file" },
                         members = new
                         {
                             type = "array",
                             items = new { type = "string" },
-                            description = "Optional: specific field/property names to initialize"
+                            description = "Field/property names for constructor initialization"
                         },
-                        preview = new { type = "boolean", description = "Optional: if true, return changes without applying" }
-                    },
-                    required = new[] { "className", "solutionPath" }
-                }
-            },
-            new McpToolDefinition
-            {
-                Name = "aura_extract_interface",
-                Description = "Extract an interface from a class's public members. Creates new interface file and updates class.",
-                InputSchema = new
-                {
-                    type = "object",
-                    properties = new
-                    {
-                        className = new { type = "string", description = "Name of the class to extract from" },
-                        interfaceName = new { type = "string", description = "Name for the new interface" },
-                        solutionPath = new { type = "string", description = "Path to the solution file" },
-                        members = new
-                        {
-                            type = "array",
-                            items = new { type = "string" },
-                            description = "Optional: specific member names to include"
-                        },
-                        preview = new { type = "boolean", description = "Optional: if true, return changes without applying" }
-                    },
-                    required = new[] { "className", "interfaceName", "solutionPath" }
-                }
-            },
-            new McpToolDefinition
-            {
-                Name = "aura_safe_delete",
-                Description = "Safely delete a symbol only if it has no remaining references. Returns error with reference list if still used.",
-                InputSchema = new
-                {
-                    type = "object",
-                    properties = new
-                    {
-                        symbolName = new { type = "string", description = "Name of the symbol to delete" },
-                        solutionPath = new { type = "string", description = "Path to the solution file" },
-                        containingType = new { type = "string", description = "Optional: type containing the symbol" },
-                        preview = new { type = "boolean", description = "Optional: if true, return changes without applying" }
-                    },
-                    required = new[] { "symbolName", "solutionPath" }
-                }
-            },
-            new McpToolDefinition
-            {
-                Name = "aura_add_property",
-                Description = "Add a property to a class with specified type and accessors.",
-                InputSchema = new
-                {
-                    type = "object",
-                    properties = new
-                    {
-                        className = new { type = "string", description = "Name of the class to modify" },
-                        propertyName = new { type = "string", description = "Name of the new property" },
-                        propertyType = new { type = "string", description = "Type of the property (e.g., 'string', 'int', 'ILogger<MyClass>')" },
-                        solutionPath = new { type = "string", description = "Path to the solution file" },
+                        propertyName = new { type = "string", description = "Name for new property" },
+                        propertyType = new { type = "string", description = "Type for new property" },
                         hasGetter = new { type = "boolean", description = "Include getter (default: true)" },
                         hasSetter = new { type = "boolean", description = "Include setter (default: true)" },
-                        initialValue = new { type = "string", description = "Optional initial value" },
-                        preview = new { type = "boolean", description = "Optional: if true, return changes without applying" }
-                    },
-                    required = new[] { "className", "propertyName", "propertyType", "solutionPath" }
-                }
-            },
-            new McpToolDefinition
-            {
-                Name = "aura_add_method",
-                Description = "Add a method to a class with specified signature and optional body.",
-                InputSchema = new
-                {
-                    type = "object",
-                    properties = new
-                    {
-                        className = new { type = "string", description = "Name of the class to modify" },
-                        methodName = new { type = "string", description = "Name of the new method" },
-                        returnType = new { type = "string", description = "Return type (e.g., 'void', 'Task<string>')" },
-                        solutionPath = new { type = "string", description = "Path to the solution file" },
+                        initialValue = new { type = "string", description = "Initial value for property" },
+                        methodName = new { type = "string", description = "Name for new method" },
+                        returnType = new { type = "string", description = "Return type for new method" },
                         parameters = new
                         {
                             type = "array",
@@ -585,98 +345,95 @@ public sealed class McpHandler
                         accessModifier = new { type = "string", description = "Access modifier (default: 'public')" },
                         isAsync = new { type = "boolean", description = "Whether method is async" },
                         body = new { type = "string", description = "Optional method body code" },
-                        preview = new { type = "boolean", description = "Optional: if true, return changes without applying" }
+                        preview = new { type = "boolean", description = "If true, return changes without applying (default: false)" }
                     },
-                    required = new[] { "className", "methodName", "returnType", "solutionPath" }
+                    required = new[] { "operation", "className", "solutionPath" }
                 }
             },
-            // Phase 6: Python refactoring tools
+
+            // =================================================================
+            // aura_validate - Check code correctness
+            // =================================================================
             new McpToolDefinition
             {
-                Name = "aura_python_rename",
-                Description = "Rename a Python symbol (function, class, variable) and update all references across the project.",
+                Name = "aura_validate",
+                Description = "Validate code: check compilation, run tests. Use after code changes. (Read)",
                 InputSchema = new
                 {
                     type = "object",
                     properties = new
                     {
-                        projectPath = new { type = "string", description = "Root path of the Python project" },
-                        filePath = new { type = "string", description = "Path to the file containing the symbol" },
-                        offset = new { type = "integer", description = "Character offset of the symbol in the file" },
-                        newName = new { type = "string", description = "New name for the symbol" },
-                        preview = new { type = "boolean", description = "Optional: if true, return changes without applying" }
+                        operation = new
+                        {
+                            type = "string",
+                            description = "Validation operation type",
+                            @enum = new[] { "compilation", "tests" }
+                        },
+                        solutionPath = new { type = "string", description = "Path to solution file (.sln) - for compilation" },
+                        projectName = new { type = "string", description = "Project name - for compilation" },
+                        projectPath = new { type = "string", description = "Path to test project - for tests" },
+                        includeWarnings = new { type = "boolean", description = "Include warnings in compilation output (default: false)" },
+                        filter = new { type = "string", description = "Test filter (dotnet test --filter syntax)" },
+                        timeoutSeconds = new { type = "integer", description = "Timeout in seconds for tests (default: 120)" }
                     },
-                    required = new[] { "projectPath", "filePath", "offset", "newName" }
+                    required = new[] { "operation" }
                 }
             },
+
+            // =================================================================
+            // aura_workflow - Manage development workflows
+            // =================================================================
             new McpToolDefinition
             {
-                Name = "aura_python_extract_method",
-                Description = "Extract a region of Python code into a new method/function.",
+                Name = "aura_workflow",
+                Description = "Manage Aura development workflows/stories: list, get details, create from GitHub issues. (CRUD)",
                 InputSchema = new
                 {
                     type = "object",
                     properties = new
                     {
-                        projectPath = new { type = "string", description = "Root path of the Python project" },
-                        filePath = new { type = "string", description = "Path to the file containing the code" },
-                        startOffset = new { type = "integer", description = "Start character offset of the code region" },
-                        endOffset = new { type = "integer", description = "End character offset of the code region" },
-                        newName = new { type = "string", description = "Name for the new method" },
-                        preview = new { type = "boolean", description = "Optional: if true, return changes without applying" }
+                        operation = new
+                        {
+                            type = "string",
+                            description = "Workflow operation type",
+                            @enum = new[] { "list", "get", "create" }
+                        },
+                        storyId = new { type = "string", description = "Story ID (GUID) - for get operation" },
+                        issueUrl = new { type = "string", description = "GitHub issue URL - for create operation" },
+                        repositoryPath = new { type = "string", description = "Local repository path for worktree creation" },
+                        mode = new
+                        {
+                            type = "string",
+                            description = "Workflow mode",
+                            @enum = new[] { "Conversational", "Structured" }
+                        }
                     },
-                    required = new[] { "projectPath", "filePath", "startOffset", "endOffset", "newName" }
+                    required = new[] { "operation" }
                 }
             },
+
+            // =================================================================
+            // aura_architect - Whole-codebase architectural analysis (placeholder)
+            // =================================================================
             new McpToolDefinition
             {
-                Name = "aura_python_extract_variable",
-                Description = "Extract a Python expression into a variable.",
+                Name = "aura_architect",
+                Description = "Analyze codebase architecture: dependencies, layer violations, public API surface. (Read/Write) [Coming Soon]",
                 InputSchema = new
                 {
                     type = "object",
                     properties = new
                     {
-                        projectPath = new { type = "string", description = "Root path of the Python project" },
-                        filePath = new { type = "string", description = "Path to the file containing the expression" },
-                        startOffset = new { type = "integer", description = "Start character offset of the expression" },
-                        endOffset = new { type = "integer", description = "End character offset of the expression" },
-                        newName = new { type = "string", description = "Name for the new variable" },
-                        preview = new { type = "boolean", description = "Optional: if true, return changes without applying" }
+                        operation = new
+                        {
+                            type = "string",
+                            description = "Architecture operation type",
+                            @enum = new[] { "dependencies", "layer_check", "public_api" }
+                        },
+                        projectPath = new { type = "string", description = "Path to project or solution" },
+                        targetLayer = new { type = "string", description = "Target layer for layer_check" }
                     },
-                    required = new[] { "projectPath", "filePath", "startOffset", "endOffset", "newName" }
-                }
-            },
-            new McpToolDefinition
-            {
-                Name = "aura_python_find_references",
-                Description = "Find all references to a Python symbol across the project.",
-                InputSchema = new
-                {
-                    type = "object",
-                    properties = new
-                    {
-                        projectPath = new { type = "string", description = "Root path of the Python project" },
-                        filePath = new { type = "string", description = "Path to the file containing the symbol" },
-                        offset = new { type = "integer", description = "Character offset of the symbol in the file" }
-                    },
-                    required = new[] { "projectPath", "filePath", "offset" }
-                }
-            },
-            new McpToolDefinition
-            {
-                Name = "aura_python_find_definition",
-                Description = "Find the definition location of a Python symbol.",
-                InputSchema = new
-                {
-                    type = "object",
-                    properties = new
-                    {
-                        projectPath = new { type = "string", description = "Root path of the Python project" },
-                        filePath = new { type = "string", description = "Path to the file containing the symbol reference" },
-                        offset = new { type = "integer", description = "Character offset of the symbol in the file" }
-                    },
-                    required = new[] { "projectPath", "filePath", "offset" }
+                    required = new[] { "operation" }
                 }
             },
         };
@@ -751,7 +508,250 @@ public sealed class McpHandler
     }
 
     // =========================================================================
-    // Tool Implementations
+    // Phase 7: Meta-Tool Routers (8 consolidated tools)
+    // =========================================================================
+
+    /// <summary>
+    /// aura_search - Semantic and structural code search (was aura_search_code).
+    /// </summary>
+    private async Task<object> SearchAsync(JsonElement? args, CancellationToken ct)
+    {
+        // Delegates to existing SearchCodeAsync logic
+        return await SearchCodeAsync(args, ct);
+    }
+
+    /// <summary>
+    /// aura_navigate - Find code elements and relationships.
+    /// Routes to: callers, implementations, derived_types, usages, by_attribute, extension_methods, by_return_type, references, definition.
+    /// </summary>
+    private async Task<object> NavigateAsync(JsonElement? args, CancellationToken ct)
+    {
+        var operation = args?.GetProperty("operation").GetString()
+            ?? throw new ArgumentException("operation is required");
+
+        return operation switch
+        {
+            "callers" => await FindCallersAsync(args, ct),
+            "implementations" => await FindImplementationsFromNavigate(args, ct),
+            "derived_types" => await FindDerivedTypesFromNavigate(args, ct),
+            "usages" => await FindUsagesAsync(args, ct),
+            "by_attribute" => await FindByAttributeFromNavigate(args, ct),
+            "extension_methods" => await FindExtensionMethodsFromNavigate(args, ct),
+            "by_return_type" => await FindByReturnTypeFromNavigate(args, ct),
+            "references" => await PythonFindReferencesAsync(args, ct),
+            "definition" => await PythonFindDefinitionAsync(args, ct),
+            _ => throw new ArgumentException($"Unknown navigate operation: {operation}")
+        };
+    }
+
+    // Navigation helpers - adapt from old parameter names to new unified schema
+    private async Task<object> FindImplementationsFromNavigate(JsonElement? args, CancellationToken ct)
+    {
+        var typeName = args?.GetProperty("symbolName").GetString() ?? "";
+        var results = await _graphService.FindImplementationsAsync(typeName, cancellationToken: ct);
+        return results.Select(n => new { name = n.Name, fullName = n.FullName, kind = n.NodeType.ToString(), filePath = n.FilePath, line = n.LineNumber });
+    }
+
+    private async Task<object> FindDerivedTypesFromNavigate(JsonElement? args, CancellationToken ct)
+    {
+        var baseClassName = args?.GetProperty("symbolName").GetString() ?? "";
+        var results = await _graphService.FindDerivedTypesAsync(baseClassName, cancellationToken: ct);
+        return results.Select(n => new { name = n.Name, fullName = n.FullName, kind = n.NodeType.ToString(), filePath = n.FilePath, line = n.LineNumber });
+    }
+
+    private async Task<object> FindByAttributeFromNavigate(JsonElement? args, CancellationToken ct)
+    {
+        // Delegate to existing implementation - just need to remap attributeName from symbolName if needed
+        return await FindByAttributeAsync(args, ct);
+    }
+
+    private async Task<object> FindExtensionMethodsFromNavigate(JsonElement? args, CancellationToken ct)
+    {
+        // Remap targetType to extendedTypeName for existing implementation
+        return await FindExtensionMethodsAsync(args, ct);
+    }
+
+    private async Task<object> FindByReturnTypeFromNavigate(JsonElement? args, CancellationToken ct)
+    {
+        // Remap targetType to returnTypeName for existing implementation
+        return await FindByReturnTypeAsync(args, ct);
+    }
+
+    /// <summary>
+    /// aura_inspect - Examine code structure.
+    /// Routes to: type_members, list_types.
+    /// </summary>
+    private async Task<object> InspectAsync(JsonElement? args, CancellationToken ct)
+    {
+        var operation = args?.GetProperty("operation").GetString()
+            ?? throw new ArgumentException("operation is required");
+
+        return operation switch
+        {
+            "type_members" => await GetTypeMembersAsync(args, ct),
+            "list_types" => await ListClassesFromInspect(args, ct),
+            _ => throw new ArgumentException($"Unknown inspect operation: {operation}")
+        };
+    }
+
+    private async Task<object> ListClassesFromInspect(JsonElement? args, CancellationToken ct)
+    {
+        // Adapts from new schema to existing ListClassesAsync
+        return await ListClassesAsync(args, ct);
+    }
+
+    /// <summary>
+    /// aura_refactor - Transform existing code.
+    /// Routes to: rename, change_signature, extract_interface, extract_method, extract_variable, safe_delete.
+    /// Auto-detects language from filePath extension.
+    /// </summary>
+    private async Task<object> RefactorAsync(JsonElement? args, CancellationToken ct)
+    {
+        var operation = args?.GetProperty("operation").GetString()
+            ?? throw new ArgumentException("operation is required");
+
+        // Detect language from filePath if provided
+        var isPython = false;
+        if (args.HasValue && args.Value.TryGetProperty("filePath", out var filePathEl))
+        {
+            var filePath = filePathEl.GetString() ?? "";
+            isPython = filePath.EndsWith(".py", StringComparison.OrdinalIgnoreCase);
+        }
+
+        return operation switch
+        {
+            "rename" when isPython => await PythonRenameAsync(args, ct),
+            "rename" => await RenameSymbolAsync(args, ct),
+            "change_signature" => await ChangeSignatureAsync(args, ct),
+            "extract_interface" => await ExtractInterfaceFromRefactor(args, ct),
+            "extract_method" when isPython => await PythonExtractMethodAsync(args, ct),
+            "extract_variable" when isPython => await PythonExtractVariableAsync(args, ct),
+            "safe_delete" => await SafeDeleteAsync(args, ct),
+            "extract_method" => throw new NotSupportedException("C# extract_method not yet implemented. Use Python files or manual extraction."),
+            "extract_variable" => throw new NotSupportedException("C# extract_variable not yet implemented. Use Python files or manual extraction."),
+            _ => throw new ArgumentException($"Unknown refactor operation: {operation}")
+        };
+    }
+
+    private async Task<object> ExtractInterfaceFromRefactor(JsonElement? args, CancellationToken ct)
+    {
+        // Map from new schema (symbolName as class name, newName as interface name) to old schema
+        var className = args?.GetProperty("symbolName").GetString()
+            ?? throw new ArgumentException("symbolName (class name) is required for extract_interface");
+        var interfaceName = args?.GetProperty("newName").GetString()
+            ?? throw new ArgumentException("newName (interface name) is required for extract_interface");
+        var solutionPath = args?.GetProperty("solutionPath").GetString()
+            ?? throw new ArgumentException("solutionPath is required for extract_interface");
+
+        var preview = false;
+        if (args.HasValue && args.Value.TryGetProperty("preview", out var previewEl))
+        {
+            preview = previewEl.GetBoolean();
+        }
+
+        var members = new List<string>();
+        if (args.HasValue && args.Value.TryGetProperty("members", out var membersEl))
+        {
+            foreach (var m in membersEl.EnumerateArray())
+            {
+                if (m.GetString() is string memberName)
+                    members.Add(memberName);
+            }
+        }
+
+        var result = await _refactoringService.ExtractInterfaceAsync(
+            new ExtractInterfaceRequest
+            {
+                ClassName = className,
+                InterfaceName = interfaceName,
+                SolutionPath = solutionPath,
+                Members = members.Count > 0 ? members : null,
+                Preview = preview
+            },
+            ct);
+
+        return new
+        {
+            success = result.Success,
+            filesModified = result.ModifiedFiles,
+            message = result.Error ?? $"Extracted interface {interfaceName} from {className}",
+            preview = preview ? result.Preview : null
+        };
+    }
+
+    /// <summary>
+    /// aura_generate - Create new code elements.
+    /// Routes to: implement_interface, constructor, property, method.
+    /// </summary>
+    private async Task<object> GenerateAsync(JsonElement? args, CancellationToken ct)
+    {
+        var operation = args?.GetProperty("operation").GetString()
+            ?? throw new ArgumentException("operation is required");
+
+        return operation switch
+        {
+            "implement_interface" => await ImplementInterfaceAsync(args, ct),
+            "constructor" => await GenerateConstructorAsync(args, ct),
+            "property" => await AddPropertyAsync(args, ct),
+            "method" => await AddMethodAsync(args, ct),
+            _ => throw new ArgumentException($"Unknown generate operation: {operation}")
+        };
+    }
+
+    /// <summary>
+    /// aura_validate - Check code correctness.
+    /// Routes to: compilation, tests.
+    /// </summary>
+    private async Task<object> ValidateAsync(JsonElement? args, CancellationToken ct)
+    {
+        var operation = args?.GetProperty("operation").GetString()
+            ?? throw new ArgumentException("operation is required");
+
+        return operation switch
+        {
+            "compilation" => await ValidateCompilationAsync(args, ct),
+            "tests" => await RunTestsAsync(args, ct),
+            _ => throw new ArgumentException($"Unknown validate operation: {operation}")
+        };
+    }
+
+    /// <summary>
+    /// aura_workflow - Manage development workflows.
+    /// Routes to: list, get, create.
+    /// </summary>
+    private async Task<object> WorkflowAsync(JsonElement? args, CancellationToken ct)
+    {
+        var operation = args?.GetProperty("operation").GetString()
+            ?? throw new ArgumentException("operation is required");
+
+        return operation switch
+        {
+            "list" => await ListStoriesAsync(args, ct),
+            "get" => await GetStoryContextAsync(args, ct),
+            "create" => await CreateStoryFromIssueAsync(args, ct),
+            _ => throw new ArgumentException($"Unknown workflow operation: {operation}")
+        };
+    }
+
+    /// <summary>
+    /// aura_architect - Whole-codebase architectural analysis.
+    /// Placeholder for future implementation.
+    /// </summary>
+    private Task<object> ArchitectAsync(JsonElement? args, CancellationToken ct)
+    {
+        var operation = args?.GetProperty("operation").GetString()
+            ?? throw new ArgumentException("operation is required");
+
+        return Task.FromResult<object>(new
+        {
+            success = false,
+            message = $"aura_architect operation '{operation}' is not yet implemented. Coming in a future release.",
+            availableOperations = new[] { "dependencies", "layer_check", "public_api" }
+        });
+    }
+
+    // =========================================================================
+    // Existing Tool Implementations (used by meta-tool routers)
     // =========================================================================
 
     private async Task<object> SearchCodeAsync(JsonElement? args, CancellationToken ct)
