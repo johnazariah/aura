@@ -63,6 +63,7 @@ features/
 | [MCP Server](completed/mcp-server.md) | Expose RAG/Code Graph to Copilot via MCP | 2026-01-15 |
 | [MCP Tools Enhancement](completed/mcp-tools-enhancement.md) | 8 meta-tools: search, navigate, refactor, generate, etc. | 2026-01-15 |
 | [Copilot CLI Parity](completed/copilot-cli-parity.md) | Autonomous mode, build-fix loop, visualization, GitHub Actions | 2026-01-15 |
+| [Path Normalization](completed/path-normalization-review.md) | Consistent path handling across Windows/macOS | 2026-01-15 |
 
 ## Upcoming Features
 
@@ -71,6 +72,7 @@ features/
 | Feature | Description |
 |---------|-------------|
 | [Story Model](upcoming/story-model.md) | GitHub Issue integration, conversational mode |
+| [Story Chat](upcoming/story-chat.md) | Chat-first workflow interaction |
 
 ### Medium Priority (User Experience)
 
@@ -79,15 +81,16 @@ features/
 | [Multi-Language Refactoring](upcoming/multi-language-refactoring.md) | TypeScript (ts-morph), Go/Rust/Java (LSP) support |
 | [Multi-Workspace](upcoming/multi-workspace.md) | Multiple workspace support |
 | [macOS Support](upcoming/macos-support.md) | Native macOS build, installer, and CI |
+| [Workflow Verification](upcoming/workflow-verification-stage.md) | Run tests/linting before commit |
+| [API Harmonization](upcoming/api-review-harmonization.md) | Consistent REST API design |
 
 ### Lower Priority (Advanced)
 
 | Feature | Description |
 |---------|-------------|
+| [Agent Reflection](upcoming/agent-reflection.md) | Self-critique step for agent responses |
 | [Condensed Export](upcoming/condensed-export.md) | Export indexed context |
-| [Specialist Agents](upcoming/specialist-coding-agents.md) | Language-specific coding agents |
 | [Internationalization](upcoming/internationalization.md) | Multi-language UI support |
-| [Unified Software Development](upcoming/unified-software-development-capability.md) | Universal dev capability |
 
 ### Unplanned (Backlog)
 
