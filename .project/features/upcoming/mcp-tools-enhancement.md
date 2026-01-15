@@ -1,12 +1,13 @@
 # MCP Tools Enhancement
 
-**Status:** ⏳ In Progress (Phases 1-6 Complete)  
+**Status:** ⏳ In Progress (Phases 1-6 Complete, Phase 7 Planned)  
 **Priority:** High  
-**Estimated Effort:** 3-5 days (2 days remaining)  
+**Estimated Effort:** 5 days total (2 days remaining for Phase 7)  
 **Created:** 2026-01-15  
 **Updated:** 2026-01-15
 
-> **Progress:** Phases 1-6 implemented on 2026-01-15. See commit `6db5ea6` (Roslyn) and `0c3b48f` (Python).
+> **Progress:** Phases 1-6 implemented on 2026-01-15. See commit `6db5ea6` (Roslyn) and `0c3b48f` (Python).  
+> **Next:** Phase 7 - Tool Consolidation (28 tools → 8 meta-tools)
 
 ## Overview
 
@@ -1157,6 +1158,220 @@ public class RoslynRefactoringService : IRoslynRefactoringService
 - [ ] Extract Python function with correct parameter capture
 - [ ] Tools report "Python" in capability description
 
+### Milestone 8: Tool Consolidation (Phase 7)
+
+**Duration:** 2 days  
+**Goal:** Reduce tool count from 28 to 8 meta-tools for improved LLM usability
+
+#### Problem Statement
+
+With 28 individual tools, the MCP server consumes significant context window space and creates cognitive load for LLMs when selecting the right tool. Anthropic recommends 10-20 tools as optimal.
+
+| Metric | Before | After |
+|--------|--------|-------|
+| Total tools | 28 | 8 |
+| Schema tokens | ~4,800 | ~1,600 |
+| Tool descriptions | 28 paragraphs | 8 paragraphs |
+| LLM selection complexity | High | Low |
+
+#### Design Principle: Group by Intent
+
+Instead of grouping by language (Roslyn vs Python) or technology, group by **user intent**:
+
+| Meta-Tool | Verb | Purpose | Read/Write |
+|-----------|------|---------|------------|
+| `aura_search` | Search | Semantic and structural code search | Read |
+| `aura_navigate` | Navigate | Find code elements and relationships | Read |
+| `aura_inspect` | Inspect | Examine code structure | Read |
+| `aura_refactor` | Refactor | Transform existing code | Write |
+| `aura_generate` | Generate | Create new code elements | Write |
+| `aura_validate` | Validate | Check code correctness | Read |
+| `aura_workflow` | Workflow | Manage development workflows | CRUD |
+| `aura_architect` | Architect | Whole-codebase architectural analysis | Read/Write |
+
+#### Consolidation Mapping
+
+**aura_search** (1 tool → 1 tool)
+```
+aura_search_code → aura_search
+```
+Schema:
+```json
+{
+  "query": "string",
+  "contentType": "code|docs|config|all",
+  "limit": "integer"
+}
+```
+
+---
+
+**aura_navigate** (9 tools → 1 tool)
+```
+aura_find_implementations    → aura_navigate operation=implementations
+aura_find_callers           → aura_navigate operation=callers
+aura_find_derived_types     → aura_navigate operation=derived_types
+aura_find_usages            → aura_navigate operation=usages
+aura_find_by_attribute      → aura_navigate operation=by_attribute
+aura_find_extension_methods → aura_navigate operation=extension_methods
+aura_find_by_return_type    → aura_navigate operation=by_return_type
+aura_python_find_references → aura_navigate operation=references
+aura_python_find_definition → aura_navigate operation=definition
+```
+Schema:
+```json
+{
+  "operation": "callers|implementations|derived_types|usages|by_attribute|extension_methods|by_return_type|references|definition",
+  "symbolName": "string",
+  "filePath": "string (optional, for Python ops)",
+  "attributeName": "string (for by_attribute)",
+  "targetType": "string (for extension_methods, by_return_type)"
+}
+```
+
+---
+
+**aura_inspect** (2 tools → 1 tool)
+```
+aura_get_type_members → aura_inspect operation=type_members
+aura_list_classes     → aura_inspect operation=list_types
+```
+Schema:
+```json
+{
+  "operation": "type_members|list_types",
+  "typeName": "string (for type_members)",
+  "projectPath": "string (for list_types)"
+}
+```
+
+---
+
+**aura_refactor** (7 tools → 1 tool)
+```
+aura_rename_symbol           → aura_refactor operation=rename
+aura_change_signature        → aura_refactor operation=change_signature
+aura_extract_interface       → aura_refactor operation=extract_interface
+aura_safe_delete             → aura_refactor operation=safe_delete
+aura_python_rename           → aura_refactor operation=rename (auto-detect from filePath)
+aura_python_extract_method   → aura_refactor operation=extract_method
+aura_python_extract_variable → aura_refactor operation=extract_variable
+```
+Schema:
+```json
+{
+  "operation": "rename|change_signature|extract_interface|extract_method|extract_variable|safe_delete",
+  "filePath": "string",
+  "symbolName": "string",
+  "newName": "string (for rename, extract_*)",
+  "startLine": "integer (for extract_*)",
+  "endLine": "integer (for extract_*)",
+  "parameters": "array (for change_signature)",
+  "preview": "boolean"
+}
+```
+**Language Detection:** Automatically routes to Roslyn (.cs) or rope (.py) based on file extension.
+
+---
+
+**aura_generate** (4 tools → 1 tool)
+```
+aura_implement_interface  → aura_generate operation=implement_interface
+aura_generate_constructor → aura_generate operation=constructor
+aura_add_property         → aura_generate operation=property
+aura_add_method           → aura_generate operation=method
+```
+Schema:
+```json
+{
+  "operation": "implement_interface|constructor|property|method",
+  "filePath": "string",
+  "typeName": "string",
+  "interfaceName": "string (for implement_interface)",
+  "memberName": "string (for property, method)",
+  "memberType": "string (for property)",
+  "parameters": "array (for constructor, method)",
+  "preview": "boolean"
+}
+```
+
+---
+
+**aura_validate** (2 tools → 1 tool)
+```
+aura_validate_compilation → aura_validate operation=compilation
+aura_run_tests            → aura_validate operation=tests
+```
+Schema:
+```json
+{
+  "operation": "compilation|tests",
+  "projectPath": "string (optional)",
+  "testFilter": "string (for tests)"
+}
+```
+
+---
+
+**aura_workflow** (3 tools → 1 tool)
+```
+aura_list_stories           → aura_workflow operation=list
+aura_get_story_context      → aura_workflow operation=get
+aura_create_story_from_issue → aura_workflow operation=create
+```
+Schema:
+```json
+{
+  "operation": "list|get|create",
+  "storyId": "string (for get)",
+  "issueUrl": "string (for create)",
+  "title": "string (for create)"
+}
+```
+
+---
+
+**aura_architect** (new tool)
+```
+(future) analyze_dependencies      → aura_architect operation=dependencies
+(future) verify_layer_architecture → aura_architect operation=layer_check
+(future) analyze_public_api        → aura_architect operation=public_api
+```
+Schema:
+```json
+{
+  "operation": "dependencies|layer_check|public_api",
+  "projectPath": "string",
+  "targetLayer": "string (for layer_check)"
+}
+```
+
+#### Implementation Plan
+
+| Phase | Task | Effort |
+|-------|------|--------|
+| 7.1 | Create `aura_navigate` meta-tool with operation routing | 4h |
+| 7.2 | Create `aura_refactor` meta-tool with language detection | 4h |
+| 7.3 | Create `aura_generate` meta-tool | 2h |
+| 7.4 | Create `aura_inspect` meta-tool | 1h |
+| 7.5 | Create `aura_validate` meta-tool | 1h |
+| 7.6 | Create `aura_workflow` meta-tool | 1h |
+| 7.7 | Update `aura_search` schema (already consolidated) | 30m |
+| 7.8 | Add `aura_architect` placeholder | 30m |
+| 7.9 | Remove 27 old tool definitions | 2h |
+| 7.10 | Update tests and documentation | 2h |
+
+**Total:** ~2 days
+
+#### Acceptance Criteria
+
+- [ ] Only 8 tools appear in `tools/list` response
+- [ ] `aura_navigate operation=callers symbol=MyMethod` works
+- [ ] `aura_refactor operation=rename filePath=foo.py` routes to Python
+- [ ] `aura_refactor operation=rename filePath=foo.cs` routes to Roslyn
+- [ ] Context window usage reduced by ~60%
+- [ ] All existing test scenarios still pass
+
 ---
 
 ### Timeline Summary
@@ -1179,6 +1394,10 @@ Week 3: Code Generation + Extraction (Phase 5.3-5.4)
 Week 4: Cleanup + Python (Phase 5.5 + Phase 6)
         ├── Day 1-2: safe_delete, remove_usings, apply_code_fix
         └── Day 3-5: Python rope integration
+
+Week 5: Tool Consolidation (Phase 7)
+        ├── Day 1: aura_navigate, aura_refactor meta-tools
+        └── Day 2: Remaining meta-tools, cleanup, testing
 ```
 
 ### Dependencies
