@@ -973,8 +973,8 @@ interface LspRefactoringCapabilities {
 | Phase | Languages | Engine |
 |-------|-----------|--------|
 | Phase 5 | C#, F#, VB.NET | Roslyn |
-| Phase 6 | TypeScript, JavaScript | ts-morph |
-| Phase 7 | Python | rope/jedi |
+| Phase 6 | Python | rope/jedi |
+| Phase 7 | TypeScript, JavaScript | ts-morph |
 | Phase 8 | Go, Rust, Java | LSP integration |
 
 ### Tool Naming Convention
@@ -984,11 +984,216 @@ Tools should indicate language scope in descriptions:
 ```
 aura_rename_symbol
   Description: "Rename a symbol and update all references. 
-                Supports: C#, F#, VB.NET (Roslyn), TypeScript/JavaScript (ts-morph).
+                Supports: C#, F#, VB.NET (Roslyn), Python (rope).
                 Other languages: basic rename via LSP if available."
 ```
 
 This allows the AI to understand capabilities and choose the right tool.
+
+---
+
+## Implementation Roadmap
+
+This roadmap covers the path from current state through Phase 5 (Roslyn refactoring) and Phase 6 (Python).
+
+### Current State (January 2026)
+
+- ✅ 12 MCP tools available (search, find implementations, callers, etc.)
+- ✅ Tree-sitter indexing for 13 languages
+- ✅ RAG semantic search
+- ✅ Code graph with relationships
+- ❌ No content type filtering on search
+- ❌ No framework type support (inheriting from `Controller`, etc.)
+- ❌ No refactoring tools (rename, signature, etc.)
+
+### Milestone 1: Discovery Improvements (Phases 1-4)
+
+**Duration:** 1 week  
+**Goal:** Make existing tools more useful before adding new ones
+
+| Day | Task | Deliverable |
+|-----|------|-------------|
+| 1 | Add `contentType` filter to `aura_search_code` | Filter code/docs/config |
+| 1 | Boost exact symbol name matches | Code graph lookup before RAG |
+| 2 | Add `aura_find_by_attribute` tool | Find `[HttpGet]`, `[Test]`, etc. |
+| 3 | Add `aura_find_extension_methods` tool | Find extensions for `IServiceCollection` |
+| 4 | Extend `aura_find_derived_types` for framework types | Index NuGet package type hierarchies |
+| 5 | Add `aura_find_by_return_type` tool | Find methods returning `WebApplication` |
+
+**Acceptance Criteria:**
+- [ ] `aura_search_code("AgentContext", contentType: "code")` returns C# record, not markdown
+- [ ] `aura_find_by_attribute("[HttpGet]")` finds all HTTP GET endpoints
+- [ ] `aura_find_extension_methods("IServiceCollection")` finds all `AddX()` methods
+- [ ] `aura_find_derived_types("Controller")` finds all controllers
+
+### Milestone 2: Roslyn Foundation (Phase 5.1)
+
+**Duration:** 3 days  
+**Goal:** Establish the Roslyn refactoring infrastructure
+
+| Day | Task | Deliverable |
+|-----|------|-------------|
+| 1 | Create `RoslynRefactoringService` | MSBuildWorkspace management, solution loading |
+| 1 | Symbol lookup by name | Find symbol across solution |
+| 2 | `aura_rename_symbol` tool | Rename with all references updated |
+| 2 | Preview mode support | Return changes without applying |
+| 3 | Integration tests | Rename across projects, edge cases |
+
+**Key Code:**
+```csharp
+// src/Aura.Module.Developer/Services/RoslynRefactoringService.cs
+public class RoslynRefactoringService : IRoslynRefactoringService
+{
+    public async Task<RefactoringResult> RenameSymbolAsync(
+        string symbolName,
+        string newName,
+        string? containingType,
+        string solutionPath,
+        bool preview,
+        CancellationToken ct);
+}
+```
+
+**Acceptance Criteria:**
+- [ ] Rename a method and all 50+ call sites in one operation
+- [ ] Preview mode shows affected files without writing
+- [ ] Handles overloads correctly (only renames the specified one)
+
+### Milestone 3: Signature Changes (Phase 5.2)
+
+**Duration:** 3 days  
+**Goal:** Safe parameter modifications
+
+| Day | Task | Deliverable |
+|-----|------|-------------|
+| 1 | `aura_change_method_signature` tool | Add/remove/reorder parameters |
+| 1 | Default value injection | Existing call sites get default |
+| 2 | `aura_change_property_type` tool | Change property types safely |
+| 2 | Cascading updates | Update derived classes/implementations |
+| 3 | Integration tests | Complex inheritance scenarios |
+
+**Acceptance Criteria:**
+- [ ] Add `CancellationToken ct = default` to method, all callers updated
+- [ ] Remove unused parameter, all call sites cleaned up
+- [ ] Change property from `string` to `int`, compilation validates
+
+### Milestone 4: Code Generation (Phase 5.3)
+
+**Duration:** 4 days  
+**Goal:** Generate boilerplate correctly
+
+| Day | Task | Deliverable |
+|-----|------|-------------|
+| 1 | `aura_implement_interface` tool | Generate interface stubs |
+| 1 | Explicit vs implicit implementation | Option to choose style |
+| 2 | `aura_generate_constructor` tool | Initialize readonly fields |
+| 2 | Primary constructor support | .NET 8+ primary ctors |
+| 3 | `aura_add_property` tool | Add with backing field or auto |
+| 3 | `aura_add_method` tool | Add method skeleton |
+| 4 | `aura_generate_equality_members` | Equals, GetHashCode, operators |
+
+**Acceptance Criteria:**
+- [ ] Implement `IDisposable` adds pattern-correct `Dispose()` method
+- [ ] Generate constructor from 8 readonly fields in one call
+- [ ] Add property with validation in setter
+
+### Milestone 5: Extraction & Reorganization (Phase 5.4)
+
+**Duration:** 4 days  
+**Goal:** Restructure code safely
+
+| Day | Task | Deliverable |
+|-----|------|-------------|
+| 1 | `aura_extract_interface` tool | Create interface from class |
+| 1 | Member selection | Choose which members to include |
+| 2 | `aura_extract_method` tool | Extract code block to method |
+| 2 | Variable capture | Determine parameters and return |
+| 3 | `aura_move_type` tool | Move class to new file/namespace |
+| 3 | Update using statements | Fix references across solution |
+| 4 | `aura_move_member` tool | Move method/property between types |
+
+**Acceptance Criteria:**
+- [ ] Extract interface, original class now implements it
+- [ ] Extract 20-line block to method, correct parameters inferred
+- [ ] Move class to new namespace, all usings updated
+
+### Milestone 6: Cleanup & Safe Delete (Phase 5.5)
+
+**Duration:** 2 days  
+**Goal:** Code cleanup tools
+
+| Day | Task | Deliverable |
+|-----|------|-------------|
+| 1 | `aura_safe_delete` tool | Remove unused symbol with validation |
+| 1 | Reference check | Error if still referenced |
+| 2 | `aura_remove_unused_usings` tool | Clean up imports |
+| 2 | `aura_sort_members` tool | Organize type members |
+| 2 | `aura_apply_code_fix` tool | Apply compiler suggestions |
+
+**Acceptance Criteria:**
+- [ ] Safe delete fails with error listing 3 remaining references
+- [ ] Remove unused usings from 50 files in one operation
+- [ ] Apply "make readonly" suggestion to field
+
+### Milestone 7: Python Support (Phase 6)
+
+**Duration:** 5 days  
+**Goal:** Refactoring for Python projects
+
+| Day | Task | Deliverable |
+|-----|------|-------------|
+| 1 | Integrate `rope` library | Python refactoring engine |
+| 1 | Create `PythonRefactoringService` | Service abstraction |
+| 2 | `aura_rename_symbol` Python support | Rename with references |
+| 3 | `aura_extract_method` Python support | Extract function |
+| 4 | `aura_change_signature` Python support | Modify parameters |
+| 5 | Integration tests | pytest-based validation |
+
+**Acceptance Criteria:**
+- [ ] Rename Python class across 10 files
+- [ ] Extract Python function with correct parameter capture
+- [ ] Tools report "Python" in capability description
+
+---
+
+### Timeline Summary
+
+```
+Week 1: Discovery Improvements (Phases 1-4)
+        ├── Day 1-2: contentType filter, exact match boost, attributes
+        ├── Day 3-4: extension methods, framework types
+        └── Day 5: return type search
+
+Week 2: Roslyn Foundation + Signatures (Phase 5.1-5.2)
+        ├── Day 1-3: RoslynRefactoringService, rename_symbol
+        └── Day 4-5: change_signature, change_property_type
+
+Week 3: Code Generation + Extraction (Phase 5.3-5.4)
+        ├── Day 1-2: implement_interface, generate_constructor, add_property/method
+        ├── Day 3-4: extract_interface, extract_method
+        └── Day 5: move_type, move_member
+
+Week 4: Cleanup + Python (Phase 5.5 + Phase 6)
+        ├── Day 1-2: safe_delete, remove_usings, apply_code_fix
+        └── Day 3-5: Python rope integration
+```
+
+### Dependencies
+
+| Component | Dependency | Notes |
+|-----------|------------|-------|
+| Roslyn workspace | `Microsoft.CodeAnalysis.Workspaces.MSBuild` | Already referenced |
+| Symbol lookup | Existing code graph | Reuse for symbol location |
+| Python refactoring | `rope` (Python package) | Subprocess or IPC |
+
+### Risks & Mitigations
+
+| Risk | Impact | Mitigation |
+|------|--------|------------|
+| MSBuildWorkspace slow on large solutions | High | Cache workspace, incremental updates |
+| Roslyn API version conflicts | Medium | Pin to known-good version |
+| Python subprocess unreliable | Medium | Fallback to text-based editing |
+| Framework type resolution | Medium | NuGet package pre-indexing (Phase 4) |
 
 ---
 
