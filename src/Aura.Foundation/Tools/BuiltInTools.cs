@@ -493,7 +493,11 @@ public static class BuiltInTools
         {
             ToolId = "shell.execute",
             Name = "Execute Shell Command",
-            Description = "Execute a shell command and return the output. Use for builds, tests, git, etc.",
+            Description = """
+                Execute a shell command and return the output. Use for builds, tests, git, file operations, and other system tasks.
+                This is a powerful general-purpose tool - prefer specialized tools when available (e.g., dotnet.build, git.status).
+                Commands are executed in the system's default shell (PowerShell on Windows, bash on Unix).
+                """,
             InputSchema = """
                 {
                     "type": "object",
@@ -505,7 +509,8 @@ public static class BuiltInTools
                     "required": ["command"]
                 }
                 """,
-            Categories = ["shell"],
+            Categories = ["shell", "dangerous"],
+            RequiresConfirmation = true,
             Handler = async (input, ct) =>
             {
                 var command = input.GetRequiredParameter<string>("command");
