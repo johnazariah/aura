@@ -24,6 +24,7 @@ public static class DeveloperEndpoints
         // Workflow CRUD
         app.MapPost("/api/developer/workflows", CreateWorkflow);
         app.MapGet("/api/developer/workflows", ListWorkflows);
+        app.MapGet("/api/developer/workflows/by-path", GetWorkflowByPath);
         app.MapGet("/api/developer/workflows/{id:guid}", GetWorkflow);
         app.MapDelete("/api/developer/workflows/{id:guid}", DeleteWorkflow);
 
@@ -204,10 +205,49 @@ public static class DeveloperEndpoints
                 approval = s.Approval?.ToString(),
                 chatHistory = s.ChatHistory
             }),
+            chatHistory = workflow.ChatHistory,
             createdAt = workflow.CreatedAt,
             updatedAt = workflow.UpdatedAt,
             completedAt = workflow.CompletedAt,
             pullRequestUrl = workflow.PullRequestUrl
+        });
+    }
+
+    private static async Task<IResult> GetWorkflowByPath(
+        string path,
+        IWorkflowService workflowService,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return Results.BadRequest(new { error = "Path query parameter is required" });
+        }
+
+        var workflow = await workflowService.GetByWorktreePathAsync(path, ct);
+        if (workflow is null)
+        {
+            return Results.NotFound(new { error = $"No workflow found for path: {path}" });
+        }
+
+        return Results.Ok(new
+        {
+            id = workflow.Id,
+            title = workflow.Title,
+            description = workflow.Description,
+            status = workflow.Status.ToString(),
+            mode = workflow.Mode.ToString(),
+            gitBranch = workflow.GitBranch,
+            worktreePath = workflow.WorktreePath,
+            repositoryPath = workflow.RepositoryPath,
+            issueUrl = workflow.IssueUrl,
+            issueProvider = workflow.IssueProvider?.ToString(),
+            issueNumber = workflow.IssueNumber,
+            issueOwner = workflow.IssueOwner,
+            issueRepo = workflow.IssueRepo,
+            chatHistory = workflow.ChatHistory,
+            createdAt = workflow.CreatedAt,
+            updatedAt = workflow.UpdatedAt,
+            completedAt = workflow.CompletedAt
         });
     }
 

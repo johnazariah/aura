@@ -2424,7 +2424,7 @@ export class WorkflowPanelProvider {
             <div class="spinner"></div>
             <span>Thinking...</span>
         </div>
-        <div id="chatResponse" class="chat-response" style="display: none;"></div>
+        <div id="chatResponse" class="chat-response" ${workflow.chatHistory ? '' : 'style="display: none;"'}>${this.renderWorkflowChatHistory(workflow)}</div>
     </div>
 
     <h3>Timeline</h3>
@@ -3590,6 +3590,30 @@ export class WorkflowPanelProvider {
                 return 'Modify the plan... (e.g., "Add a step for logging")';
             default:
                 return 'Workflow is complete';
+        }
+    }
+
+    private renderWorkflowChatHistory(workflow: Workflow): string {
+        if (!workflow.chatHistory) {
+            return '';
+        }
+
+        try {
+            const messages = JSON.parse(workflow.chatHistory) as Array<{Role: string, Content: string}>;
+            if (messages.length === 0) {
+                return '';
+            }
+
+            const messagesHtml = messages.map(msg => {
+                const isUser = msg.Role.toLowerCase() === 'user';
+                const roleLabel = isUser ? '👤 You' : '🤖 Aura';
+                const className = isUser ? 'chat-user-message' : 'chat-assistant-message';
+                return `<div class="${className}"><strong>${roleLabel}:</strong> ${this.escapeHtml(msg.Content)}</div>`;
+            }).join('');
+
+            return messagesHtml;
+        } catch {
+            return '';
         }
     }
 

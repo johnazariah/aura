@@ -354,6 +354,9 @@ export async function activate(context: vscode.ExtensionContext) {
     // Check workspace onboarding status and set context for view visibility
     await checkOnboardingStatus();
 
+    // Check if this workspace is a workflow worktree and auto-open the panel
+    await checkAndOpenWorkflowForWorktree();
+
     // Setup auto-refresh
     setupAutoRefresh();
 
@@ -440,6 +443,35 @@ async function checkOnboardingStatus(): Promise<void> {
         console.log('[Aura] Failed to check onboarding status:', error);
         await vscode.commands.executeCommand('setContext', 'aura.workspaceOnboarded', false);
         await vscode.commands.executeCommand('setContext', 'aura.workspaceNotOnboarded', true);
+    }
+}
+
+/**
+ * Check if the current workspace is a workflow worktree and auto-open the workflow panel.
+ * This provides the "continue existing story" experience.
+ */
+async function checkAndOpenWorkflowForWorktree(): Promise<void> {
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (!workspaceFolders || workspaceFolders.length === 0) {
+        return;
+    }
+
+    const workspacePath = workspaceFolders[0].uri.fsPath;
+    console.log('[Aura] Checking if workspace is a workflow worktree:', workspacePath);
+
+    try {
+        const workflow = await auraApiService.getWorkflowByPath(workspacePath);
+        if (workflow) {
+            console.log('[Aura] Found workflow for worktree:', workflow.id, workflow.title);
+            // Auto-open the workflow panel
+            await workflowPanelProvider.openWorkflowPanel(workflow.id);
+            vscode.window.showInformationMessage(`📖 Continuing story: ${workflow.title}`);
+        } else {
+            console.log('[Aura] No workflow found for this path');
+        }
+    } catch (error) {
+        // Silently fail - this is an enhancement, not critical
+        console.log('[Aura] Failed to check for workflow worktree:', error);
     }
 }
 

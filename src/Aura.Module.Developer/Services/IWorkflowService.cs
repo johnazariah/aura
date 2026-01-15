@@ -48,6 +48,14 @@ public interface IWorkflowService
     Task<Workflow?> GetByIdWithStepsAsync(Guid id, CancellationToken ct = default);
 
     /// <summary>
+    /// Gets a workflow by its worktree path.
+    /// </summary>
+    /// <param name="worktreePath">The absolute path to the worktree.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>The workflow if found, null otherwise.</returns>
+    Task<Workflow?> GetByWorktreePathAsync(string worktreePath, CancellationToken ct = default);
+
+    /// <summary>
     /// Lists all workflows, optionally filtered by status and/or repository path.
     /// </summary>
     /// <param name="status">Filter by status (optional).</param>

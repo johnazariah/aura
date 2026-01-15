@@ -63,6 +63,9 @@ public sealed class DeveloperDbContext(DbContextOptions<DeveloperDbContext> opti
             entity.Property(e => e.Mode).HasColumnName("mode").HasConversion<string>().HasMaxLength(20);
             entity.Property(e => e.AutomationMode).HasColumnName("automation_mode").HasConversion<string>().HasMaxLength(20);
 
+            // Chat
+            entity.Property(e => e.ChatHistory).HasColumnName("chat_history").HasColumnType("jsonb");
+
             entity.HasIndex(e => e.Status);
             entity.HasIndex(e => e.CreatedAt);
             entity.HasIndex(e => e.IssueUrl);

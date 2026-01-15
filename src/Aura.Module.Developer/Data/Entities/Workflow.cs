@@ -76,6 +76,11 @@ public sealed class Workflow
 
     /// <summary>Gets or sets the automation mode for step execution.</summary>
     public AutomationMode AutomationMode { get; set; } = AutomationMode.Assisted;
+
+    // === Chat ===
+
+    /// <summary>Gets or sets the workflow-level chat history as JSON array of messages.</summary>
+    public string? ChatHistory { get; set; }
 }
 
 /// <summary>

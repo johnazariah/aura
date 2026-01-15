@@ -174,6 +174,19 @@ public sealed class WorkflowService(
     }
 
     /// <inheritdoc/>
+    public async Task<Workflow?> GetByWorktreePathAsync(string worktreePath, CancellationToken ct = default)
+    {
+        // Normalize path for cross-platform comparison
+        var normalizedPath = Aura.Foundation.Rag.PathNormalizer.Normalize(worktreePath);
+        return await _db.Workflows
+            .Include(w => w.Steps.OrderBy(s => s.Order))
+            .FirstOrDefaultAsync(w => w.WorktreePath != null &&
+                EF.Functions.ILike(
+                    w.WorktreePath.Replace("\\", "/").ToLower(),
+                    normalizedPath), ct);
+    }
+
+    /// <inheritdoc/>
     public async Task<IReadOnlyList<Workflow>> ListAsync(WorkflowStatus? status = null, string? repositoryPath = null, CancellationToken ct = default)
     {
         var query = _db.Workflows.AsQueryable();
@@ -1426,6 +1439,9 @@ public sealed class WorkflowService(
             }
         }
 
+        // Persist chat history
+        await AppendWorkflowChatHistoryAsync(workflow, message, output.Content, ct);
+
         return response with
         {
             PlanModified = stepsAdded.Count > 0 || stepsRemoved.Count > 0,
@@ -1433,6 +1449,28 @@ public sealed class WorkflowService(
             StepsRemoved = stepsRemoved,
             AnalysisUpdated = analysisUpdated,
         };
+    }
+
+    /// <summary>
+    /// Appends a message exchange to the workflow's chat history.
+    /// </summary>
+    private async Task AppendWorkflowChatHistoryAsync(Workflow workflow, string userMessage, string assistantResponse, CancellationToken ct)
+    {
+        var history = new List<ChatMessage>();
+        if (!string.IsNullOrEmpty(workflow.ChatHistory))
+        {
+            try
+            {
+                history = JsonSerializer.Deserialize<List<ChatMessage>>(workflow.ChatHistory) ?? [];
+            }
+            catch { /* ignore parse errors */ }
+        }
+
+        history.Add(new ChatMessage("user", userMessage));
+        history.Add(new ChatMessage("assistant", assistantResponse));
+        workflow.ChatHistory = JsonSerializer.Serialize(history);
+
+        await _db.SaveChangesAsync(ct);
     }
 
     /// <inheritdoc/>

@@ -176,6 +176,7 @@ export interface Workflow {
     analyzedContext?: string;
     executionPlan?: string;
     pullRequestUrl?: string;
+    chatHistory?: string;
     steps: WorkflowStep[];
     createdAt: string;
     updatedAt: string;
@@ -563,6 +564,22 @@ export class AuraApiService {
     async getWorkflow(id: string): Promise<Workflow> {
         const response = await this.httpClient.get(`${this.getBaseUrl()}/api/developer/workflows/${id}`);
         return response.data;
+    }
+
+    async getWorkflowByPath(worktreePath: string): Promise<Workflow | null> {
+        try {
+            const params = new URLSearchParams();
+            params.append('path', worktreePath);
+            const response = await this.httpClient.get(
+                `${this.getBaseUrl()}/api/developer/workflows/by-path?${params.toString()}`
+            );
+            return response.data;
+        } catch (error: unknown) {
+            if (axios.isAxiosError(error) && error.response?.status === 404) {
+                return null;
+            }
+            throw error;
+        }
     }
 
     async deleteWorkflow(id: string): Promise<void> {
