@@ -71,6 +71,9 @@ public sealed class DeveloperModule : IAuraModule
         // Register Roslyn workspace service (singleton for caching)
         services.AddSingleton<IRoslynWorkspaceService, RoslynWorkspaceService>();
 
+        // Register Roslyn refactoring service
+        services.AddSingleton<IRoslynRefactoringService, RoslynRefactoringService>();
+
         // Register Code Graph indexer (for Graph RAG)
         services.AddScoped<ICodeGraphIndexer, CodeGraphIndexer>();
 

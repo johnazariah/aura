@@ -13,6 +13,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.FindSymbols;
 using Microsoft.Extensions.Logging;
+using RefactoringParameterInfo = Aura.Module.Developer.Services.ParameterInfo;
 
 /// <summary>
 /// Handles MCP (Model Context Protocol) JSON-RPC requests.
@@ -35,6 +36,7 @@ public sealed class McpHandler
     private readonly IWorkflowService _workflowService;
     private readonly IGitHubService _gitHubService;
     private readonly IRoslynWorkspaceService _roslynService;
+    private readonly IRoslynRefactoringService _refactoringService;
     private readonly ILogger<McpHandler> _logger;
 
     private readonly Dictionary<string, Func<JsonElement?, CancellationToken, Task<object>>> _tools;
@@ -48,6 +50,7 @@ public sealed class McpHandler
         IWorkflowService workflowService,
         IGitHubService gitHubService,
         IRoslynWorkspaceService roslynService,
+        IRoslynRefactoringService refactoringService,
         ILogger<McpHandler> logger)
     {
         _ragService = ragService;
@@ -55,10 +58,12 @@ public sealed class McpHandler
         _workflowService = workflowService;
         _gitHubService = gitHubService;
         _roslynService = roslynService;
+        _refactoringService = refactoringService;
         _logger = logger;
 
         _tools = new Dictionary<string, Func<JsonElement?, CancellationToken, Task<object>>>
         {
+            // Discovery tools
             ["aura_search_code"] = SearchCodeAsync,
             ["aura_find_implementations"] = FindImplementationsAsync,
             ["aura_find_callers"] = FindCallersAsync,
@@ -71,9 +76,19 @@ public sealed class McpHandler
             ["aura_list_classes"] = ListClassesAsync,
             ["aura_validate_compilation"] = ValidateCompilationAsync,
             ["aura_run_tests"] = RunTestsAsync,
+            // Story/workflow tools
             ["aura_list_stories"] = ListStoriesAsync,
             ["aura_get_story_context"] = GetStoryContextAsync,
             ["aura_create_story_from_issue"] = CreateStoryFromIssueAsync,
+            // Refactoring tools (Phase 5)
+            ["aura_rename_symbol"] = RenameSymbolAsync,
+            ["aura_change_signature"] = ChangeSignatureAsync,
+            ["aura_implement_interface"] = ImplementInterfaceAsync,
+            ["aura_generate_constructor"] = GenerateConstructorAsync,
+            ["aura_extract_interface"] = ExtractInterfaceAsync,
+            ["aura_safe_delete"] = SafeDeleteAsync,
+            ["aura_add_property"] = AddPropertyAsync,
+            ["aura_add_method"] = AddMethodAsync,
         };
     }
 
@@ -367,6 +382,203 @@ public sealed class McpHandler
                         solutionPath = new { type = "string", description = "Path to the solution file" }
                     },
                     required = new[] { "returnTypeName", "solutionPath" }
+                }
+            },
+            // =================================================================
+            // Refactoring Tools (Phase 5)
+            // =================================================================
+            new McpToolDefinition
+            {
+                Name = "aura_rename_symbol",
+                Description = "Rename a symbol (type, method, property, field) and update ALL references across the solution. Uses Roslyn for safe, semantic-aware renaming.",
+                InputSchema = new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        symbolName = new { type = "string", description = "Current name of the symbol to rename" },
+                        newName = new { type = "string", description = "New name for the symbol" },
+                        solutionPath = new { type = "string", description = "Path to the solution file" },
+                        containingType = new { type = "string", description = "Optional: type containing the symbol (for disambiguation)" },
+                        filePath = new { type = "string", description = "Optional: file containing the symbol (for disambiguation)" },
+                        preview = new { type = "boolean", description = "Optional: if true, return changes without applying" }
+                    },
+                    required = new[] { "symbolName", "newName", "solutionPath" }
+                }
+            },
+            new McpToolDefinition
+            {
+                Name = "aura_change_signature",
+                Description = "Change a method signature: add or remove parameters. Updates all call sites with default values.",
+                InputSchema = new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        methodName = new { type = "string", description = "Name of the method to modify" },
+                        containingType = new { type = "string", description = "Type containing the method" },
+                        solutionPath = new { type = "string", description = "Path to the solution file" },
+                        addParameters = new
+                        {
+                            type = "array",
+                            items = new
+                            {
+                                type = "object",
+                                properties = new
+                                {
+                                    name = new { type = "string" },
+                                    type = new { type = "string" },
+                                    defaultValue = new { type = "string" }
+                                }
+                            },
+                            description = "Parameters to add (each with name, type, optional defaultValue)"
+                        },
+                        removeParameters = new
+                        {
+                            type = "array",
+                            items = new { type = "string" },
+                            description = "Names of parameters to remove"
+                        },
+                        preview = new { type = "boolean", description = "Optional: if true, return changes without applying" }
+                    },
+                    required = new[] { "methodName", "containingType", "solutionPath" }
+                }
+            },
+            new McpToolDefinition
+            {
+                Name = "aura_implement_interface",
+                Description = "Generate method and property stubs to implement an interface on a class.",
+                InputSchema = new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        className = new { type = "string", description = "Name of the class to modify" },
+                        interfaceName = new { type = "string", description = "Name of the interface to implement" },
+                        solutionPath = new { type = "string", description = "Path to the solution file" },
+                        explicitImplementation = new { type = "boolean", description = "Use explicit interface implementation (default: false)" },
+                        preview = new { type = "boolean", description = "Optional: if true, return changes without applying" }
+                    },
+                    required = new[] { "className", "interfaceName", "solutionPath" }
+                }
+            },
+            new McpToolDefinition
+            {
+                Name = "aura_generate_constructor",
+                Description = "Generate a constructor that initializes fields/properties. Defaults to all readonly fields.",
+                InputSchema = new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        className = new { type = "string", description = "Name of the class to modify" },
+                        solutionPath = new { type = "string", description = "Path to the solution file" },
+                        members = new
+                        {
+                            type = "array",
+                            items = new { type = "string" },
+                            description = "Optional: specific field/property names to initialize"
+                        },
+                        preview = new { type = "boolean", description = "Optional: if true, return changes without applying" }
+                    },
+                    required = new[] { "className", "solutionPath" }
+                }
+            },
+            new McpToolDefinition
+            {
+                Name = "aura_extract_interface",
+                Description = "Extract an interface from a class's public members. Creates new interface file and updates class.",
+                InputSchema = new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        className = new { type = "string", description = "Name of the class to extract from" },
+                        interfaceName = new { type = "string", description = "Name for the new interface" },
+                        solutionPath = new { type = "string", description = "Path to the solution file" },
+                        members = new
+                        {
+                            type = "array",
+                            items = new { type = "string" },
+                            description = "Optional: specific member names to include"
+                        },
+                        preview = new { type = "boolean", description = "Optional: if true, return changes without applying" }
+                    },
+                    required = new[] { "className", "interfaceName", "solutionPath" }
+                }
+            },
+            new McpToolDefinition
+            {
+                Name = "aura_safe_delete",
+                Description = "Safely delete a symbol only if it has no remaining references. Returns error with reference list if still used.",
+                InputSchema = new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        symbolName = new { type = "string", description = "Name of the symbol to delete" },
+                        solutionPath = new { type = "string", description = "Path to the solution file" },
+                        containingType = new { type = "string", description = "Optional: type containing the symbol" },
+                        preview = new { type = "boolean", description = "Optional: if true, return changes without applying" }
+                    },
+                    required = new[] { "symbolName", "solutionPath" }
+                }
+            },
+            new McpToolDefinition
+            {
+                Name = "aura_add_property",
+                Description = "Add a property to a class with specified type and accessors.",
+                InputSchema = new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        className = new { type = "string", description = "Name of the class to modify" },
+                        propertyName = new { type = "string", description = "Name of the new property" },
+                        propertyType = new { type = "string", description = "Type of the property (e.g., 'string', 'int', 'ILogger<MyClass>')" },
+                        solutionPath = new { type = "string", description = "Path to the solution file" },
+                        hasGetter = new { type = "boolean", description = "Include getter (default: true)" },
+                        hasSetter = new { type = "boolean", description = "Include setter (default: true)" },
+                        initialValue = new { type = "string", description = "Optional initial value" },
+                        preview = new { type = "boolean", description = "Optional: if true, return changes without applying" }
+                    },
+                    required = new[] { "className", "propertyName", "propertyType", "solutionPath" }
+                }
+            },
+            new McpToolDefinition
+            {
+                Name = "aura_add_method",
+                Description = "Add a method to a class with specified signature and optional body.",
+                InputSchema = new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        className = new { type = "string", description = "Name of the class to modify" },
+                        methodName = new { type = "string", description = "Name of the new method" },
+                        returnType = new { type = "string", description = "Return type (e.g., 'void', 'Task<string>')" },
+                        solutionPath = new { type = "string", description = "Path to the solution file" },
+                        parameters = new
+                        {
+                            type = "array",
+                            items = new
+                            {
+                                type = "object",
+                                properties = new
+                                {
+                                    name = new { type = "string" },
+                                    type = new { type = "string" },
+                                    defaultValue = new { type = "string" }
+                                }
+                            },
+                            description = "Method parameters"
+                        },
+                        accessModifier = new { type = "string", description = "Access modifier (default: 'public')" },
+                        isAsync = new { type = "boolean", description = "Whether method is async" },
+                        body = new { type = "string", description = "Optional method body code" },
+                        preview = new { type = "boolean", description = "Optional: if true, return changes without applying" }
+                    },
+                    required = new[] { "className", "methodName", "returnType", "solutionPath" }
                 }
             },
         };
@@ -1367,6 +1579,356 @@ public sealed class McpHandler
             _logger.LogError(ex, "Failed to find by return type {Type}", returnTypeName);
             return new { error = $"Failed to find by return type: {ex.Message}" };
         }
+    }
+
+    // =========================================================================
+    // Refactoring Tool Handlers (Phase 5)
+    // =========================================================================
+
+    private async Task<object> RenameSymbolAsync(JsonElement? args, CancellationToken ct)
+    {
+        var symbolName = args?.GetProperty("symbolName").GetString() ?? "";
+        var newName = args?.GetProperty("newName").GetString() ?? "";
+        var solutionPath = args?.GetProperty("solutionPath").GetString() ?? "";
+
+        string? containingType = null;
+        string? filePath = null;
+        var preview = false;
+
+        if (args.HasValue)
+        {
+            if (args.Value.TryGetProperty("containingType", out var ctEl))
+                containingType = ctEl.GetString();
+            if (args.Value.TryGetProperty("filePath", out var fpEl))
+                filePath = fpEl.GetString();
+            if (args.Value.TryGetProperty("preview", out var prevEl))
+                preview = prevEl.GetBoolean();
+        }
+
+        var result = await _refactoringService.RenameSymbolAsync(new RenameSymbolRequest
+        {
+            SymbolName = symbolName,
+            NewName = newName,
+            SolutionPath = solutionPath,
+            ContainingType = containingType,
+            FilePath = filePath,
+            Preview = preview
+        }, ct);
+
+        return new
+        {
+            success = result.Success,
+            message = result.Message,
+            modifiedFiles = result.ModifiedFiles,
+            preview = result.Preview?.Select(p => new { p.FilePath, p.NewContent })
+        };
+    }
+
+    private async Task<object> ChangeSignatureAsync(JsonElement? args, CancellationToken ct)
+    {
+        var methodName = args?.GetProperty("methodName").GetString() ?? "";
+        var containingType = args?.GetProperty("containingType").GetString() ?? "";
+        var solutionPath = args?.GetProperty("solutionPath").GetString() ?? "";
+
+        List<RefactoringParameterInfo>? addParams = null;
+        List<string>? removeParams = null;
+        var preview = false;
+
+        if (args.HasValue)
+        {
+            if (args.Value.TryGetProperty("addParameters", out var addEl) && addEl.ValueKind == JsonValueKind.Array)
+            {
+                addParams = addEl.EnumerateArray().Select(p => new RefactoringParameterInfo(
+                    p.GetProperty("name").GetString() ?? "",
+                    p.GetProperty("type").GetString() ?? "",
+                    p.TryGetProperty("defaultValue", out var dv) ? dv.GetString() : null
+                )).ToList();
+            }
+
+            if (args.Value.TryGetProperty("removeParameters", out var remEl) && remEl.ValueKind == JsonValueKind.Array)
+            {
+                removeParams = remEl.EnumerateArray().Select(p => p.GetString() ?? "").ToList();
+            }
+
+            if (args.Value.TryGetProperty("preview", out var prevEl))
+                preview = prevEl.GetBoolean();
+        }
+
+        var result = await _refactoringService.ChangeMethodSignatureAsync(new ChangeSignatureRequest
+        {
+            MethodName = methodName,
+            ContainingType = containingType,
+            SolutionPath = solutionPath,
+            AddParameters = addParams,
+            RemoveParameters = removeParams,
+            Preview = preview
+        }, ct);
+
+        return new
+        {
+            success = result.Success,
+            message = result.Message,
+            modifiedFiles = result.ModifiedFiles,
+            preview = result.Preview?.Select(p => new { p.FilePath, p.NewContent })
+        };
+    }
+
+    private async Task<object> ImplementInterfaceAsync(JsonElement? args, CancellationToken ct)
+    {
+        var className = args?.GetProperty("className").GetString() ?? "";
+        var interfaceName = args?.GetProperty("interfaceName").GetString() ?? "";
+        var solutionPath = args?.GetProperty("solutionPath").GetString() ?? "";
+
+        var explicitImpl = false;
+        var preview = false;
+
+        if (args.HasValue)
+        {
+            if (args.Value.TryGetProperty("explicitImplementation", out var expEl))
+                explicitImpl = expEl.GetBoolean();
+            if (args.Value.TryGetProperty("preview", out var prevEl))
+                preview = prevEl.GetBoolean();
+        }
+
+        var result = await _refactoringService.ImplementInterfaceAsync(new ImplementInterfaceRequest
+        {
+            ClassName = className,
+            InterfaceName = interfaceName,
+            SolutionPath = solutionPath,
+            ExplicitImplementation = explicitImpl,
+            Preview = preview
+        }, ct);
+
+        return new
+        {
+            success = result.Success,
+            message = result.Message,
+            modifiedFiles = result.ModifiedFiles,
+            preview = result.Preview?.Select(p => new { p.FilePath, p.NewContent })
+        };
+    }
+
+    private async Task<object> GenerateConstructorAsync(JsonElement? args, CancellationToken ct)
+    {
+        var className = args?.GetProperty("className").GetString() ?? "";
+        var solutionPath = args?.GetProperty("solutionPath").GetString() ?? "";
+
+        List<string>? members = null;
+        var preview = false;
+
+        if (args.HasValue)
+        {
+            if (args.Value.TryGetProperty("members", out var memEl) && memEl.ValueKind == JsonValueKind.Array)
+            {
+                members = memEl.EnumerateArray().Select(m => m.GetString() ?? "").ToList();
+            }
+
+            if (args.Value.TryGetProperty("preview", out var prevEl))
+                preview = prevEl.GetBoolean();
+        }
+
+        var result = await _refactoringService.GenerateConstructorAsync(new GenerateConstructorRequest
+        {
+            ClassName = className,
+            SolutionPath = solutionPath,
+            Members = members,
+            Preview = preview
+        }, ct);
+
+        return new
+        {
+            success = result.Success,
+            message = result.Message,
+            modifiedFiles = result.ModifiedFiles,
+            preview = result.Preview?.Select(p => new { p.FilePath, p.NewContent })
+        };
+    }
+
+    private async Task<object> ExtractInterfaceAsync(JsonElement? args, CancellationToken ct)
+    {
+        var className = args?.GetProperty("className").GetString() ?? "";
+        var interfaceName = args?.GetProperty("interfaceName").GetString() ?? "";
+        var solutionPath = args?.GetProperty("solutionPath").GetString() ?? "";
+
+        List<string>? members = null;
+        var preview = false;
+
+        if (args.HasValue)
+        {
+            if (args.Value.TryGetProperty("members", out var memEl) && memEl.ValueKind == JsonValueKind.Array)
+            {
+                members = memEl.EnumerateArray().Select(m => m.GetString() ?? "").ToList();
+            }
+
+            if (args.Value.TryGetProperty("preview", out var prevEl))
+                preview = prevEl.GetBoolean();
+        }
+
+        var result = await _refactoringService.ExtractInterfaceAsync(new ExtractInterfaceRequest
+        {
+            ClassName = className,
+            InterfaceName = interfaceName,
+            SolutionPath = solutionPath,
+            Members = members,
+            Preview = preview
+        }, ct);
+
+        return new
+        {
+            success = result.Success,
+            message = result.Message,
+            modifiedFiles = result.ModifiedFiles,
+            createdFiles = result.CreatedFiles,
+            preview = result.Preview?.Select(p => new { p.FilePath, p.NewContent })
+        };
+    }
+
+    private async Task<object> SafeDeleteAsync(JsonElement? args, CancellationToken ct)
+    {
+        var symbolName = args?.GetProperty("symbolName").GetString() ?? "";
+        var solutionPath = args?.GetProperty("solutionPath").GetString() ?? "";
+
+        string? containingType = null;
+        var preview = false;
+
+        if (args.HasValue)
+        {
+            if (args.Value.TryGetProperty("containingType", out var ctEl))
+                containingType = ctEl.GetString();
+            if (args.Value.TryGetProperty("preview", out var prevEl))
+                preview = prevEl.GetBoolean();
+        }
+
+        var result = await _refactoringService.SafeDeleteAsync(new SafeDeleteRequest
+        {
+            SymbolName = symbolName,
+            SolutionPath = solutionPath,
+            ContainingType = containingType,
+            Preview = preview
+        }, ct);
+
+        if (!result.Success && result.RemainingReferences?.Count > 0)
+        {
+            return new
+            {
+                success = false,
+                message = result.Message,
+                remainingReferences = result.RemainingReferences.Select(r => new
+                {
+                    r.FilePath,
+                    r.Line,
+                    r.CodeSnippet
+                })
+            };
+        }
+
+        return new
+        {
+            success = result.Success,
+            message = result.Message,
+            modifiedFiles = result.ModifiedFiles
+        };
+    }
+
+    private async Task<object> AddPropertyAsync(JsonElement? args, CancellationToken ct)
+    {
+        var className = args?.GetProperty("className").GetString() ?? "";
+        var propertyName = args?.GetProperty("propertyName").GetString() ?? "";
+        var propertyType = args?.GetProperty("propertyType").GetString() ?? "";
+        var solutionPath = args?.GetProperty("solutionPath").GetString() ?? "";
+
+        var hasGetter = true;
+        var hasSetter = true;
+        string? initialValue = null;
+        var preview = false;
+
+        if (args.HasValue)
+        {
+            if (args.Value.TryGetProperty("hasGetter", out var gEl))
+                hasGetter = gEl.GetBoolean();
+            if (args.Value.TryGetProperty("hasSetter", out var sEl))
+                hasSetter = sEl.GetBoolean();
+            if (args.Value.TryGetProperty("initialValue", out var ivEl))
+                initialValue = ivEl.GetString();
+            if (args.Value.TryGetProperty("preview", out var prevEl))
+                preview = prevEl.GetBoolean();
+        }
+
+        var result = await _refactoringService.AddPropertyAsync(new AddPropertyRequest
+        {
+            ClassName = className,
+            PropertyName = propertyName,
+            PropertyType = propertyType,
+            SolutionPath = solutionPath,
+            HasGetter = hasGetter,
+            HasSetter = hasSetter,
+            InitialValue = initialValue,
+            Preview = preview
+        }, ct);
+
+        return new
+        {
+            success = result.Success,
+            message = result.Message,
+            modifiedFiles = result.ModifiedFiles,
+            preview = result.Preview?.Select(p => new { p.FilePath, p.NewContent })
+        };
+    }
+
+    private async Task<object> AddMethodAsync(JsonElement? args, CancellationToken ct)
+    {
+        var className = args?.GetProperty("className").GetString() ?? "";
+        var methodName = args?.GetProperty("methodName").GetString() ?? "";
+        var returnType = args?.GetProperty("returnType").GetString() ?? "";
+        var solutionPath = args?.GetProperty("solutionPath").GetString() ?? "";
+
+        List<RefactoringParameterInfo>? parameters = null;
+        var accessModifier = "public";
+        var isAsync = false;
+        string? body = null;
+        var preview = false;
+
+        if (args.HasValue)
+        {
+            if (args.Value.TryGetProperty("parameters", out var paramsEl) && paramsEl.ValueKind == JsonValueKind.Array)
+            {
+                parameters = paramsEl.EnumerateArray().Select(p => new RefactoringParameterInfo(
+                    p.GetProperty("name").GetString() ?? "",
+                    p.GetProperty("type").GetString() ?? "",
+                    p.TryGetProperty("defaultValue", out var dv) ? dv.GetString() : null
+                )).ToList();
+            }
+
+            if (args.Value.TryGetProperty("accessModifier", out var amEl))
+                accessModifier = amEl.GetString() ?? "public";
+            if (args.Value.TryGetProperty("isAsync", out var asyncEl))
+                isAsync = asyncEl.GetBoolean();
+            if (args.Value.TryGetProperty("body", out var bodyEl))
+                body = bodyEl.GetString();
+            if (args.Value.TryGetProperty("preview", out var prevEl))
+                preview = prevEl.GetBoolean();
+        }
+
+        var result = await _refactoringService.AddMethodAsync(new AddMethodRequest
+        {
+            ClassName = className,
+            MethodName = methodName,
+            ReturnType = returnType,
+            SolutionPath = solutionPath,
+            Parameters = parameters,
+            AccessModifier = accessModifier,
+            IsAsync = isAsync,
+            Body = body,
+            Preview = preview
+        }, ct);
+
+        return new
+        {
+            success = result.Success,
+            message = result.Message,
+            modifiedFiles = result.ModifiedFiles,
+            preview = result.Preview?.Select(p => new { p.FilePath, p.NewContent })
+        };
     }
 
     // =========================================================================
