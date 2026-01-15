@@ -74,6 +74,9 @@ public sealed class DeveloperModule : IAuraModule
         // Register Roslyn refactoring service
         services.AddSingleton<IRoslynRefactoringService, RoslynRefactoringService>();
 
+        // Register Python refactoring service
+        services.AddSingleton<IPythonRefactoringService, PythonRefactoringService>();
+
         // Register Code Graph indexer (for Graph RAG)
         services.AddScoped<ICodeGraphIndexer, CodeGraphIndexer>();
 

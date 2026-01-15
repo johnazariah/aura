@@ -37,6 +37,7 @@ public sealed class McpHandler
     private readonly IGitHubService _gitHubService;
     private readonly IRoslynWorkspaceService _roslynService;
     private readonly IRoslynRefactoringService _refactoringService;
+    private readonly IPythonRefactoringService _pythonRefactoringService;
     private readonly ILogger<McpHandler> _logger;
 
     private readonly Dictionary<string, Func<JsonElement?, CancellationToken, Task<object>>> _tools;
@@ -51,6 +52,7 @@ public sealed class McpHandler
         IGitHubService gitHubService,
         IRoslynWorkspaceService roslynService,
         IRoslynRefactoringService refactoringService,
+        IPythonRefactoringService pythonRefactoringService,
         ILogger<McpHandler> logger)
     {
         _ragService = ragService;
@@ -59,6 +61,7 @@ public sealed class McpHandler
         _gitHubService = gitHubService;
         _roslynService = roslynService;
         _refactoringService = refactoringService;
+        _pythonRefactoringService = pythonRefactoringService;
         _logger = logger;
 
         _tools = new Dictionary<string, Func<JsonElement?, CancellationToken, Task<object>>>
@@ -89,6 +92,12 @@ public sealed class McpHandler
             ["aura_safe_delete"] = SafeDeleteAsync,
             ["aura_add_property"] = AddPropertyAsync,
             ["aura_add_method"] = AddMethodAsync,
+            // Python refactoring tools (Phase 6)
+            ["aura_python_rename"] = PythonRenameAsync,
+            ["aura_python_extract_method"] = PythonExtractMethodAsync,
+            ["aura_python_extract_variable"] = PythonExtractVariableAsync,
+            ["aura_python_find_references"] = PythonFindReferencesAsync,
+            ["aura_python_find_definition"] = PythonFindDefinitionAsync,
         };
     }
 
@@ -579,6 +588,95 @@ public sealed class McpHandler
                         preview = new { type = "boolean", description = "Optional: if true, return changes without applying" }
                     },
                     required = new[] { "className", "methodName", "returnType", "solutionPath" }
+                }
+            },
+            // Phase 6: Python refactoring tools
+            new McpToolDefinition
+            {
+                Name = "aura_python_rename",
+                Description = "Rename a Python symbol (function, class, variable) and update all references across the project.",
+                InputSchema = new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        projectPath = new { type = "string", description = "Root path of the Python project" },
+                        filePath = new { type = "string", description = "Path to the file containing the symbol" },
+                        offset = new { type = "integer", description = "Character offset of the symbol in the file" },
+                        newName = new { type = "string", description = "New name for the symbol" },
+                        preview = new { type = "boolean", description = "Optional: if true, return changes without applying" }
+                    },
+                    required = new[] { "projectPath", "filePath", "offset", "newName" }
+                }
+            },
+            new McpToolDefinition
+            {
+                Name = "aura_python_extract_method",
+                Description = "Extract a region of Python code into a new method/function.",
+                InputSchema = new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        projectPath = new { type = "string", description = "Root path of the Python project" },
+                        filePath = new { type = "string", description = "Path to the file containing the code" },
+                        startOffset = new { type = "integer", description = "Start character offset of the code region" },
+                        endOffset = new { type = "integer", description = "End character offset of the code region" },
+                        newName = new { type = "string", description = "Name for the new method" },
+                        preview = new { type = "boolean", description = "Optional: if true, return changes without applying" }
+                    },
+                    required = new[] { "projectPath", "filePath", "startOffset", "endOffset", "newName" }
+                }
+            },
+            new McpToolDefinition
+            {
+                Name = "aura_python_extract_variable",
+                Description = "Extract a Python expression into a variable.",
+                InputSchema = new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        projectPath = new { type = "string", description = "Root path of the Python project" },
+                        filePath = new { type = "string", description = "Path to the file containing the expression" },
+                        startOffset = new { type = "integer", description = "Start character offset of the expression" },
+                        endOffset = new { type = "integer", description = "End character offset of the expression" },
+                        newName = new { type = "string", description = "Name for the new variable" },
+                        preview = new { type = "boolean", description = "Optional: if true, return changes without applying" }
+                    },
+                    required = new[] { "projectPath", "filePath", "startOffset", "endOffset", "newName" }
+                }
+            },
+            new McpToolDefinition
+            {
+                Name = "aura_python_find_references",
+                Description = "Find all references to a Python symbol across the project.",
+                InputSchema = new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        projectPath = new { type = "string", description = "Root path of the Python project" },
+                        filePath = new { type = "string", description = "Path to the file containing the symbol" },
+                        offset = new { type = "integer", description = "Character offset of the symbol in the file" }
+                    },
+                    required = new[] { "projectPath", "filePath", "offset" }
+                }
+            },
+            new McpToolDefinition
+            {
+                Name = "aura_python_find_definition",
+                Description = "Find the definition location of a Python symbol.",
+                InputSchema = new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        projectPath = new { type = "string", description = "Root path of the Python project" },
+                        filePath = new { type = "string", description = "Path to the file containing the symbol reference" },
+                        offset = new { type = "integer", description = "Character offset of the symbol in the file" }
+                    },
+                    required = new[] { "projectPath", "filePath", "offset" }
                 }
             },
         };
@@ -1928,6 +2026,151 @@ public sealed class McpHandler
             message = result.Message,
             modifiedFiles = result.ModifiedFiles,
             preview = result.Preview?.Select(p => new { p.FilePath, p.NewContent })
+        };
+    }
+
+    // =========================================================================
+    // Python Refactoring Tool Handlers (Phase 6)
+    // =========================================================================
+
+    private async Task<object> PythonRenameAsync(JsonElement? args, CancellationToken ct)
+    {
+        var projectPath = args?.GetProperty("projectPath").GetString() ?? "";
+        var filePath = args?.GetProperty("filePath").GetString() ?? "";
+        var offset = args?.GetProperty("offset").GetInt32() ?? 0;
+        var newName = args?.GetProperty("newName").GetString() ?? "";
+        var preview = args.HasValue && args.Value.TryGetProperty("preview", out var prevEl) && prevEl.GetBoolean();
+
+        var result = await _pythonRefactoringService.RenameSymbolAsync(new PythonRenameRequest
+        {
+            ProjectPath = projectPath,
+            FilePath = filePath,
+            Offset = offset,
+            NewName = newName,
+            Preview = preview
+        }, ct);
+
+        return new
+        {
+            success = result.Success,
+            error = result.Error,
+            preview = result.Preview,
+            changedFiles = result.ChangedFiles,
+            description = result.Description,
+            fileChanges = result.FileChanges?.Select(fc => new { fc.FilePath, fc.OldContent, fc.NewContent })
+        };
+    }
+
+    private async Task<object> PythonExtractMethodAsync(JsonElement? args, CancellationToken ct)
+    {
+        var projectPath = args?.GetProperty("projectPath").GetString() ?? "";
+        var filePath = args?.GetProperty("filePath").GetString() ?? "";
+        var startOffset = args?.GetProperty("startOffset").GetInt32() ?? 0;
+        var endOffset = args?.GetProperty("endOffset").GetInt32() ?? 0;
+        var newName = args?.GetProperty("newName").GetString() ?? "";
+        var preview = args.HasValue && args.Value.TryGetProperty("preview", out var prevEl) && prevEl.GetBoolean();
+
+        var result = await _pythonRefactoringService.ExtractMethodAsync(new PythonExtractMethodRequest
+        {
+            ProjectPath = projectPath,
+            FilePath = filePath,
+            StartOffset = startOffset,
+            EndOffset = endOffset,
+            NewName = newName,
+            Preview = preview
+        }, ct);
+
+        return new
+        {
+            success = result.Success,
+            error = result.Error,
+            preview = result.Preview,
+            changedFiles = result.ChangedFiles,
+            description = result.Description,
+            fileChanges = result.FileChanges?.Select(fc => new { fc.FilePath, fc.OldContent, fc.NewContent })
+        };
+    }
+
+    private async Task<object> PythonExtractVariableAsync(JsonElement? args, CancellationToken ct)
+    {
+        var projectPath = args?.GetProperty("projectPath").GetString() ?? "";
+        var filePath = args?.GetProperty("filePath").GetString() ?? "";
+        var startOffset = args?.GetProperty("startOffset").GetInt32() ?? 0;
+        var endOffset = args?.GetProperty("endOffset").GetInt32() ?? 0;
+        var newName = args?.GetProperty("newName").GetString() ?? "";
+        var preview = args.HasValue && args.Value.TryGetProperty("preview", out var prevEl) && prevEl.GetBoolean();
+
+        var result = await _pythonRefactoringService.ExtractVariableAsync(new PythonExtractVariableRequest
+        {
+            ProjectPath = projectPath,
+            FilePath = filePath,
+            StartOffset = startOffset,
+            EndOffset = endOffset,
+            NewName = newName,
+            Preview = preview
+        }, ct);
+
+        return new
+        {
+            success = result.Success,
+            error = result.Error,
+            preview = result.Preview,
+            changedFiles = result.ChangedFiles,
+            description = result.Description,
+            fileChanges = result.FileChanges?.Select(fc => new { fc.FilePath, fc.OldContent, fc.NewContent })
+        };
+    }
+
+    private async Task<object> PythonFindReferencesAsync(JsonElement? args, CancellationToken ct)
+    {
+        var projectPath = args?.GetProperty("projectPath").GetString() ?? "";
+        var filePath = args?.GetProperty("filePath").GetString() ?? "";
+        var offset = args?.GetProperty("offset").GetInt32() ?? 0;
+
+        var result = await _pythonRefactoringService.FindReferencesAsync(new PythonFindReferencesRequest
+        {
+            ProjectPath = projectPath,
+            FilePath = filePath,
+            Offset = offset
+        }, ct);
+
+        return new
+        {
+            success = result.Success,
+            error = result.Error,
+            count = result.Count,
+            references = result.References.Select(r => new
+            {
+                filePath = r.FilePath,
+                offset = r.Offset,
+                isDefinition = r.IsDefinition,
+                isWrite = r.IsWrite
+            })
+        };
+    }
+
+    private async Task<object> PythonFindDefinitionAsync(JsonElement? args, CancellationToken ct)
+    {
+        var projectPath = args?.GetProperty("projectPath").GetString() ?? "";
+        var filePath = args?.GetProperty("filePath").GetString() ?? "";
+        var offset = args?.GetProperty("offset").GetInt32() ?? 0;
+
+        var result = await _pythonRefactoringService.FindDefinitionAsync(new PythonFindDefinitionRequest
+        {
+            ProjectPath = projectPath,
+            FilePath = filePath,
+            Offset = offset
+        }, ct);
+
+        return new
+        {
+            success = result.Success,
+            error = result.Error,
+            found = result.Found,
+            filePath = result.FilePath,
+            offset = result.Offset,
+            line = result.Line,
+            message = result.Message
         };
     }
 
