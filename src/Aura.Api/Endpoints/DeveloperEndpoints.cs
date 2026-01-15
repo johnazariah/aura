@@ -8,6 +8,7 @@ using System.Text;
 using Aura.Api.Contracts;
 using Aura.Foundation.Git;
 using Aura.Module.Developer.Data.Entities;
+using Aura.Module.Developer.GitHub;
 using Aura.Module.Developer.Services;
 
 /// <summary>
@@ -29,6 +30,7 @@ public static class DeveloperEndpoints
         // Workflow lifecycle
         app.MapPost("/api/developer/workflows/{id:guid}/analyze", AnalyzeWorkflow);
         app.MapPost("/api/developer/workflows/{id:guid}/plan", PlanWorkflow);
+        app.MapPost("/api/developer/workflows/{id:guid}/execute-all", ExecuteAllSteps);
         app.MapPost("/api/developer/workflows/{id:guid}/complete", CompleteWorkflow);
         app.MapPost("/api/developer/workflows/{id:guid}/cancel", CancelWorkflow);
         app.MapPost("/api/developer/workflows/{id:guid}/finalize", FinalizeWorkflow);
@@ -48,6 +50,12 @@ public static class DeveloperEndpoints
         app.MapPost("/api/developer/workflows/{workflowId:guid}/steps/{stepId:guid}/reassign", ReassignStep);
         app.MapPut("/api/developer/workflows/{workflowId:guid}/steps/{stepId:guid}/description", UpdateStepDescription);
 
+        // Story/Issue integration endpoints
+        app.MapPost("/api/developer/stories/from-issue", CreateStoryFromIssue);
+        app.MapPost("/api/developer/workflows/{id:guid}/refresh-from-issue", RefreshFromIssue);
+        app.MapPost("/api/developer/workflows/{id:guid}/post-update", PostUpdateToIssue);
+        app.MapPost("/api/developer/workflows/{id:guid}/close-issue", CloseLinkedIssue);
+
         return app;
     }
 
@@ -63,10 +71,27 @@ public static class DeveloperEndpoints
 
         try
         {
+            // Parse mode from string
+            var mode = WorkflowMode.Structured;
+            if (!string.IsNullOrEmpty(request.Mode) && Enum.TryParse<WorkflowMode>(request.Mode, true, out var m))
+            {
+                mode = m;
+            }
+
+            // Parse automation mode from string
+            var automationMode = AutomationMode.Assisted;
+            if (!string.IsNullOrEmpty(request.AutomationMode) && Enum.TryParse<AutomationMode>(request.AutomationMode, true, out var am))
+            {
+                automationMode = am;
+            }
+
             var workflow = await workflowService.CreateAsync(
                 request.Title,
                 request.Description,
                 request.RepositoryPath,
+                mode,
+                automationMode,
+                request.IssueUrl,
                 ct);
 
             return Results.Created($"/api/developer/workflows/{workflow.Id}", new
@@ -75,9 +100,16 @@ public static class DeveloperEndpoints
                 title = workflow.Title,
                 description = workflow.Description,
                 status = workflow.Status.ToString(),
+                mode = workflow.Mode.ToString(),
+                automationMode = workflow.AutomationMode.ToString(),
                 gitBranch = workflow.GitBranch,
                 worktreePath = workflow.WorktreePath,
                 repositoryPath = workflow.RepositoryPath,
+                issueUrl = workflow.IssueUrl,
+                issueProvider = workflow.IssueProvider?.ToString(),
+                issueNumber = workflow.IssueNumber,
+                issueOwner = workflow.IssueOwner,
+                issueRepo = workflow.IssueRepo,
                 createdAt = workflow.CreatedAt
             });
         }
@@ -110,9 +142,12 @@ public static class DeveloperEndpoints
                 title = w.Title,
                 description = w.Description,
                 status = w.Status.ToString(),
+                mode = w.Mode.ToString(),
                 gitBranch = w.GitBranch,
                 repositoryPath = w.RepositoryPath,
                 worktreePath = w.WorktreePath,
+                issueUrl = w.IssueUrl,
+                issueNumber = w.IssueNumber,
                 stepCount = w.Steps.Count,
                 completedSteps = w.Steps.Count(s => s.Status == StepStatus.Completed),
                 createdAt = w.CreatedAt,
@@ -138,9 +173,15 @@ public static class DeveloperEndpoints
             title = workflow.Title,
             description = workflow.Description,
             status = workflow.Status.ToString(),
+            mode = workflow.Mode.ToString(),
             gitBranch = workflow.GitBranch,
             worktreePath = workflow.WorktreePath,
             repositoryPath = workflow.RepositoryPath,
+            issueUrl = workflow.IssueUrl,
+            issueProvider = workflow.IssueProvider?.ToString(),
+            issueNumber = workflow.IssueNumber,
+            issueOwner = workflow.IssueOwner,
+            issueRepo = workflow.IssueRepo,
             analyzedContext = workflow.AnalyzedContext,
             executionPlan = workflow.ExecutionPlan,
             steps = workflow.Steps.OrderBy(s => s.Order).Select(s => new
@@ -455,6 +496,52 @@ public static class DeveloperEndpoints
         }
     }
 
+    private static async Task<IResult> ExecuteAllSteps(
+        Guid id,
+        ExecuteAllStepsRequest? request,
+        IWorkflowService workflowService,
+        CancellationToken ct)
+    {
+        try
+        {
+            var result = await workflowService.ExecuteAllStepsAsync(
+                id,
+                request?.StopOnError ?? true,
+                ct);
+
+            return Results.Ok(new
+            {
+                success = result.Success,
+                executedSteps = result.ExecutedSteps.Select(s => new
+                {
+                    id = s.Id,
+                    name = s.Name,
+                    status = s.Status.ToString(),
+                    completedAt = s.CompletedAt,
+                }),
+                skippedSteps = result.SkippedSteps.Select(s => new
+                {
+                    id = s.Id,
+                    name = s.Name,
+                    capability = s.Capability,
+                    reason = "Requires user confirmation",
+                }),
+                failedStep = result.FailedStep is null ? null : new
+                {
+                    id = result.FailedStep.Id,
+                    name = result.FailedStep.Name,
+                    error = result.Error,
+                },
+                stoppedOnError = result.StoppedOnError,
+                hasPendingConfirmations = result.HasPendingConfirmations,
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Results.BadRequest(new { error = ex.Message });
+        }
+    }
+
     private static async Task<IResult> ApproveStep(
         Guid workflowId,
         Guid stepId,
@@ -649,5 +736,254 @@ public static class DeveloperEndpoints
         sb.AppendLine("---");
         sb.AppendLine("*Created by [Aura](https://github.com/johnazariah/aura)*");
         return sb.ToString();
+    }
+
+    // =========================================================================
+    // Story/Issue Integration Endpoints
+    // =========================================================================
+
+    private static async Task<IResult> CreateStoryFromIssue(
+        CreateStoryFromIssueRequest request,
+        IGitHubService gitHub,
+        IWorkflowService workflowService,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(request.IssueUrl))
+        {
+            return Results.BadRequest(new { error = "IssueUrl is required" });
+        }
+
+        // Parse issue URL
+        var parsed = gitHub.ParseIssueUrl(request.IssueUrl);
+        if (parsed is null)
+        {
+            return Results.BadRequest(new { error = "Invalid GitHub issue URL. Expected format: https://github.com/owner/repo/issues/123" });
+        }
+
+        if (!gitHub.IsConfigured)
+        {
+            return Results.BadRequest(new { error = "GitHub integration not configured. Set GitHub:Token in appsettings.json" });
+        }
+
+        try
+        {
+            // Fetch issue from GitHub
+            var issue = await gitHub.GetIssueAsync(parsed.Value.Owner, parsed.Value.Repo, parsed.Value.Number, ct);
+
+            // Parse mode
+            var mode = WorkflowMode.Conversational; // Default to conversational for issue-based stories
+            if (!string.IsNullOrEmpty(request.Mode) && Enum.TryParse<WorkflowMode>(request.Mode, true, out var m))
+            {
+                mode = m;
+            }
+
+            // Create workflow/story
+            var workflow = await workflowService.CreateAsync(
+                issue.Title,
+                issue.Body,
+                request.RepositoryPath,
+                mode,
+                AutomationMode.Assisted, // Issue-based workflows default to assisted mode
+                request.IssueUrl,
+                ct);
+
+            // Post a comment to the issue that work has started
+            var branch = workflow.GitBranch ?? "unknown";
+            await gitHub.PostCommentAsync(
+                parsed.Value.Owner,
+                parsed.Value.Repo,
+                parsed.Value.Number,
+                $"Started work in branch `{branch}`",
+                ct);
+
+            return Results.Created($"/api/developer/workflows/{workflow.Id}", new
+            {
+                id = workflow.Id,
+                title = workflow.Title,
+                description = workflow.Description,
+                status = workflow.Status.ToString(),
+                mode = workflow.Mode.ToString(),
+                gitBranch = workflow.GitBranch,
+                worktreePath = workflow.WorktreePath,
+                repositoryPath = workflow.RepositoryPath,
+                issueUrl = workflow.IssueUrl,
+                issueProvider = workflow.IssueProvider?.ToString(),
+                issueNumber = workflow.IssueNumber,
+                issueOwner = workflow.IssueOwner,
+                issueRepo = workflow.IssueRepo,
+                createdAt = workflow.CreatedAt
+            });
+        }
+        catch (HttpRequestException ex)
+        {
+            return Results.BadRequest(new { error = $"Failed to fetch issue from GitHub: {ex.Message}" });
+        }
+    }
+
+    private static async Task<IResult> RefreshFromIssue(
+        Guid id,
+        IGitHubService gitHub,
+        IWorkflowService workflowService,
+        CancellationToken ct)
+    {
+        var workflow = await workflowService.GetByIdAsync(id, ct);
+        if (workflow is null)
+        {
+            return Results.NotFound(new { error = $"Workflow {id} not found" });
+        }
+
+        if (string.IsNullOrEmpty(workflow.IssueUrl) ||
+            workflow.IssueOwner is null ||
+            workflow.IssueRepo is null ||
+            workflow.IssueNumber is null)
+        {
+            return Results.BadRequest(new { error = "Workflow is not linked to a GitHub issue" });
+        }
+
+        if (!gitHub.IsConfigured)
+        {
+            return Results.BadRequest(new { error = "GitHub integration not configured" });
+        }
+
+        try
+        {
+            var issue = await gitHub.GetIssueAsync(
+                workflow.IssueOwner,
+                workflow.IssueRepo,
+                workflow.IssueNumber.Value,
+                ct);
+
+            var changes = new List<string>();
+
+            // Update title if changed
+            if (workflow.Title != issue.Title)
+            {
+                workflow.Title = issue.Title;
+                changes.Add("title");
+            }
+
+            // Update description if changed
+            if (workflow.Description != issue.Body)
+            {
+                workflow.Description = issue.Body;
+                changes.Add("description");
+            }
+
+            if (changes.Count > 0)
+            {
+                workflow.UpdatedAt = DateTimeOffset.UtcNow;
+                await workflowService.UpdateAsync(workflow, ct);
+            }
+
+            return Results.Ok(new
+            {
+                updated = changes.Count > 0,
+                changes
+            });
+        }
+        catch (HttpRequestException ex)
+        {
+            return Results.BadRequest(new { error = $"Failed to fetch issue: {ex.Message}" });
+        }
+    }
+
+    private static async Task<IResult> PostUpdateToIssue(
+        Guid id,
+        PostUpdateRequest request,
+        IGitHubService gitHub,
+        IWorkflowService workflowService,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(request.Message))
+        {
+            return Results.BadRequest(new { error = "Message is required" });
+        }
+
+        var workflow = await workflowService.GetByIdAsync(id, ct);
+        if (workflow is null)
+        {
+            return Results.NotFound(new { error = $"Workflow {id} not found" });
+        }
+
+        if (workflow.IssueOwner is null ||
+            workflow.IssueRepo is null ||
+            workflow.IssueNumber is null)
+        {
+            return Results.BadRequest(new { error = "Workflow is not linked to a GitHub issue" });
+        }
+
+        if (!gitHub.IsConfigured)
+        {
+            return Results.BadRequest(new { error = "GitHub integration not configured" });
+        }
+
+        try
+        {
+            await gitHub.PostCommentAsync(
+                workflow.IssueOwner,
+                workflow.IssueRepo,
+                workflow.IssueNumber.Value,
+                request.Message,
+                ct);
+
+            return Results.Ok(new { posted = true });
+        }
+        catch (HttpRequestException ex)
+        {
+            return Results.BadRequest(new { error = $"Failed to post comment: {ex.Message}" });
+        }
+    }
+
+    private static async Task<IResult> CloseLinkedIssue(
+        Guid id,
+        CloseIssueRequest? request,
+        IGitHubService gitHub,
+        IWorkflowService workflowService,
+        CancellationToken ct)
+    {
+        var workflow = await workflowService.GetByIdAsync(id, ct);
+        if (workflow is null)
+        {
+            return Results.NotFound(new { error = $"Workflow {id} not found" });
+        }
+
+        if (workflow.IssueOwner is null ||
+            workflow.IssueRepo is null ||
+            workflow.IssueNumber is null)
+        {
+            return Results.BadRequest(new { error = "Workflow is not linked to a GitHub issue" });
+        }
+
+        if (!gitHub.IsConfigured)
+        {
+            return Results.BadRequest(new { error = "GitHub integration not configured" });
+        }
+
+        try
+        {
+            // Post closing comment if provided
+            if (!string.IsNullOrEmpty(request?.Comment))
+            {
+                await gitHub.PostCommentAsync(
+                    workflow.IssueOwner,
+                    workflow.IssueRepo,
+                    workflow.IssueNumber.Value,
+                    request.Comment,
+                    ct);
+            }
+
+            // Close the issue
+            await gitHub.CloseIssueAsync(
+                workflow.IssueOwner,
+                workflow.IssueRepo,
+                workflow.IssueNumber.Value,
+                ct);
+
+            return Results.Ok(new { closed = true });
+        }
+        catch (HttpRequestException ex)
+        {
+            return Results.BadRequest(new { error = $"Failed to close issue: {ex.Message}" });
+        }
     }
 }

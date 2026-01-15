@@ -130,7 +130,14 @@ public record WorkspaceIndexingOptions(
 public record CreateWorkflowRequest(
     string? Title = null,
     string? Description = null,
-    string? RepositoryPath = null);
+    string? RepositoryPath = null,
+    string? Mode = null,
+    string? AutomationMode = null,
+    string? IssueUrl = null);
+
+/// <summary>Request to execute all pending steps.</summary>
+public record ExecuteAllStepsRequest(
+    bool StopOnError = true);
 
 /// <summary>Request to execute a workflow step.</summary>
 public record ExecuteStepRequest(string? AgentId = null);
@@ -168,6 +175,23 @@ public record FinalizeWorkflowRequest(
     string? PrBody = null,
     string? BaseBranch = null,
     bool Draft = true);
+
+// =============================================================================
+// Story/Issue Integration Requests
+// =============================================================================
+
+/// <summary>Request to create a story from a GitHub issue.</summary>
+public record CreateStoryFromIssueRequest(
+    string IssueUrl,
+    string? Mode = null,
+    string? RepositoryPath = null,
+    bool CreateWorktree = true);
+
+/// <summary>Request to post an update to the linked issue.</summary>
+public record PostUpdateRequest(string Message);
+
+/// <summary>Request to close the linked issue.</summary>
+public record CloseIssueRequest(string? Comment = null);
 
 // =============================================================================
 // Response Models
