@@ -17,12 +17,18 @@ public interface IWorkflowService
     /// <param name="title">The workflow title.</param>
     /// <param name="description">The workflow description.</param>
     /// <param name="repositoryPath">Optional repository path.</param>
+    /// <param name="mode">Execution mode (Structured or Conversational).</param>
+    /// <param name="automationMode">Automation mode (Assisted, Autonomous, FullAutonomous).</param>
+    /// <param name="issueUrl">Optional external issue URL to link.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>The created workflow.</returns>
     Task<Workflow> CreateAsync(
         string title,
         string? description = null,
         string? repositoryPath = null,
+        WorkflowMode mode = WorkflowMode.Structured,
+        AutomationMode automationMode = AutomationMode.Assisted,
+        string? issueUrl = null,
         CancellationToken ct = default);
 
     /// <summary>
@@ -58,6 +64,13 @@ public interface IWorkflowService
     Task DeleteAsync(Guid workflowId, CancellationToken ct = default);
 
     /// <summary>
+    /// Updates a workflow.
+    /// </summary>
+    /// <param name="workflow">The workflow to update.</param>
+    /// <param name="ct">Cancellation token.</param>
+    Task UpdateAsync(Workflow workflow, CancellationToken ct = default);
+
+    /// <summary>
     /// Enriches the workflow requirements using the issue-enrichment agent.
     /// </summary>
     /// <param name="workflowId">The workflow ID.</param>
@@ -85,6 +98,21 @@ public interface IWorkflowService
         Guid workflowId,
         Guid stepId,
         string? agentIdOverride = null,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Executes all pending steps in the workflow according to the automation mode.
+    /// In Assisted mode, only executes safe steps.
+    /// In Autonomous mode, executes steps that don't require confirmation.
+    /// In FullAutonomous mode, executes all steps.
+    /// </summary>
+    /// <param name="workflowId">The workflow ID.</param>
+    /// <param name="stopOnError">Whether to stop if a step fails.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Result containing executed steps and any errors.</returns>
+    Task<ExecuteAllResult> ExecuteAllStepsAsync(
+        Guid workflowId,
+        bool stopOnError = true,
         CancellationToken ct = default);
 
     /// <summary>
@@ -227,4 +255,31 @@ public record WorkflowChatResponse
 
     /// <summary>Gets whether the analysis was re-run with additional context.</summary>
     public bool AnalysisUpdated { get; init; }
+}
+
+/// <summary>
+/// Result from executing all steps in a workflow.
+/// </summary>
+public record ExecuteAllResult
+{
+    /// <summary>Gets whether all steps completed successfully.</summary>
+    public required bool Success { get; init; }
+
+    /// <summary>Gets the steps that were executed.</summary>
+    public required IReadOnlyList<WorkflowStep> ExecutedSteps { get; init; }
+
+    /// <summary>Gets the steps that were skipped (require user confirmation in current automation mode).</summary>
+    public required IReadOnlyList<WorkflowStep> SkippedSteps { get; init; }
+
+    /// <summary>Gets the step that failed, if any.</summary>
+    public WorkflowStep? FailedStep { get; init; }
+
+    /// <summary>Gets the error message if a step failed.</summary>
+    public string? Error { get; init; }
+
+    /// <summary>Gets whether execution was stopped due to an error.</summary>
+    public bool StoppedOnError { get; init; }
+
+    /// <summary>Gets whether there are steps requiring user confirmation.</summary>
+    public bool HasPendingConfirmations => SkippedSteps.Count > 0;
 }

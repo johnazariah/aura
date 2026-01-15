@@ -54,8 +54,18 @@ public sealed class DeveloperDbContext(DbContextOptions<DeveloperDbContext> opti
             entity.Property(e => e.CompletedAt).HasColumnName("completed_at");
             entity.Property(e => e.PullRequestUrl).HasColumnName("pull_request_url").HasMaxLength(1000);
 
+            // Issue integration (Story Model)
+            entity.Property(e => e.IssueUrl).HasColumnName("issue_url").HasMaxLength(1000);
+            entity.Property(e => e.IssueProvider).HasColumnName("issue_provider").HasConversion<string>().HasMaxLength(20);
+            entity.Property(e => e.IssueNumber).HasColumnName("issue_number");
+            entity.Property(e => e.IssueOwner).HasColumnName("issue_owner").HasMaxLength(200);
+            entity.Property(e => e.IssueRepo).HasColumnName("issue_repo").HasMaxLength(200);
+            entity.Property(e => e.Mode).HasColumnName("mode").HasConversion<string>().HasMaxLength(20);
+            entity.Property(e => e.AutomationMode).HasColumnName("automation_mode").HasConversion<string>().HasMaxLength(20);
+
             entity.HasIndex(e => e.Status);
             entity.HasIndex(e => e.CreatedAt);
+            entity.HasIndex(e => e.IssueUrl);
         });
 
         // WorkflowStep configuration

@@ -60,6 +60,9 @@ public sealed class WorkflowService(
         string title,
         string? description = null,
         string? repositoryPath = null,
+        WorkflowMode mode = WorkflowMode.Structured,
+        AutomationMode automationMode = AutomationMode.Assisted,
+        string? issueUrl = null,
         CancellationToken ct = default)
     {
         // Create a branch name from the title
@@ -80,9 +83,25 @@ public sealed class WorkflowService(
             Description = description,
             GitBranch = branchName,
             Status = WorkflowStatus.Created,
+            Mode = mode,
+            AutomationMode = automationMode,
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow,
         };
+
+        // Parse issue URL if provided
+        if (!string.IsNullOrEmpty(issueUrl))
+        {
+            var parsed = ParseGitHubIssueUrl(issueUrl);
+            if (parsed is not null)
+            {
+                workflow.IssueUrl = issueUrl;
+                workflow.IssueProvider = IssueProvider.GitHub;
+                workflow.IssueOwner = parsed.Value.owner;
+                workflow.IssueRepo = parsed.Value.repo;
+                workflow.IssueNumber = parsed.Value.number;
+            }
+        }
 
         // Try to create a worktree if repository path is set
         if (!string.IsNullOrEmpty(repositoryPath))
@@ -230,6 +249,14 @@ public sealed class WorkflowService(
         await _db.SaveChangesAsync(ct);
 
         _logger.LogInformation("Deleted workflow {WorkflowId}: {Title}", id, workflow.Title);
+    }
+
+    /// <inheritdoc/>
+    public async Task UpdateAsync(Workflow workflow, CancellationToken ct = default)
+    {
+        _db.Workflows.Update(workflow);
+        await _db.SaveChangesAsync(ct);
+        _logger.LogInformation("Updated workflow {WorkflowId}: {Title}", workflow.Id, workflow.Title);
     }
 
     /// <inheritdoc/>
@@ -888,6 +915,134 @@ public sealed class WorkflowService(
             _logger.LogError(ex, "Failed to execute step {StepId} in workflow {WorkflowId}", stepId, workflowId);
             throw;
         }
+    }
+
+    /// <inheritdoc/>
+    public async Task<ExecuteAllResult> ExecuteAllStepsAsync(
+        Guid workflowId,
+        bool stopOnError = true,
+        CancellationToken ct = default)
+    {
+        var workflow = await _db.Workflows
+            .Include(w => w.Steps)
+            .FirstOrDefaultAsync(w => w.Id == workflowId, ct)
+            ?? throw new InvalidOperationException($"Workflow {workflowId} not found");
+
+        if (workflow.Status is not WorkflowStatus.Planned and not WorkflowStatus.Executing)
+        {
+            throw new InvalidOperationException(
+                $"Workflow must be in 'Planned' or 'Executing' status to execute all steps. Current status: {workflow.Status}");
+        }
+
+        var executedSteps = new List<WorkflowStep>();
+        var skippedSteps = new List<WorkflowStep>();
+        WorkflowStep? failedStep = null;
+        string? error = null;
+        var stoppedOnError = false;
+
+        // Get pending steps in order
+        var pendingSteps = workflow.Steps
+            .Where(s => s.Status == StepStatus.Pending || s.NeedsRework)
+            .OrderBy(s => s.Order)
+            .ToList();
+
+        _logger.LogInformation(
+            "ExecuteAllSteps: Processing {PendingCount} pending steps in workflow {WorkflowId} with AutomationMode={AutomationMode}",
+            pendingSteps.Count, workflowId, workflow.AutomationMode);
+
+        foreach (var step in pendingSteps)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            // Check if step can be auto-executed based on automation mode
+            var canAutoExecute = CanAutoExecuteStep(workflow.AutomationMode, step);
+
+            if (!canAutoExecute)
+            {
+                _logger.LogInformation(
+                    "Step {StepId} ({StepName}) requires user confirmation, skipping in auto-execute mode",
+                    step.Id, step.Name);
+                skippedSteps.Add(step);
+                continue;
+            }
+
+            try
+            {
+                _logger.LogInformation("Auto-executing step {StepId} ({StepName})", step.Id, step.Name);
+                var executedStep = await ExecuteStepAsync(workflowId, step.Id, ct: ct);
+                executedSteps.Add(executedStep);
+
+                // Auto-approve in autonomous modes
+                if (workflow.AutomationMode is AutomationMode.Autonomous or AutomationMode.FullAutonomous)
+                {
+                    await ApproveStepAsync(workflowId, step.Id, ct);
+                    _logger.LogInformation("Auto-approved step {StepId} ({StepName})", step.Id, step.Name);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Step {StepId} failed during auto-execution", step.Id);
+                failedStep = step;
+                error = ex.Message;
+                stoppedOnError = stopOnError;
+
+                if (stopOnError)
+                {
+                    break;
+                }
+            }
+        }
+
+        var success = failedStep is null && skippedSteps.Count == 0;
+
+        _logger.LogInformation(
+            "ExecuteAllSteps completed: Success={Success}, Executed={ExecutedCount}, Skipped={SkippedCount}, Failed={HasFailed}",
+            success, executedSteps.Count, skippedSteps.Count, failedStep is not null);
+
+        return new ExecuteAllResult
+        {
+            Success = success,
+            ExecutedSteps = executedSteps,
+            SkippedSteps = skippedSteps,
+            FailedStep = failedStep,
+            Error = error,
+            StoppedOnError = stoppedOnError,
+        };
+    }
+
+    /// <summary>
+    /// Determines if a step can be auto-executed based on the workflow's automation mode.
+    /// </summary>
+    private static bool CanAutoExecuteStep(AutomationMode automationMode, WorkflowStep step)
+    {
+        return automationMode switch
+        {
+            // Assisted mode: never auto-execute (all steps need approval)
+            AutomationMode.Assisted => false,
+
+            // Autonomous mode: auto-execute safe capabilities only
+            // "Dangerous" capabilities that modify state require confirmation
+            AutomationMode.Autonomous => step.Capability switch
+            {
+                // Safe capabilities - analysis, planning, review
+                "analysis" => true,
+                "review" => true,
+                "testing" => true,
+
+                // Coding/documentation modify files - require confirmation
+                "coding" => false,
+                "documentation" => false,
+                "fixing" => false,
+
+                // Unknown capabilities default to requiring confirmation
+                _ => false,
+            },
+
+            // Full autonomous mode: execute everything (YOLO)
+            AutomationMode.FullAutonomous => true,
+
+            _ => false,
+        };
     }
 
     /// <inheritdoc/>
@@ -2127,5 +2282,21 @@ public sealed class WorkflowService(
 
         _logger.LogInformation("Updated description for step {StepId}", stepId);
         return step;
+    }
+
+    /// <summary>
+    /// Parses a GitHub issue URL into its components.
+    /// </summary>
+    /// <param name="url">The issue URL (e.g., "https://github.com/owner/repo/issues/123").</param>
+    /// <returns>The parsed components, or null if the URL is invalid.</returns>
+    private static (string owner, string repo, int number)? ParseGitHubIssueUrl(string url)
+    {
+        var match = Regex.Match(url, @"github\.com/([^/]+)/([^/]+)/issues/(\d+)", RegexOptions.IgnoreCase);
+        if (!match.Success)
+        {
+            return null;
+        }
+
+        return (match.Groups[1].Value, match.Groups[2].Value, int.Parse(match.Groups[3].Value));
     }
 }

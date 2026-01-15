@@ -3,6 +3,7 @@ using System;
 using Aura.Module.Developer.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Aura.Module.Developer.Data.Migrations
 {
     [DbContext(typeof(DeveloperDbContext))]
-    partial class DeveloperDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260113112027_AddStoryFeatures")]
+    partial class AddStoryFeatures
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -32,12 +35,6 @@ namespace Aura.Module.Developer.Data.Migrations
                     b.Property<string>("AnalyzedContext")
                         .HasColumnType("jsonb")
                         .HasColumnName("analyzed_context");
-
-                    b.Property<string>("AutomationMode")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasColumnName("automation_mode");
 
                     b.Property<DateTimeOffset?>("CompletedAt")
                         .HasColumnType("timestamp with time zone")
