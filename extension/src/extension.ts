@@ -244,6 +244,25 @@ export async function activate(context: vscode.ExtensionContext) {
         await showTypeMembers();
     });
 
+    // Story/Issue integration commands
+    const createStoryFromIssueCommand = vscode.commands.registerCommand('aura.createStoryFromIssue', async () => {
+        await createStoryFromIssue();
+    });
+
+    const refreshFromIssueCommand = vscode.commands.registerCommand('aura.refreshFromIssue', async (workflowId?: string) => {
+        await refreshFromIssue(workflowId);
+    });
+
+    const postUpdateToIssueCommand = vscode.commands.registerCommand('aura.postUpdateToIssue', async (workflowId?: string) => {
+        await postUpdateToIssue(workflowId);
+    });
+
+    const openStoryWorktreeCommand = vscode.commands.registerCommand('aura.openStoryWorktree', async (worktreePath?: string) => {
+        if (worktreePath) {
+            await vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.file(worktreePath), { forceNewWindow: true });
+        }
+    });
+
     // Subscribe to configuration changes
     const configWatcher = vscode.workspace.onDidChangeConfiguration(e => {
         if (e.affectsConfiguration('aura')) {
@@ -317,6 +336,10 @@ export async function activate(context: vscode.ExtensionContext) {
         findImplementationsCommand,
         findCallersCommand,
         showTypeMembersCommand,
+        createStoryFromIssueCommand,
+        refreshFromIssueCommand,
+        postUpdateToIssueCommand,
+        openStoryWorktreeCommand,
         configWatcher
     );
     
@@ -913,6 +936,133 @@ async function deleteWorkflow(item?: any): Promise<void> {
     } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error';
         vscode.window.showErrorMessage(`Failed to delete workflow: ${message}`);
+    }
+}
+
+// =====================
+// Story/Issue Functions
+// =====================
+
+async function createStoryFromIssue(): Promise<void> {
+    // Prompt for GitHub issue URL
+    const issueUrl = await vscode.window.showInputBox({
+        prompt: 'Enter GitHub issue URL',
+        placeHolder: 'https://github.com/owner/repo/issues/123',
+        validateInput: (value) => {
+            if (!value) {
+                return 'Issue URL is required';
+            }
+            if (!value.match(/github\.com\/[^/]+\/[^/]+\/issues\/\d+/i)) {
+                return 'Invalid GitHub issue URL format';
+            }
+            return null;
+        }
+    });
+
+    if (!issueUrl) {
+        return;
+    }
+
+    // Get current workspace path
+    const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+
+    // Ask for mode
+    const modeItems: vscode.QuickPickItem[] = [
+        { label: 'Conversational', description: 'Free-form development with GitHub Copilot (recommended)' },
+        { label: 'Structured', description: 'Plan → Steps → Execute → Review workflow' }
+    ];
+
+    const selectedMode = await vscode.window.showQuickPick(modeItems, {
+        placeHolder: 'Select development mode'
+    });
+
+    if (!selectedMode) {
+        return;
+    }
+
+    try {
+        await vscode.window.withProgress(
+            {
+                location: vscode.ProgressLocation.Notification,
+                title: 'Creating story from issue...',
+                cancellable: false
+            },
+            async () => {
+                const workflow = await auraApiService.createStoryFromIssue(
+                    issueUrl,
+                    workspacePath,
+                    selectedMode.label
+                );
+
+                workflowTreeProvider.refresh();
+
+                // Auto-open worktree in new VS Code window
+                if (workflow.worktreePath) {
+                    const action = await vscode.window.showInformationMessage(
+                        `Created story: ${workflow.title}`,
+                        'Open in New Window',
+                        'Stay Here'
+                    );
+                    if (action === 'Open in New Window') {
+                        await vscode.commands.executeCommand(
+                            'vscode.openFolder',
+                            vscode.Uri.file(workflow.worktreePath),
+                            { forceNewWindow: true }
+                        );
+                    }
+                } else {
+                    vscode.window.showInformationMessage(`Created story: ${workflow.title}`);
+                }
+            }
+        );
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        vscode.window.showErrorMessage(`Failed to create story: ${message}`);
+    }
+}
+
+async function refreshFromIssue(workflowId?: string): Promise<void> {
+    if (!workflowId) {
+        vscode.window.showErrorMessage('No story selected');
+        return;
+    }
+
+    try {
+        const result = await auraApiService.refreshFromIssue(workflowId);
+        
+        if (result.updated) {
+            workflowTreeProvider.refresh();
+            vscode.window.showInformationMessage(`Story updated: ${result.changes.join(', ')}`);
+        } else {
+            vscode.window.showInformationMessage('Story is already up to date');
+        }
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        vscode.window.showErrorMessage(`Failed to refresh from issue: ${message}`);
+    }
+}
+
+async function postUpdateToIssue(workflowId?: string): Promise<void> {
+    if (!workflowId) {
+        vscode.window.showErrorMessage('No story selected');
+        return;
+    }
+
+    const message = await vscode.window.showInputBox({
+        prompt: 'Enter update message to post to the issue',
+        placeHolder: 'Progress update...'
+    });
+
+    if (!message) {
+        return;
+    }
+
+    try {
+        await auraApiService.postUpdateToIssue(workflowId, message);
+        vscode.window.showInformationMessage('Update posted to issue');
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        vscode.window.showErrorMessage(`Failed to post update: ${errorMessage}`);
     }
 }
 

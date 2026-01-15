@@ -164,9 +164,15 @@ export interface Workflow {
     title: string;
     description?: string;
     status: string;
+    mode?: string;
     gitBranch?: string;
     worktreePath?: string;
     repositoryPath?: string;
+    issueUrl?: string;
+    issueProvider?: string;
+    issueNumber?: number;
+    issueOwner?: string;
+    issueRepo?: string;
     analyzedContext?: string;
     executionPlan?: string;
     pullRequestUrl?: string;
@@ -850,6 +856,62 @@ export class AuraApiService {
             jobId: response.data.jobId,
             message: response.data.message
         };
+    }
+
+    // =====================
+    // Story/Issue Integration Methods
+    // =====================
+
+    /**
+     * Create a story from a GitHub issue URL.
+     */
+    async createStoryFromIssue(
+        issueUrl: string,
+        repositoryPath?: string,
+        mode?: string
+    ): Promise<Workflow> {
+        const response = await this.httpClient.post(
+            `${this.getBaseUrl()}/api/developer/stories/from-issue`,
+            { issueUrl, repositoryPath, mode, createWorktree: true },
+            { timeout: this.getWorkflowTimeout() }
+        );
+        return response.data;
+    }
+
+    /**
+     * Refresh a workflow/story from its linked GitHub issue.
+     */
+    async refreshFromIssue(workflowId: string): Promise<{ updated: boolean; changes: string[] }> {
+        const response = await this.httpClient.post(
+            `${this.getBaseUrl()}/api/developer/workflows/${workflowId}/refresh-from-issue`,
+            {},
+            { timeout: 10000 }
+        );
+        return response.data;
+    }
+
+    /**
+     * Post an update comment to the linked GitHub issue.
+     */
+    async postUpdateToIssue(workflowId: string, message: string): Promise<{ posted: boolean }> {
+        const response = await this.httpClient.post(
+            `${this.getBaseUrl()}/api/developer/workflows/${workflowId}/post-update`,
+            { message },
+            { timeout: 10000 }
+        );
+        return response.data;
+    }
+
+    /**
+     * Close the linked GitHub issue.
+     */
+    async closeLinkedIssue(workflowId: string, comment?: string): Promise<{ closed: boolean }> {
+        const response = await this.httpClient.post(
+            `${this.getBaseUrl()}/api/developer/workflows/${workflowId}/close-issue`,
+            { comment },
+            { timeout: 10000 }
+        );
+        return response.data;
     }
 }
 

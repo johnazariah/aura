@@ -75,12 +75,25 @@ export class WorkflowPanelProvider {
             // Notify caller
             onCreated(workflow.id);
 
-            // Open the workflow management panel
-            await this.openWorkflowPanel(workflow.id);
-
-            vscode.window.showInformationMessage(
-                `Workflow created! Branch: ${workflow.gitBranch || 'N/A'}`
-            );
+            // Auto-open worktree in new VS Code window if available
+            if (workflow.worktreePath) {
+                const openNow = await vscode.window.showInformationMessage(
+                    `Story created! Branch: ${workflow.gitBranch || 'N/A'}`,
+                    'Open in New Window',
+                    'Stay Here'
+                );
+                if (openNow === 'Open in New Window') {
+                    await vscode.commands.executeCommand(
+                        'vscode.openFolder',
+                        vscode.Uri.file(workflow.worktreePath),
+                        { forceNewWindow: true }
+                    );
+                }
+            } else {
+                vscode.window.showInformationMessage(
+                    `Workflow created! Branch: ${workflow.gitBranch || 'N/A'}`
+                );
+            }
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Unknown error';
             panel.webview.postMessage({ type: 'error', message: `Failed to create workflow: ${message}` });

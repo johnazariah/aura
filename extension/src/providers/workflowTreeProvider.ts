@@ -92,11 +92,11 @@ export class WorkflowTreeProvider implements vscode.TreeDataProvider<WorkflowTre
         item.iconPath = this.getStatusIcon(workflow.status);
         item.tooltip = this.getWorkflowTooltip(workflow);
 
-        // Command to open workflow panel when clicked
+        // Click opens worktree in new window
         item.command = {
-            command: 'aura.openWorkflow',
-            title: 'Open Workflow',
-            arguments: [workflow.id]
+            command: 'aura.openStoryWorktree',
+            title: 'Open Worktree',
+            arguments: [workflow.worktreePath]
         };
 
         return item;
@@ -104,6 +104,35 @@ export class WorkflowTreeProvider implements vscode.TreeDataProvider<WorkflowTre
 
     private getWorkflowChildren(workflow: Workflow): WorkflowTreeItem[] {
         const items: WorkflowTreeItem[] = [];
+
+        // Add mode indicator
+        if (workflow.mode) {
+            const modeIcon = workflow.mode === 'Conversational' ? 'comment-discussion' : 'list-ordered';
+            const modeItem = new WorkflowTreeItem(
+                `Mode: ${workflow.mode}`,
+                vscode.TreeItemCollapsibleState.None,
+                'info'
+            );
+            modeItem.iconPath = new vscode.ThemeIcon(modeIcon);
+            items.push(modeItem);
+        }
+
+        // Add issue link if exists
+        if (workflow.issueUrl && workflow.issueNumber) {
+            const issueItem = new WorkflowTreeItem(
+                `Issue #${workflow.issueNumber}`,
+                vscode.TreeItemCollapsibleState.None,
+                'issue'
+            );
+            issueItem.iconPath = new vscode.ThemeIcon('github');
+            issueItem.tooltip = workflow.issueUrl;
+            issueItem.command = {
+                command: 'vscode.open',
+                title: 'Open Issue',
+                arguments: [vscode.Uri.parse(workflow.issueUrl)]
+            };
+            items.push(issueItem);
+        }
 
         // Add branch if exists
         if (workflow.gitBranch) {
@@ -114,6 +143,24 @@ export class WorkflowTreeProvider implements vscode.TreeDataProvider<WorkflowTre
             );
             branchItem.iconPath = new vscode.ThemeIcon('git-branch');
             items.push(branchItem);
+        }
+
+        // Add worktree path if exists (with action to open)
+        if (workflow.worktreePath) {
+            const worktreeItem = new WorkflowTreeItem(
+                `Worktree`,
+                vscode.TreeItemCollapsibleState.None,
+                'worktree'
+            );
+            worktreeItem.iconPath = new vscode.ThemeIcon('folder-opened');
+            worktreeItem.tooltip = `Open in new window: ${workflow.worktreePath}`;
+            worktreeItem.workflowId = workflow.id;
+            worktreeItem.command = {
+                command: 'aura.openStoryWorktree',
+                title: 'Open Worktree',
+                arguments: [workflow.worktreePath]
+            };
+            items.push(worktreeItem);
         }
 
         // Add steps
@@ -192,11 +239,20 @@ export class WorkflowTreeProvider implements vscode.TreeDataProvider<WorkflowTre
             tooltip += `\n${workflow.description}\n`;
         }
         tooltip += `\nStatus: ${workflow.status}`;
+        if (workflow.mode) {
+            tooltip += `\nMode: ${workflow.mode}`;
+        }
+        if (workflow.issueUrl) {
+            tooltip += `\nIssue: ${workflow.issueUrl}`;
+        }
         if (workflow.repositoryPath) {
             tooltip += `\nRepository: ${workflow.repositoryPath}`;
         }
         if (workflow.gitBranch) {
             tooltip += `\nBranch: ${workflow.gitBranch}`;
+        }
+        if (workflow.worktreePath) {
+            tooltip += `\nWorktree: ${workflow.worktreePath}`;
         }
         return tooltip;
     }

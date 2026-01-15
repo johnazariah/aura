@@ -180,6 +180,26 @@
         "command": "aura.showTypeMembers",
         "title": "Aura: Show Type Members",
         "icon": "$(symbol-class)"
+      },
+      {
+        "command": "aura.createStoryFromIssue",
+        "title": "Aura: Create Story from GitHub Issue",
+        "icon": "$(github)"
+      },
+      {
+        "command": "aura.refreshFromIssue",
+        "title": "Refresh from Issue",
+        "icon": "$(sync)"
+      },
+      {
+        "command": "aura.postUpdateToIssue",
+        "title": "Post Update to Issue",
+        "icon": "$(comment)"
+      },
+      {
+        "command": "aura.openStoryWorktree",
+        "title": "Open Story Worktree",
+        "icon": "$(folder-opened)"
       }
     ],
     "menus": {
