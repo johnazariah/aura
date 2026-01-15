@@ -61,6 +61,7 @@ features/
 | [Indexing UX](completed/indexing-ux.md) | Progress UI, prompts, query commands | 2026-01-13 |
 | [API Program Refactor](completed/api-program-refactor.md) | Extract Program.cs to organized endpoint files | 2026-01-13 |
 | [MCP Server](completed/mcp-server.md) | Expose RAG/Code Graph to Copilot via MCP | 2026-01-15 |
+| [MCP Tools Enhancement](completed/mcp-tools-enhancement.md) | 8 meta-tools: search, navigate, refactor, generate, etc. | 2026-01-15 |
 
 ## Upcoming Features
 
@@ -68,7 +69,6 @@ features/
 
 | Feature | Description |
 |---------|-------------|
-| [MCP Tools Enhancement](upcoming/mcp-tools-enhancement.md) | Advanced discovery + refactoring tools (Phases 1-6 done) |
 | [Story Model](upcoming/story-model.md) | GitHub Issue integration, conversational mode |
 | [Copilot CLI Parity](upcoming/copilot-cli-parity.md) | Autonomous mode, build-fix loop, visualization, GitHub Actions |
 
