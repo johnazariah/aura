@@ -1,9 +1,10 @@
 # Story Chat: Unified Development Experience
 
-**Status:** Proposed  
-**Priority:** High  
-**Estimated Effort:** 1-2 days  
+**Status:** ✅ Complete  
+**Completed:** 2026-01-15  
 **Created:** 2026-01-15
+
+> Core implementation done. Quick Actions bar (Build/Test/Commit/PR buttons) deferred as polish item.
 
 ## Overview
 

@@ -64,15 +64,10 @@ features/
 | [MCP Tools Enhancement](completed/mcp-tools-enhancement.md) | 8 meta-tools: search, navigate, refactor, generate, etc. | 2026-01-15 |
 | [Copilot CLI Parity](completed/copilot-cli-parity.md) | Autonomous mode, build-fix loop, visualization, GitHub Actions | 2026-01-15 |
 | [Path Normalization](completed/path-normalization-review.md) | Consistent path handling across Windows/macOS | 2026-01-15 |
+| [Story Model](completed/story-model.md) | GitHub Issue integration, workflow modes | 2026-01-15 |
+| [Story Chat](completed/story-chat.md) | Chat-first workflow interaction | 2026-01-15 |
 
 ## Upcoming Features
-
-### High Priority (Session Infrastructure)
-
-| Feature | Description |
-|---------|-------------|
-| [Story Model](upcoming/story-model.md) | GitHub Issue integration, conversational mode |
-| [Story Chat](upcoming/story-chat.md) | Chat-first workflow interaction |
 
 ### Medium Priority (User Experience)
 
