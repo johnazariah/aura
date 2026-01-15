@@ -10,6 +10,7 @@ using Aura.Foundation.Rag;
 using Aura.Foundation.Tools;
 using Aura.Module.Developer.Agents;
 using Aura.Module.Developer.Data;
+using Aura.Module.Developer.GitHub;
 using Aura.Module.Developer.Services;
 using Aura.Module.Developer.Tools;
 using Microsoft.EntityFrameworkCore;
@@ -50,6 +51,22 @@ public sealed class DeveloperModule : IAuraModule
 
         // Register Developer Module services
         services.AddScoped<IWorkflowService, WorkflowService>();
+
+        // Register GitHub service with typed HttpClient
+        services.Configure<GitHubOptions>(config.GetSection(GitHubOptions.SectionName));
+        services.AddHttpClient<IGitHubService, GitHubService>((sp, client) =>
+        {
+            var options = config.GetSection(GitHubOptions.SectionName).Get<GitHubOptions>() ?? new();
+            client.BaseAddress = new Uri(options.BaseUrl);
+            client.DefaultRequestHeaders.Add("Accept", "application/vnd.github+json");
+            client.DefaultRequestHeaders.Add("User-Agent", "Aura/1.2.0");
+            client.DefaultRequestHeaders.Add("X-GitHub-Api-Version", "2022-11-28");
+            if (!string.IsNullOrEmpty(options.Token))
+            {
+                client.DefaultRequestHeaders.Authorization =
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", options.Token);
+            }
+        });
 
         // Register Roslyn workspace service (singleton for caching)
         services.AddSingleton<IRoslynWorkspaceService, RoslynWorkspaceService>();
@@ -177,5 +194,27 @@ public sealed class DeveloperModule : IAuraModule
             toolRegistry,
             processRunner,
             loggerFactory.CreateLogger("RustTools"));
+
+        // Build-fix loop tools (autonomous build → fix → rebuild cycles)
+        var agentRegistry = services.GetRequiredService<Foundation.Agents.IAgentRegistry>();
+        BuildFixLoopTools.RegisterBuildFixLoopTools(
+            toolRegistry,
+            processRunner,
+            agentRegistry,
+            loggerFactory.CreateLogger("BuildFixLoopTools"));
+
+        // Architecture visualization tools (Mermaid/ASCII diagrams)
+        var codeGraphService = services.GetRequiredService<Foundation.Rag.ICodeGraphService>();
+        VisualizationTools.RegisterVisualizationTools(
+            toolRegistry,
+            codeGraphService,
+            loggerFactory.CreateLogger("VisualizationTools"));
+
+        // GitHub Actions tools (CI/CD monitoring and triggering)
+        var gitHubService = services.GetRequiredService<GitHub.IGitHubService>();
+        GitHubActionsTools.Register(
+            toolRegistry,
+            gitHubService,
+            loggerFactory);
     }
 }
