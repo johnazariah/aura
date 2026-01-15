@@ -150,6 +150,12 @@ public sealed class WorkflowService(
                     worktreeResult.Error);
                 workflow.WorktreePath = repositoryPath;
             }
+
+            // Set up Copilot/MCP configuration in the worktree
+            if (!string.IsNullOrEmpty(workflow.WorktreePath) && workflow.WorktreePath != repositoryPath)
+            {
+                await SetupWorktreeCopilotConfigAsync(repositoryPath, workflow.WorktreePath, ct);
+            }
         }
 
         _db.Workflows.Add(workflow);
@@ -1663,6 +1669,83 @@ public sealed class WorkflowService(
     }
 
     private record ChatMessage(string Role, string Content);
+
+    /// <summary>
+    /// Sets up Copilot/MCP configuration in a worktree to enable Aura tools.
+    /// Creates .vscode/settings.json and copies copilot-instructions.md.
+    /// </summary>
+    private async Task SetupWorktreeCopilotConfigAsync(string repositoryPath, string worktreePath, CancellationToken ct)
+    {
+        try
+        {
+            // Create .vscode directory if it doesn't exist
+            var vscodeDir = Path.Combine(worktreePath, ".vscode");
+            if (!Directory.Exists(vscodeDir))
+            {
+                Directory.CreateDirectory(vscodeDir);
+            }
+
+            // Create settings.json with MCP autostart
+            var settingsPath = Path.Combine(vscodeDir, "settings.json");
+            if (!File.Exists(settingsPath))
+            {
+                var settings = """
+                    {
+                        "chat.mcp.autostart": "always"
+                    }
+                    """;
+                await File.WriteAllTextAsync(settingsPath, settings, ct);
+                _logger.LogDebug("Created .vscode/settings.json with MCP autostart in worktree");
+            }
+
+            // Copy copilot-instructions.md if it exists in the source repo
+            var sourceInstructionsPath = Path.Combine(repositoryPath, ".github", "copilot-instructions.md");
+            if (File.Exists(sourceInstructionsPath))
+            {
+                var destGithubDir = Path.Combine(worktreePath, ".github");
+                if (!Directory.Exists(destGithubDir))
+                {
+                    Directory.CreateDirectory(destGithubDir);
+                }
+
+                var destInstructionsPath = Path.Combine(destGithubDir, "copilot-instructions.md");
+
+                // Read the source instructions and append Aura-specific guidance
+                var instructions = await File.ReadAllTextAsync(sourceInstructionsPath, ct);
+
+                // Check if Aura tools guidance is already present
+                if (!instructions.Contains("aura_", StringComparison.OrdinalIgnoreCase))
+                {
+                    instructions += """
+
+
+                        ## Aura MCP Tools
+
+                        This workspace has Aura MCP tools available. Use them for code understanding:
+
+                        - **aura_get_type_members** - Get all members of a type (preferred for exploring types)
+                        - **aura_find_implementations** - Find types implementing an interface
+                        - **aura_find_callers** - Find all callers of a method
+                        - **aura_find_derived_types** - Find subclasses
+                        - **aura_list_classes** - List all types in a project
+                        - **aura_search_code** - Semantic search (for concepts, not exact type names)
+                        - **aura_validate_compilation** - Check if code compiles
+                        - **aura_run_tests** - Run unit tests
+
+                        Use these tools before falling back to file reading for code structure questions.
+                        """;
+                }
+
+                await File.WriteAllTextAsync(destInstructionsPath, instructions, ct);
+                _logger.LogDebug("Copied copilot-instructions.md to worktree with Aura tools guidance");
+            }
+        }
+        catch (Exception ex)
+        {
+            // Non-fatal - log and continue
+            _logger.LogWarning(ex, "Failed to set up Copilot config in worktree {Path}", worktreePath);
+        }
+    }
 
     /// <summary>
     /// Determines if a provider supports structured output well enough to use for workflow planning.
