@@ -99,6 +99,18 @@ See `.project/standards/coding-standards.md`. Key rules:
 - **Records for DTOs** - Immutable by default
 - **Nullable reference types** - Handle nulls explicitly
 
+## File Creation Rules
+
+**CRITICAL**: This project uses LF line endings (see `.editorconfig`).
+
+When creating files:
+- Use **LF (`\n`)** line endings, NOT CRLF (`\r\n`)
+- Use **UTF-8** encoding without BOM
+- Include a **final newline**
+- Follow `.editorconfig` indent rules (4 spaces for C#, 2 for JSON/YAML)
+
+The pre-commit hook will reject files with CRLF line endings.
+
 ## When Making Changes
 
 | Change Type | Location | Notes |

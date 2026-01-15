@@ -11,6 +11,7 @@ using System.Text.RegularExpressions;
 using Aura.Foundation.Agents;
 using Aura.Foundation.Git;
 using Aura.Foundation.Llm;
+using Aura.Foundation.Mcp;
 using Aura.Foundation.Prompts;
 using Aura.Foundation.Rag;
 using Aura.Foundation.Tools;
@@ -1716,28 +1717,28 @@ public sealed class WorkflowService(
                 // Check if Aura tools guidance is already present
                 if (!instructions.Contains("aura_", StringComparison.OrdinalIgnoreCase))
                 {
-                    instructions += """
-
-
-                        ## Aura MCP Tools
-
-                        This workspace has Aura MCP tools available. Use them for code understanding:
-
-                        - **aura_get_type_members** - Get all members of a type (preferred for exploring types)
-                        - **aura_find_implementations** - Find types implementing an interface
-                        - **aura_find_callers** - Find all callers of a method
-                        - **aura_find_derived_types** - Find subclasses
-                        - **aura_list_classes** - List all types in a project
-                        - **aura_search_code** - Semantic search (for concepts, not exact type names)
-                        - **aura_validate_compilation** - Check if code compiles
-                        - **aura_run_tests** - Run unit tests
-
-                        Use these tools before falling back to file reading for code structure questions.
-                        """;
+                    instructions += "\n\n" + McpToolDocumentation.CopilotInstructionsMarkdown;
                 }
 
                 await File.WriteAllTextAsync(destInstructionsPath, instructions, ct);
                 _logger.LogDebug("Copied copilot-instructions.md to worktree with Aura tools guidance");
+            }
+            else
+            {
+                // Source repo doesn't have copilot-instructions.md - create one with Aura tools guidance
+                var destGithubDir = Path.Combine(worktreePath, ".github");
+                if (!Directory.Exists(destGithubDir))
+                {
+                    Directory.CreateDirectory(destGithubDir);
+                }
+
+                var destInstructionsPath = Path.Combine(destGithubDir, "copilot-instructions.md");
+                if (!File.Exists(destInstructionsPath))
+                {
+                    var instructions = "# Copilot Instructions\n\n" + McpToolDocumentation.CopilotInstructionsMarkdown;
+                    await File.WriteAllTextAsync(destInstructionsPath, instructions, ct);
+                    _logger.LogDebug("Created copilot-instructions.md in worktree with Aura tools guidance");
+                }
             }
         }
         catch (Exception ex)
