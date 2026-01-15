@@ -91,7 +91,7 @@ features/
 
 | Feature | Description |
 |---------|-------------|
-
+| [Quick Actions Bar](unplanned/quick-actions-bar.md) | Build/Test/Commit/PR buttons for workflow chat |
 | [Indexing Epic](unplanned/indexing-epic.md) | Future indexing enhancements (smart content, boolean queries, etc.) |
 
 ## See Also
