@@ -69,6 +69,7 @@ features/
 |---------|-------------|
 | [MCP Server](upcoming/mcp-server.md) | Expose RAG/Code Graph to Copilot via MCP |
 | [Story Model](upcoming/story-model.md) | GitHub Issue integration, conversational mode |
+| [Copilot CLI Parity](upcoming/copilot-cli-parity.md) | Autonomous mode, build-fix loop, visualization, GitHub Actions |
 
 ### Medium Priority (User Experience)
 
