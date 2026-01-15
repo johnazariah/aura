@@ -101,11 +101,69 @@ The Developer Module provides workflow automation for coding tasks:
 |---------|-------------|
 | **Workflows** | Track a coding task from start to PR |
 | **Git worktrees** | Each workflow gets an isolated branch and directory |
-| **GitHub integration** | Create workflows from issues, sync status |
+| **GitHub integration** | Create workflows from issues, sync status back |
 | **Step execution** | Break work into steps, execute with different agents |
 | **Assisted mode** | Review each step before proceeding |
 | **Autonomous mode** | Let the agent run multiple steps automatically |
 | **Chat history** | Conversation persists across sessions |
+| **Build-fix loops** | Iteratively build and fix errors until success |
+
+### MCP Server for GitHub Copilot
+
+Aura exposes your indexed codebase to GitHub Copilot via MCP (Model Context Protocol). This means Copilot can:
+
+- Search your codebase semantically ("find authentication code")
+- Navigate code relationships (callers, implementations, derived types)
+- Understand your project's structure before suggesting code
+
+Configure in VS Code `settings.json`:
+
+```json
+{
+  "github.copilot.chat.codeGeneration.instructions": [
+    { "file": ".github/copilot-instructions.md" }
+  ],
+  "mcp": {
+    "servers": {
+      "aura": {
+        "url": "http://localhost:5300/mcp"
+      }
+    }
+  }
+}
+```
+
+### Build-Fix Loops
+
+The agent can run iterative build-fix cycles until your code compiles:
+
+```
+You: "Build this and fix any errors"
+
+Agent: 🔨 Building... ❌ 3 errors
+       → Fixing CS1002: Missing semicolon...
+       → Fixing CS0246: Type not found...
+       🔨 Rebuilding... ✅ Build succeeded
+```
+
+Works for C#, Rust, TypeScript, Go, and Python.
+
+### Architecture Visualization
+
+Generate diagrams of your codebase:
+
+```
+You: "Show me the class hierarchy for UserService"
+
+Agent: ```mermaid
+       classDiagram
+           IUserService <|.. UserService
+           UserService --> ICacheService
+           UserService --> IUserRepository
+       ```
+```
+
+Supports dependency graphs, class hierarchies, and call graphs.
 
 ### Supported Languages
 
