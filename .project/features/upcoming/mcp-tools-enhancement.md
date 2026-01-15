@@ -393,6 +393,298 @@ public enum ContentCategory
 
 ---
 
+## Phase 5: Roslyn Refactoring Tools (High Value)
+
+This is the highest-value enhancement. Current editing relies on text-based `replace_string_in_file` which is fragile. Roslyn-based refactoring would be **safe and complete**.
+
+### The Problem
+
+| Text-based Editing | Roslyn-based Editing |
+|-------------------|---------------------|
+| Matches exact strings | Understands syntax |
+| Misses overloads | Finds all overloads |
+| Can break code | Preserves correctness |
+| Manual caller updates | Automatic propagation |
+| Whitespace sensitive | Format-aware |
+
+### Current Workflow Gap
+
+| Step | Tool | Works? |
+|------|------|--------|
+| 1. Understand context | `aura_get_type_members`, `aura_find_callers` | ✅ Yes |
+| 2. Find what to change | `aura_find_usages`, `aura_search_code` | ⚠️ Partial |
+| 3. Make the edit | `replace_string_in_file` | ❌ Fragile |
+| 4. Validate | `aura_validate_compilation`, `aura_run_tests` | ✅ Yes |
+
+### Proposed Refactoring Tools
+
+#### 5.1 `aura_rename_symbol` (High Priority)
+
+The most common refactoring. Renames a symbol and all its references correctly.
+
+```csharp
+new McpToolDefinition
+{
+    Name = "aura_rename_symbol",
+    Description = "Rename a symbol (type, method, property, variable) and update all references. Uses Roslyn for safe, complete renaming.",
+    InputSchema = new
+    {
+        type = "object",
+        properties = new
+        {
+            symbolName = new { type = "string", description = "Current name of the symbol" },
+            newName = new { type = "string", description = "New name for the symbol" },
+            containingType = new { type = "string", description = "Optional: type containing the symbol (for methods/properties)" },
+            filePath = new { type = "string", description = "Optional: file containing the symbol (for disambiguation)" },
+            solutionPath = new { type = "string", description = "Path to solution file" }
+        },
+        required = new[] { "symbolName", "newName", "solutionPath" }
+    }
+}
+```
+
+**Example:**
+```
+Today (fragile):
+1. grep_search for method name
+2. read_file each match
+3. multi_replace_string_in_file with 10+ replacements
+4. Hope we didn't miss an overload or break a string literal
+5. aura_validate_compilation to catch mistakes
+
+With aura_rename_symbol (safe):
+1. aura_rename_symbol("GetUser", "GetUserAsync", solutionPath: "C:/work/app/App.sln")
+2. Done — Roslyn handles all references correctly
+```
+
+**Implementation:** Use `Microsoft.CodeAnalysis.Rename.Renamer.RenameSymbolAsync()`
+
+#### 5.2 `aura_add_parameter` (High Priority)
+
+Add a parameter to a method and update all call sites.
+
+```csharp
+new McpToolDefinition
+{
+    Name = "aura_add_parameter",
+    Description = "Add a parameter to a method and update all call sites with a default value.",
+    InputSchema = new
+    {
+        type = "object",
+        properties = new
+        {
+            methodName = new { type = "string", description = "Method to modify" },
+            containingType = new { type = "string", description = "Type containing the method" },
+            parameterName = new { type = "string", description = "Name of new parameter" },
+            parameterType = new { type = "string", description = "Type of new parameter (e.g., 'string', 'CancellationToken')" },
+            defaultValue = new { type = "string", description = "Default value for existing call sites (e.g., 'null', 'default', '\"\"')" },
+            solutionPath = new { type = "string", description = "Path to solution file" }
+        },
+        required = new[] { "methodName", "containingType", "parameterName", "parameterType", "defaultValue", "solutionPath" }
+    }
+}
+```
+
+**Example:**
+```
+aura_add_parameter(
+    methodName: "GetUserAsync",
+    containingType: "UserService",
+    parameterName: "ct",
+    parameterType: "CancellationToken",
+    defaultValue: "default",
+    solutionPath: "C:/work/app/App.sln"
+)
+```
+
+#### 5.3 `aura_implement_interface` (High Priority)
+
+Generate stub implementations for an interface.
+
+```csharp
+new McpToolDefinition
+{
+    Name = "aura_implement_interface",
+    Description = "Generate method stubs for a class to implement an interface.",
+    InputSchema = new
+    {
+        type = "object",
+        properties = new
+        {
+            className = new { type = "string", description = "Class to modify" },
+            interfaceName = new { type = "string", description = "Interface to implement" },
+            explicitImplementation = new { type = "boolean", description = "Use explicit interface implementation (default: false)" },
+            solutionPath = new { type = "string", description = "Path to solution file" }
+        },
+        required = new[] { "className", "interfaceName", "solutionPath" }
+    }
+}
+```
+
+#### 5.4 `aura_extract_interface` (Medium Priority)
+
+Extract an interface from a class's public members.
+
+```csharp
+new McpToolDefinition
+{
+    Name = "aura_extract_interface",
+    Description = "Extract an interface from a class's public methods and properties.",
+    InputSchema = new
+    {
+        type = "object",
+        properties = new
+        {
+            className = new { type = "string", description = "Class to extract interface from" },
+            interfaceName = new { type = "string", description = "Name for the new interface" },
+            members = new { 
+                type = "array", 
+                items = new { type = "string" },
+                description = "Optional: specific members to include (default: all public)" 
+            },
+            solutionPath = new { type = "string", description = "Path to solution file" }
+        },
+        required = new[] { "className", "interfaceName", "solutionPath" }
+    }
+}
+```
+
+#### 5.5 `aura_generate_constructor` (Medium Priority)
+
+Generate a constructor that initializes fields/properties.
+
+```csharp
+new McpToolDefinition
+{
+    Name = "aura_generate_constructor",
+    Description = "Generate a constructor that initializes specified fields or properties.",
+    InputSchema = new
+    {
+        type = "object",
+        properties = new
+        {
+            className = new { type = "string", description = "Class to modify" },
+            members = new { 
+                type = "array", 
+                items = new { type = "string" },
+                description = "Fields/properties to initialize (default: all readonly fields)" 
+            },
+            solutionPath = new { type = "string", description = "Path to solution file" }
+        },
+        required = new[] { "className", "solutionPath" }
+    }
+}
+```
+
+#### 5.6 `aura_change_signature` (Medium Priority)
+
+Comprehensive signature changes - add/remove/reorder parameters.
+
+```csharp
+new McpToolDefinition
+{
+    Name = "aura_change_signature",
+    Description = "Change a method signature - add, remove, or reorder parameters. Updates all call sites.",
+    InputSchema = new
+    {
+        type = "object",
+        properties = new
+        {
+            methodName = new { type = "string", description = "Method to modify" },
+            containingType = new { type = "string", description = "Type containing the method" },
+            newParameters = new { 
+                type = "array",
+                items = new {
+                    type = "object",
+                    properties = new {
+                        name = new { type = "string" },
+                        type = new { type = "string" },
+                        defaultValue = new { type = "string" }
+                    }
+                },
+                description = "New parameter list in order"
+            },
+            solutionPath = new { type = "string", description = "Path to solution file" }
+        },
+        required = new[] { "methodName", "containingType", "newParameters", "solutionPath" }
+    }
+}
+```
+
+### Implementation Approach
+
+Roslyn provides these APIs:
+
+| Refactoring | Roslyn API |
+|-------------|-----------|
+| Rename | `Renamer.RenameSymbolAsync()` |
+| Add parameter | `ChangeSignatureService` or manual syntax rewrite |
+| Implement interface | `ImplementInterfaceService` |
+| Extract interface | `ExtractInterfaceService` |
+| Generate constructor | `GenerateConstructorService` |
+
+**Key pattern:**
+
+```csharp
+public async Task<RefactoringResult> RenameSymbolAsync(
+    string symbolName, 
+    string newName, 
+    string? containingType,
+    string solutionPath,
+    CancellationToken ct)
+{
+    // 1. Open the solution
+    using var workspace = MSBuildWorkspace.Create();
+    var solution = await workspace.OpenSolutionAsync(solutionPath, ct);
+    
+    // 2. Find the symbol
+    var symbol = await FindSymbolAsync(solution, symbolName, containingType, ct);
+    if (symbol is null)
+        return RefactoringResult.Fail($"Symbol '{symbolName}' not found");
+    
+    // 3. Perform the rename
+    var newSolution = await Renamer.RenameSymbolAsync(
+        solution, 
+        symbol, 
+        new SymbolRenameOptions(), 
+        newName, 
+        ct);
+    
+    // 4. Apply changes to disk
+    var changedDocs = GetChangedDocuments(solution, newSolution);
+    foreach (var doc in changedDocs)
+    {
+        var text = await doc.GetTextAsync(ct);
+        await File.WriteAllTextAsync(doc.FilePath!, text.ToString(), ct);
+    }
+    
+    // 5. Return summary
+    return RefactoringResult.Success(
+        $"Renamed '{symbolName}' to '{newName}' in {changedDocs.Count} files",
+        changedDocs.Select(d => d.FilePath!).ToList());
+}
+```
+
+### Why This Is Feasible
+
+1. **Roslyn APIs exist** - These power VS/Rider refactorings
+2. **We already load solutions** - `aura_validate_compilation` opens MSBuildWorkspace
+3. **Pattern is established** - Similar to existing code graph tools
+4. **High ROI** - Eliminates the most fragile part of AI-assisted coding
+
+### Priority Order
+
+| Tool | Priority | Reason |
+|------|----------|--------|
+| `aura_rename_symbol` | 🔴 High | Most common refactoring, biggest reliability win |
+| `aura_add_parameter` | 🔴 High | Frequent need, very hard to do manually |
+| `aura_implement_interface` | 🔴 High | Saves boilerplate, ensures completeness |
+| `aura_change_signature` | 🟡 Medium | Powerful but complex |
+| `aura_extract_interface` | 🟡 Medium | Common pattern extraction |
+| `aura_generate_constructor` | 🟡 Medium | DI setup helper |
+
+---
+
 ## References
 
 - [ADR-012: Tool-Using Agents](../adr/012-tool-using-agents.md)
