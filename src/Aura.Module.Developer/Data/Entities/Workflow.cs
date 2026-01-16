@@ -77,6 +77,20 @@ public sealed class Workflow
     /// <summary>Gets or sets the automation mode for step execution.</summary>
     public AutomationMode AutomationMode { get; set; } = AutomationMode.Assisted;
 
+    // === Source ===
+
+    /// <summary>Gets or sets how this workflow was created.</summary>
+    public WorkflowSource Source { get; set; } = WorkflowSource.User;
+
+    /// <summary>Gets or sets the guardian ID if created by a guardian.</summary>
+    public string? SourceGuardianId { get; set; }
+
+    /// <summary>Gets or sets the priority for UI sorting.</summary>
+    public WorkflowPriority Priority { get; set; } = WorkflowPriority.Medium;
+
+    /// <summary>Gets or sets the suggested specialist/agent capability for this workflow.</summary>
+    public string? SuggestedCapability { get; set; }
+
     // === Chat ===
 
     /// <summary>Gets or sets the workflow-level chat history as JSON array of messages.</summary>
@@ -129,6 +143,39 @@ public enum AutomationMode
     /// Use with caution - no human-in-the-loop safety checks.
     /// </summary>
     FullAutonomous,
+}
+
+/// <summary>
+/// How a workflow was created.
+/// </summary>
+public enum WorkflowSource
+{
+    /// <summary>Created by user via UI or API.</summary>
+    User,
+
+    /// <summary>Created automatically by a guardian.</summary>
+    Guardian,
+
+    /// <summary>Created by other system automation.</summary>
+    System,
+}
+
+/// <summary>
+/// Priority level for workflow sorting and attention.
+/// </summary>
+public enum WorkflowPriority
+{
+    /// <summary>Low priority - can wait.</summary>
+    Low,
+
+    /// <summary>Medium priority - normal work.</summary>
+    Medium,
+
+    /// <summary>High priority - should address soon.</summary>
+    High,
+
+    /// <summary>Critical priority - blocking issue.</summary>
+    Critical,
 }
 
 /// <summary>
