@@ -129,6 +129,7 @@ app.MapToolEndpoints();
 app.MapGitEndpoints();
 app.MapWorkspaceEndpoints();
 app.MapDeveloperEndpoints();
+app.MapGuardianEndpoints();
 
 await app.RunAsync();
 
