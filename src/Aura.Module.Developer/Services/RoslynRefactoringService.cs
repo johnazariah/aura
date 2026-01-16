@@ -30,6 +30,222 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
     }
 
     /// <inheritdoc/>
+    public async Task<BlastRadiusResult> AnalyzeRenameAsync(RenameSymbolRequest request, CancellationToken ct = default)
+    {
+        _logger.LogInformation("Analyzing blast radius for renaming {Symbol} to {NewName} in {Solution}",
+            request.SymbolName, request.NewName, request.SolutionPath);
+
+        try
+        {
+            var solution = await _workspaceService.GetSolutionAsync(request.SolutionPath, ct);
+
+            // Find the primary symbol
+            var primarySymbol = await FindSymbolAsync(
+                solution, request.SymbolName, request.ContainingType, request.FilePath, ct);
+
+            if (primarySymbol is null)
+            {
+                return new BlastRadiusResult
+                {
+                    Operation = "rename",
+                    Symbol = request.SymbolName,
+                    NewName = request.NewName,
+                    RelatedSymbols = [],
+                    SuggestedPlan = [],
+                    Error = $"Symbol '{request.SymbolName}' not found"
+                };
+            }
+
+            // Collect related symbols by naming convention
+            var relatedSymbols = await DiscoverRelatedSymbolsAsync(
+                solution, request.SymbolName, primarySymbol, ct);
+
+            // Build suggested plan
+            var suggestedPlan = BuildSuggestedPlan(
+                request.SymbolName, request.NewName, relatedSymbols);
+
+            // Calculate totals
+            var totalReferences = relatedSymbols.Sum(s => s.ReferenceCount);
+            var filesAffected = relatedSymbols.Select(s => s.FilePath).Distinct().Count();
+            var filesToRename = relatedSymbols.Count(s =>
+                Path.GetFileNameWithoutExtension(s.FilePath)
+                    .Equals(s.Name, StringComparison.OrdinalIgnoreCase));
+
+            return new BlastRadiusResult
+            {
+                Operation = "rename",
+                Symbol = request.SymbolName,
+                NewName = request.NewName,
+                RelatedSymbols = relatedSymbols,
+                TotalReferences = totalReferences,
+                FilesAffected = filesAffected,
+                FilesToRename = filesToRename,
+                SuggestedPlan = suggestedPlan,
+                AwaitsConfirmation = true
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to analyze blast radius for {Symbol}", request.SymbolName);
+            return new BlastRadiusResult
+            {
+                Operation = "rename",
+                Symbol = request.SymbolName,
+                NewName = request.NewName,
+                RelatedSymbols = [],
+                SuggestedPlan = [],
+                Error = ex.Message
+            };
+        }
+    }
+
+    private async Task<IReadOnlyList<RelatedSymbol>> DiscoverRelatedSymbolsAsync(
+        Solution solution,
+        string primaryName,
+        ISymbol primarySymbol,
+        CancellationToken ct)
+    {
+        var related = new List<RelatedSymbol>();
+        var seenSymbols = new HashSet<string>();
+
+        // Add the primary symbol first
+        var primaryRefs = await SymbolFinder.FindReferencesAsync(primarySymbol, solution, ct);
+        var primaryRefCount = primaryRefs.Sum(r => r.Locations.Count());
+
+        related.Add(new RelatedSymbol
+        {
+            Name = primaryName,
+            Kind = primarySymbol.Kind.ToString(),
+            FilePath = primarySymbol.Locations.FirstOrDefault()?.SourceTree?.FilePath ?? "",
+            ReferenceCount = primaryRefCount
+        });
+        seenSymbols.Add(primarySymbol.ToDisplayString());
+
+        // Find related symbols by naming convention (prefix matching)
+        // E.g., if renaming "Workflow", also find "WorkflowStep", "IWorkflowService", etc.
+        foreach (var project in solution.Projects)
+        {
+            var compilation = await project.GetCompilationAsync(ct);
+            if (compilation is null) continue;
+
+            foreach (var typeSymbol in GetAllTypes(compilation))
+            {
+                if (seenSymbols.Contains(typeSymbol.ToDisplayString()))
+                    continue;
+
+                var typeName = typeSymbol.Name;
+
+                // Check if this type is related by naming convention
+                bool isRelated =
+                    typeName.StartsWith(primaryName, StringComparison.Ordinal) || // WorkflowStep
+                    typeName.EndsWith(primaryName, StringComparison.Ordinal) ||   // IWorkflow
+                    (typeName.StartsWith("I") && typeName[1..].StartsWith(primaryName)); // IWorkflowService
+
+                if (!isRelated) continue;
+
+                seenSymbols.Add(typeSymbol.ToDisplayString());
+
+                var refs = await SymbolFinder.FindReferencesAsync(typeSymbol, solution, ct);
+                var refCount = refs.Sum(r => r.Locations.Count());
+
+                related.Add(new RelatedSymbol
+                {
+                    Name = typeName,
+                    Kind = typeSymbol.TypeKind.ToString(),
+                    FilePath = typeSymbol.Locations.FirstOrDefault()?.SourceTree?.FilePath ?? "",
+                    ReferenceCount = refCount
+                });
+            }
+        }
+
+        return related.OrderByDescending(s => s.ReferenceCount).ToList();
+    }
+
+    private static IEnumerable<INamedTypeSymbol> GetAllTypes(Compilation compilation)
+    {
+        var stack = new Stack<INamespaceSymbol>();
+        stack.Push(compilation.GlobalNamespace);
+
+        while (stack.Count > 0)
+        {
+            var ns = stack.Pop();
+
+            foreach (var type in ns.GetTypeMembers())
+            {
+                yield return type;
+            }
+
+            foreach (var childNs in ns.GetNamespaceMembers())
+            {
+                stack.Push(childNs);
+            }
+        }
+    }
+
+    private static IReadOnlyList<SuggestedOperation> BuildSuggestedPlan(
+        string oldName,
+        string newName,
+        IReadOnlyList<RelatedSymbol> relatedSymbols)
+    {
+        var plan = new List<SuggestedOperation>();
+        var order = 1;
+
+        foreach (var symbol in relatedSymbols)
+        {
+            // Calculate the new name by replacing the old name pattern
+            var suggestedNewName = symbol.Name.Replace(oldName, newName);
+
+            // Handle interface prefix (IWorkflow -> IStory)
+            if (symbol.Name.StartsWith("I") && symbol.Name.Length > 1 && char.IsUpper(symbol.Name[1]))
+            {
+                if (symbol.Name[1..].StartsWith(oldName))
+                {
+                    suggestedNewName = "I" + symbol.Name[1..].Replace(oldName, newName);
+                }
+            }
+
+            plan.Add(new SuggestedOperation
+            {
+                Order = order++,
+                Operation = "rename",
+                Target = symbol.Name,
+                NewValue = suggestedNewName,
+                ReferenceCount = symbol.ReferenceCount
+            });
+        }
+
+        // Add file renames for types that match their filename
+        foreach (var symbol in relatedSymbols)
+        {
+            var fileName = Path.GetFileNameWithoutExtension(symbol.FilePath);
+            if (fileName.Equals(symbol.Name, StringComparison.OrdinalIgnoreCase))
+            {
+                var newFileName = symbol.Name.Replace(oldName, newName);
+                if (symbol.Name.StartsWith("I") && symbol.Name.Length > 1 && char.IsUpper(symbol.Name[1]))
+                {
+                    if (symbol.Name[1..].StartsWith(oldName))
+                    {
+                        newFileName = "I" + symbol.Name[1..].Replace(oldName, newName);
+                    }
+                }
+
+                plan.Add(new SuggestedOperation
+                {
+                    Order = order++,
+                    Operation = "rename_file",
+                    Target = symbol.FilePath,
+                    NewValue = Path.Combine(
+                        Path.GetDirectoryName(symbol.FilePath) ?? "",
+                        newFileName + Path.GetExtension(symbol.FilePath)),
+                    ReferenceCount = 0
+                });
+            }
+        }
+
+        return plan;
+    }
+
+    /// <inheritdoc/>
     public async Task<RefactoringResult> RenameSymbolAsync(RenameSymbolRequest request, CancellationToken ct = default)
     {
         _logger.LogInformation("Renaming symbol {OldName} to {NewName} in {Solution}",

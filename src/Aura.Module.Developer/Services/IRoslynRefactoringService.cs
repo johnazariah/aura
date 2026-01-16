@@ -11,6 +11,15 @@ namespace Aura.Module.Developer.Services;
 public interface IRoslynRefactoringService
 {
     /// <summary>
+    /// Analyzes the blast radius of a rename operation without executing it.
+    /// Discovers related symbols and reference counts.
+    /// </summary>
+    /// <param name="request">The rename request (only SymbolName and SolutionPath are used).</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Blast radius analysis with related symbols and suggested plan.</returns>
+    Task<BlastRadiusResult> AnalyzeRenameAsync(RenameSymbolRequest request, CancellationToken ct = default);
+
+    /// <summary>
     /// Renames a symbol and all its references across the solution.
     /// </summary>
     /// <param name="request">The rename request parameters.</param>
@@ -127,6 +136,87 @@ public sealed record ValidationResult
 
     /// <summary>Residual occurrences of the old symbol name found via grep.</summary>
     public IReadOnlyList<string>? Residuals { get; init; }
+}
+
+/// <summary>
+/// Result of blast radius analysis for a refactoring operation.
+/// </summary>
+public sealed record BlastRadiusResult
+{
+    /// <summary>The operation being analyzed.</summary>
+    public required string Operation { get; init; }
+
+    /// <summary>The primary symbol being refactored.</summary>
+    public required string Symbol { get; init; }
+
+    /// <summary>The new name (for rename operations).</summary>
+    public string? NewName { get; init; }
+
+    /// <summary>Related symbols discovered by naming convention.</summary>
+    public required IReadOnlyList<RelatedSymbol> RelatedSymbols { get; init; }
+
+    /// <summary>Total number of references across all related symbols.</summary>
+    public int TotalReferences { get; init; }
+
+    /// <summary>Number of files that will be modified.</summary>
+    public int FilesAffected { get; init; }
+
+    /// <summary>Number of files that should be renamed.</summary>
+    public int FilesToRename { get; init; }
+
+    /// <summary>Suggested sequence of operations.</summary>
+    public required IReadOnlyList<SuggestedOperation> SuggestedPlan { get; init; }
+
+    /// <summary>Whether this result awaits user confirmation before execution.</summary>
+    public bool AwaitsConfirmation { get; init; } = true;
+
+    /// <summary>Error message if analysis failed.</summary>
+    public string? Error { get; init; }
+
+    /// <summary>Whether the analysis succeeded.</summary>
+    public bool Success => Error is null;
+}
+
+/// <summary>
+/// A symbol related to the primary refactoring target.
+/// </summary>
+public sealed record RelatedSymbol
+{
+    /// <summary>Symbol name.</summary>
+    public required string Name { get; init; }
+
+    /// <summary>Symbol kind (class, interface, enum, method, etc.).</summary>
+    public required string Kind { get; init; }
+
+    /// <summary>File containing the symbol definition.</summary>
+    public required string FilePath { get; init; }
+
+    /// <summary>Number of references to this symbol.</summary>
+    public int ReferenceCount { get; init; }
+
+    /// <summary>Suggested new name (for cascade renames).</summary>
+    public string? SuggestedNewName { get; init; }
+}
+
+/// <summary>
+/// A suggested operation in the refactoring plan.
+/// </summary>
+public sealed record SuggestedOperation
+{
+    /// <summary>Order in the sequence.</summary>
+    public required int Order { get; init; }
+
+    /// <summary>Operation type (rename, rename_file, etc.).</summary>
+    public required string Operation { get; init; }
+
+    /// <summary>Target symbol or file.</summary>
+    public required string Target { get; init; }
+
+    /// <summary>New name or destination.</summary>
+    public required string NewValue { get; init; }
+
+    /// <summary>Number of references affected.</summary>
+    public int ReferenceCount { get; init; }
 }
 
 /// <summary>

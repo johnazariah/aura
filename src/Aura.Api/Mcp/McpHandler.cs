@@ -291,6 +291,7 @@ public sealed class McpHandler
                             items = new { type = "string" },
                             description = "Parameter names to remove for change_signature"
                         },
+                        analyze = new { type = "boolean", description = "If true (default), return blast radius analysis without executing. Set to false to execute immediately." },
                         preview = new { type = "boolean", description = "If true, return changes without applying (default: false)" },
                         validate = new { type = "boolean", description = "If true, run build after refactoring and check for residuals (default: false)" }
                     },
@@ -1734,6 +1735,7 @@ public sealed class McpHandler
         string? filePath = null;
         var preview = false;
         var validate = false;
+        var analyze = true; // Default to analyze mode
 
         if (args.HasValue)
         {
@@ -1745,6 +1747,53 @@ public sealed class McpHandler
                 preview = prevEl.GetBoolean();
             if (args.Value.TryGetProperty("validate", out var valEl))
                 validate = valEl.GetBoolean();
+            if (args.Value.TryGetProperty("analyze", out var analyzeEl))
+                analyze = analyzeEl.GetBoolean();
+        }
+
+        // If analyze mode, return blast radius without executing
+        if (analyze)
+        {
+            var blastRadius = await _refactoringService.AnalyzeRenameAsync(new RenameSymbolRequest
+            {
+                SymbolName = symbolName,
+                NewName = newName,
+                SolutionPath = solutionPath,
+                ContainingType = containingType
+            }, ct);
+
+            return new
+            {
+                operation = blastRadius.Operation,
+                symbol = blastRadius.Symbol,
+                newName = blastRadius.NewName,
+                success = blastRadius.Success,
+                error = blastRadius.Error,
+                blastRadius = new
+                {
+                    relatedSymbols = blastRadius.RelatedSymbols.Select(s => new
+                    {
+                        name = s.Name,
+                        kind = s.Kind,
+                        filePath = s.FilePath,
+                        referenceCount = s.ReferenceCount,
+                        suggestedNewName = s.SuggestedNewName
+                    }),
+                    totalReferences = blastRadius.TotalReferences,
+                    filesAffected = blastRadius.FilesAffected,
+                    filesToRename = blastRadius.FilesToRename
+                },
+                suggestedPlan = blastRadius.SuggestedPlan.Select(op => new
+                {
+                    order = op.Order,
+                    operation = op.Operation,
+                    target = op.Target,
+                    newValue = op.NewValue,
+                    referenceCount = op.ReferenceCount
+                }),
+                awaitsConfirmation = blastRadius.AwaitsConfirmation,
+                instructions = "Review the blast radius and suggested plan. To execute, call aura_refactor with analyze: false"
+            };
         }
 
         var result = await _refactoringService.RenameSymbolAsync(new RenameSymbolRequest

@@ -121,16 +121,29 @@ The pre-commit hook will reject files with CRLF line endings.
 | New feature | `.project/features/upcoming/` | Create spec first |
 | Complete feature | `.project/features/completed/` | **Follow ceremony** (see below) |
 
-## Refactoring Protocol (Renames, Extract, Large Changes)
+## Blast Radius Protocol (Renames, Extract, Large Changes)
 
-For any refactoring that touches multiple files:
+`aura_refactor` defaults to **analyze mode** (`analyze: true`). Before executing any refactoring:
 
-1. **Analyze first** - Use `grep_search` or `aura_navigate(usages)` to find ALL occurrences
-2. **Plan the sequence** - List all symbols/files that need changing, in dependency order
-3. **Dry-run when available** - Use `preview: true` to see what will change
-4. **Compare coverage** - If tool reports fewer files than grep found, plan for text fallback
-5. **Build after each step** - Run `dotnet build` after each refactor operation, not just at the end
-6. **Sweep for residuals** - After all changes, grep for old names to catch stragglers
+1. **Always analyze first** - Call the operation without `analyze: false` to see the blast radius
+2. **Review the response** - Shows related symbols discovered by naming convention and a suggested plan
+3. **Present to user** - Show the blast radius (files affected, references, related symbols)
+4. **Wait for confirmation** - Do NOT proceed without explicit user approval
+5. **Execute with `analyze: false`** - Only after user confirms, run each step in the suggested order
+6. **Build after each step** - Run `dotnet build` after each operation
+7. **Sweep for residuals** - Use `grep_search` to find any missed occurrences
+
+Example:
+```
+# Step 1: Analyze (default behavior)
+aura_refactor(operation: "rename", symbolName: "Workflow", newName: "Story", ...)
+# → Returns blast radius with 64 refs across 12 files, related: WorkflowService, IWorkflowRepository
+
+# Step 2: Present to user and get confirmation
+
+# Step 3: Execute after confirmation
+aura_refactor(operation: "rename", symbolName: "Workflow", newName: "Story", analyze: false, ...)
+```
 
 **Never assume a refactor tool caught everything.** Roslyn workspace may be stale or incomplete.
 

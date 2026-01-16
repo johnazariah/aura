@@ -67,16 +67,31 @@ public static class McpToolDocumentation
 
         Use `aura_search` first to understand the codebase, then `aura_navigate`/`aura_inspect` for specifics.
 
-        ### Refactoring Protocol (Renames, Extract, Large Changes)
+        ### Blast Radius Protocol (Renames, Extract, Large Changes)
 
-        For any refactoring that touches multiple files:
+        `aura_refactor` defaults to **analyze mode** (`analyze: true`). Before executing any refactoring:
 
-        1. **Analyze first** - Use `grep_search` or `aura_navigate(usages)` to find ALL occurrences
-        2. **Plan the sequence** - List all symbols/files that need changing, in dependency order
-        3. **Dry-run when available** - Use `preview: true` to see what will change
-        4. **Compare coverage** - If tool reports fewer files than grep found, plan for text fallback
-        5. **Build after each step** - Run `dotnet build` after each refactor operation, not just at the end
-        6. **Sweep for residuals** - After all changes, grep for old names to catch stragglers
+        1. **Always analyze first** - Call the operation without `analyze: false` to see the blast radius
+        2. **Review related symbols** - The response shows symbols discovered by naming convention
+        3. **Review the suggested plan** - A sequence of ordered operations to execute
+        4. **Present to user** - Show the blast radius (files, references, related symbols)
+        5. **Wait for confirmation** - Do NOT proceed without explicit user approval
+        6. **Execute with `analyze: false`** - Only after user confirms, run each step in order
+        7. **Build after each step** - Run `dotnet build` after each operation
+        8. **Sweep for residuals** - Use `grep_search` to find any missed occurrences
+
+        Example workflow:
+        ```
+        # Step 1: Analyze (default)
+        aura_refactor(operation: "rename", symbolName: "Workflow", newName: "Story", ...)
+        # Returns: blastRadius with relatedSymbols, suggestedPlan, awaitsConfirmation: true
+
+        # Step 2: Present to user and get confirmation
+        "I found 64 references across 12 files. Related symbols: WorkflowService, IWorkflowRepository..."
+
+        # Step 3: Execute after confirmation
+        aura_refactor(operation: "rename", symbolName: "Workflow", newName: "Story", analyze: false, ...)
+        ```
 
         **Never assume a refactor tool caught everything.** Roslyn workspace may be stale or incomplete.
         """;
