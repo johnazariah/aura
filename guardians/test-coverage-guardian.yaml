@@ -1,0 +1,53 @@
+# Test Coverage Guardian
+# Monitors test coverage and creates workflows for gaps
+
+id: test-coverage-guardian
+name: Test Coverage Guardian
+version: 1
+description: Monitors test coverage and creates workflows when coverage drops
+
+triggers:
+  - type: schedule
+    cron: "0 8 * * *"  # Daily at 8 AM
+  - type: file_changed
+    patterns:
+      - "src/**/*.cs"
+      - "src/**/*.ts"
+      - "src/**/*.py"
+    debounce: 300  # Wait 5 min after changes settle
+
+detection:
+  commands:
+    dotnet: "dotnet test --collect:\"XPlat Code Coverage\""
+    node: "npm run test:coverage"
+    python: "pytest --cov"
+
+  parsers:
+    - type: cobertura
+      path: "**/coverage.cobertura.xml"
+    - type: lcov
+      path: "**/lcov.info"
+
+  thresholds:
+    overall_minimum: 70
+    file_minimum: 50
+    regression_tolerance: 5  # Alert if coverage drops 5%+
+
+workflow:
+  title: "Improve test coverage: {target}"
+  description: |
+    Test coverage needs attention.
+
+    **Current:** {current_coverage}%
+    **Threshold:** {threshold}%
+    **Files needing tests:**
+    {uncovered_files}
+
+  suggested_capability: testing
+  priority: medium
+  mode: structured
+
+  context_gathering:
+    - coverage_report
+    - uncovered_methods
+    - similar_test_patterns

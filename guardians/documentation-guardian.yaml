@@ -1,0 +1,61 @@
+# Documentation Guardian
+# Detects missing or stale documentation
+
+id: documentation-guardian
+name: Documentation Guardian
+version: 1
+description: Detects undocumented public APIs and creates workflows to add documentation
+
+triggers:
+  - type: file_changed
+    patterns:
+      - "src/**/*.cs"
+      - "src/**/*.ts"
+      - "src/**/*.py"
+    debounce: 600  # Wait 10 min after changes settle
+  - type: schedule
+    cron: "0 6 * * 1"  # Weekly Monday 6 AM
+
+detection:
+  rules:
+    - id: public_members_undocumented
+      description: Public API members without documentation
+      languages: [csharp, typescript, python]
+
+    - id: readme_outdated
+      description: README doesn't reflect current structure
+      check: file_age_vs_code_changes
+
+    - id: api_docs_stale
+      description: API docs don't match implementation signatures
+      check: signature_drift
+
+  language_patterns:
+    csharp:
+      public_pattern: "public\\s+(class|interface|record|struct|enum|delegate)"
+      doc_pattern: "///\\s*<summary>"
+    typescript:
+      public_pattern: "export\\s+(class|interface|function|const|type)"
+      doc_pattern: "/\\*\\*"
+    python:
+      public_pattern: "^(class|def)\\s+[A-Z]"
+      doc_pattern: '"""'
+
+workflow:
+  title: "Document: {target}"
+  description: |
+    Documentation is missing or outdated.
+
+    **Issue:** {rule_description}
+    **Location:** {file_path}
+    **Details:**
+    {violation_details}
+
+  suggested_capability: documentation
+  priority: low
+  mode: structured
+
+  context_gathering:
+    - file_content
+    - similar_documented_members
+    - project_doc_style

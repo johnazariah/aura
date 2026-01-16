@@ -1,0 +1,47 @@
+# CI/CD Guardian
+# Monitors CI pipelines and creates workflows for failures
+
+id: ci-guardian
+name: CI/CD Guardian
+version: 1
+description: Monitors CI pipelines and creates workflows for build/test failures
+
+triggers:
+  - type: schedule
+    cron: "*/15 * * * *"  # Poll every 15 minutes
+  - type: webhook
+    events:
+      - workflow_run.completed
+
+detection:
+  sources:
+    - type: github_actions
+      branches: [main, develop]
+    - type: azure_pipelines
+      branches: [main, develop]
+
+  failure_analysis:
+    parse_logs: true
+    identify_failing_tests: true
+    identify_build_errors: true
+
+workflow:
+  title: "Fix CI: {failure_summary}"
+  description: |
+    CI pipeline failed on {branch}.
+
+    **Pipeline:** {pipeline_name}
+    **Failed at:** {timestamp}
+    **Error:** {error_summary}
+
+    ## Failure Details
+    {parsed_failure_details}
+
+  suggested_capability: build-fixer
+  priority: high
+  mode: structured
+
+  context_gathering:
+    - failure_logs
+    - recent_commits
+    - affected_files
