@@ -167,6 +167,45 @@ public sealed class WorkflowService(
     }
 
     /// <inheritdoc/>
+    public async Task<Workflow> CreateFromGuardianAsync(
+        GuardianWorkflowRequest request,
+        CancellationToken ct = default)
+    {
+        // Create the workflow with guardian source
+        var workflow = await CreateAsync(
+            request.Title,
+            request.Description,
+            request.RepositoryPath,
+            request.Mode,
+            AutomationMode.Assisted,
+            issueUrl: null,
+            ct);
+
+        // Set guardian-specific fields
+        workflow.Source = WorkflowSource.Guardian;
+        workflow.SourceGuardianId = request.GuardianId;
+        workflow.Priority = request.Priority;
+        workflow.SuggestedCapability = request.SuggestedCapability;
+
+        // Store additional context from the guardian if provided
+        if (!string.IsNullOrEmpty(request.Context))
+        {
+            workflow.AnalyzedContext = request.Context;
+        }
+
+        await _db.SaveChangesAsync(ct);
+
+        _logger.LogInformation(
+            "Created guardian workflow {WorkflowId} from {GuardianId}: {Title} (Priority: {Priority})",
+            workflow.Id,
+            request.GuardianId,
+            request.Title,
+            request.Priority);
+
+        return workflow;
+    }
+
+    /// <inheritdoc/>
     public async Task<Workflow?> GetByIdAsync(Guid id, CancellationToken ct = default)
     {
         return await _db.Workflows.FindAsync([id], ct);

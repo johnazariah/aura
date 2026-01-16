@@ -32,6 +32,16 @@ public interface IWorkflowService
         CancellationToken ct = default);
 
     /// <summary>
+    /// Creates a new workflow from a guardian check.
+    /// </summary>
+    /// <param name="request">The guardian workflow creation request.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>The created workflow.</returns>
+    Task<Workflow> CreateFromGuardianAsync(
+        GuardianWorkflowRequest request,
+        CancellationToken ct = default);
+
+    /// <summary>
     /// Gets a workflow by ID.
     /// </summary>
     /// <param name="id">The workflow ID.</param>
@@ -290,4 +300,34 @@ public record ExecuteAllResult
 
     /// <summary>Gets whether there are steps requiring user confirmation.</summary>
     public bool HasPendingConfirmations => SkippedSteps.Count > 0;
+}
+
+/// <summary>
+/// Request to create a workflow from a guardian check.
+/// </summary>
+public record GuardianWorkflowRequest
+{
+    /// <summary>Gets the workflow title.</summary>
+    public required string Title { get; init; }
+
+    /// <summary>Gets the workflow description.</summary>
+    public string? Description { get; init; }
+
+    /// <summary>Gets the repository path.</summary>
+    public string? RepositoryPath { get; init; }
+
+    /// <summary>Gets the guardian ID that detected this issue.</summary>
+    public required string GuardianId { get; init; }
+
+    /// <summary>Gets the workflow priority.</summary>
+    public WorkflowPriority Priority { get; init; } = WorkflowPriority.Medium;
+
+    /// <summary>Gets the suggested capability/agent for this workflow.</summary>
+    public string? SuggestedCapability { get; init; }
+
+    /// <summary>Gets the execution mode.</summary>
+    public WorkflowMode Mode { get; init; } = WorkflowMode.Structured;
+
+    /// <summary>Gets additional context from the guardian check.</summary>
+    public string? Context { get; init; }
 }

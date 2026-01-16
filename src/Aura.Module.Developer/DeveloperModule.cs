@@ -41,6 +41,7 @@ public sealed class DeveloperModule : IAuraModule
     {
         // Register module options
         services.Configure<DeveloperModuleOptions>(config.GetSection(DeveloperModuleOptions.SectionName));
+        services.Configure<Guardians.GuardianOptions>(config.GetSection(Guardians.GuardianOptions.Section));
 
         // Get connection string from configuration (shared with Foundation)
         var connectionString = config.GetConnectionString("auradb");
@@ -94,6 +95,12 @@ public sealed class DeveloperModule : IAuraModule
 
         // Register language config loader
         services.AddSingleton<Agents.ILanguageConfigLoader, Agents.LanguageConfigLoader>();
+
+        // Register guardian infrastructure
+        services.AddSingleton<Foundation.Guardians.IGuardianRegistry, Guardians.GuardianRegistry>();
+        services.AddSingleton<Foundation.Guardians.IGuardianExecutor, Guardians.GuardianExecutor>();
+        services.AddHostedService<Guardians.GuardianRegistryInitializer>();
+        services.AddHostedService<Guardians.GuardianScheduler>();
 
         // Register Roslyn tools
         services.AddSingleton<ListProjectsTool>();
