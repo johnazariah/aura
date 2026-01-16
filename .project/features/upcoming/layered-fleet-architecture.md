@@ -146,9 +146,188 @@ The key insight: **Guardians detect, workflows track, agents/Copilot reason, too
 
 ---
 
-## Guardian Definition Format
+## Reasoning Layer: Dual-Mode Execution
 
-Guardians are defined in `guardians/*.yaml` and hot-reloaded (same pattern as agents):
+Workflows can execute in two modes. The mode is selected per-workflow based on user preference or workflow type.
+
+### Mode Selection
+
+```csharp
+public enum WorkflowMode
+{
+    /// <summary>
+    /// Aura agents execute steps via ReAct loop with local/cloud LLM.
+    /// Plan → Steps → Execute → Review
+    /// </summary>
+    Structured,
+    
+    /// <summary>
+    /// Hand off to GitHub Copilot for free-form conversation in worktree.
+    /// Tools available via MCP, expertise injected as context.
+    /// </summary>
+    Conversational,
+}
+```
+
+### When to Use Each Mode
+
+| Scenario | Recommended Mode | Why |
+|----------|------------------|-----|
+| Batch doc generation | Structured | Predictable, no interaction needed |
+| Privacy-sensitive code | Structured | Local LLM, data stays on-prem |
+| CI/CD automation | Structured | Needs to run unattended |
+| Learning a new codebase | Conversational | Interactive exploration |
+| Complex multi-file refactor | Conversational | Benefits from reasoning power |
+| Debugging a tricky issue | Conversational | Back-and-forth dialogue |
+| Offline/air-gapped | Structured | No cloud dependency |
+
+### Workflow Schema Extension
+
+```csharp
+public record Workflow
+{
+    // ... existing fields ...
+    
+    /// <summary>How this workflow was created.</summary>
+    public WorkflowSource Source { get; init; }
+    
+    /// <summary>Guardian ID if created by guardian.</summary>
+    public string? SourceGuardianId { get; init; }
+    
+    /// <summary>Priority for UI sorting.</summary>
+    public WorkflowPriority Priority { get; init; }
+    
+    /// <summary>Execution mode.</summary>
+    public WorkflowMode Mode { get; init; } = WorkflowMode.Structured;
+    
+    /// <summary>Suggested specialist for this workflow.</summary>
+    public string? SuggestedSpecialist { get; init; }
+}
+```
+
+### Mode Handoff
+
+**Structured Mode:**
+```
+Workflow created
+    │
+    ▼
+WorkflowService.PlanAsync() ─► LLM generates steps
+    │
+    ▼
+For each step:
+    AgentRegistry.GetAgent(step.Capability)
+    Agent.ExecuteAsync() ─► ReAct loop with tools
+    │
+    ▼
+Human reviews, approves
+```
+
+**Conversational Mode:**
+```
+Workflow created
+    │
+    ▼
+Extension opens worktree in new VS Code window
+    │
+    ▼
+Injects specialist context into Copilot (via MCP resource)
+    │
+    ▼
+User chats with Copilot
+    Copilot calls aura_* tools via MCP
+    │
+    ▼
+User marks workflow complete when done
+```
+
+---
+
+## Expertise Layer: Specialists
+
+Specialists provide domain knowledge that informs reasoning. The same YAML config serves both modes.
+
+### Specialist Definition
+
+```yaml
+# agents/languages/rust.yaml
+id: rust-specialist
+name: Rust Language Specialist
+version: 1
+
+# === Used in Structured Mode (as agent) ===
+capabilities:
+  - software-development-rust
+
+system_prompt: |
+  You are an expert Rust developer. Follow these conventions:
+  - Use `thiserror` for custom error types
+  - Prefer `anyhow::Result` for application code
+  - Use `#[derive(Debug, Clone)]` by default
+  - Prefer `&str` over `String` in function parameters
+  - Use `clippy` lints at warn level
+
+tools_available:
+  - aura_search
+  - aura_navigate
+  - aura_refactor
+  - aura_validate
+
+# === Used in Conversational Mode (as context) ===
+copilot_context:
+  # Injected into Copilot's system prompt when working on .rs files
+  conventions: |
+    Rust conventions for this project:
+    - Error handling: `thiserror` for libraries, `anyhow` for apps
+    - Derive Debug and Clone on all public types
+    - Prefer borrowing over ownership in function signatures
+    - Run `cargo clippy` before committing
+    
+  # Relevant docs to surface
+  related_docs:
+    - docs/rust-style-guide.md
+    - CONTRIBUTING.md#rust-guidelines
+```
+
+### How Context Injection Works (Conversational Mode)
+
+When a workflow opens in Conversational mode:
+
+1. Extension detects primary language(s) in worktree
+2. Loads matching specialists from `agents/languages/`
+3. Registers an MCP **resource** with the specialist context
+4. Copilot sees the context when it lists resources
+
+```typescript
+// Extension: Register specialist context as MCP resource
+mcp.registerResource({
+  uri: `aura://specialist/${workflowId}`,
+  name: "Aura Specialist Context",
+  description: "Project conventions and patterns",
+  contents: buildSpecialistContext(workflow, detectedLanguages)
+});
+```
+
+### How Agent Loading Works (Structured Mode)
+
+When a workflow step executes:
+
+1. `AgentRegistry.GetAgent(capability)` finds matching agent
+2. Agent's `system_prompt` loaded from YAML
+3. `tools_available` determines which tools are injected
+4. ReAct loop executes with those tools
+
+```csharp
+// Existing agent loading path
+var agent = _agentRegistry.GetByCapability("software-development-rust");
+var result = await agent.ExecuteAsync(context, tools, cancellationToken);
+```
+
+---
+
+## Orchestration Layer: Guardians
+
+Guardians are background sensors that detect issues and create workflows.
 
 ```yaml
 # guardians/ci-guardian.yaml
@@ -540,30 +719,90 @@ config:
 
 ---
 
+## Current State vs Target
+
+### What We Have Today
+
+| Layer | Current State | Notes |
+|-------|---------------|-------|
+| **Orchestration** | ❌ None | No guardians, no automated detection |
+| **Reasoning** | ⚠️ Partial | Aura agents work; Copilot works via MCP; but no mode selection |
+| **Expertise** | ⚠️ Partial | Language specialists exist as agents; no context injection for Copilot |
+| **Capabilities** | ✅ Complete | 8 meta-tools via MCP, Roslyn adapter, rope adapter |
+
+### What We're Building
+
+```
+Current: User creates workflow → Aura agents execute
+Target:  Guardians detect     → User chooses mode → Aura OR Copilot executes
+```
+
+---
+
 ## Implementation Phases
 
-### Phase 1: Guardian Framework
+### Phase 1: Workflow Mode Infrastructure
+
+**Goal:** Enable dual-mode execution on existing workflows.
+
+- [ ] Add `Mode` field to `Workflow` entity (Structured | Conversational)
+- [ ] Add `SuggestedSpecialist` field to `Workflow`
+- [ ] Extension: Mode selector when creating/opening workflow
+- [ ] Extension: "Open in Copilot" action for Conversational mode
+- [ ] API: Accept `mode` in workflow creation
+
+**Milestone:** User can create workflow and choose execution mode.
+
+### Phase 2: Specialist Context Injection
+
+**Goal:** Specialists inform Copilot in Conversational mode.
+
+- [ ] Extend specialist YAML schema with `copilot_context` section
+- [ ] `SpecialistContextService` — Load and merge specialist context
+- [ ] MCP resource provider — Expose specialist context to Copilot
+- [ ] Extension: Detect languages in worktree, load matching specialists
+- [ ] Test with existing language specialists (C#, Python, Rust)
+
+**Milestone:** Copilot receives project conventions when working in worktree.
+
+### Phase 3: Guardian Framework
+
+**Goal:** Background detection creates workflows automatically.
 
 - [ ] `IGuardian` interface and `GuardianRegistry` (hot-reload from `guardians/`)
 - [ ] `GuardianScheduler` background service (cron + file watch triggers)
 - [ ] `GuardianExecutor` (run check → create workflow)
 - [ ] Extend `Workflow` with `Source`, `SourceGuardianId`, `Priority`
 - [ ] API endpoints: list, get, run, history
-- [ ] Extension UI: filter/group workflows by source
+- [ ] Extension UI: filter/group workflows by source, priority badge
 
-### Phase 2: First Guardians
+**Milestone:** Guardians can be defined in YAML and triggered on schedule.
 
-- [ ] **CI Guardian** — Parse GitHub Actions / Azure Pipelines failures, create "fix build" workflows
-- [ ] **Test Coverage Guardian** — Run coverage, detect regressions, create "write tests" workflows
-- [ ] **Documentation Guardian** — Detect undocumented public APIs, create "document" workflows
+### Phase 4: First Guardians
 
-### Phase 3: Detection Improvements
+**Goal:** Prove the model with real detection.
+
+- [ ] **CI Guardian** — Parse GitHub Actions / Azure Pipelines failures
+- [ ] **Test Coverage Guardian** — Run coverage, detect regressions
+- [ ] **Documentation Guardian** — Detect undocumented public APIs
+
+**Milestone:** Maintenance chores appear automatically in workflow list.
+
+### Phase 5: Production Hardening
+
+**Goal:** Make it reliable for real use.
 
 - [ ] Webhook receiver for real-time CI/CD events
-- [ ] Smarter violation deduplication (don't create duplicate workflows)
-- [ ] Guardian dashboard in extension (run status, last violations)
+- [ ] Workflow deduplication (don't create duplicates for same issue)
+- [ ] Guardian dashboard in extension (status, history, manual trigger)
+- [ ] User configuration for default mode per guardian type
+- [ ] Notification preferences
 
-### Phase 4: Future Guardians
+**Milestone:** Guardians run reliably in production.
+
+### Phase 6: Future Guardians
+
+**Goal:** Expand detection capabilities.
 
 - [ ] Dependency Guardian (CVE scanning, outdated packages)
 - [ ] API Compatibility Guardian (breaking change detection)
@@ -572,12 +811,34 @@ config:
 
 ---
 
+## Migration Path
+
+### Existing Components → New Architecture
+
+| Existing | Becomes | Changes Needed |
+|----------|---------|----------------|
+| `agents/languages/*.yaml` | Expertise Layer (dual-use) | Add `copilot_context` section |
+| `AgentRegistry` | Unchanged (Structured mode) | None |
+| MCP Tools | Unchanged (Capabilities layer) | None |
+| `Workflow` entity | Extended | Add `Mode`, `Source`, `Priority` |
+| Workflow UI | Extended | Add mode selector, source filter |
+
+### Breaking Changes
+
+**None.** This is additive:
+- Existing workflows default to `Mode=Structured`
+- Existing agents continue to work
+- Guardians are opt-in via `guardians/` folder
+
+---
+
 ## Success Metrics
 
 | Metric | Target |
 |--------|--------|
-| Workflow creation latency | <30 seconds from detection to workflow appearing |
-| Coverage trend | Coverage doesn't regress quarter-over-quarter |
+| Mode adoption | >30% of workflows use Conversational mode |
+| Specialist coverage | >80% of indexed languages have specialists |
+| Workflow creation latency | <30 seconds from detection to UI |
 | Build break visibility | 100% of CI failures result in workflows |
 | Chore completion rate | >50% of guardian workflows completed within 1 week |
 
@@ -585,16 +846,18 @@ config:
 
 ## Open Questions
 
-1. **Workflow deduplication** — If CI fails twice, do we create two workflows or update one?
-2. **Guardian priorities** — Should users configure relative priority between guardians?
-3. **Notification preferences** — Should guardians notify via extension only, or also email/Slack?
+1. **Mode recommendation** — Should guardians recommend a mode based on issue type?
+2. **Workflow deduplication** — If CI fails twice, create two workflows or update one?
+3. **Specialist conflicts** — Multiple specialists for same file (e.g., TypeScript + React)?
 4. **Cross-repository guardians** — For monorepos, can a guardian span multiple workspaces?
+5. **Offline Copilot** — What happens in Conversational mode without internet?
 
 ---
 
 ## Related Documents
 
-- [Workflow Spec](../completed/workflow-lifecycle.md) — Existing workflow infrastructure
-- [Agent Registry](../../spec/01-agents.md) — Hot-reload pattern to follow
-- [Background Jobs](../../adr/008-local-rag-foundation.md) — Existing background service pattern
+- [MCP Tools Enhancement](completed/mcp-tools-enhancement.md) — Capabilities layer
+- [Story Model](completed/story-model.md) — WorkflowMode definition
+- [Agent Registry](../../spec/01-agents.md) — Hot-reload pattern
+- [Language Specialists](completed/generic-language-agent.md) — Current specialist implementation
 
