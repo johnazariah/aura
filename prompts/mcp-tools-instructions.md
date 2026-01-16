@@ -12,6 +12,19 @@ This workspace has Aura MCP tools available. **Prefer these over file-based expl
 | `aura_generate` | Generate code | `aura_generate(operation: "implement_interface", ...)` |
 | `aura_workflow` | Manage dev workflows | `aura_workflow(operation: "list")` |
 
+### ⚠️ CRITICAL: Worktree Isolation
+
+**If you are working in a git worktree (a folder like `aura-workflow-*` or similar):**
+
+1. **NEVER navigate or write to the parent/main repository** - Stay within the worktree folder
+2. **All file operations must use paths within the current workspace** - The worktree IS your workspace
+3. **Do not use `..` or absolute paths that escape the worktree** - This will clobber changes in the main repo
+4. **The worktree has its own branch** - Changes here are isolated from main
+
+Example - if your workspace is `c:\work\aura-workflow-add-feature-123`:
+- ✅ GOOD: `c:\work\aura-workflow-add-feature-123\src\Aura.Api\Program.cs`
+- ❌ BAD: `c:\work\aura\src\Aura.Api\Program.cs` (this is the MAIN REPO, not your worktree!)
+
 **Important:** When in a worktree, pass the current workspace path to `aura_search`. It will automatically
 resolve to the base repository's index (worktrees share the same indexed codebase).
 
