@@ -555,15 +555,31 @@ public sealed class McpHandler
     private async Task<object> FindImplementationsFromNavigate(JsonElement? args, CancellationToken ct)
     {
         var typeName = args?.GetProperty("symbolName").GetString() ?? "";
+        var worktreeInfo = DetectWorktreeFromArgs(args);
         var results = await _graphService.FindImplementationsAsync(typeName, cancellationToken: ct);
-        return results.Select(n => new { name = n.Name, fullName = n.FullName, kind = n.NodeType.ToString(), filePath = n.FilePath, line = n.LineNumber });
+        return results.Select(n => new
+        {
+            name = n.Name,
+            fullName = n.FullName,
+            kind = n.NodeType.ToString(),
+            filePath = TranslatePathIfWorktree(n.FilePath, worktreeInfo),
+            line = n.LineNumber
+        });
     }
 
     private async Task<object> FindDerivedTypesFromNavigate(JsonElement? args, CancellationToken ct)
     {
         var baseClassName = args?.GetProperty("symbolName").GetString() ?? "";
+        var worktreeInfo = DetectWorktreeFromArgs(args);
         var results = await _graphService.FindDerivedTypesAsync(baseClassName, cancellationToken: ct);
-        return results.Select(n => new { name = n.Name, fullName = n.FullName, kind = n.NodeType.ToString(), filePath = n.FilePath, line = n.LineNumber });
+        return results.Select(n => new
+        {
+            name = n.Name,
+            fullName = n.FullName,
+            kind = n.NodeType.ToString(),
+            filePath = TranslatePathIfWorktree(n.FilePath, worktreeInfo),
+            line = n.LineNumber
+        });
     }
 
     private async Task<object> FindByAttributeFromNavigate(JsonElement? args, CancellationToken ct)
@@ -796,12 +812,33 @@ public sealed class McpHandler
             limit = limitEl.GetInt32();
         }
 
-        // Parse workspacePath and resolve to main repository if it's a worktree
+        // Parse workspacePath and detect if it's a worktree
         string? sourcePathPrefix = null;
+        DetectedWorktree? worktreeInfo = null;
         if (args.HasValue && args.Value.TryGetProperty("workspacePath", out var workspaceEl))
         {
             var workspacePath = workspaceEl.GetString();
-            sourcePathPrefix = await ResolveToMainRepositoryAsync(workspacePath, ct);
+
+            // Detect worktree synchronously - we need this for path translation
+            if (!string.IsNullOrEmpty(workspacePath))
+            {
+                worktreeInfo = GitWorktreeDetector.Detect(workspacePath);
+            }
+
+            if (worktreeInfo?.IsWorktree == true)
+            {
+                // Use main repo path for index lookup
+                sourcePathPrefix = worktreeInfo.Value.MainRepoPath;
+                _logger.LogDebug(
+                    "Search from worktree {WorktreePath} -> querying index at {MainRepoPath}",
+                    worktreeInfo.Value.WorktreePath,
+                    worktreeInfo.Value.MainRepoPath);
+            }
+            else
+            {
+                // Fallback to async resolution for non-worktree cases
+                sourcePathPrefix = await ResolveToMainRepositoryAsync(workspacePath, ct);
+            }
         }
 
         // Parse contentType filter
@@ -834,7 +871,7 @@ public sealed class McpHandler
             .Select(n => new
             {
                 content = $"[EXACT MATCH] {n.NodeType}: {n.FullName}",
-                filePath = n.FilePath,
+                filePath = TranslatePathIfWorktree(n.FilePath, worktreeInfo),
                 line = n.LineNumber,
                 score = 1.0, // Perfect match
                 contentType = "Code",
@@ -846,7 +883,7 @@ public sealed class McpHandler
         var semanticResults = ragResults.Select(r => new
         {
             content = r.Text,
-            filePath = r.SourcePath,
+            filePath = TranslatePathIfWorktree(r.SourcePath, worktreeInfo),
             line = (int?)null,
             score = r.Score,
             contentType = r.ContentType.ToString(),
@@ -862,9 +899,63 @@ public sealed class McpHandler
         return combinedResults;
     }
 
+    /// <summary>
+    /// Translates a file path from the main repository to the worktree if applicable.
+    /// </summary>
+    private static string? TranslatePathIfWorktree(string? filePath, DetectedWorktree? worktreeInfo)
+    {
+        if (filePath is null || worktreeInfo is null || !worktreeInfo.Value.IsWorktree)
+        {
+            return filePath;
+        }
+
+        return GitWorktreeDetector.TranslatePath(filePath, worktreeInfo.Value);
+    }
+
+    /// <summary>
+    /// Detects worktree info from solutionPath, workspacePath, or filePath in args.
+    /// </summary>
+    private static DetectedWorktree? DetectWorktreeFromArgs(JsonElement? args)
+    {
+        if (!args.HasValue) return null;
+
+        // Try solutionPath first (most common for C# operations)
+        if (args.Value.TryGetProperty("solutionPath", out var solutionEl))
+        {
+            var path = solutionEl.GetString();
+            if (!string.IsNullOrEmpty(path))
+            {
+                return GitWorktreeDetector.Detect(path);
+            }
+        }
+
+        // Try workspacePath (used by search)
+        if (args.Value.TryGetProperty("workspacePath", out var workspaceEl))
+        {
+            var path = workspaceEl.GetString();
+            if (!string.IsNullOrEmpty(path))
+            {
+                return GitWorktreeDetector.Detect(path);
+            }
+        }
+
+        // Try filePath (used by Python operations)
+        if (args.Value.TryGetProperty("filePath", out var fileEl))
+        {
+            var path = fileEl.GetString();
+            if (!string.IsNullOrEmpty(path))
+            {
+                return GitWorktreeDetector.Detect(path);
+            }
+        }
+
+        return null;
+    }
+
     private async Task<object> FindImplementationsAsync(JsonElement? args, CancellationToken ct)
     {
         var typeName = args?.GetProperty("typeName").GetString() ?? "";
+        var worktreeInfo = DetectWorktreeFromArgs(args);
         var results = await _graphService.FindImplementationsAsync(typeName, cancellationToken: ct);
 
         return results.Select(n => new
@@ -872,7 +963,7 @@ public sealed class McpHandler
             name = n.Name,
             fullName = n.FullName,
             kind = n.NodeType.ToString(),
-            filePath = n.FilePath,
+            filePath = TranslatePathIfWorktree(n.FilePath, worktreeInfo),
             line = n.LineNumber
         });
     }
@@ -886,6 +977,7 @@ public sealed class McpHandler
             containingType = typeEl.GetString();
         }
 
+        var worktreeInfo = DetectWorktreeFromArgs(args);
         var results = await _graphService.FindCallersAsync(methodName, containingType, cancellationToken: ct);
 
         return results.Select(n => new
@@ -893,7 +985,7 @@ public sealed class McpHandler
             name = n.Name,
             fullName = n.FullName,
             kind = n.NodeType.ToString(),
-            filePath = n.FilePath,
+            filePath = TranslatePathIfWorktree(n.FilePath, worktreeInfo),
             line = n.LineNumber
         });
     }
@@ -901,13 +993,14 @@ public sealed class McpHandler
     private async Task<object> GetTypeMembersAsync(JsonElement? args, CancellationToken ct)
     {
         var typeName = args?.GetProperty("typeName").GetString() ?? "";
+        var worktreeInfo = DetectWorktreeFromArgs(args);
         var results = await _graphService.GetTypeMembersAsync(typeName, cancellationToken: ct);
 
         return results.Select(n => new
         {
             name = n.Name,
             kind = n.NodeType.ToString(),
-            filePath = n.FilePath,
+            filePath = TranslatePathIfWorktree(n.FilePath, worktreeInfo),
             line = n.LineNumber
         });
     }
@@ -915,6 +1008,7 @@ public sealed class McpHandler
     private async Task<object> FindDerivedTypesAsync(JsonElement? args, CancellationToken ct)
     {
         var baseClassName = args?.GetProperty("baseClassName").GetString() ?? "";
+        var worktreeInfo = DetectWorktreeFromArgs(args);
         var results = await _graphService.FindDerivedTypesAsync(baseClassName, cancellationToken: ct);
 
         return results.Select(n => new
@@ -922,7 +1016,7 @@ public sealed class McpHandler
             name = n.Name,
             fullName = n.FullName,
             kind = n.NodeType.ToString(),
-            filePath = n.FilePath,
+            filePath = TranslatePathIfWorktree(n.FilePath, worktreeInfo),
             line = n.LineNumber
         });
     }
