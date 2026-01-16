@@ -50,7 +50,7 @@ public sealed class RoslynCodingAgent(
         Capabilities: ["software-development-csharp", "software-development", "coding"],
         Priority: 10,  // Highest priority for C# coding tasks
         Languages: ["csharp"],
-        Provider: "ollama",
+        Provider: null,  // Use configured default provider
         Temperature: DefaultTemperature,
         Tools:
         [

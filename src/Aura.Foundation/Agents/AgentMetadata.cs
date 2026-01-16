@@ -12,7 +12,7 @@ namespace Aura.Foundation.Agents;
 /// <param name="Capabilities">Fixed vocabulary capabilities for routing (see <see cref="Agents.Capabilities"/>).</param>
 /// <param name="Priority">Agent priority. Lower = more specialized, selected first. Default 50.</param>
 /// <param name="Languages">Languages this agent supports (null = polyglot, handles any language).</param>
-/// <param name="Provider">LLM provider to use (e.g., "ollama", "maf").</param>
+/// <param name="Provider">LLM provider to use (e.g., "ollama", "azureopenai"). Null = use system default.</param>
 /// <param name="Model">Model to use with the provider.</param>
 /// <param name="Temperature">Temperature for LLM sampling (0.0-1.0).</param>
 /// <param name="Tools">List of tool names this agent can use.</param>
@@ -23,7 +23,7 @@ public sealed record AgentMetadata(
     IReadOnlyList<string> Capabilities,
     int Priority = 50,
     IReadOnlyList<string>? Languages = null,
-    string Provider = "ollama",
+    string? Provider = null,  // null = use configured default provider
     string? Model = null,
     double Temperature = 0.7,
     IReadOnlyList<string>? Tools = null,
