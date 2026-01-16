@@ -68,7 +68,7 @@ public sealed class McpHandler
         _worktreeService = worktreeService;
         _logger = logger;
 
-        // Phase 7: Consolidated meta-tools (28 tools → 8 tools)
+        // Phase 7: Consolidated meta-tools (28 tools → 9 tools)
         _tools = new Dictionary<string, Func<JsonElement?, CancellationToken, Task<object>>>
         {
             ["aura_search"] = SearchAsync,
@@ -79,6 +79,7 @@ public sealed class McpHandler
             ["aura_validate"] = ValidateAsync,
             ["aura_workflow"] = WorkflowAsync,
             ["aura_architect"] = ArchitectAsync,
+            ["aura_workspace"] = WorkspaceAsync,
         };
     }
 
@@ -443,6 +444,30 @@ public sealed class McpHandler
                     required = new[] { "operation" }
                 }
             },
+
+            // =================================================================
+            // aura_workspace - Workspace and worktree management
+            // =================================================================
+            new McpToolDefinition
+            {
+                Name = "aura_workspace",
+                Description = "Manage workspace state: detect git worktrees, invalidate cached workspaces, check status. (Read/Write)",
+                InputSchema = new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        operation = new
+                        {
+                            type = "string",
+                            description = "Workspace operation type",
+                            @enum = new[] { "detect_worktree", "invalidate_cache", "status" }
+                        },
+                        path = new { type = "string", description = "Path to workspace, solution, or worktree" }
+                    },
+                    required = new[] { "operation", "path" }
+                }
+            },
         };
 
         return new JsonRpcResponse
@@ -771,6 +796,107 @@ public sealed class McpHandler
             message = $"aura_architect operation '{operation}' is not yet implemented. Coming in a future release.",
             availableOperations = new[] { "dependencies", "layer_check", "public_api" }
         });
+    }
+
+    /// <summary>
+    /// aura_workspace - Workspace and worktree management.
+    /// Supports: detect_worktree, invalidate_cache, status.
+    /// </summary>
+    private Task<object> WorkspaceAsync(JsonElement? args, CancellationToken ct)
+    {
+        var operation = args?.GetProperty("operation").GetString()
+            ?? throw new ArgumentException("operation is required");
+        var path = args?.GetProperty("path").GetString()
+            ?? throw new ArgumentException("path is required");
+
+        return operation switch
+        {
+            "detect_worktree" => Task.FromResult(DetectWorktreeOperation(path)),
+            "invalidate_cache" => Task.FromResult(InvalidateCacheOperation(path)),
+            "status" => Task.FromResult(WorkspaceStatusOperation(path)),
+            _ => throw new ArgumentException($"Unknown workspace operation: {operation}")
+        };
+    }
+
+    private object DetectWorktreeOperation(string path)
+    {
+        var worktreeInfo = GitWorktreeDetector.Detect(path);
+
+        if (worktreeInfo is null)
+        {
+            return new
+            {
+                isGitRepository = false,
+                isWorktree = false,
+                path = Path.GetFullPath(path),
+                message = "Path is not in a git repository"
+            };
+        }
+
+        if (!worktreeInfo.Value.IsWorktree)
+        {
+            return new
+            {
+                isGitRepository = true,
+                isWorktree = false,
+                path = worktreeInfo.Value.WorktreePath,
+                message = "Path is in a main git repository (not a worktree)"
+            };
+        }
+
+        return new
+        {
+            isGitRepository = true,
+            isWorktree = true,
+            worktreePath = worktreeInfo.Value.WorktreePath,
+            mainRepoPath = worktreeInfo.Value.MainRepoPath,
+            gitDir = worktreeInfo.Value.GitDir,
+            message = "Path is in a git worktree"
+        };
+    }
+
+    private object InvalidateCacheOperation(string path)
+    {
+        // Try to invalidate both the exact path and any parent .sln files
+        var normalizedPath = Path.GetFullPath(path);
+        var invalidated = _roslynService.InvalidateCache(normalizedPath);
+
+        // Also try worktree detection to invalidate related paths
+        var worktreeInfo = GitWorktreeDetector.Detect(path);
+        var additionalInfo = worktreeInfo?.IsWorktree == true
+            ? $"Worktree detected. Main repo: {worktreeInfo.Value.MainRepoPath}"
+            : null;
+
+        return new
+        {
+            success = invalidated,
+            path = normalizedPath,
+            message = invalidated
+                ? "Roslyn workspace cache invalidated for this path"
+                : "No cached workspace found for this path",
+            worktreeInfo = additionalInfo
+        };
+    }
+
+    private object WorkspaceStatusOperation(string path)
+    {
+        var worktreeInfo = GitWorktreeDetector.Detect(path);
+
+        return new
+        {
+            path = Path.GetFullPath(path),
+            isGitRepository = worktreeInfo is not null,
+            isWorktree = worktreeInfo?.IsWorktree ?? false,
+            worktreePath = worktreeInfo?.WorktreePath,
+            mainRepoPath = worktreeInfo?.MainRepoPath,
+            gitDir = worktreeInfo?.GitDir,
+            roslynWorkspaceCached = false, // TODO: Expose cache status from RoslynWorkspaceService
+            message = worktreeInfo?.IsWorktree == true
+                ? $"Git worktree linked to {worktreeInfo.Value.MainRepoPath}"
+                : worktreeInfo is not null
+                    ? "Main git repository"
+                    : "Not a git repository"
+        };
     }
 
     // =========================================================================
