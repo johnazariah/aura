@@ -40,6 +40,11 @@ public interface IPromptRegistry
     IReadOnlyList<string> GetTools(string name);
 
     /// <summary>
+    /// Gets the primary prompts directory path.
+    /// </summary>
+    string PromptsDirectory { get; }
+
+    /// <summary>
     /// Gets all registered prompt names.
     /// </summary>
     IReadOnlyList<string> GetPromptNames();

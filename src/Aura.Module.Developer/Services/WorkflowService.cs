@@ -1756,7 +1756,7 @@ public sealed class WorkflowService(
                 // Check if Aura tools guidance is already present
                 if (!instructions.Contains("aura_", StringComparison.OrdinalIgnoreCase))
                 {
-                    instructions += "\n\n" + McpToolDocumentation.CopilotInstructionsMarkdown;
+                    instructions += "\n\n" + McpToolDocumentation.GetCopilotInstructionsMarkdown(_promptRegistry.PromptsDirectory);
                 }
 
                 await File.WriteAllTextAsync(destInstructionsPath, instructions, ct);
@@ -1774,7 +1774,7 @@ public sealed class WorkflowService(
                 var destInstructionsPath = Path.Combine(destGithubDir, "copilot-instructions.md");
                 if (!File.Exists(destInstructionsPath))
                 {
-                    var instructions = "# Copilot Instructions\n\n" + McpToolDocumentation.CopilotInstructionsMarkdown;
+                    var instructions = "# Copilot Instructions\n\n" + McpToolDocumentation.GetCopilotInstructionsMarkdown(_promptRegistry.PromptsDirectory);
                     await File.WriteAllTextAsync(destInstructionsPath, instructions, ct);
                     _logger.LogDebug("Created copilot-instructions.md in worktree with Aura tools guidance");
                 }

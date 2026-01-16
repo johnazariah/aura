@@ -45,6 +45,9 @@ public sealed class PromptRegistry : IPromptRegistry
     }
 
     /// <inheritdoc/>
+    public string PromptsDirectory => _options.Directories.FirstOrDefault() ?? "prompts";
+
+    /// <inheritdoc/>
     public PromptTemplate? GetPrompt(string name)
     {
         _prompts.TryGetValue(name, out var prompt);
