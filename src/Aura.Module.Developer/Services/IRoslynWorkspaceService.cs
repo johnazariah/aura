@@ -46,4 +46,12 @@ public interface IRoslynWorkspaceService
     /// Clears the workspace cache.
     /// </summary>
     void ClearCache();
+
+    /// <summary>
+    /// Invalidates the cached workspace for a specific solution path.
+    /// Use when files have changed and the workspace needs to be reloaded.
+    /// </summary>
+    /// <param name="solutionPath">Path to the .sln file to invalidate</param>
+    /// <returns>True if a cached workspace was found and invalidated</returns>
+    bool InvalidateCache(string solutionPath);
 }

@@ -5,6 +5,7 @@
 namespace Aura.Module.Developer.Services;
 
 using System.Collections.Concurrent;
+using Aura.Foundation.Git;
 using Microsoft.Build.Locator;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.MSBuild;
@@ -61,10 +62,23 @@ public sealed class RoslynWorkspaceService : IRoslynWorkspaceService, IDisposabl
             throw new FileNotFoundException($"Solution file not found: {normalizedPath}");
         }
 
+        // Detect if we're in a worktree - each worktree gets its own workspace
+        // to ensure we see the worktree's file contents, not cached/stale data
+        var worktreeInfo = GitWorktreeDetector.Detect(normalizedPath);
+        var cacheKey = normalizedPath; // Use full path as cache key (unique per worktree)
+
+        if (worktreeInfo?.IsWorktree == true)
+        {
+            _logger.LogDebug(
+                "Worktree detected: {WorktreePath} -> Main: {MainRepoPath}",
+                worktreeInfo.Value.WorktreePath,
+                worktreeInfo.Value.MainRepoPath);
+        }
+
         await _loadLock.WaitAsync(ct);
         try
         {
-            if (!_workspaces.TryGetValue(normalizedPath, out var workspace))
+            if (!_workspaces.TryGetValue(cacheKey, out var workspace))
             {
                 _logger.LogInformation("Loading solution: {Path}", normalizedPath);
                 workspace = MSBuildWorkspace.Create();
@@ -75,7 +89,7 @@ public sealed class RoslynWorkspaceService : IRoslynWorkspaceService, IDisposabl
                 };
 
                 var solution = await workspace.OpenSolutionAsync(normalizedPath, cancellationToken: ct);
-                _workspaces[normalizedPath] = workspace;
+                _workspaces[cacheKey] = workspace;
                 _logger.LogInformation("Loaded solution with {ProjectCount} projects", solution.Projects.Count());
                 return solution;
             }
@@ -165,6 +179,19 @@ public sealed class RoslynWorkspaceService : IRoslynWorkspaceService, IDisposabl
         }
         _workspaces.Clear();
         _logger.LogInformation("Cleared workspace cache");
+    }
+
+    /// <inheritdoc/>
+    public bool InvalidateCache(string solutionPath)
+    {
+        var normalizedPath = Path.GetFullPath(solutionPath);
+        if (_workspaces.TryRemove(normalizedPath, out var workspace))
+        {
+            workspace.Dispose();
+            _logger.LogInformation("Invalidated cached workspace: {Path}", normalizedPath);
+            return true;
+        }
+        return false;
     }
 
     public void Dispose()
