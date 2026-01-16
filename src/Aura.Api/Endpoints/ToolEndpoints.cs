@@ -87,14 +87,17 @@ public static class ToolEndpoints
     {
         logger.LogInformation("ReAct execution starting: {Task}", request.Task);
 
-        // Get the LLM provider
-        var llm = llmRegistry.GetProvider(request.Provider ?? "ollama");
+        // Get the LLM provider - use request's provider or fall back to configured default
+        var llm = request.Provider is not null
+            ? llmRegistry.GetProvider(request.Provider)
+            : llmRegistry.GetDefaultProvider();
+
         if (llm is null)
         {
             return Results.BadRequest(new
             {
                 success = false,
-                error = $"LLM provider '{request.Provider ?? "ollama"}' not found"
+                error = $"No LLM provider available. Requested: {request.Provider ?? "(default)"}"
             });
         }
 

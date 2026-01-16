@@ -218,16 +218,19 @@ public static class AgentEndpoints
             return Results.NotFound(new { error = "Agent '" + agentId + "' not found" });
         }
 
-        var providerId = agent.Metadata.Provider ?? "ollama";
-        var provider = llmRegistry.GetProvider(providerId);
+        // Use agent's provider, or fall back to configured default
+        var provider = agent.Metadata.Provider is not null
+            ? llmRegistry.GetProvider(agent.Metadata.Provider)
+            : llmRegistry.GetDefaultProvider();
+
         if (provider is null)
         {
-            return Results.BadRequest(new { error = $"LLM provider '{providerId}' not found" });
+            return Results.BadRequest(new { error = $"No LLM provider available. Agent provider: {agent.Metadata.Provider ?? "(not set)"}" });
         }
 
         if (!provider.SupportsStreaming)
         {
-            return Results.BadRequest(new { error = $"Provider '{providerId}' does not support streaming" });
+            return Results.BadRequest(new { error = $"Provider '{provider.ProviderId}' does not support streaming" });
         }
 
         httpContext.Response.Headers.ContentType = "text/event-stream";

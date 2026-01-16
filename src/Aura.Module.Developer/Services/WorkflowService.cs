@@ -501,8 +501,16 @@ public sealed class WorkflowService(
             string rawResponse;
             int tokensUsed;
 
-            var providerId = planner.Metadata.Provider ?? "ollama";
-            var provider = _llmProviderRegistry.GetProvider(providerId);
+            // Use agent's provider, or fall back to configured default
+            var provider = planner.Metadata.Provider is not null
+                ? _llmProviderRegistry.GetProvider(planner.Metadata.Provider)
+                : _llmProviderRegistry.GetDefaultProvider();
+
+            if (provider is null)
+            {
+                throw new InvalidOperationException(
+                    $"No LLM provider available. Agent provider: {planner.Metadata.Provider ?? "(not set)"}");
+            }
 
             if (provider is not null && CanUseStructuredOutput(provider))
             {
