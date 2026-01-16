@@ -104,11 +104,29 @@ public sealed record RefactoringResult
     /// <summary>Remaining references (for safe delete failures).</summary>
     public IReadOnlyList<SymbolReference>? RemainingReferences { get; init; }
 
+    /// <summary>Build validation result (when validate=true).</summary>
+    public ValidationResult? Validation { get; init; }
+
     public static RefactoringResult Succeeded(string message, IReadOnlyList<string>? modifiedFiles = null) =>
         new() { Success = true, Message = message, ModifiedFiles = modifiedFiles ?? [] };
 
     public static RefactoringResult Failed(string error) =>
         new() { Success = false, Message = error, Error = error };
+}
+
+/// <summary>
+/// Result of post-refactoring build validation.
+/// </summary>
+public sealed record ValidationResult
+{
+    /// <summary>Whether the build succeeded.</summary>
+    public required bool BuildSucceeded { get; init; }
+
+    /// <summary>Build output (errors/warnings).</summary>
+    public string? BuildOutput { get; init; }
+
+    /// <summary>Residual occurrences of the old symbol name found via grep.</summary>
+    public IReadOnlyList<string>? Residuals { get; init; }
 }
 
 /// <summary>
@@ -143,6 +161,9 @@ public sealed record RenameSymbolRequest
 
     /// <summary>If true, return preview without applying changes.</summary>
     public bool Preview { get; init; }
+
+    /// <summary>If true, run build after refactoring and check for residuals.</summary>
+    public bool Validate { get; init; }
 }
 
 /// <summary>

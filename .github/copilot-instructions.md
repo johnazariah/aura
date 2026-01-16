@@ -121,6 +121,19 @@ The pre-commit hook will reject files with CRLF line endings.
 | New feature | `.project/features/upcoming/` | Create spec first |
 | Complete feature | `.project/features/completed/` | **Follow ceremony** (see below) |
 
+## Refactoring Protocol (Renames, Extract, Large Changes)
+
+For any refactoring that touches multiple files:
+
+1. **Analyze first** - Use `grep_search` or `aura_navigate(usages)` to find ALL occurrences
+2. **Plan the sequence** - List all symbols/files that need changing, in dependency order
+3. **Dry-run when available** - Use `preview: true` to see what will change
+4. **Compare coverage** - If tool reports fewer files than grep found, plan for text fallback
+5. **Build after each step** - Run `dotnet build` after each refactor operation, not just at the end
+6. **Sweep for residuals** - After all changes, grep for old names to catch stragglers
+
+**Never assume a refactor tool caught everything.** Roslyn workspace may be stale or incomplete.
+
 ## Feature Completion Ceremony
 
 When a feature is complete, you MUST follow the ceremony in `.github/prompts/aura.complete-feature.prompt.md`:

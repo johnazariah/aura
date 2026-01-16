@@ -291,7 +291,8 @@ public sealed class McpHandler
                             items = new { type = "string" },
                             description = "Parameter names to remove for change_signature"
                         },
-                        preview = new { type = "boolean", description = "If true, return changes without applying (default: false)" }
+                        preview = new { type = "boolean", description = "If true, return changes without applying (default: false)" },
+                        validate = new { type = "boolean", description = "If true, run build after refactoring and check for residuals (default: false)" }
                     },
                     required = new[] { "operation" }
                 }
@@ -1732,6 +1733,7 @@ public sealed class McpHandler
         string? containingType = null;
         string? filePath = null;
         var preview = false;
+        var validate = false;
 
         if (args.HasValue)
         {
@@ -1741,6 +1743,8 @@ public sealed class McpHandler
                 filePath = fpEl.GetString();
             if (args.Value.TryGetProperty("preview", out var prevEl))
                 preview = prevEl.GetBoolean();
+            if (args.Value.TryGetProperty("validate", out var valEl))
+                validate = valEl.GetBoolean();
         }
 
         var result = await _refactoringService.RenameSymbolAsync(new RenameSymbolRequest
@@ -1750,7 +1754,8 @@ public sealed class McpHandler
             SolutionPath = solutionPath,
             ContainingType = containingType,
             FilePath = filePath,
-            Preview = preview
+            Preview = preview,
+            Validate = validate
         }, ct);
 
         return new
@@ -1758,7 +1763,13 @@ public sealed class McpHandler
             success = result.Success,
             message = result.Message,
             modifiedFiles = result.ModifiedFiles,
-            preview = result.Preview?.Select(p => new { p.FilePath, p.NewContent })
+            preview = result.Preview?.Select(p => new { p.FilePath, p.NewContent }),
+            validation = result.Validation is null ? null : new
+            {
+                buildSucceeded = result.Validation.BuildSucceeded,
+                buildOutput = result.Validation.BuildOutput,
+                residuals = result.Validation.Residuals
+            }
         };
     }
 

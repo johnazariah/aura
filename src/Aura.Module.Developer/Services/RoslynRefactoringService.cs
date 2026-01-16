@@ -92,17 +92,35 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
             }
 
             // Apply changes to disk
+            var modifiedFiles = new List<string>();
             foreach (var doc in changedDocs)
             {
                 if (doc.FilePath is null) continue;
                 var text = await doc.GetTextAsync(ct);
                 await File.WriteAllTextAsync(doc.FilePath, text.ToString(), ct);
+                modifiedFiles.Add(doc.FilePath);
                 _logger.LogDebug("Updated file: {Path}", doc.FilePath);
             }
 
-            return RefactoringResult.Succeeded(
-                $"Renamed '{request.SymbolName}' to '{request.NewName}' in {changedDocs.Count} files",
-                changedDocs.Select(d => d.FilePath!).ToList());
+            // Clear workspace cache so subsequent operations see the updated files
+            _workspaceService.ClearCache();
+            _logger.LogDebug("Cleared workspace cache after rename");
+
+            // Optionally validate with build and grep for residuals
+            ValidationResult? validation = null;
+            if (request.Validate)
+            {
+                validation = await ValidateRefactoringAsync(
+                    request.SolutionPath, request.SymbolName, ct);
+            }
+
+            return new RefactoringResult
+            {
+                Success = true,
+                Message = $"Renamed '{request.SymbolName}' to '{request.NewName}' in {modifiedFiles.Count} files",
+                ModifiedFiles = modifiedFiles,
+                Validation = validation
+            };
         }
         catch (Exception ex)
         {
@@ -1260,5 +1278,108 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
         if (name.Length == 0) return name;
 
         return char.ToLowerInvariant(name[0]) + name[1..];
+    }
+
+    /// <summary>
+    /// Validates a refactoring by running a build and checking for residuals.
+    /// </summary>
+    private async Task<ValidationResult> ValidateRefactoringAsync(
+        string solutionPath,
+        string? oldSymbolName,
+        CancellationToken ct)
+    {
+        var solutionDir = Path.GetDirectoryName(solutionPath) ?? ".";
+        var buildSucceeded = false;
+        string? buildOutput = null;
+        List<string>? residuals = null;
+
+        try
+        {
+            // Run dotnet build
+            _logger.LogDebug("Running post-refactor build validation for {Solution}", solutionPath);
+
+            var psi = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "dotnet",
+                Arguments = "build --no-restore -v q",
+                WorkingDirectory = solutionDir,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            using var process = System.Diagnostics.Process.Start(psi);
+            if (process is not null)
+            {
+                var stdout = await process.StandardOutput.ReadToEndAsync(ct);
+                var stderr = await process.StandardError.ReadToEndAsync(ct);
+                await process.WaitForExitAsync(ct);
+
+                buildSucceeded = process.ExitCode == 0;
+                buildOutput = string.IsNullOrEmpty(stderr) ? stdout : stderr;
+
+                // Truncate output if too long
+                if (buildOutput.Length > 2000)
+                {
+                    buildOutput = buildOutput[..2000] + "\n... (truncated)";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Build validation failed");
+            buildOutput = $"Build check failed: {ex.Message}";
+        }
+
+        // Check for residuals (grep for old symbol name in source files)
+        if (!string.IsNullOrEmpty(oldSymbolName))
+        {
+            try
+            {
+                residuals = [];
+                var sourceFiles = Directory.GetFiles(solutionDir, "*.cs", SearchOption.AllDirectories)
+                    .Where(f => !f.Contains("bin") && !f.Contains("obj"));
+
+                foreach (var file in sourceFiles)
+                {
+                    var content = await File.ReadAllTextAsync(file, ct);
+                    if (content.Contains(oldSymbolName, StringComparison.Ordinal))
+                    {
+                        // Find line numbers
+                        var lines = content.Split('\n');
+                        for (int i = 0; i < lines.Length; i++)
+                        {
+                            if (lines[i].Contains(oldSymbolName, StringComparison.Ordinal))
+                            {
+                                var relativePath = Path.GetRelativePath(solutionDir, file);
+                                residuals.Add($"{relativePath}:{i + 1}: {lines[i].Trim()}");
+                            }
+                        }
+                    }
+                }
+
+                if (residuals.Count == 0)
+                {
+                    residuals = null;
+                }
+                else
+                {
+                    _logger.LogWarning("Found {Count} residual occurrences of '{Symbol}'",
+                        residuals.Count, oldSymbolName);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Residual check failed");
+            }
+        }
+
+        return new ValidationResult
+        {
+            BuildSucceeded = buildSucceeded,
+            BuildOutput = buildOutput,
+            Residuals = residuals
+        };
     }
 }
