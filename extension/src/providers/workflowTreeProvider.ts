@@ -105,18 +105,6 @@ export class WorkflowTreeProvider implements vscode.TreeDataProvider<WorkflowTre
     private getWorkflowChildren(workflow: Workflow): WorkflowTreeItem[] {
         const items: WorkflowTreeItem[] = [];
 
-        // Add mode indicator
-        if (workflow.mode) {
-            const modeIcon = workflow.mode === 'Conversational' ? 'comment-discussion' : 'list-ordered';
-            const modeItem = new WorkflowTreeItem(
-                `Mode: ${workflow.mode}`,
-                vscode.TreeItemCollapsibleState.None,
-                'info'
-            );
-            modeItem.iconPath = new vscode.ThemeIcon(modeIcon);
-            items.push(modeItem);
-        }
-
         // Add issue link if exists
         if (workflow.issueUrl && workflow.issueNumber) {
             const issueItem = new WorkflowTreeItem(
@@ -239,9 +227,6 @@ export class WorkflowTreeProvider implements vscode.TreeDataProvider<WorkflowTre
             tooltip += `\n${workflow.description}\n`;
         }
         tooltip += `\nStatus: ${workflow.status}`;
-        if (workflow.mode) {
-            tooltip += `\nMode: ${workflow.mode}`;
-        }
         if (workflow.issueUrl) {
             tooltip += `\nIssue: ${workflow.issueUrl}`;
         }

@@ -17,7 +17,6 @@ public interface IWorkflowService
     /// <param name="title">The workflow title.</param>
     /// <param name="description">The workflow description.</param>
     /// <param name="repositoryPath">Optional repository path.</param>
-    /// <param name="mode">Execution mode (Structured or Conversational).</param>
     /// <param name="automationMode">Automation mode (Assisted, Autonomous, FullAutonomous).</param>
     /// <param name="issueUrl">Optional external issue URL to link.</param>
     /// <param name="ct">Cancellation token.</param>
@@ -26,7 +25,6 @@ public interface IWorkflowService
         string title,
         string? description = null,
         string? repositoryPath = null,
-        WorkflowMode mode = WorkflowMode.Structured,
         AutomationMode automationMode = AutomationMode.Assisted,
         string? issueUrl = null,
         CancellationToken ct = default);
@@ -324,9 +322,6 @@ public record GuardianWorkflowRequest
 
     /// <summary>Gets the suggested capability/agent for this workflow.</summary>
     public string? SuggestedCapability { get; init; }
-
-    /// <summary>Gets the execution mode.</summary>
-    public WorkflowMode Mode { get; init; } = WorkflowMode.Structured;
 
     /// <summary>Gets additional context from the guardian check.</summary>
     public string? Context { get; init; }

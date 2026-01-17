@@ -72,13 +72,6 @@ public static class DeveloperEndpoints
 
         try
         {
-            // Parse mode from string
-            var mode = WorkflowMode.Structured;
-            if (!string.IsNullOrEmpty(request.Mode) && Enum.TryParse<WorkflowMode>(request.Mode, true, out var m))
-            {
-                mode = m;
-            }
-
             // Parse automation mode from string
             var automationMode = AutomationMode.Assisted;
             if (!string.IsNullOrEmpty(request.AutomationMode) && Enum.TryParse<AutomationMode>(request.AutomationMode, true, out var am))
@@ -90,7 +83,6 @@ public static class DeveloperEndpoints
                 request.Title,
                 request.Description,
                 request.RepositoryPath,
-                mode,
                 automationMode,
                 request.IssueUrl,
                 ct);
@@ -101,7 +93,6 @@ public static class DeveloperEndpoints
                 title = workflow.Title,
                 description = workflow.Description,
                 status = workflow.Status.ToString(),
-                mode = workflow.Mode.ToString(),
                 automationMode = workflow.AutomationMode.ToString(),
                 gitBranch = workflow.GitBranch,
                 worktreePath = workflow.WorktreePath,
@@ -143,7 +134,6 @@ public static class DeveloperEndpoints
                 title = w.Title,
                 description = w.Description,
                 status = w.Status.ToString(),
-                mode = w.Mode.ToString(),
                 gitBranch = w.GitBranch,
                 repositoryPath = w.RepositoryPath,
                 worktreePath = w.WorktreePath,
@@ -174,7 +164,6 @@ public static class DeveloperEndpoints
             title = workflow.Title,
             description = workflow.Description,
             status = workflow.Status.ToString(),
-            mode = workflow.Mode.ToString(),
             gitBranch = workflow.GitBranch,
             worktreePath = workflow.WorktreePath,
             repositoryPath = workflow.RepositoryPath,
@@ -235,7 +224,6 @@ public static class DeveloperEndpoints
             title = workflow.Title,
             description = workflow.Description,
             status = workflow.Status.ToString(),
-            mode = workflow.Mode.ToString(),
             gitBranch = workflow.GitBranch,
             worktreePath = workflow.WorktreePath,
             repositoryPath = workflow.RepositoryPath,
@@ -810,19 +798,11 @@ public static class DeveloperEndpoints
             // Fetch issue from GitHub
             var issue = await gitHub.GetIssueAsync(parsed.Value.Owner, parsed.Value.Repo, parsed.Value.Number, ct);
 
-            // Parse mode
-            var mode = WorkflowMode.Conversational; // Default to conversational for issue-based stories
-            if (!string.IsNullOrEmpty(request.Mode) && Enum.TryParse<WorkflowMode>(request.Mode, true, out var m))
-            {
-                mode = m;
-            }
-
             // Create workflow/story
             var workflow = await workflowService.CreateAsync(
                 issue.Title,
                 issue.Body,
                 request.RepositoryPath,
-                mode,
                 AutomationMode.Assisted, // Issue-based workflows default to assisted mode
                 request.IssueUrl,
                 ct);
@@ -842,7 +822,6 @@ public static class DeveloperEndpoints
                 title = workflow.Title,
                 description = workflow.Description,
                 status = workflow.Status.ToString(),
-                mode = workflow.Mode.ToString(),
                 gitBranch = workflow.GitBranch,
                 worktreePath = workflow.WorktreePath,
                 repositoryPath = workflow.RepositoryPath,

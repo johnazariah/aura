@@ -164,7 +164,6 @@ export interface Workflow {
     title: string;
     description?: string;
     status: string;
-    mode?: string;
     gitBranch?: string;
     worktreePath?: string;
     repositoryPath?: string;
@@ -884,12 +883,11 @@ export class AuraApiService {
      */
     async createStoryFromIssue(
         issueUrl: string,
-        repositoryPath?: string,
-        mode?: string
+        repositoryPath?: string
     ): Promise<Workflow> {
         const response = await this.httpClient.post(
             `${this.getBaseUrl()}/api/developer/stories/from-issue`,
-            { issueUrl, repositoryPath, mode, createWorktree: true },
+            { issueUrl, repositoryPath, createWorktree: true },
             { timeout: this.getWorkflowTimeout() }
         );
         return response.data;

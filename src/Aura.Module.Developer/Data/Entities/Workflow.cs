@@ -69,10 +69,7 @@ public sealed class Workflow
     /// <summary>Gets or sets the repository name (extracted from URL).</summary>
     public string? IssueRepo { get; set; }
 
-    // === Mode ===
-
-    /// <summary>Gets or sets the execution mode: structured (steps) or conversational.</summary>
-    public WorkflowMode Mode { get; set; } = WorkflowMode.Structured;
+    // === Automation ===
 
     /// <summary>Gets or sets the automation mode for step execution.</summary>
     public AutomationMode AutomationMode { get; set; } = AutomationMode.Assisted;
@@ -107,18 +104,6 @@ public enum IssueProvider
 
     /// <summary>Azure DevOps Work Items.</summary>
     AzureDevOps,
-}
-
-/// <summary>
-/// The execution mode for a workflow/story.
-/// </summary>
-public enum WorkflowMode
-{
-    /// <summary>Plan → Steps → Execute → Review (current behavior).</summary>
-    Structured,
-
-    /// <summary>Free-form conversation in worktree (GHCP Agent mode).</summary>
-    Conversational,
 }
 
 /// <summary>

@@ -60,7 +60,6 @@ public sealed class DeveloperDbContext(DbContextOptions<DeveloperDbContext> opti
             entity.Property(e => e.IssueNumber).HasColumnName("issue_number");
             entity.Property(e => e.IssueOwner).HasColumnName("issue_owner").HasMaxLength(200);
             entity.Property(e => e.IssueRepo).HasColumnName("issue_repo").HasMaxLength(200);
-            entity.Property(e => e.Mode).HasColumnName("mode").HasConversion<string>().HasMaxLength(20);
             entity.Property(e => e.AutomationMode).HasColumnName("automation_mode").HasConversion<string>().HasMaxLength(20);
 
             // Chat

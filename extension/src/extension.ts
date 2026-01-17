@@ -998,20 +998,6 @@ async function createStoryFromIssue(): Promise<void> {
     // Get current workspace path
     const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
 
-    // Ask for mode
-    const modeItems: vscode.QuickPickItem[] = [
-        { label: 'Conversational', description: 'Free-form development with GitHub Copilot (recommended)' },
-        { label: 'Structured', description: 'Plan → Steps → Execute → Review workflow' }
-    ];
-
-    const selectedMode = await vscode.window.showQuickPick(modeItems, {
-        placeHolder: 'Select development mode'
-    });
-
-    if (!selectedMode) {
-        return;
-    }
-
     try {
         await vscode.window.withProgress(
             {
@@ -1022,8 +1008,7 @@ async function createStoryFromIssue(): Promise<void> {
             async () => {
                 const workflow = await auraApiService.createStoryFromIssue(
                     issueUrl,
-                    workspacePath,
-                    selectedMode.label
+                    workspacePath
                 );
 
                 workflowTreeProvider.refresh();

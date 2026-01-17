@@ -61,7 +61,6 @@ public sealed class WorkflowService(
         string title,
         string? description = null,
         string? repositoryPath = null,
-        WorkflowMode mode = WorkflowMode.Structured,
         AutomationMode automationMode = AutomationMode.Assisted,
         string? issueUrl = null,
         CancellationToken ct = default)
@@ -84,7 +83,6 @@ public sealed class WorkflowService(
             Description = description,
             GitBranch = branchName,
             Status = WorkflowStatus.Created,
-            Mode = mode,
             AutomationMode = automationMode,
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow,
@@ -176,7 +174,6 @@ public sealed class WorkflowService(
             request.Title,
             request.Description,
             request.RepositoryPath,
-            request.Mode,
             AutomationMode.Assisted,
             issueUrl: null,
             ct);

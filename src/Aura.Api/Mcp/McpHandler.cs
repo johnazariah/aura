@@ -1675,7 +1675,6 @@ public sealed class McpHandler
                 id = w.Id,
                 title = w.Title,
                 status = w.Status.ToString(),
-                mode = w.Mode.ToString(),
                 gitBranch = w.GitBranch,
                 worktreePath = w.WorktreePath,
                 repositoryPath = w.RepositoryPath,
@@ -1707,7 +1706,6 @@ public sealed class McpHandler
             title = workflow.Title,
             description = workflow.Description,
             status = workflow.Status.ToString(),
-            mode = workflow.Mode.ToString(),
             issueUrl = workflow.IssueUrl,
             issueProvider = workflow.IssueProvider?.ToString(),
             issueNumber = workflow.IssueNumber,
@@ -1755,16 +1753,6 @@ public sealed class McpHandler
             repositoryPath = repoEl.GetString();
         }
 
-        var mode = WorkflowMode.Conversational;
-        if (args.HasValue && args.Value.TryGetProperty("mode", out var modeEl))
-        {
-            var modeStr = modeEl.GetString();
-            if (!string.IsNullOrEmpty(modeStr) && Enum.TryParse<WorkflowMode>(modeStr, true, out var m))
-            {
-                mode = m;
-            }
-        }
-
         try
         {
             // Fetch issue from GitHub
@@ -1775,7 +1763,6 @@ public sealed class McpHandler
                 issue.Title,
                 issue.Body,
                 repositoryPath,
-                mode,
                 AutomationMode.Assisted, // MCP-created workflows default to assisted mode
                 issueUrl,
                 ct);
@@ -1795,7 +1782,6 @@ public sealed class McpHandler
                 title = workflow.Title,
                 description = workflow.Description,
                 status = workflow.Status.ToString(),
-                mode = workflow.Mode.ToString(),
                 gitBranch = workflow.GitBranch,
                 worktreePath = workflow.WorktreePath,
                 issueUrl = workflow.IssueUrl,

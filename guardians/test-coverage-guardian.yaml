@@ -45,7 +45,6 @@ workflow:
 
   suggested_capability: testing
   priority: medium
-  mode: structured
 
   context_gathering:
     - coverage_report

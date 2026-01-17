@@ -39,7 +39,6 @@ workflow:
 
   suggested_capability: build-fixer
   priority: high
-  mode: structured
 
   context_gathering:
     - failure_logs

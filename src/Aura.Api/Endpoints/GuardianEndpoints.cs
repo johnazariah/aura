@@ -68,7 +68,6 @@ public static class GuardianEndpoints
             {
                 Title = guardian.Workflow.Title,
                 Priority = guardian.Workflow.Priority,
-                Mode = guardian.Workflow.Mode,
                 SuggestedCapability = guardian.Workflow.SuggestedCapability,
             } : null,
         });
@@ -187,9 +186,6 @@ public record GuardianWorkflowResponse
 
     /// <summary>Gets the priority.</summary>
     public string Priority { get; init; } = "medium";
-
-    /// <summary>Gets the mode.</summary>
-    public string Mode { get; init; } = "structured";
 
     /// <summary>Gets the suggested capability.</summary>
     public string? SuggestedCapability { get; init; }
