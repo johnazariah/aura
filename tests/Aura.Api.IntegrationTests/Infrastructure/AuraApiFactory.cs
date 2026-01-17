@@ -8,6 +8,8 @@ using Aura.Foundation;
 using Aura.Foundation.Data;
 using Aura.Foundation.Llm;
 using Aura.Module.Developer.Data;
+using DotNet.Testcontainers.Builders;
+using DotNet.Testcontainers.Configurations;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
@@ -20,12 +22,23 @@ using Testcontainers.PostgreSql;
 /// </summary>
 public class AuraApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 {
-    private readonly PostgreSqlContainer _postgresContainer = new PostgreSqlBuilder()
-        .WithImage("pgvector/pgvector:pg16")
-        .WithDatabase("aura_test")
-        .WithUsername("aura_test")
-        .WithPassword("aura_test")
-        .Build();
+    private readonly PostgreSqlContainer _postgresContainer;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="AuraApiFactory"/> class.
+    /// </summary>
+    public AuraApiFactory()
+    {
+        // Configure Testcontainers to use Podman on Windows if Docker is not available
+        ConfigureContainerRuntime();
+
+        _postgresContainer = new PostgreSqlBuilder()
+            .WithImage("pgvector/pgvector:pg16")
+            .WithDatabase("aura_test")
+            .WithUsername("aura_test")
+            .WithPassword("aura_test")
+            .Build();
+    }
 
     /// <summary>
     /// Gets the PostgreSQL connection string for the test container.
@@ -119,5 +132,63 @@ public class AuraApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         {
             services.Remove(descriptor);
         }
+    }
+
+    /// <summary>
+    /// Configures Testcontainers to use the appropriate container runtime.
+    /// On Windows, prefers Podman if Docker is not available.
+    /// </summary>
+    private static void ConfigureContainerRuntime()
+    {
+        // Check if DOCKER_HOST is already set (user override)
+        if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DOCKER_HOST")))
+        {
+            return;
+        }
+
+        // On Windows, check for Podman socket if Docker pipe doesn't exist
+        if (OperatingSystem.IsWindows())
+        {
+            var dockerPipe = @"\\.\pipe\docker_engine";
+            if (!File.Exists(dockerPipe))
+            {
+                // Try to find Podman socket
+                var podmanSocket = GetPodmanSocketPath();
+                if (!string.IsNullOrEmpty(podmanSocket) && File.Exists(podmanSocket))
+                {
+                    // Configure Testcontainers to use Podman
+                    Environment.SetEnvironmentVariable("DOCKER_HOST", $"npipe://{podmanSocket.Replace("\\", "/")}");
+                    Environment.SetEnvironmentVariable("TESTCONTAINERS_RYUK_DISABLED", "true");
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets the Podman machine socket path on Windows.
+    /// </summary>
+    private static string? GetPodmanSocketPath()
+    {
+        // Default Podman machine socket location on Windows
+        var tempPath = Path.GetTempPath();
+        var defaultSocket = Path.Combine(tempPath, "podman", "podman-machine-default-api.sock");
+
+        if (File.Exists(defaultSocket))
+        {
+            return defaultSocket;
+        }
+
+        // Try the podman directory without machine name
+        var podmanDir = Path.Combine(tempPath, "podman");
+        if (Directory.Exists(podmanDir))
+        {
+            var sockets = Directory.GetFiles(podmanDir, "*.sock");
+            if (sockets.Length > 0)
+            {
+                return sockets[0];
+            }
+        }
+
+        return null;
     }
 }
