@@ -1044,19 +1044,27 @@ public sealed class McpHandler
 
     private static string GetPatternsDirectory()
     {
-        // Look for patterns/ relative to the prompts/ folder or the assembly location
-        var assemblyDir = Path.GetDirectoryName(typeof(McpHandler).Assembly.Location) ?? ".";
-
-        // Try common locations
-        var candidates = new[]
+        // Try relative to the base directory of the executing assembly
+        var basePath = AppContext.BaseDirectory;
+        var absolutePath = Path.Combine(basePath, "patterns");
+        if (Directory.Exists(absolutePath))
         {
-            Path.Combine(assemblyDir, "..", "..", "..", "..", "patterns"),      // Dev: running from bin/Debug
-            Path.Combine(assemblyDir, "patterns"),                               // Published: alongside DLL
-            Path.Combine(Directory.GetCurrentDirectory(), "patterns"),           // CWD
-        };
+            return absolutePath;
+        }
 
-        return candidates.FirstOrDefault(Directory.Exists)
-            ?? Path.Combine(assemblyDir, "patterns");
+        // Try one level up from base directory (installed layout: api\ is sibling to patterns\)
+        var parentPath = Path.GetDirectoryName(basePath.TrimEnd(Path.DirectorySeparatorChar));
+        if (!string.IsNullOrEmpty(parentPath))
+        {
+            var siblingPath = Path.Combine(parentPath, "patterns");
+            if (Directory.Exists(siblingPath))
+            {
+                return siblingPath;
+            }
+        }
+
+        // Default fallback - will fail gracefully with "not found" message
+        return Path.Combine(basePath, "patterns");
     }
 
     // =========================================================================

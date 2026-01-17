@@ -61,6 +61,7 @@ if (-not (Test-Path $InstallPath)) {
 
 $apiPath = Join-Path $InstallPath "api"
 $agentsPath = Join-Path $InstallPath "agents"
+$patternsPath = Join-Path $InstallPath "patterns"
 $extensionPath = Join-Path $InstallPath "extension"
 
 if (-not (Test-Path $apiPath)) {
@@ -170,6 +171,23 @@ try {
         Write-Step "Agents updated"
     } else {
         Write-Skip "Agents"
+    }
+
+    # =============================================================================
+    # Deploy Patterns (operational playbooks)
+    # =============================================================================
+    if (-not $SkipAgents) {
+        Write-Header "Deploying Patterns"
+        
+        # Copy patterns directory
+        if (Test-Path $patternsPath) {
+            Remove-Item $patternsPath -Recurse -Force
+        }
+        Copy-Item -Path "patterns" -Destination $patternsPath -Recurse
+        
+        Write-Step "Patterns updated"
+    } else {
+        Write-Skip "Patterns"
     }
 
     # =============================================================================

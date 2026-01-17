@@ -62,6 +62,10 @@ try {
     Write-Host "`nCopying prompts..." -ForegroundColor Green
     Copy-Item -Path "prompts" -Destination "$OutputDir/win-x64/prompts" -Recurse
 
+    # Copy patterns
+    Write-Host "`nCopying patterns..." -ForegroundColor Green
+    Copy-Item -Path "patterns" -Destination "$OutputDir/win-x64/patterns" -Recurse
+
     # Build VS Code extension
     Write-Host "`nBuilding VS Code Extension..." -ForegroundColor Green
     Push-Location extension

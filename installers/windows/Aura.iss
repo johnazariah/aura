@@ -49,6 +49,8 @@ Source: "..\..\publish\win-x64\tray\*"; DestDir: "{app}\tray"; Flags: ignorevers
 Source: "..\..\publish\win-x64\agents\*"; DestDir: "{app}\agents"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; Prompts
 Source: "..\..\publish\win-x64\prompts\*"; DestDir: "{app}\prompts"; Flags: ignoreversion recursesubdirs createallsubdirs
+; Patterns
+Source: "..\..\publish\win-x64\patterns\*"; DestDir: "{app}\patterns"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; VS Code Extension
 Source: "..\..\publish\win-x64\extension\*.vsix"; DestDir: "{app}\extension"; Flags: ignoreversion
 ; Scripts
