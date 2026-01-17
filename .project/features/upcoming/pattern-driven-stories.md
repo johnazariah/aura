@@ -341,6 +341,143 @@ For large refactors requiring approval (tech lead review, team awareness, compli
 
 5. **Partial rollback**: Can user undo specific steps, or only full rollback?
 
+## Architectural Decisions
+
+### Remove WorkflowMode Enum
+
+The current `WorkflowMode` (Conversational vs Structured) is an artificial dichotomy. In practice, users need both:
+
+- Conversation for discussion, clarification, complex decisions
+- Structure for visibility, progress tracking, execution
+
+**Decision:** Remove `WorkflowMode` entirely. A story always has:
+- `conversation: ChatMessage[]` — the chat history
+- `steps: Step[]` — may be empty, may be populated, may grow
+
+If steps exist, show them. Chat is always available. The UI presents both views.
+
+**Blast Radius:**
+- `Workflow.cs` — Remove `Mode` property and `WorkflowMode` enum
+- `IWorkflowService.cs` / `WorkflowService.cs` — Remove `mode` parameter
+- `DeveloperEndpoints.cs` / `McpHandler.cs` — Remove mode handling
+- `workflowTreeProvider.ts` — Remove mode-based icon logic
+- Database — Leave column nullable or drop via migration
+
+### Decoupled Architecture
+
+Analysis tools (`aura_refactor`, `aura_inspect`) remain pure — they analyze and return structured data. They do not know about stories.
+
+The agent orchestrates:
+1. Runs analysis using appropriate tool
+2. Presents items to user
+3. User modifies plan
+4. Agent decides if story mode is warranted
+5. Agent calls `aura_workflow` to enrich the current story with steps
+
+```
+┌─────────────────────┐     ┌─────────────────────┐     ┌─────────────────────┐
+│   aura_refactor     │     │      Agent          │     │   aura_workflow     │
+│   aura_inspect      │────▶│   (orchestrator)    │────▶│   (enrich story)    │
+│   (pure analysis)   │     │                     │     │                     │
+└─────────────────────┘     └─────────────────────┘     └─────────────────────┘
+```
+
+### Enrich, Don't Spawn
+
+When a pattern runs inside an existing story context:
+- Do NOT create a new story
+- ENRICH the current story with structured steps from analysis
+
+The story goes from "Rename Workflow → Story" (title only) to "Rename Workflow → Story" (title + 15 structured steps).
+
+**New `aura_workflow` operation:** `enrich`
+```
+aura_workflow(
+  operation: "enrich",
+  storyId: "...",
+  steps: [
+    { type: "symbol-rename", from: "Workflow", to: "Story", refs: 14 },
+    { type: "symbol-rename", from: "IWorkflow", to: "IStory", refs: 8 },
+    ...
+  ]
+)
+```
+
+### Chat-Driven Execution
+
+Users can execute steps from chat, with progress reflected in the panel:
+
+1. Agent calls `aura_workflow(get, storyId)` to see current steps
+2. "Execute next step" → agent runs it
+3. Agent calls `aura_workflow(update_step, storyId, stepId, status: "completed")`
+4. Panel reflects the change in real-time
+
+Both panel-driven and chat-driven execution use the same underlying step model.
+
+### Step Model: No Schema Changes
+
+The existing `WorkflowStep` entity is sufficient. Steps are modeled as commands:
+
+| Field | Usage |
+|-------|-------|
+| `Name` | Step title (e.g., "Rename Workflow → Story") |
+| `Capability` | The MCP tool to invoke (e.g., "aura_refactor") |
+| `Input` | JSON arguments for the tool |
+| `Description` | Phase prefix for grouping (e.g., "[Core Types] Rename...") |
+| `Status` | Pending/Running/Completed/Failed/Skipped |
+| `SkipReason` | "Disabled by user" when user disables a step |
+
+**Phase grouping:** Use Description with prefix pattern `[Phase Name] Step title`. UI parses prefix for grouping.
+
+**Enable/disable:** Set `Status = Skipped` with `SkipReason = "Disabled by user"`. No new fields needed.
+
+**Example steps from pattern analysis:**
+
+```json
+[
+  {
+    "name": "Rename Workflow → Story",
+    "capability": "aura_refactor",
+    "description": "[Core Types] Rename Workflow → Story (14 refs, 3 files)",
+    "input": {
+      "operation": "rename",
+      "symbolName": "Workflow",
+      "newName": "Story",
+      "solutionPath": "c:\\work\\aura\\Aura.sln"
+    }
+  },
+  {
+    "name": "Rename IWorkflow → IStory",
+    "capability": "aura_refactor",
+    "description": "[Core Types] Rename IWorkflow → IStory (8 refs, 2 files)",
+    "input": {
+      "operation": "rename",
+      "symbolName": "IWorkflow",
+      "newName": "IStory",
+      "solutionPath": "c:\\work\\aura\\Aura.sln"
+    }
+  },
+  {
+    "name": "Add database migration",
+    "capability": "manual",
+    "description": "[Database] Add migration for table rename",
+    "input": {
+      "instructions": "Run: dotnet ef migrations add RenameWorkflowToStory"
+    }
+  },
+  {
+    "name": "Build verification",
+    "capability": "shell",
+    "description": "[Verification] Build solution",
+    "input": {
+      "command": "dotnet build"
+    }
+  }
+]
+```
+
+For `capability: "manual"`, the agent pauses and waits for user confirmation rather than invoking a tool.
+
 ## Related
 
 - [Operational Patterns](../completed/operational-patterns.md) — original patterns implementation
