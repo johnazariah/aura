@@ -70,6 +70,12 @@ features/
 
 ## Upcoming Features
 
+### High Priority
+
+| Feature | Description |
+|---------|-------------|
+| [Pattern-Driven Stories](upcoming/pattern-driven-stories.md) | Patterns generate user-modifiable stories with discrete items |
+
 ### Medium Priority (User Experience)
 
 | Feature | Description |
