@@ -1,93 +1,132 @@
 ## Aura MCP Tools
 
-This workspace has Aura MCP tools available. **Prefer these over file-based exploration:**
+**Prefer these semantic tools over file-based exploration:**
 
-| Tool | Purpose | Example |
-|------|---------|---------|
-| `aura_search` | Semantic code search | `aura_search(query: "authentication", workspacePath: "/path/to/workspace")` |
-| `aura_navigate` | Find code relationships | `aura_navigate(operation: "callers", symbolName: "UserService.GetAsync")` |
-| `aura_inspect` | Explore type structure | `aura_inspect(operation: "type_members", typeName: "UserService")` |
-| `aura_validate` | Check compilation/tests | `aura_validate(operation: "compilation", solutionPath: "...")` |
-| `aura_refactor` | Transform code | `aura_refactor(operation: "rename", filePath: "...", oldName: "x", newName: "y")` |
-| `aura_generate` | Generate code | `aura_generate(operation: "implement_interface", ...)` |
-| `aura_workflow` | Manage dev workflows | `aura_workflow(operation: "list")` |
+| Tool | Purpose |
+|------|---------|
+| `aura_search` | Semantic code search |
+| `aura_navigate` | Find callers, implementations, usages |
+| `aura_inspect` | Explore type members and structure |
+| `aura_validate` | Check compilation or run tests |
+| `aura_refactor` | Rename, extract, change signatures |
+| `aura_generate` | Create types, generate tests, implement interfaces |
+| `aura_workflow` | Manage dev workflows |
+| `aura_pattern` | Load step-by-step operational patterns |
 
-### ⚠️ CRITICAL: Worktree Isolation
+### ⚠️ Workspace Path Resolution
 
-**If you are working in a git worktree (a folder like `aura-workflow-*` or similar):**
+**Before calling ANY `aura_*` tool:**
 
-1. **NEVER navigate or write to the parent/main repository** - Stay within the worktree folder
-2. **All file operations must use paths within the current workspace** - The worktree IS your workspace
-3. **Do not use `..` or absolute paths that escape the worktree** - This will clobber changes in the main repo
-4. **The worktree has its own branch** - Changes here are isolated from main
+1. Check `<workspace_info>` for the actual workspace folders
+2. Use ONLY paths from `<workspace_info>` — never from conversation history
+3. Always use absolute paths anchored to the workspace root
 
-Example - if your workspace is `c:\work\aura-workflow-add-feature-123`:
-- ✅ GOOD: `c:\work\aura-workflow-add-feature-123\src\Aura.Api\Program.cs`
-- ❌ BAD: `c:\work\aura\src\Aura.Api\Program.cs` (this is the MAIN REPO, not your worktree!)
+**Mistakes to avoid:**
+- ❌ Using paths from conversation history or error messages
+- ❌ Using worktree paths when in main repo (or vice versa)
+- ✅ Always check `<workspace_info>` fresh for each tool call
 
-**Important:** When in a worktree, pass the current workspace path to `aura_search`. It will automatically
-resolve to the base repository's index (worktrees share the same indexed codebase).
+### Worktree Isolation
 
-### Operation Quick Reference
+When in a git worktree:
+- Stay within the worktree folder — never escape to parent/main repository
+- The worktree IS your workspace; all paths must be within it
+- `aura_search` automatically resolves to the shared index
 
-**aura_navigate operations:**
-- `callers` - Find all callers of a method
-- `implementations` - Find types implementing an interface
-- `derived_types` - Find subclasses of a type
-- `usages` - Find all usages of a symbol
-- `references` - Find references (Python)
-- `definition` - Go to definition (Python)
-- `by_attribute` - Find symbols with attribute (e.g., `[HttpGet]`)
-- `extension_methods` - Find extension methods for a type
+---
 
-**aura_inspect operations:**
-- `type_members` - Get all members of a type
-- `list_types` - List types in a project/namespace
+## Operations Reference
 
-**aura_refactor operations:**
-- `rename` - Rename a symbol
-- `extract_method` - Extract code to new method
-- `extract_variable` - Extract expression to variable
-- `extract_interface` - Create interface from class
-- `change_signature` - Add/remove parameters
-- `safe_delete` - Delete with usage check
+**aura_navigate:**
+`callers`, `implementations`, `derived_types`, `usages`, `references`, `definition`, `by_attribute`, `extension_methods`
 
-**aura_generate operations:**
-- `implement_interface` - Implement interface members
-- `constructor` - Generate constructor
-- `property` - Add property
-- `method` - Add method
+**aura_inspect:**
+`type_members`, `list_types`
 
-**aura_validate operations:**
-- `compilation` - Check if code compiles
-- `tests` - Run unit tests
+**aura_refactor:**
+`rename`, `extract_method`, `extract_variable`, `extract_interface`, `change_signature`, `safe_delete`, `move_type_to_file`
+
+**aura_generate:**
+`create_type`, `tests`, `implement_interface`, `constructor`, `property`, `method`
+
+**aura_validate:**
+`compilation`, `tests`
 
 Use `aura_search` first to understand the codebase, then `aura_navigate`/`aura_inspect` for specifics.
 
-### Blast Radius Protocol (Renames, Extract, Large Changes)
+---
 
-`aura_refactor` defaults to **analyze mode** (`analyze: true`). Before executing any refactoring:
+## Operational Patterns
 
-1. **Always analyze first** - Call the operation without `analyze: false` to see the blast radius
-2. **Review related symbols** - The response shows symbols discovered by naming convention
-3. **Review the suggested plan** - A sequence of ordered operations to execute
-4. **Present to user** - Show the blast radius (files, references, related symbols)
-5. **Wait for confirmation** - Do NOT proceed without explicit user approval
-6. **Execute with `analyze: false`** - Only after user confirms, run each step in order
-7. **Build after each step** - Run `dotnet build` after each operation
-8. **Sweep for residuals** - Use `grep_search` to find any missed occurrences
+For complex multi-step operations, call `aura_pattern(operation: "list")` to discover available patterns, then load the relevant one:
 
-Example workflow:
 ```
-# Step 1: Analyze (default)
-aura_refactor(operation: "rename", symbolName: "Workflow", newName: "Story", ...)
-# Returns: blastRadius with relatedSymbols, suggestedPlan, awaitsConfirmation: true
-
-# Step 2: Present to user and get confirmation
-"I found 64 references across 12 files. Related symbols: WorkflowService, IWorkflowRepository..."
-
-# Step 3: Execute after confirmation
-aura_refactor(operation: "rename", symbolName: "Workflow", newName: "Story", analyze: false, ...)
+aura_pattern(operation: "list")                              # Discover available patterns
+aura_pattern(operation: "get", name: "comprehensive-rename") # Load specific pattern
 ```
 
-**Never assume a refactor tool caught everything.** Roslyn workspace may be stale or incomplete.
+Patterns are step-by-step procedures using existing primitives. When you encounter a complex operation (renaming domain concepts, generating comprehensive tests, etc.), check for an applicable pattern and follow it exactly.
+
+---
+
+## Refactoring
+
+`aura_refactor` defaults to **analyze mode** (`analyze: true`), returning blast radius and suggested plan before making changes.
+
+**For rename operations:** Load the `comprehensive-rename` pattern — it handles cascading renames, file renames, and residual sweeps.
+
+**For other operations** (`extract_method`, `extract_variable`, `change_signature`, `safe_delete`):
+1. Call with `analyze: true` to preview changes
+2. Get user confirmation
+3. Execute with `analyze: false`
+4. Build to verify
+
+**Disambiguation** (when multiple symbols match):
+- `filePath` — for types
+- `containingType` — for members
+
+---
+
+## Creating New Types
+
+Use `aura_generate(operation: "create_type")` instead of manual file creation:
+
+```
+aura_generate(
+  operation: "create_type",
+  typeName: "InvoiceRepository",
+  typeKind: "class",
+  targetDirectory: "/path/to/project/Repositories",
+  implements: ["IInvoiceRepository"]
+)
+```
+
+Benefits: correct namespace inference, proper formatting, standard structure.
+
+---
+
+## Test Generation
+
+Use `aura_generate(operation: "tests")` for comprehensive test generation:
+
+```
+aura_generate(
+  operation: "tests",
+  target: "OrderService"           # Class or method (Class.Method)
+)
+```
+
+| Parameter | Description |
+|-----------|-------------|
+| `target` | Class, method, or namespace (required) |
+| `count` | Explicit count (omit for comprehensive) |
+| `focus` | `all`, `happy_path`, `edge_cases`, `error_handling` |
+| `analyzeOnly` | Return analysis only, no generation |
+
+---
+
+## General Guidelines
+
+- Explain each step before executing
+- Wait for confirmation on destructive operations
+- Build/validate after significant changes
