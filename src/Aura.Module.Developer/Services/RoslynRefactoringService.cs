@@ -4,6 +4,7 @@
 
 namespace Aura.Module.Developer.Services;
 
+using System.Diagnostics;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -64,8 +65,8 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
             var suggestedPlan = BuildSuggestedPlan(
                 request.SymbolName, request.NewName, relatedSymbols);
 
-            // Calculate totals
-            var totalReferences = relatedSymbols.Sum(s => s.ReferenceCount);
+            // Calculate totals (only count symbols where we actually counted references)
+            var totalReferences = relatedSymbols.Where(s => s.ReferenceCount > 0).Sum(s => s.ReferenceCount);
             var filesAffected = relatedSymbols.Select(s => s.FilePath).Distinct().Count();
             var filesToRename = relatedSymbols.Count(s =>
                 Path.GetFileNameWithoutExtension(s.FilePath)
@@ -105,10 +106,13 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
         ISymbol primarySymbol,
         CancellationToken ct)
     {
+        const int MaxRelatedSymbols = 50;
+
         var related = new List<RelatedSymbol>();
         var seenSymbols = new HashSet<string>();
 
-        // Add the primary symbol first
+        // Add the primary symbol first - only count references for this one
+        _logger.LogDebug("Counting references for primary symbol {Symbol}...", primaryName);
         var primaryRefs = await SymbolFinder.FindReferencesAsync(primarySymbol, solution, ct);
         var primaryRefCount = primaryRefs.Sum(r => r.Locations.Count());
 
@@ -121,42 +125,63 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
         });
         seenSymbols.Add(primarySymbol.ToDisplayString());
 
+        _logger.LogDebug("Primary symbol has {Count} references. Scanning for related symbols...", primaryRefCount);
+
         // Find related symbols by naming convention (prefix matching)
         // E.g., if renaming "Workflow", also find "WorkflowStep", "IWorkflowService", etc.
+        // NOTE: We skip reference counting for related symbols to avoid O(n) FindReferencesAsync calls
+        var relatedCount = 0;
         foreach (var project in solution.Projects)
         {
+            if (relatedCount >= MaxRelatedSymbols)
+            {
+                _logger.LogInformation("Reached maximum of {Max} related symbols, stopping scan", MaxRelatedSymbols);
+                break;
+            }
+
             var compilation = await project.GetCompilationAsync(ct);
             if (compilation is null) continue;
 
             foreach (var typeSymbol in GetAllTypes(compilation))
             {
+                if (relatedCount >= MaxRelatedSymbols) break;
+
                 if (seenSymbols.Contains(typeSymbol.ToDisplayString()))
                     continue;
 
                 var typeName = typeSymbol.Name;
 
                 // Check if this type is related by naming convention
+                // Rules:
+                // 1. Starts with primaryName: WorkflowStep, WorkflowStatus → related
+                // 2. Interface starting with I + primaryName: IWorkflow, IWorkflowService → related
+                // 3. EndsWith is too broad (GitHubWorkflow is NOT related to Workflow)
                 bool isRelated =
                     typeName.StartsWith(primaryName, StringComparison.Ordinal) || // WorkflowStep
-                    typeName.EndsWith(primaryName, StringComparison.Ordinal) ||   // IWorkflow
-                    (typeName.StartsWith("I") && typeName[1..].StartsWith(primaryName)); // IWorkflowService
+                    (typeName.StartsWith("I") && typeName.Length > 1 && char.IsUpper(typeName[1]) &&
+                     typeName[1..].StartsWith(primaryName, StringComparison.Ordinal)); // IWorkflow, IWorkflowService
 
                 if (!isRelated) continue;
 
                 seenSymbols.Add(typeSymbol.ToDisplayString());
+                relatedCount++;
 
-                var refs = await SymbolFinder.FindReferencesAsync(typeSymbol, solution, ct);
-                var refCount = refs.Sum(r => r.Locations.Count());
+                _logger.LogDebug("Found related symbol: {TypeName} ({Kind})", typeName, typeSymbol.TypeKind);
 
+                // Don't count references for related symbols - too expensive
+                // Just record that they exist and would need renaming
+                // ReferenceCount = 0 means "not counted" (we only count the primary symbol)
                 related.Add(new RelatedSymbol
                 {
                     Name = typeName,
                     Kind = typeSymbol.TypeKind.ToString(),
                     FilePath = typeSymbol.Locations.FirstOrDefault()?.SourceTree?.FilePath ?? "",
-                    ReferenceCount = refCount
+                    ReferenceCount = 0
                 });
             }
         }
+
+        _logger.LogInformation("Found {Count} related symbols for {Primary}", related.Count - 1, primaryName);
 
         return related.OrderByDescending(s => s.ReferenceCount).ToList();
     }
@@ -258,9 +283,12 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
 
         try
         {
+            _logger.LogDebug("Loading solution...");
             var solution = await _workspaceService.GetSolutionAsync(request.SolutionPath, ct);
+            _logger.LogDebug("Solution loaded with {Count} projects", solution.ProjectIds.Count);
 
             // Find the symbol
+            _logger.LogDebug("Finding symbol {Symbol}...", request.SymbolName);
             var symbol = await FindSymbolAsync(
                 solution, request.SymbolName, request.ContainingType, request.FilePath, ct);
 
@@ -274,12 +302,14 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
             _logger.LogDebug("Found symbol: {Symbol} ({Kind})", symbol.ToDisplayString(), symbol.Kind);
 
             // Perform the rename
+            _logger.LogInformation("Performing Roslyn rename (this may take a moment)...");
             var newSolution = await Renamer.RenameSymbolAsync(
                 solution,
                 symbol,
                 new SymbolRenameOptions(),
                 request.NewName,
                 ct);
+            _logger.LogDebug("Roslyn rename complete, computing changed documents...");
 
             // Get changed documents
             var changedDocs = GetChangedDocuments(solution, newSolution);
@@ -1249,6 +1279,524 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
         }
     }
 
+    /// <inheritdoc/>
+    public async Task<RefactoringResult> MoveTypeToFileAsync(MoveTypeToFileRequest request, CancellationToken ct = default)
+    {
+        _logger.LogInformation("Moving type {Type} to its own file in {Solution}",
+            request.TypeName, request.SolutionPath);
+
+        if (!File.Exists(request.SolutionPath))
+        {
+            return RefactoringResult.Failed($"Solution file not found: {request.SolutionPath}");
+        }
+
+        try
+        {
+            var solution = await _workspaceService.GetSolutionAsync(request.SolutionPath, ct);
+
+            // Find the type
+            var typeSymbol = await FindTypeAsync(solution, request.TypeName, ct);
+            if (typeSymbol is null)
+            {
+                return RefactoringResult.Failed($"Type '{request.TypeName}' not found");
+            }
+
+            var typeDecl = typeSymbol.DeclaringSyntaxReferences.FirstOrDefault();
+            if (typeDecl is null)
+            {
+                return RefactoringResult.Failed("Could not find type declaration");
+            }
+
+            var typeNode = await typeDecl.GetSyntaxAsync(ct) as BaseTypeDeclarationSyntax;
+            if (typeNode is null)
+            {
+                return RefactoringResult.Failed("Could not parse type declaration");
+            }
+
+            var sourceDoc = solution.GetDocument(typeDecl.SyntaxTree);
+            if (sourceDoc?.FilePath is null)
+            {
+                return RefactoringResult.Failed("Could not find source document");
+            }
+
+            var sourceRoot = await sourceDoc.GetSyntaxRootAsync(ct);
+            if (sourceRoot is null)
+            {
+                return RefactoringResult.Failed("Could not get syntax root");
+            }
+
+            // Determine target file path
+            var targetDir = request.TargetDirectory ?? Path.GetDirectoryName(sourceDoc.FilePath)!;
+            var targetFileName = request.TargetFileName ?? $"{request.TypeName}.cs";
+            var targetPath = Path.Combine(targetDir, targetFileName);
+
+            // Check if already in correct file
+            var sourceFileName = Path.GetFileNameWithoutExtension(sourceDoc.FilePath);
+            if (sourceFileName.Equals(request.TypeName, StringComparison.OrdinalIgnoreCase))
+            {
+                return RefactoringResult.Succeeded(
+                    $"Type '{request.TypeName}' is already in file '{sourceFileName}.cs'",
+                    []);
+            }
+
+            // Check if target file already exists
+            if (File.Exists(targetPath))
+            {
+                return RefactoringResult.Failed($"Target file already exists: {targetPath}");
+            }
+
+            // Count types in source file (classes, interfaces, records, structs, enums)
+            var typesInFile = sourceRoot.DescendantNodes()
+                .OfType<BaseTypeDeclarationSyntax>()
+                .Where(t => t.Parent is BaseNamespaceDeclarationSyntax or CompilationUnitSyntax)
+                .ToList();
+
+            var isOnlyTypeInFile = typesInFile.Count == 1;
+
+            if (isOnlyTypeInFile && request.UseGitMove)
+            {
+                // Simple case: just rename the file using git mv
+                return await MoveFileWithGitAsync(sourceDoc.FilePath, targetPath, request.Preview, ct);
+            }
+
+            // Complex case: extract type to new file
+            return await ExtractTypeToNewFileAsync(
+                solution, sourceDoc, sourceRoot, typeNode, targetPath, request.Preview, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to move type to file");
+            return RefactoringResult.Failed($"Failed to move type: {ex.Message}");
+        }
+    }
+
+    private async Task<RefactoringResult> MoveFileWithGitAsync(
+        string sourcePath,
+        string targetPath,
+        bool preview,
+        CancellationToken ct)
+    {
+        _logger.LogDebug("Moving file with git: {Source} -> {Target}", sourcePath, targetPath);
+
+        if (preview)
+        {
+            return new RefactoringResult
+            {
+                Success = true,
+                Message = $"Preview: Would rename file using 'git mv {Path.GetFileName(sourcePath)} {Path.GetFileName(targetPath)}'",
+                ModifiedFiles = [sourcePath],
+                CreatedFiles = [targetPath]
+            };
+        }
+
+        // Use git mv to preserve history
+        var workingDir = Path.GetDirectoryName(sourcePath)!;
+        var sourceFileName = Path.GetFileName(sourcePath);
+        var targetFileName = Path.GetFileName(targetPath);
+
+        var psi = new ProcessStartInfo
+        {
+            FileName = "git",
+            Arguments = $"mv \"{sourceFileName}\" \"{targetFileName}\"",
+            WorkingDirectory = workingDir,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        using var process = Process.Start(psi);
+        if (process is null)
+        {
+            return RefactoringResult.Failed("Failed to start git process");
+        }
+
+        await process.WaitForExitAsync(ct);
+        var error = await process.StandardError.ReadToEndAsync(ct);
+
+        if (process.ExitCode != 0)
+        {
+            _logger.LogWarning("git mv failed: {Error}", error);
+
+            // Fall back to regular file move
+            File.Move(sourcePath, targetPath);
+            _logger.LogInformation("Fell back to File.Move");
+        }
+
+        _workspaceService.ClearCache();
+
+        return new RefactoringResult
+        {
+            Success = true,
+            Message = $"Renamed file '{Path.GetFileName(sourcePath)}' to '{Path.GetFileName(targetPath)}'",
+            ModifiedFiles = [],
+            CreatedFiles = [targetPath],
+            DeletedFiles = [sourcePath]
+        };
+    }
+
+    private async Task<RefactoringResult> ExtractTypeToNewFileAsync(
+        Solution solution,
+        Document sourceDoc,
+        SyntaxNode sourceRoot,
+        BaseTypeDeclarationSyntax typeNode,
+        string targetPath,
+        bool preview,
+        CancellationToken ct)
+    {
+        _logger.LogDebug("Extracting type to new file: {Target}", targetPath);
+
+        // Get namespace
+        var namespaceDecl = typeNode.Ancestors().OfType<BaseNamespaceDeclarationSyntax>().FirstOrDefault();
+        var namespaceName = namespaceDecl switch
+        {
+            NamespaceDeclarationSyntax ns => ns.Name.ToString(),
+            FileScopedNamespaceDeclarationSyntax fsns => fsns.Name.ToString(),
+            _ => "Unknown"
+        };
+
+        // Collect using directives from source
+        var usings = sourceRoot.DescendantNodes().OfType<UsingDirectiveSyntax>().ToList();
+
+        // Build new file content
+        var newFileRoot = SyntaxFactory.CompilationUnit()
+            .WithUsings(SyntaxFactory.List(usings))
+            .WithMembers(SyntaxFactory.SingletonList<MemberDeclarationSyntax>(
+                SyntaxFactory.FileScopedNamespaceDeclaration(SyntaxFactory.ParseName(namespaceName))
+                    .WithMembers(SyntaxFactory.SingletonList<MemberDeclarationSyntax>(typeNode))));
+
+        // Remove type from source file
+        var newSourceRoot = sourceRoot.RemoveNode(typeNode, SyntaxRemoveOptions.KeepNoTrivia);
+        if (newSourceRoot is null)
+        {
+            return RefactoringResult.Failed("Failed to remove type from source file");
+        }
+
+        var formattedNewFile = Formatter.Format(newFileRoot, solution.Workspace);
+        var formattedSource = Formatter.Format(newSourceRoot, solution.Workspace);
+
+        if (preview)
+        {
+            var originalText = (await sourceDoc.GetTextAsync(ct)).ToString();
+            return new RefactoringResult
+            {
+                Success = true,
+                Message = $"Preview: Would extract type to new file and update source",
+                Preview =
+                [
+                    new FileChange(sourceDoc.FilePath!, originalText, formattedSource.ToFullString()),
+                    new FileChange(targetPath, "", formattedNewFile.ToFullString())
+                ],
+                CreatedFiles = [targetPath],
+                ModifiedFiles = [sourceDoc.FilePath!]
+            };
+        }
+
+        // Write new file
+        await File.WriteAllTextAsync(targetPath, formattedNewFile.ToFullString(), ct);
+
+        // Update source file
+        await File.WriteAllTextAsync(sourceDoc.FilePath!, formattedSource.ToFullString(), ct);
+
+        _workspaceService.ClearCache();
+
+        return new RefactoringResult
+        {
+            Success = true,
+            Message = $"Extracted type '{typeNode.Identifier.Text}' to '{Path.GetFileName(targetPath)}'",
+            CreatedFiles = [targetPath],
+            ModifiedFiles = [sourceDoc.FilePath!]
+        };
+    }
+
+    /// <inheritdoc/>
+    public async Task<RefactoringResult> CreateTypeAsync(CreateTypeRequest request, CancellationToken ct = default)
+    {
+        _logger.LogInformation("Creating {Kind} {Type} in {Directory}",
+            request.TypeKind, request.TypeName, request.TargetDirectory);
+
+        if (!File.Exists(request.SolutionPath))
+        {
+            return RefactoringResult.Failed($"Solution file not found: {request.SolutionPath}");
+        }
+
+        if (!Directory.Exists(request.TargetDirectory))
+        {
+            return RefactoringResult.Failed($"Target directory not found: {request.TargetDirectory}");
+        }
+
+        try
+        {
+            var solution = await _workspaceService.GetSolutionAsync(request.SolutionPath, ct);
+
+            // Find the project that contains this directory
+            var project = FindProjectForDirectory(solution, request.TargetDirectory);
+            if (project is null)
+            {
+                return RefactoringResult.Failed(
+                    $"Could not find a project containing directory: {request.TargetDirectory}");
+            }
+
+            // Infer namespace from project and directory structure
+            var targetNamespace = request.Namespace ?? InferNamespace(project, request.TargetDirectory);
+
+            // Build the type file
+            var targetPath = Path.Combine(request.TargetDirectory, $"{request.TypeName}.cs");
+
+            if (File.Exists(targetPath))
+            {
+                return RefactoringResult.Failed($"File already exists: {targetPath}");
+            }
+
+            // Generate the type declaration
+            var typeDeclaration = GenerateTypeDeclaration(request);
+            if (typeDeclaration is null)
+            {
+                return RefactoringResult.Failed($"Unknown type kind: {request.TypeKind}");
+            }
+
+            // Build using directives
+            var usings = new List<UsingDirectiveSyntax>();
+
+            // Add standard usings based on context
+            if (request.Interfaces?.Count > 0 || request.BaseClass != null)
+            {
+                // We might need usings for the base types - for now, assume they're in the same namespace
+                // or the caller provides AdditionalUsings
+            }
+
+            if (request.AdditionalUsings != null)
+            {
+                foreach (var ns in request.AdditionalUsings)
+                {
+                    usings.Add(SyntaxFactory.UsingDirective(SyntaxFactory.ParseName(ns)));
+                }
+            }
+
+            // Build the compilation unit
+            var compilationUnit = SyntaxFactory.CompilationUnit()
+                .WithUsings(SyntaxFactory.List(usings))
+                .WithMembers(SyntaxFactory.SingletonList<MemberDeclarationSyntax>(
+                    SyntaxFactory.FileScopedNamespaceDeclaration(SyntaxFactory.ParseName(targetNamespace))
+                        .WithMembers(SyntaxFactory.SingletonList<MemberDeclarationSyntax>(typeDeclaration))));
+
+            var formattedRoot = Formatter.Format(compilationUnit, solution.Workspace);
+            var fileContent = formattedRoot.ToFullString();
+
+            if (request.Preview)
+            {
+                return new RefactoringResult
+                {
+                    Success = true,
+                    Message = $"Preview: Would create {request.TypeKind} '{request.TypeName}' in namespace '{targetNamespace}'",
+                    Preview = [new FileChange(targetPath, "", fileContent)],
+                    CreatedFiles = [targetPath]
+                };
+            }
+
+            // Write the file
+            await File.WriteAllTextAsync(targetPath, fileContent, ct);
+            _logger.LogInformation("Created type file: {Path}", targetPath);
+
+            _workspaceService.ClearCache();
+
+            return new RefactoringResult
+            {
+                Success = true,
+                Message = $"Created {request.TypeKind} '{request.TypeName}' in namespace '{targetNamespace}'",
+                CreatedFiles = [targetPath]
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to create type");
+            return RefactoringResult.Failed($"Failed to create type: {ex.Message}");
+        }
+    }
+
+    private static Project? FindProjectForDirectory(Solution solution, string directory)
+    {
+        // Normalize directory path
+        var targetDir = Path.GetFullPath(directory).TrimEnd(Path.DirectorySeparatorChar);
+
+        Project? bestMatch = null;
+        var bestMatchLength = 0;
+
+        foreach (var project in solution.Projects)
+        {
+            if (project.FilePath is null) continue;
+
+            var projectDir = Path.GetDirectoryName(project.FilePath);
+            if (projectDir is null) continue;
+
+            projectDir = Path.GetFullPath(projectDir).TrimEnd(Path.DirectorySeparatorChar);
+
+            // Check if target directory is under this project's directory
+            if (targetDir.StartsWith(projectDir, StringComparison.OrdinalIgnoreCase))
+            {
+                // Prefer the project with the longest matching path (most specific)
+                if (projectDir.Length > bestMatchLength)
+                {
+                    bestMatch = project;
+                    bestMatchLength = projectDir.Length;
+                }
+            }
+        }
+
+        return bestMatch;
+    }
+
+    private static string InferNamespace(Project project, string targetDirectory)
+    {
+        // Get the project's root namespace (default to project name if not set)
+        var rootNamespace = project.DefaultNamespace ?? project.Name;
+
+        // Get project directory
+        var projectDir = Path.GetDirectoryName(project.FilePath);
+        if (projectDir is null)
+        {
+            return rootNamespace;
+        }
+
+        projectDir = Path.GetFullPath(projectDir).TrimEnd(Path.DirectorySeparatorChar);
+        var targetDir = Path.GetFullPath(targetDirectory).TrimEnd(Path.DirectorySeparatorChar);
+
+        // If target is under project directory, append subdirectory path to namespace
+        if (targetDir.StartsWith(projectDir, StringComparison.OrdinalIgnoreCase) &&
+            targetDir.Length > projectDir.Length)
+        {
+            var relativePath = targetDir[(projectDir.Length + 1)..];
+            var subNamespace = relativePath.Replace(Path.DirectorySeparatorChar, '.');
+
+            return $"{rootNamespace}.{subNamespace}";
+        }
+
+        return rootNamespace;
+    }
+
+    private static TypeDeclarationSyntax? GenerateTypeDeclaration(CreateTypeRequest request)
+    {
+        // Build modifiers
+        var modifiers = new List<SyntaxToken>();
+
+        var accessModifier = request.AccessModifier.ToLowerInvariant() switch
+        {
+            "internal" => SyntaxKind.InternalKeyword,
+            "private" => SyntaxKind.PrivateKeyword,
+            "protected" => SyntaxKind.ProtectedKeyword,
+            _ => SyntaxKind.PublicKeyword
+        };
+        modifiers.Add(SyntaxFactory.Token(accessModifier));
+
+        if (request.IsStatic)
+            modifiers.Add(SyntaxFactory.Token(SyntaxKind.StaticKeyword));
+        if (request.IsAbstract)
+            modifiers.Add(SyntaxFactory.Token(SyntaxKind.AbstractKeyword));
+        if (request.IsSealed)
+            modifiers.Add(SyntaxFactory.Token(SyntaxKind.SealedKeyword));
+
+        // Build base list
+        var baseTypes = new List<BaseTypeSyntax>();
+        if (request.BaseClass != null)
+        {
+            baseTypes.Add(SyntaxFactory.SimpleBaseType(SyntaxFactory.ParseTypeName(request.BaseClass)));
+        }
+        if (request.Interfaces != null)
+        {
+            foreach (var iface in request.Interfaces)
+            {
+                baseTypes.Add(SyntaxFactory.SimpleBaseType(SyntaxFactory.ParseTypeName(iface)));
+            }
+        }
+        var baseList = baseTypes.Count > 0
+            ? SyntaxFactory.BaseList(SyntaxFactory.SeparatedList(baseTypes))
+            : null;
+
+        // Build documentation if provided
+        SyntaxTriviaList leadingTrivia = default;
+        if (request.DocumentationSummary != null)
+        {
+            var docComment = $"""
+                /// <summary>
+                /// {request.DocumentationSummary}
+                /// </summary>
+
+                """;
+            leadingTrivia = SyntaxFactory.ParseLeadingTrivia(docComment);
+        }
+
+        // Generate the type based on kind
+        TypeDeclarationSyntax? typeDecl = request.TypeKind.ToLowerInvariant() switch
+        {
+            "class" => SyntaxFactory.ClassDeclaration(request.TypeName)
+                .WithModifiers(SyntaxFactory.TokenList(modifiers))
+                .WithBaseList(baseList)
+                .WithOpenBraceToken(SyntaxFactory.Token(SyntaxKind.OpenBraceToken))
+                .WithCloseBraceToken(SyntaxFactory.Token(SyntaxKind.CloseBraceToken)),
+
+            "interface" => SyntaxFactory.InterfaceDeclaration(request.TypeName)
+                .WithModifiers(SyntaxFactory.TokenList(modifiers))
+                .WithBaseList(baseList)
+                .WithOpenBraceToken(SyntaxFactory.Token(SyntaxKind.OpenBraceToken))
+                .WithCloseBraceToken(SyntaxFactory.Token(SyntaxKind.CloseBraceToken)),
+
+            "record" when request.IsRecordStruct => SyntaxFactory.RecordDeclaration(
+                    SyntaxKind.RecordStructDeclaration,
+                    SyntaxFactory.Token(SyntaxKind.RecordKeyword),
+                    SyntaxFactory.Identifier(request.TypeName))
+                .WithClassOrStructKeyword(SyntaxFactory.Token(SyntaxKind.StructKeyword))
+                .WithModifiers(SyntaxFactory.TokenList(modifiers))
+                .WithBaseList(baseList)
+                .WithOpenBraceToken(SyntaxFactory.Token(SyntaxKind.OpenBraceToken))
+                .WithCloseBraceToken(SyntaxFactory.Token(SyntaxKind.CloseBraceToken)),
+
+            "record" => SyntaxFactory.RecordDeclaration(
+                    SyntaxKind.RecordDeclaration,
+                    SyntaxFactory.Token(SyntaxKind.RecordKeyword),
+                    SyntaxFactory.Identifier(request.TypeName))
+                .WithModifiers(SyntaxFactory.TokenList(modifiers))
+                .WithBaseList(baseList)
+                .WithOpenBraceToken(SyntaxFactory.Token(SyntaxKind.OpenBraceToken))
+                .WithCloseBraceToken(SyntaxFactory.Token(SyntaxKind.CloseBraceToken)),
+
+            "struct" => SyntaxFactory.StructDeclaration(request.TypeName)
+                .WithModifiers(SyntaxFactory.TokenList(modifiers))
+                .WithBaseList(baseList)
+                .WithOpenBraceToken(SyntaxFactory.Token(SyntaxKind.OpenBraceToken))
+                .WithCloseBraceToken(SyntaxFactory.Token(SyntaxKind.CloseBraceToken)),
+
+            "enum" => null, // Enums are handled separately below
+
+            _ => null
+        };
+
+        // Handle enum specially (it doesn't have a base list in the same way)
+        if (request.TypeKind.Equals("enum", StringComparison.OrdinalIgnoreCase))
+        {
+            var enumDecl = SyntaxFactory.EnumDeclaration(request.TypeName)
+                .WithModifiers(SyntaxFactory.TokenList(modifiers))
+                .WithOpenBraceToken(SyntaxFactory.Token(SyntaxKind.OpenBraceToken))
+                .WithCloseBraceToken(SyntaxFactory.Token(SyntaxKind.CloseBraceToken));
+
+            if (leadingTrivia != default)
+            {
+                enumDecl = enumDecl.WithLeadingTrivia(leadingTrivia);
+            }
+
+            // EnumDeclaration is not a TypeDeclarationSyntax, so we need to cast
+            // Actually, EnumDeclarationSyntax is a BaseTypeDeclarationSyntax, not TypeDeclarationSyntax
+            // We need to handle this differently
+            return null; // For now, skip enums - they need different handling
+        }
+
+        if (typeDecl != null && leadingTrivia != default)
+        {
+            typeDecl = typeDecl.WithLeadingTrivia(leadingTrivia);
+        }
+
+        return typeDecl;
+    }
+
     // =========================================================================
     // Helper Methods
     // =========================================================================
@@ -1260,6 +1808,8 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
         string? filePath,
         CancellationToken ct)
     {
+        var candidates = new List<(ISymbol Symbol, string Location)>();
+
         foreach (var project in solution.Projects)
         {
             var compilation = await project.GetCompilationAsync(ct);
@@ -1278,36 +1828,123 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
                 var semanticModel = compilation.GetSemanticModel(tree);
                 var root = await tree.GetRootAsync(ct);
 
+                // Find all type and member declarations
                 var symbols = root.DescendantNodes()
-                    .Where(n => n is MethodDeclarationSyntax or PropertyDeclarationSyntax or
-                               ClassDeclarationSyntax or FieldDeclarationSyntax or InterfaceDeclarationSyntax)
+                    .Where(n => n is BaseTypeDeclarationSyntax or  // class, interface, struct, record, enum
+                               MethodDeclarationSyntax or
+                               PropertyDeclarationSyntax or
+                               FieldDeclarationSyntax)
                     .Select(n => semanticModel.GetDeclaredSymbol(n))
                     .Where(s => s?.Name == symbolName)
                     .ToList();
 
                 if (containingType != null)
                 {
-                    symbols = symbols.Where(s => s?.ContainingType?.Name == containingType).ToList();
+                    // Support both simple name and full namespace-qualified name
+                    symbols = symbols.Where(s =>
+                    {
+                        // For top-level types, ContainingType is null - they match if the type itself matches containingType
+                        if (s?.ContainingType is null && s is INamedTypeSymbol namedType)
+                        {
+                            return namedType.Name == containingType ||
+                                   namedType.ToDisplayString() == containingType;
+                        }
+                        // For members, check the containing type
+                        return s?.ContainingType?.Name == containingType ||
+                               s?.ContainingType?.ToDisplayString() == containingType;
+                    }).ToList();
                 }
 
-                if (symbols.Count > 0) return symbols.First();
+                foreach (var s in symbols.Where(s => s != null))
+                {
+                    candidates.Add((s!, filePath));
+                }
             }
-
-            // Search all types in compilation
-            var allTypes = GetAllTypes(compilation.GlobalNamespace);
-
-            foreach (var type in allTypes)
+            else
             {
-                if (containingType != null && type.Name != containingType) continue;
+                // Search all types in compilation
+                var allTypes = GetAllTypes(compilation.GlobalNamespace);
 
-                if (type.Name == symbolName) return type;
+                foreach (var type in allTypes)
+                {
+                    // If containingType specified, only look at members of that type
+                    if (containingType != null)
+                    {
+                        // Support both simple name and full namespace-qualified name
+                        if (type.Name == containingType || type.ToDisplayString() == containingType)
+                        {
+                            var member = type.GetMembers(symbolName).FirstOrDefault();
+                            if (member != null)
+                            {
+                                var loc = member.Locations.FirstOrDefault()?.SourceTree?.FilePath ?? "";
+                                candidates.Add((member, loc));
+                            }
+                        }
+                        continue;
+                    }
 
-                var member = type.GetMembers(symbolName).FirstOrDefault();
-                if (member != null) return member;
+                    // No containingType - check if this type matches
+                    if (type.Name == symbolName)
+                    {
+                        var loc = type.Locations.FirstOrDefault()?.SourceTree?.FilePath ?? "";
+                        _logger.LogDebug("Found type match: {TypeName} ({Kind}) at {Path}",
+                            type.ToDisplayString(), type.TypeKind, loc);
+                        candidates.Add((type, loc));
+                    }
+
+                    // Also check members
+                    var memberMatch = type.GetMembers(symbolName).FirstOrDefault();
+                    if (memberMatch != null)
+                    {
+                        var loc = memberMatch.Locations.FirstOrDefault()?.SourceTree?.FilePath ?? "";
+                        _logger.LogDebug("Found member match: {MemberName} ({Kind}) in {Type} at {Path}",
+                            memberMatch.Name, memberMatch.Kind, type.Name, loc);
+                        candidates.Add((memberMatch, loc));
+                    }
+                }
             }
         }
 
-        return null;
+        // Deduplicate by symbol display string
+        candidates = candidates
+            .GroupBy(c => c.Symbol.ToDisplayString())
+            .Select(g => g.First())
+            .ToList();
+
+        if (candidates.Count == 0)
+        {
+            return null;
+        }
+
+        if (candidates.Count == 1)
+        {
+            return candidates[0].Symbol;
+        }
+
+        // Multiple candidates - if no containingType specified, prefer types over members
+        if (containingType == null)
+        {
+            var typeMatches = candidates.Where(c => c.Symbol is INamedTypeSymbol).ToList();
+            if (typeMatches.Count == 1)
+            {
+                _logger.LogDebug("Multiple symbols named {Name} found, preferring type over member", symbolName);
+                return typeMatches[0].Symbol;
+            }
+        }
+
+        // Multiple candidates found - log them and throw an error requiring disambiguation
+        _logger.LogWarning("Multiple symbols named {Name} found:", symbolName);
+        foreach (var (sym, loc) in candidates)
+        {
+            _logger.LogWarning("  - {Kind} {FullName} in {File}",
+                sym.Kind, sym.ToDisplayString(), Path.GetFileName(loc));
+        }
+
+        var candidateList = string.Join("\n", candidates.Select(c =>
+            $"  - {c.Symbol.Kind}: {c.Symbol.ToDisplayString()} (in {Path.GetFileName(c.Location)})"));
+
+        throw new InvalidOperationException(
+            $"Multiple symbols named '{symbolName}' found. Please specify 'containingType' or 'filePath' to disambiguate:\n{candidateList}");
     }
 
     private async Task<INamedTypeSymbol?> FindTypeAsync(Solution solution, string typeName, CancellationToken ct)

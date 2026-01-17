@@ -82,6 +82,24 @@ public interface IRoslynRefactoringService
     /// <param name="ct">Cancellation token.</param>
     /// <returns>Result containing the modified file or error information.</returns>
     Task<RefactoringResult> AddMethodAsync(AddMethodRequest request, CancellationToken ct = default);
+
+    /// <summary>
+    /// Moves a type to its own file with matching name.
+    /// If the source file contains only this type, uses git mv to preserve history.
+    /// If the source file contains multiple types, extracts the type to a new file.
+    /// </summary>
+    /// <param name="request">The move type request.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Result containing created/modified/deleted files or error information.</returns>
+    Task<RefactoringResult> MoveTypeToFileAsync(MoveTypeToFileRequest request, CancellationToken ct = default);
+
+    /// <summary>
+    /// Creates a new type file with proper namespace inferred from project structure.
+    /// </summary>
+    /// <param name="request">The create type request.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Result containing the created file or error information.</returns>
+    Task<RefactoringResult> CreateTypeAsync(CreateTypeRequest request, CancellationToken ct = default);
 }
 
 /// <summary>
@@ -421,6 +439,81 @@ public sealed record AddMethodRequest
 
     /// <summary>Optional method body. If null, generates throw NotImplementedException().</summary>
     public string? Body { get; init; }
+
+    /// <summary>If true, return preview without applying changes.</summary>
+    public bool Preview { get; init; }
+}
+
+/// <summary>
+/// Request to move a type to its own file.
+/// </summary>
+public sealed record MoveTypeToFileRequest
+{
+    /// <summary>Name of the type to move.</summary>
+    public required string TypeName { get; init; }
+
+    /// <summary>Path to the solution file.</summary>
+    public required string SolutionPath { get; init; }
+
+    /// <summary>Optional: target directory. If null, uses the same directory as source.</summary>
+    public string? TargetDirectory { get; init; }
+
+    /// <summary>Optional: target filename. If null, uses {TypeName}.cs.</summary>
+    public string? TargetFileName { get; init; }
+
+    /// <summary>If true, use git mv when possible to preserve history.</summary>
+    public bool UseGitMove { get; init; } = true;
+
+    /// <summary>If true, return preview without applying changes.</summary>
+    public bool Preview { get; init; }
+}
+
+/// <summary>
+/// Request to create a new type file.
+/// </summary>
+public sealed record CreateTypeRequest
+{
+    /// <summary>Name of the type to create.</summary>
+    public required string TypeName { get; init; }
+
+    /// <summary>Kind of type: class, interface, record, struct, enum.</summary>
+    public required string TypeKind { get; init; }
+
+    /// <summary>Path to the solution file.</summary>
+    public required string SolutionPath { get; init; }
+
+    /// <summary>Target directory for the new file.</summary>
+    public required string TargetDirectory { get; init; }
+
+    /// <summary>Optional: explicit namespace. If null, inferred from project + directory.</summary>
+    public string? Namespace { get; init; }
+
+    /// <summary>Optional: base class to inherit from.</summary>
+    public string? BaseClass { get; init; }
+
+    /// <summary>Optional: interfaces to implement.</summary>
+    public IReadOnlyList<string>? Interfaces { get; init; }
+
+    /// <summary>Optional: access modifier (public, internal). Default: public.</summary>
+    public string AccessModifier { get; init; } = "public";
+
+    /// <summary>Optional: whether class is sealed. Default: false.</summary>
+    public bool IsSealed { get; init; }
+
+    /// <summary>Optional: whether class is abstract. Default: false.</summary>
+    public bool IsAbstract { get; init; }
+
+    /// <summary>Optional: whether class is static. Default: false.</summary>
+    public bool IsStatic { get; init; }
+
+    /// <summary>Optional: whether record is a struct. Default: false.</summary>
+    public bool IsRecordStruct { get; init; }
+
+    /// <summary>Optional: additional using directives to add.</summary>
+    public IReadOnlyList<string>? AdditionalUsings { get; init; }
+
+    /// <summary>Optional: XML documentation summary.</summary>
+    public string? DocumentationSummary { get; init; }
 
     /// <summary>If true, return preview without applying changes.</summary>
     public bool Preview { get; init; }
