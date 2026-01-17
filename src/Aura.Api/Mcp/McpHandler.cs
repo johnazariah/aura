@@ -10,6 +10,7 @@ using Aura.Foundation.Rag;
 using Aura.Module.Developer.Data.Entities;
 using Aura.Module.Developer.GitHub;
 using Aura.Module.Developer.Services;
+using Aura.Module.Developer.Services.Testing;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.FindSymbols;
@@ -39,6 +40,7 @@ public sealed class McpHandler
     private readonly IRoslynWorkspaceService _roslynService;
     private readonly IRoslynRefactoringService _refactoringService;
     private readonly IPythonRefactoringService _pythonRefactoringService;
+    private readonly ITestGenerationService _testGenerationService;
     private readonly IGitWorktreeService _worktreeService;
     private readonly ILogger<McpHandler> _logger;
 
@@ -55,6 +57,7 @@ public sealed class McpHandler
         IRoslynWorkspaceService roslynService,
         IRoslynRefactoringService refactoringService,
         IPythonRefactoringService pythonRefactoringService,
+        ITestGenerationService testGenerationService,
         IGitWorktreeService worktreeService,
         ILogger<McpHandler> logger)
     {
@@ -65,10 +68,11 @@ public sealed class McpHandler
         _roslynService = roslynService;
         _refactoringService = refactoringService;
         _pythonRefactoringService = pythonRefactoringService;
+        _testGenerationService = testGenerationService;
         _worktreeService = worktreeService;
         _logger = logger;
 
-        // Phase 7: Consolidated meta-tools (28 tools → 9 tools)
+        // Phase 7: Consolidated meta-tools (28 tools → 10 tools)
         _tools = new Dictionary<string, Func<JsonElement?, CancellationToken, Task<object>>>
         {
             ["aura_search"] = SearchAsync,
@@ -80,6 +84,7 @@ public sealed class McpHandler
             ["aura_workflow"] = WorkflowAsync,
             ["aura_architect"] = ArchitectAsync,
             ["aura_workspace"] = WorkspaceAsync,
+            ["aura_pattern"] = PatternAsync,
         };
     }
 
@@ -244,7 +249,7 @@ public sealed class McpHandler
             new McpToolDefinition
             {
                 Name = "aura_refactor",
-                Description = "Transform existing code: rename symbols, change signatures, extract methods/variables/interfaces, safe delete. Auto-detects language from filePath. (Write)",
+                Description = "Transform existing code: rename symbols, change signatures, extract methods/variables/interfaces, safe delete, move type to file. Auto-detects language from filePath. (Write)",
                 InputSchema = new
                 {
                     type = "object",
@@ -254,13 +259,14 @@ public sealed class McpHandler
                         {
                             type = "string",
                             description = "Refactoring operation type",
-                            @enum = new[] { "rename", "change_signature", "extract_interface", "extract_method", "extract_variable", "safe_delete" }
+                            @enum = new[] { "rename", "change_signature", "extract_interface", "extract_method", "extract_variable", "safe_delete", "move_type_to_file" }
                         },
                         symbolName = new { type = "string", description = "Symbol to refactor" },
                         newName = new { type = "string", description = "New name for rename, extract_method, extract_variable, extract_interface" },
                         containingType = new { type = "string", description = "Type containing the symbol (for C# disambiguation)" },
                         solutionPath = new { type = "string", description = "Path to solution file (.sln) - for C# operations" },
                         filePath = new { type = "string", description = "Path to file containing the code" },
+                        targetDirectory = new { type = "string", description = "Target directory for move_type_to_file (default: same as source)" },
                         projectPath = new { type = "string", description = "Project root - for Python operations" },
                         offset = new { type = "integer", description = "Character offset for Python rename" },
                         startOffset = new { type = "integer", description = "Start offset for Python extract operations" },
@@ -306,7 +312,7 @@ public sealed class McpHandler
             new McpToolDefinition
             {
                 Name = "aura_generate",
-                Description = "Generate new code: implement interfaces, generate constructors, add properties/methods. (Write)",
+                Description = "Generate new code: create types with proper namespace, implement interfaces, generate constructors, add properties/methods, generate tests. (Write)",
                 InputSchema = new
                 {
                     type = "object",
@@ -316,10 +322,27 @@ public sealed class McpHandler
                         {
                             type = "string",
                             description = "Generation operation type",
-                            @enum = new[] { "implement_interface", "constructor", "property", "method" }
+                            @enum = new[] { "implement_interface", "constructor", "property", "method", "create_type", "tests" }
                         },
-                        className = new { type = "string", description = "Target class name" },
+                        className = new { type = "string", description = "Target class name (for existing class operations)" },
                         solutionPath = new { type = "string", description = "Path to solution file (.sln)" },
+                        typeName = new { type = "string", description = "Name of type to create (for create_type)" },
+                        typeKind = new { type = "string", description = "Kind of type: class, interface, record, struct (for create_type)", @enum = new[] { "class", "interface", "record", "struct" } },
+                        targetDirectory = new { type = "string", description = "Target directory for new type file (for create_type)" },
+
+                        // Test generation parameters
+                        target = new { type = "string", description = "Target for test generation: class name, method (Class.Method), or namespace (for tests)" },
+                        count = new { type = "integer", description = "Explicit test count. If omitted, generates comprehensive tests (for tests)" },
+                        maxTests = new { type = "integer", description = "Maximum tests to generate, default: 20 (for tests)" },
+                        focus = new { type = "string", description = "Focus area for tests", @enum = new[] { "all", "happy_path", "edge_cases", "error_handling" } },
+                        testFramework = new { type = "string", description = "Override framework detection: xunit, nunit, mstest (for tests)" },
+                        analyzeOnly = new { type = "boolean", description = "If true, return analysis without generating code (for tests)" },
+                        baseClass = new { type = "string", description = "Base class to inherit from (for create_type)" },
+                        implements = new { type = "array", items = new { type = "string" }, description = "Interfaces to implement (for create_type)" },
+                        isSealed = new { type = "boolean", description = "Whether class is sealed (for create_type)" },
+                        isAbstract = new { type = "boolean", description = "Whether class is abstract (for create_type)" },
+                        isStatic = new { type = "boolean", description = "Whether class is static (for create_type)" },
+                        documentationSummary = new { type = "string", description = "XML doc summary for the type (for create_type)" },
                         interfaceName = new { type = "string", description = "Interface to implement (for implement_interface)" },
                         explicitImplementation = new { type = "boolean", description = "Use explicit interface implementation (default: false)" },
                         members = new
@@ -355,7 +378,7 @@ public sealed class McpHandler
                         body = new { type = "string", description = "Optional method body code" },
                         preview = new { type = "boolean", description = "If true, return changes without applying (default: false)" }
                     },
-                    required = new[] { "operation", "className", "solutionPath" }
+                    required = new[] { "operation", "solutionPath" }
                 }
             },
 
@@ -466,6 +489,30 @@ public sealed class McpHandler
                         path = new { type = "string", description = "Path to workspace, solution, or worktree" }
                     },
                     required = new[] { "operation", "path" }
+                }
+            },
+
+            // =================================================================
+            // aura_pattern - Load operational patterns for complex tasks
+            // =================================================================
+            new McpToolDefinition
+            {
+                Name = "aura_pattern",
+                Description = "Load operational patterns (step-by-step playbooks) for complex multi-step tasks. Patterns are dynamically discovered from the patterns/ folder. (Read)",
+                InputSchema = new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        operation = new
+                        {
+                            type = "string",
+                            description = "Pattern operation: 'list' to see available patterns, 'get' to load a specific pattern",
+                            @enum = new[] { "list", "get" }
+                        },
+                        name = new { type = "string", description = "Pattern name (without .md extension), e.g., 'comprehensive-rename'" }
+                    },
+                    required = new[] { "operation" }
                 }
             },
         };
@@ -675,6 +722,7 @@ public sealed class McpHandler
             "extract_method" when isPython => await PythonExtractMethodAsync(args, ct),
             "extract_variable" when isPython => await PythonExtractVariableAsync(args, ct),
             "safe_delete" => await SafeDeleteAsync(args, ct),
+            "move_type_to_file" => await MoveTypeToFileAsync(args, ct),
             "extract_method" => throw new NotSupportedException("C# extract_method not yet implemented. Use Python files or manual extraction."),
             "extract_variable" => throw new NotSupportedException("C# extract_variable not yet implemented. Use Python files or manual extraction."),
             _ => throw new ArgumentException($"Unknown refactor operation: {operation}")
@@ -729,7 +777,7 @@ public sealed class McpHandler
 
     /// <summary>
     /// aura_generate - Create new code elements.
-    /// Routes to: implement_interface, constructor, property, method.
+    /// Routes to: implement_interface, constructor, property, method, tests.
     /// </summary>
     private async Task<object> GenerateAsync(JsonElement? args, CancellationToken ct)
     {
@@ -742,6 +790,8 @@ public sealed class McpHandler
             "constructor" => await GenerateConstructorAsync(args, ct),
             "property" => await AddPropertyAsync(args, ct),
             "method" => await AddMethodAsync(args, ct),
+            "create_type" => await CreateTypeAsync(args, ct),
+            "tests" => await GenerateTestsAsync(args, ct),
             _ => throw new ArgumentException($"Unknown generate operation: {operation}")
         };
     }
@@ -897,6 +947,116 @@ public sealed class McpHandler
                     ? "Main git repository"
                     : "Not a git repository"
         };
+    }
+
+    // =========================================================================
+    // aura_pattern - Load operational patterns for complex tasks
+    // =========================================================================
+
+    /// <summary>
+    /// aura_pattern - Load operational patterns for complex multi-step tasks.
+    /// Patterns are dynamically discovered from the patterns/ folder.
+    /// </summary>
+    private Task<object> PatternAsync(JsonElement? args, CancellationToken ct)
+    {
+        var operation = args?.GetProperty("operation").GetString()
+            ?? throw new ArgumentException("operation is required");
+
+        return operation switch
+        {
+            "list" => Task.FromResult(ListPatternsOperation()),
+            "get" => Task.FromResult(GetPatternOperation(args)),
+            _ => throw new ArgumentException($"Unknown pattern operation: {operation}")
+        };
+    }
+
+    private object ListPatternsOperation()
+    {
+        var patternsDir = GetPatternsDirectory();
+        if (!Directory.Exists(patternsDir))
+        {
+            return new
+            {
+                success = false,
+                patterns = Array.Empty<object>(),
+                message = $"Patterns directory not found: {patternsDir}"
+            };
+        }
+
+        var patterns = Directory.GetFiles(patternsDir, "*.md")
+            .Where(f => !Path.GetFileName(f).Equals("README.md", StringComparison.OrdinalIgnoreCase))
+            .Select(f =>
+            {
+                var name = Path.GetFileNameWithoutExtension(f);
+                var content = File.ReadAllText(f);
+                var firstLine = content.Split('\n').FirstOrDefault()?.Trim() ?? "";
+                var description = firstLine.StartsWith("#")
+                    ? firstLine.TrimStart('#', ' ')
+                    : name;
+
+                return new { name, description };
+            })
+            .ToArray();
+
+        return new
+        {
+            success = true,
+            patterns,
+            message = $"Found {patterns.Length} patterns. Use aura_pattern(operation: 'get', name: '...') to load one."
+        };
+    }
+
+    private object GetPatternOperation(JsonElement? args)
+    {
+        var name = args?.TryGetProperty("name", out var nameProp) == true
+            ? nameProp.GetString()
+            : null;
+
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            throw new ArgumentException("name is required for 'get' operation");
+        }
+
+        var patternsDir = GetPatternsDirectory();
+        var patternPath = Path.Combine(patternsDir, $"{name}.md");
+
+        if (!File.Exists(patternPath))
+        {
+            return new
+            {
+                success = false,
+                name,
+                content = (string?)null,
+                message = $"Pattern '{name}' not found. Use aura_pattern(operation: 'list') to see available patterns."
+            };
+        }
+
+        var content = File.ReadAllText(patternPath);
+
+        return new
+        {
+            success = true,
+            name,
+            content,
+            message = $"Follow the steps in this pattern. Do not deviate."
+        };
+    }
+
+    private static string GetPatternsDirectory()
+    {
+        // Look for patterns/ relative to the prompts/ folder or the assembly location
+        var assemblyDir = Path.GetDirectoryName(typeof(McpHandler).Assembly.Location) ?? ".";
+
+        // Try common locations
+        var candidates = new[]
+        {
+            Path.Combine(assemblyDir, "..", "..", "..", "..", "patterns"),      // Dev: running from bin/Debug
+            Path.Combine(assemblyDir, "patterns"),                               // Published: alongside DLL
+            Path.Combine(Directory.GetCurrentDirectory(), "patterns"),           // CWD
+        };
+
+        return candidates.FirstOrDefault(Directory.Exists)
+            ?? Path.Combine(assemblyDir, "patterns");
     }
 
     // =========================================================================
@@ -2012,7 +2172,23 @@ public sealed class McpHandler
                     referenceCount = op.ReferenceCount
                 }),
                 awaitsConfirmation = blastRadius.AwaitsConfirmation,
-                instructions = "Review the blast radius and suggested plan. To execute, call aura_refactor with analyze: false"
+                instructions = $"""
+                    STEP-BY-STEP EXECUTION REQUIRED:
+                    
+                    The suggestedPlan contains {blastRadius.SuggestedPlan.Count} operations. Execute them ONE AT A TIME:
+                    
+                    1. Present this blast radius to the user and wait for confirmation
+                    2. For each step in suggestedPlan:
+                       a. State which step you're executing (e.g., "Step 1 of {blastRadius.SuggestedPlan.Count}: Renaming X → Y")
+                       b. Explain WHY this rename is needed
+                       c. Call aura_refactor(operation: "rename", symbolName: "<target>", newName: "<newValue>", analyze: false)
+                       d. Run `dotnet build` to verify
+                       e. Report result before proceeding to next step
+                    3. For 'rename_file' operations, use aura_refactor(operation: "move_type_to_file", symbolName: "<newValue>")
+                    4. After all steps, sweep for residuals with grep_search
+                    
+                    DO NOT execute multiple steps in one tool call. Each rename is a separate operation.
+                    """
             };
         }
 
@@ -2248,6 +2424,51 @@ public sealed class McpHandler
         };
     }
 
+    private async Task<object> MoveTypeToFileAsync(JsonElement? args, CancellationToken ct)
+    {
+        var typeName = args?.GetProperty("symbolName").GetString()
+            ?? throw new ArgumentException("symbolName (type name) is required for move_type_to_file");
+        var solutionPath = args?.GetProperty("solutionPath").GetString()
+            ?? throw new ArgumentException("solutionPath is required for move_type_to_file");
+
+        string? targetDirectory = null;
+        string? targetFileName = null;
+        var useGitMove = true;
+        var preview = false;
+
+        if (args.HasValue)
+        {
+            if (args.Value.TryGetProperty("targetDirectory", out var tdEl))
+                targetDirectory = tdEl.GetString();
+            if (args.Value.TryGetProperty("newName", out var tfEl))
+                targetFileName = tfEl.GetString();
+            if (args.Value.TryGetProperty("useGitMove", out var gmEl))
+                useGitMove = gmEl.GetBoolean();
+            if (args.Value.TryGetProperty("preview", out var prevEl))
+                preview = prevEl.GetBoolean();
+        }
+
+        var result = await _refactoringService.MoveTypeToFileAsync(new MoveTypeToFileRequest
+        {
+            TypeName = typeName,
+            SolutionPath = solutionPath,
+            TargetDirectory = targetDirectory,
+            TargetFileName = targetFileName,
+            UseGitMove = useGitMove,
+            Preview = preview
+        }, ct);
+
+        return new
+        {
+            success = result.Success,
+            message = result.Message,
+            modifiedFiles = result.ModifiedFiles,
+            createdFiles = result.CreatedFiles,
+            deletedFiles = result.DeletedFiles,
+            preview = result.Preview?.Select(p => new { p.FilePath, p.NewContent })
+        };
+    }
+
     private async Task<object> AddPropertyAsync(JsonElement? args, CancellationToken ct)
     {
         var className = args?.GetProperty("className").GetString() ?? "";
@@ -2346,6 +2567,197 @@ public sealed class McpHandler
             message = result.Message,
             modifiedFiles = result.ModifiedFiles,
             preview = result.Preview?.Select(p => new { p.FilePath, p.NewContent })
+        };
+    }
+
+    private async Task<object> CreateTypeAsync(JsonElement? args, CancellationToken ct)
+    {
+        var typeName = args?.GetProperty("typeName").GetString()
+            ?? throw new ArgumentException("typeName is required for create_type");
+        var typeKind = args?.GetProperty("typeKind").GetString()
+            ?? throw new ArgumentException("typeKind is required for create_type");
+        var solutionPath = args?.GetProperty("solutionPath").GetString()
+            ?? throw new ArgumentException("solutionPath is required for create_type");
+        var targetDirectory = args?.GetProperty("targetDirectory").GetString()
+            ?? throw new ArgumentException("targetDirectory is required for create_type");
+
+        string? ns = null;
+        string? baseClass = null;
+        List<string>? interfaces = null;
+        var accessModifier = "public";
+        var isSealed = false;
+        var isAbstract = false;
+        var isStatic = false;
+        var isRecordStruct = false;
+        List<string>? additionalUsings = null;
+        string? documentationSummary = null;
+        var preview = false;
+
+        if (args.HasValue)
+        {
+            if (args.Value.TryGetProperty("namespace", out var nsEl))
+                ns = nsEl.GetString();
+            if (args.Value.TryGetProperty("baseClass", out var bcEl))
+                baseClass = bcEl.GetString();
+            if (args.Value.TryGetProperty("implements", out var implEl) && implEl.ValueKind == JsonValueKind.Array)
+            {
+                interfaces = implEl.EnumerateArray()
+                    .Select(i => i.GetString())
+                    .Where(s => s != null)
+                    .Cast<string>()
+                    .ToList();
+            }
+            if (args.Value.TryGetProperty("accessModifier", out var amEl))
+                accessModifier = amEl.GetString() ?? "public";
+            if (args.Value.TryGetProperty("isSealed", out var sealedEl))
+                isSealed = sealedEl.GetBoolean();
+            if (args.Value.TryGetProperty("isAbstract", out var abstractEl))
+                isAbstract = abstractEl.GetBoolean();
+            if (args.Value.TryGetProperty("isStatic", out var staticEl))
+                isStatic = staticEl.GetBoolean();
+            if (args.Value.TryGetProperty("isRecordStruct", out var rsEl))
+                isRecordStruct = rsEl.GetBoolean();
+            if (args.Value.TryGetProperty("additionalUsings", out var usingsEl) && usingsEl.ValueKind == JsonValueKind.Array)
+            {
+                additionalUsings = usingsEl.EnumerateArray()
+                    .Select(u => u.GetString())
+                    .Where(s => s != null)
+                    .Cast<string>()
+                    .ToList();
+            }
+            if (args.Value.TryGetProperty("documentationSummary", out var docEl))
+                documentationSummary = docEl.GetString();
+            if (args.Value.TryGetProperty("preview", out var prevEl))
+                preview = prevEl.GetBoolean();
+        }
+
+        var result = await _refactoringService.CreateTypeAsync(new CreateTypeRequest
+        {
+            TypeName = typeName,
+            TypeKind = typeKind,
+            SolutionPath = solutionPath,
+            TargetDirectory = targetDirectory,
+            Namespace = ns,
+            BaseClass = baseClass,
+            Interfaces = interfaces,
+            AccessModifier = accessModifier,
+            IsSealed = isSealed,
+            IsAbstract = isAbstract,
+            IsStatic = isStatic,
+            IsRecordStruct = isRecordStruct,
+            AdditionalUsings = additionalUsings,
+            DocumentationSummary = documentationSummary,
+            Preview = preview
+        }, ct);
+
+        return new
+        {
+            success = result.Success,
+            message = result.Message,
+            createdFiles = result.CreatedFiles,
+            preview = result.Preview?.Select(p => new { p.FilePath, p.NewContent })
+        };
+    }
+
+    /// <summary>
+    /// aura_generate(operation: "tests") - Generate tests for a target.
+    /// </summary>
+    private async Task<object> GenerateTestsAsync(JsonElement? args, CancellationToken ct)
+    {
+        var target = args?.TryGetProperty("target", out var targetEl) == true
+            ? targetEl.GetString() ?? throw new ArgumentException("target is required for tests operation")
+            : args?.TryGetProperty("className", out var classEl) == true
+                ? classEl.GetString() ?? throw new ArgumentException("target or className is required")
+                : throw new ArgumentException("target is required for tests operation");
+
+        var solutionPath = args?.GetProperty("solutionPath").GetString()
+            ?? throw new ArgumentException("solutionPath is required");
+
+        int? count = null;
+        int maxTests = 20;
+        var focus = TestFocus.All;
+        string? testFramework = null;
+        bool analyzeOnly = false;
+
+        if (args.HasValue)
+        {
+            if (args.Value.TryGetProperty("count", out var countEl))
+                count = countEl.GetInt32();
+            if (args.Value.TryGetProperty("maxTests", out var maxEl))
+                maxTests = maxEl.GetInt32();
+            if (args.Value.TryGetProperty("focus", out var focusEl))
+            {
+                focus = focusEl.GetString() switch
+                {
+                    "happy_path" => TestFocus.HappyPath,
+                    "edge_cases" => TestFocus.EdgeCases,
+                    "error_handling" => TestFocus.ErrorHandling,
+                    _ => TestFocus.All
+                };
+            }
+            if (args.Value.TryGetProperty("testFramework", out var fwEl))
+                testFramework = fwEl.GetString();
+            if (args.Value.TryGetProperty("analyzeOnly", out var aoEl))
+                analyzeOnly = aoEl.GetBoolean();
+        }
+
+        var result = await _testGenerationService.GenerateTestsAsync(new TestGenerationRequest
+        {
+            Target = target,
+            SolutionPath = solutionPath,
+            Count = count,
+            MaxTests = maxTests,
+            Focus = focus,
+            TestFramework = testFramework,
+            AnalyzeOnly = analyzeOnly
+        }, ct);
+
+        return new
+        {
+            success = result.Success,
+            message = result.Message,
+            analysis = result.Analysis is not null ? new
+            {
+                testableMembers = result.Analysis.TestableMembers.Select(m => new
+                {
+                    m.Name,
+                    m.Signature,
+                    m.ReturnType,
+                    m.IsAsync,
+                    m.ContainingType,
+                    parameters = m.Parameters.Select(p => new { p.Name, p.Type, p.IsNullable }),
+                    throwsExceptions = m.ThrowsExceptions
+                }),
+                existingTests = result.Analysis.ExistingTests.Select(t => new
+                {
+                    t.FilePath,
+                    t.TestCount,
+                    t.TestedMethods
+                }),
+                gaps = result.Analysis.Gaps.Select(g => new
+                {
+                    g.MethodName,
+                    kind = g.Kind.ToString(),
+                    g.Description,
+                    priority = g.Priority.ToString()
+                }),
+                result.Analysis.DetectedFramework,
+                result.Analysis.SuggestedTestCount
+            } : null,
+            generated = result.Generated is not null ? new
+            {
+                result.Generated.TestFilePath,
+                result.Generated.FileCreated,
+                result.Generated.TestsAdded,
+                tests = result.Generated.Tests.Select(t => new
+                {
+                    t.TestName,
+                    t.Description,
+                    t.TargetMethod
+                })
+            } : null,
+            stoppingReason = result.StoppingReason,
+            error = result.Error
         };
     }
 

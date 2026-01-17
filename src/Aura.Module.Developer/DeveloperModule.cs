@@ -12,6 +12,7 @@ using Aura.Module.Developer.Agents;
 using Aura.Module.Developer.Data;
 using Aura.Module.Developer.GitHub;
 using Aura.Module.Developer.Services;
+using Aura.Module.Developer.Services.Testing;
 using Aura.Module.Developer.Tools;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -77,6 +78,9 @@ public sealed class DeveloperModule : IAuraModule
 
         // Register Python refactoring service
         services.AddSingleton<IPythonRefactoringService, PythonRefactoringService>();
+
+        // Register test generation service
+        services.AddSingleton<ITestGenerationService, RoslynTestGenerator>();
 
         // Register Code Graph indexer (for Graph RAG)
         services.AddScoped<ICodeGraphIndexer, CodeGraphIndexer>();

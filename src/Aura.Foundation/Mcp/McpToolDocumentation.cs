@@ -52,5 +52,7 @@ public static class McpToolDocumentation
         "aura_validate",
         "aura_workflow",
         "aura_architect",
+        "aura_workspace",
+        "aura_pattern",
     };
 }
