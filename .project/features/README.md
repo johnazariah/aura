@@ -66,6 +66,7 @@ features/
 | [Path Normalization](completed/path-normalization-review.md) | Consistent path handling across Windows/macOS | 2026-01-15 |
 | [Story Model](completed/story-model.md) | GitHub Issue integration, workflow modes | 2026-01-15 |
 | [Story Chat](completed/story-chat.md) | Chat-first workflow interaction | 2026-01-15 |
+| [Operational Patterns](completed/operational-patterns.md) | Multi-step playbooks for complex operations | 2026-01-17 |
 
 ## Upcoming Features
 
