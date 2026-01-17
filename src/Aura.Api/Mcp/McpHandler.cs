@@ -427,17 +427,37 @@ public sealed class McpHandler
                         {
                             type = "string",
                             description = "Workflow operation type",
-                            @enum = new[] { "list", "get", "create" }
+                            @enum = new[] { "list", "get", "create", "enrich", "update_step" }
                         },
-                        storyId = new { type = "string", description = "Story ID (GUID) - for get operation" },
+                        storyId = new { type = "string", description = "Story ID (GUID) - for get, enrich operations" },
                         issueUrl = new { type = "string", description = "GitHub issue URL - for create operation" },
                         repositoryPath = new { type = "string", description = "Local repository path for worktree creation" },
-                        mode = new
+                        steps = new
+                        {
+                            type = "array",
+                            description = "Steps to add - for enrich operation",
+                            items = new
+                            {
+                                type = "object",
+                                properties = new
+                                {
+                                    name = new { type = "string", description = "Step name" },
+                                    capability = new { type = "string", description = "Required capability/tool (e.g., 'aura_refactor', 'run_in_terminal')" },
+                                    description = new { type = "string", description = "Step description with phase prefix like '[Analysis] Examine code structure'" }
+                                },
+                                required = new[] { "name", "capability" }
+                            }
+                        },
+                        stepId = new { type = "string", description = "Step ID (GUID) - for update_step operation" },
+                        status = new
                         {
                             type = "string",
-                            description = "Workflow mode",
-                            @enum = new[] { "Conversational", "Structured" }
-                        }
+                            description = "New step status - for update_step operation",
+                            @enum = new[] { "completed", "failed", "skipped", "pending" }
+                        },
+                        output = new { type = "string", description = "Step output/result - for update_step operation" },
+                        error = new { type = "string", description = "Error message - for update_step with status=failed" },
+                        skipReason = new { type = "string", description = "Reason for skipping - for update_step with status=skipped" }
                     },
                     required = new[] { "operation" }
                 }
@@ -815,7 +835,7 @@ public sealed class McpHandler
 
     /// <summary>
     /// aura_workflow - Manage development workflows.
-    /// Routes to: list, get, create.
+    /// Routes to: list, get, create, enrich, update_step.
     /// </summary>
     private async Task<object> WorkflowAsync(JsonElement? args, CancellationToken ct)
     {
@@ -827,6 +847,8 @@ public sealed class McpHandler
             "list" => await ListStoriesAsync(args, ct),
             "get" => await GetStoryContextAsync(args, ct),
             "create" => await CreateStoryFromIssueAsync(args, ct),
+            "enrich" => await EnrichStoryAsync(args, ct),
+            "update_step" => await UpdateStepAsync(args, ct),
             _ => throw new ArgumentException($"Unknown workflow operation: {operation}")
         };
     }
@@ -1793,6 +1815,152 @@ public sealed class McpHandler
         {
             return new { error = $"Failed to fetch issue from GitHub: {ex.Message}" };
         }
+    }
+
+    private async Task<object> EnrichStoryAsync(JsonElement? args, CancellationToken ct)
+    {
+        var storyIdStr = args?.GetProperty("storyId").GetString() ?? "";
+        if (!Guid.TryParse(storyIdStr, out var storyId))
+        {
+            return new { error = $"Invalid story ID: {storyIdStr}" };
+        }
+
+        if (!args.HasValue || !args.Value.TryGetProperty("steps", out var stepsEl) || stepsEl.ValueKind != JsonValueKind.Array)
+        {
+            return new { error = "steps array is required for enrich operation" };
+        }
+
+        var workflow = await _workflowService.GetByIdWithStepsAsync(storyId, ct);
+        if (workflow is null)
+        {
+            return new { error = $"Story not found: {storyId}" };
+        }
+
+        var addedSteps = new List<object>();
+        foreach (var stepEl in stepsEl.EnumerateArray())
+        {
+            var name = stepEl.TryGetProperty("name", out var nameEl) ? nameEl.GetString() ?? "" : "";
+            var capability = stepEl.TryGetProperty("capability", out var capEl) ? capEl.GetString() ?? "" : "";
+            var description = stepEl.TryGetProperty("description", out var descEl) ? descEl.GetString() : null;
+
+            if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(capability))
+            {
+                continue; // Skip invalid steps
+            }
+
+            var step = await _workflowService.AddStepAsync(
+                storyId,
+                name,
+                capability,
+                description,
+                ct: ct);
+
+            addedSteps.Add(new
+            {
+                id = step.Id,
+                name = step.Name,
+                capability = step.Capability,
+                description = step.Description,
+                order = step.Order,
+                status = step.Status.ToString()
+            });
+        }
+
+        return new
+        {
+            storyId,
+            stepsAdded = addedSteps.Count,
+            steps = addedSteps,
+            message = $"Added {addedSteps.Count} steps to story"
+        };
+    }
+
+    private async Task<object> UpdateStepAsync(JsonElement? args, CancellationToken ct)
+    {
+        var storyIdStr = args?.GetProperty("storyId").GetString() ?? "";
+        if (!Guid.TryParse(storyIdStr, out var storyId))
+        {
+            return new { error = "storyId is required and must be a valid GUID" };
+        }
+
+        var stepIdStr = args?.GetProperty("stepId").GetString() ?? "";
+        if (!Guid.TryParse(stepIdStr, out var stepId))
+        {
+            return new { error = "stepId is required and must be a valid GUID" };
+        }
+
+        var statusStr = args?.GetProperty("status").GetString()?.ToLowerInvariant() ?? "";
+        if (string.IsNullOrEmpty(statusStr))
+        {
+            return new { error = "status is required" };
+        }
+
+        var workflow = await _workflowService.GetByIdWithStepsAsync(storyId, ct);
+        if (workflow is null)
+        {
+            return new { error = $"Story not found: {storyId}" };
+        }
+
+        var step = workflow.Steps.FirstOrDefault(s => s.Id == stepId);
+        if (step is null)
+        {
+            return new { error = $"Step not found: {stepId}" };
+        }
+
+        string? output = null;
+        string? error = null;
+        string? skipReason = null;
+
+        if (args.HasValue)
+        {
+            if (args.Value.TryGetProperty("output", out var outputEl))
+                output = outputEl.GetString();
+            if (args.Value.TryGetProperty("error", out var errorEl))
+                error = errorEl.GetString();
+            if (args.Value.TryGetProperty("skipReason", out var skipEl))
+                skipReason = skipEl.GetString();
+        }
+
+        WorkflowStep updatedStep;
+        switch (statusStr)
+        {
+            case "completed":
+                step.Status = StepStatus.Completed;
+                step.Output = output;
+                step.CompletedAt = DateTime.UtcNow;
+                await _workflowService.UpdateAsync(workflow, ct);
+                updatedStep = step;
+                break;
+
+            case "failed":
+                step.Status = StepStatus.Failed;
+                step.Error = error ?? "Step marked as failed";
+                await _workflowService.UpdateAsync(workflow, ct);
+                updatedStep = step;
+                break;
+
+            case "skipped":
+                updatedStep = await _workflowService.SkipStepAsync(storyId, stepId, skipReason, ct);
+                break;
+
+            case "pending":
+                updatedStep = await _workflowService.ResetStepAsync(storyId, stepId, ct);
+                break;
+
+            default:
+                return new { error = $"Unknown status: {statusStr}. Valid values: completed, failed, skipped, pending" };
+        }
+
+        return new
+        {
+            stepId = updatedStep.Id,
+            name = updatedStep.Name,
+            status = updatedStep.Status.ToString(),
+            output = updatedStep.Output,
+            error = updatedStep.Error,
+            skipReason = updatedStep.SkipReason,
+            message = $"Step status updated to {updatedStep.Status}"
+        };
     }
 
     private async Task<object> FindByAttributeAsync(JsonElement? args, CancellationToken ct)
