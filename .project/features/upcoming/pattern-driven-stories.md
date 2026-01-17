@@ -1,7 +1,20 @@
 # Feature: Pattern-Driven Stories
 
-**Status:** 📋 Spec
+**Status:** � In Progress
 **Priority:** High
+
+## Implementation Progress
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| Remove WorkflowMode enum | ✅ Complete | Commit c405fe0, migration 20260117231200 |
+| `aura_workflow` enrich operation | ✅ Complete | Commit 7599e1f |
+| `aura_workflow` update_step operation | ✅ Complete | Commit 7599e1f |
+| Step model compatibility | ✅ Complete | Existing WorkflowStep entity works |
+| Pattern loading in agent | ⏳ Not started | Agent needs to parse patterns |
+| UI for phase grouping | ⏳ Not started | Parse `[Phase]` prefix in Description |
+| Worktree isolation | ⏳ Not started | Create worktree for large changes |
+| Squash merge on completion | ⏳ Not started | |
 
 ## Summary
 
@@ -343,7 +356,7 @@ For large refactors requiring approval (tech lead review, team awareness, compli
 
 ## Architectural Decisions
 
-### Remove WorkflowMode Enum
+### Remove WorkflowMode Enum ✅ IMPLEMENTED
 
 The current `WorkflowMode` (Conversational vs Structured) is an artificial dichotomy. In practice, users need both:
 
@@ -356,12 +369,14 @@ The current `WorkflowMode` (Conversational vs Structured) is an artificial dicho
 
 If steps exist, show them. Chat is always available. The UI presents both views.
 
-**Blast Radius:**
-- `Workflow.cs` — Remove `Mode` property and `WorkflowMode` enum
-- `IWorkflowService.cs` / `WorkflowService.cs` — Remove `mode` parameter
-- `DeveloperEndpoints.cs` / `McpHandler.cs` — Remove mode handling
-- `workflowTreeProvider.ts` — Remove mode-based icon logic
-- Database — Leave column nullable or drop via migration
+**Implementation:** Commit c405fe0, migration 20260117231200_RemoveWorkflowMode
+
+**Blast Radius (completed):**
+- ✅ `Workflow.cs` — Removed `Mode` property and `WorkflowMode` enum
+- ✅ `IWorkflowService.cs` / `WorkflowService.cs` — Removed `mode` parameter
+- ✅ `DeveloperEndpoints.cs` / `McpHandler.cs` — Removed mode handling
+- ✅ `workflowTreeProvider.ts` — Removed mode-based icon logic
+- ✅ Database — Migration drops `mode` column
 
 ### Decoupled Architecture
 
@@ -382,13 +397,15 @@ The agent orchestrates:
 └─────────────────────┘     └─────────────────────┘     └─────────────────────┘
 ```
 
-### Enrich, Don't Spawn
+### Enrich, Don't Spawn ✅ IMPLEMENTED
 
 When a pattern runs inside an existing story context:
 - Do NOT create a new story
 - ENRICH the current story with structured steps from analysis
 
 The story goes from "Rename Workflow → Story" (title only) to "Rename Workflow → Story" (title + 15 structured steps).
+
+**Implementation:** Commit 7599e1f - Added `enrich` operation to `aura_workflow` MCP tool
 
 **New `aura_workflow` operation:** `enrich`
 ```
@@ -403,7 +420,7 @@ aura_workflow(
 )
 ```
 
-### Chat-Driven Execution
+### Chat-Driven Execution ✅ IMPLEMENTED
 
 Users can execute steps from chat, with progress reflected in the panel:
 
@@ -412,9 +429,11 @@ Users can execute steps from chat, with progress reflected in the panel:
 3. Agent calls `aura_workflow(update_step, storyId, stepId, status: "completed")`
 4. Panel reflects the change in real-time
 
+**Implementation:** Commit 7599e1f - Added `update_step` operation to `aura_workflow` MCP tool
+
 Both panel-driven and chat-driven execution use the same underlying step model.
 
-### Step Model: No Schema Changes
+### Step Model: No Schema Changes ✅ VERIFIED
 
 The existing `WorkflowStep` entity is sufficient. Steps are modeled as commands:
 
