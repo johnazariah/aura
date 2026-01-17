@@ -75,6 +75,7 @@ features/
 | Feature | Description |
 |---------|-------------|
 | [Pattern-Driven Stories](upcoming/pattern-driven-stories.md) | Patterns generate user-modifiable stories with discrete items |
+| [Pattern Catalog](upcoming/pattern-catalog.md) | 15+ patterns: refactoring, code generation, quality, architecture |
 
 ### Medium Priority (User Experience)
 
