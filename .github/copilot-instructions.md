@@ -159,6 +159,28 @@ When a feature is complete, you MUST follow the ceremony in `.github/prompts/aur
 **Validation**: Run `.\scripts\Validate-Features.ps1` to check conventions.
 This script can be installed as a pre-commit hook: `.\scripts\Validate-Features.ps1 -Install`
 
+## MCP Tools & Aura Codebase Tools
+
+When using MCP tools (prefixed with `mcp_aura_codebase_`) that require paths:
+
+**CRITICAL**: Always use the **current workspace root**, not worktree paths or cached paths from previous context.
+
+| Parameter | Value |
+|-----------|-------|
+| `solutionPath` | `c:\work\aura\Aura.sln` |
+| `projectPath` | `c:\work\aura\src\{ProjectName}` |
+| `workspacePath` | `c:\work\aura` |
+
+**Common mistakes to avoid:**
+- ❌ Using worktree paths like `c:\work\aura-workflow-xyz-abc123\Aura.sln`
+- ❌ Inferring paths from conversation history that may reference other worktrees
+- ❌ Using relative paths without anchoring to workspace root
+
+**Before calling any `aura_*` MCP tool:**
+1. Confirm the workspace root is `c:\work\aura`
+2. Use absolute paths anchored to that root
+3. For `solutionPath`, always use `c:\work\aura\Aura.sln`
+
 ## Container Runtime
 
 - **Windows**: Podman
