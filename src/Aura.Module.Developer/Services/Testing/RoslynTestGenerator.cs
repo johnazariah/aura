@@ -155,6 +155,7 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
                 ExistingTests = existingTests,
                 Gaps = gaps,
                 DetectedFramework = "xunit",
+                DetectedMockingLibrary = "nsubstitute",
                 SuggestedTestCount = 0
             };
         }
@@ -186,6 +187,7 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
 
         // Find existing tests
         var detectedFramework = await DetectTestFrameworkAsync(solution, typeSymbol, ct);
+        var detectedMockingLibrary = DetectMockingLibrary(solution);
         existingTests = await FindExistingTestsAsync(solution, typeSymbol, ct);
 
         // Identify gaps
@@ -200,6 +202,7 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
             ExistingTests = existingTests,
             Gaps = gaps,
             DetectedFramework = detectedFramework,
+            DetectedMockingLibrary = detectedMockingLibrary,
             SuggestedTestCount = suggestedCount
         };
     }
@@ -262,6 +265,32 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
         }
 
         return "xunit"; // default
+    }
+
+    /// <summary>
+    /// Detects the mocking library used in the test project.
+    /// </summary>
+    private string DetectMockingLibrary(Solution solution)
+    {
+        // Find test projects by convention
+        var testProjects = solution.Projects.Where(p =>
+            p.Name.Contains("Test", StringComparison.OrdinalIgnoreCase) ||
+            p.Name.Contains("Tests", StringComparison.OrdinalIgnoreCase));
+
+        foreach (var project in testProjects)
+        {
+            var refs = project.MetadataReferences.Select(r => r.Display ?? "").ToList();
+
+            if (refs.Any(r => r.Contains("NSubstitute", StringComparison.OrdinalIgnoreCase)))
+                return "nsubstitute";
+            if (refs.Any(r => r.Contains("Moq", StringComparison.OrdinalIgnoreCase) &&
+                         !r.Contains("NSubstitute", StringComparison.OrdinalIgnoreCase)))
+                return "moq";
+            if (refs.Any(r => r.Contains("FakeItEasy", StringComparison.OrdinalIgnoreCase)))
+                return "fakeiteasy";
+        }
+
+        return "nsubstitute"; // default - most common in modern .NET
     }
 
     private async Task<List<ExistingTestInfo>> FindExistingTestsAsync(Solution solution, INamedTypeSymbol typeSymbol, CancellationToken ct)
@@ -430,8 +459,8 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
 
         // Build the test file content
         var testCode = fileExists
-            ? await AppendToExistingTestFileAsync(testFilePath, testMethods, typeSymbol, analysis.DetectedFramework, ct)
-            : GenerateNewTestFile(typeSymbol, testMethods, analysis.DetectedFramework);
+            ? await AppendToExistingTestFileAsync(testFilePath, testMethods, typeSymbol, analysis.DetectedFramework, analysis.DetectedMockingLibrary, ct)
+            : GenerateNewTestFile(typeSymbol, testMethods, analysis.DetectedFramework, analysis.DetectedMockingLibrary);
 
         // Write the file
         var directory = Path.GetDirectoryName(testFilePath);
@@ -612,7 +641,7 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
         return shortName;
     }
 
-    private string GenerateNewTestFile(INamedTypeSymbol typeSymbol, List<GeneratedTestInfo> testMethods, string framework)
+    private string GenerateNewTestFile(INamedTypeSymbol typeSymbol, List<GeneratedTestInfo> testMethods, string framework, string mockingLibrary)
     {
         var sb = new StringBuilder();
         var typeName = typeSymbol.Name;
@@ -638,10 +667,10 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
                 break;
         }
 
-        // Add NSubstitute if there are dependencies
+        // Add mocking library using if there are dependencies
         if (hasDependencies)
         {
-            sb.AppendLine("using NSubstitute;");
+            sb.AppendLine(GetMockingLibraryUsing(mockingLibrary));
         }
 
         sb.AppendLine($"using {typeNamespace};");
@@ -667,7 +696,7 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
         foreach (var test in testMethods)
         {
             var member = typeSymbol.GetMembers(test.TargetMethod).OfType<IMethodSymbol>().FirstOrDefault();
-            GenerateTestMethod(sb, test, member, typeName, framework);
+            GenerateTestMethod(sb, test, member, typeName, framework, mockingLibrary);
         }
 
         sb.AppendLine("}");
@@ -680,7 +709,8 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
         GeneratedTestInfo test,
         IMethodSymbol? method,
         string typeName,
-        string framework)
+        string framework,
+        string mockingLibrary = "nsubstitute")
     {
         var isAsync = method?.IsAsync == true ||
                       method?.ReturnType.Name is "Task" or "ValueTask";
@@ -733,14 +763,15 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
         var constructorDeps = GetConstructorDependencies(method?.ContainingType);
         if (constructorDeps.Count > 0)
         {
-            // Generate NSubstitute mocks for each dependency
+            // Generate mocks for each dependency using detected library
             var mockVarNames = new List<string>();
             foreach (var dep in constructorDeps)
             {
                 var varName = $"_{ToCamelCase(dep.ParameterName)}";
                 var typeName2 = dep.TypeName;
-                sb.AppendLine($"        var {varName} = Substitute.For<{typeName2}>();");
-                mockVarNames.Add(varName);
+                var mockCreation = GenerateMockCreation(typeName2, mockingLibrary);
+                sb.AppendLine($"        var {varName} = {mockCreation};");
+                mockVarNames.Add(GetMockValue(varName, mockingLibrary));
             }
 
             var ctorArgs = string.Join(", ", mockVarNames);
@@ -808,6 +839,7 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
         List<GeneratedTestInfo> testMethods,
         INamedTypeSymbol typeSymbol,
         string framework,
+        string mockingLibrary,
         CancellationToken ct)
     {
         var existingContent = await File.ReadAllTextAsync(testFilePath, ct);
@@ -822,7 +854,7 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
         if (testClass is null)
         {
             // No test class found, generate new file
-            return GenerateNewTestFile(typeSymbol, testMethods, framework);
+            return GenerateNewTestFile(typeSymbol, testMethods, framework, mockingLibrary);
         }
 
         // Get existing method names to avoid duplicates
@@ -850,7 +882,7 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
         foreach (var test in methodsToAdd)
         {
             var member = typeSymbol.GetMembers(test.TargetMethod).OfType<IMethodSymbol>().FirstOrDefault();
-            GenerateTestMethod(newMethods, test, member, typeSymbol.Name, framework);
+            GenerateTestMethod(newMethods, test, member, typeSymbol.Name, framework, mockingLibrary);
         }
 
         // Insert before the closing brace of the class
@@ -1101,5 +1133,60 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
     {
         if (string.IsNullOrEmpty(name)) return name;
         return char.ToLowerInvariant(name[0]) + name[1..];
+    }
+
+    /// <summary>
+    /// Gets the using statement for a mocking library.
+    /// </summary>
+    private static string GetMockingLibraryUsing(string mockingLibrary)
+    {
+        return mockingLibrary.ToLowerInvariant() switch
+        {
+            "nsubstitute" => "using NSubstitute;",
+            "moq" => "using Moq;",
+            "fakeiteasy" => "using FakeItEasy;",
+            _ => "using NSubstitute;"
+        };
+    }
+
+    /// <summary>
+    /// Generates the mock creation expression for the given type.
+    /// </summary>
+    private static string GenerateMockCreation(string typeName, string mockingLibrary)
+    {
+        return mockingLibrary.ToLowerInvariant() switch
+        {
+            "nsubstitute" => $"Substitute.For<{typeName}>()",
+            "moq" => $"new Mock<{typeName}>()",
+            "fakeiteasy" => $"A.Fake<{typeName}>()",
+            _ => $"Substitute.For<{typeName}>()"
+        };
+    }
+
+    /// <summary>
+    /// Gets the value to pass to constructor from a mock variable.
+    /// Moq requires .Object, others don't.
+    /// </summary>
+    private static string GetMockValue(string varName, string mockingLibrary)
+    {
+        return mockingLibrary.ToLowerInvariant() switch
+        {
+            "moq" => $"{varName}.Object",
+            _ => varName
+        };
+    }
+
+    /// <summary>
+    /// Generates an inline mock/substitute for an interface parameter.
+    /// </summary>
+    private static string GenerateInlineMock(string typeName, string mockingLibrary)
+    {
+        return mockingLibrary.ToLowerInvariant() switch
+        {
+            "nsubstitute" => $"Substitute.For<{typeName}>()",
+            "moq" => $"Mock.Of<{typeName}>()",
+            "fakeiteasy" => $"A.Fake<{typeName}>()",
+            _ => $"Substitute.For<{typeName}>()"
+        };
     }
 }

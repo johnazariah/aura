@@ -111,6 +111,9 @@ public sealed record TestAnalysis
     /// <summary>Detected test framework.</summary>
     public required string DetectedFramework { get; init; }
 
+    /// <summary>Detected mocking library (nsubstitute, moq, fakeiteasy).</summary>
+    public string DetectedMockingLibrary { get; init; } = "nsubstitute";
+
     /// <summary>Suggested number of tests to generate.</summary>
     public int SuggestedTestCount { get; init; }
 }
