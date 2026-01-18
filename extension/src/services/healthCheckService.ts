@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import axios, { AxiosInstance } from 'axios';
+import { gitService } from './gitService';
 
 /**
  * Normalizes a file path for consistent API calls.
@@ -259,6 +260,17 @@ export class HealthCheckService {
             // Get current workspace path (first workspace folder)
             const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
 
+            // Check if this is a worktree and get canonical path
+            let canonicalPath = workspacePath;
+            let isWorktree = false;
+            if (workspacePath) {
+                const repoInfo = await gitService.getRepositoryInfo(workspacePath);
+                if (repoInfo) {
+                    canonicalPath = repoInfo.canonicalPath;
+                    isWorktree = repoInfo.isWorktree;
+                }
+            }
+
             // Fetch workspace stats if we have a workspace open
             let repoDocuments = 0;
             let repoChunks = 0;
@@ -272,9 +284,9 @@ export class HealthCheckService {
             let indexingProgress = 0;
 
             try {
-                if (workspacePath) {
+                if (canonicalPath) {
                     // Normalize path to match API expectations (forward slashes, lowercase)
-                    const normalizedPath = normalizePath(workspacePath);
+                    const normalizedPath = normalizePath(canonicalPath);
                     const encodedPath = encodeURIComponent(normalizedPath);
                     const workspaceResponse = await this.httpClient.get(
                         `${url}/api/workspaces/${encodedPath}`
@@ -319,9 +331,13 @@ export class HealthCheckService {
             let details: string;
             if (isIndexing) {
                 details = `Indexing... ${indexingProgress}%`;
-            } else if (workspacePath && (repoDocuments > 0 || repoChunks > 0 || graphNodes > 0)) {
-                details = `${repoDocuments} files, ${repoChunks} chunks, ${graphNodes} graph nodes`;
-            } else if (workspacePath) {
+            } else if (canonicalPath && (repoDocuments > 0 || repoChunks > 0 || graphNodes > 0)) {
+                if (isWorktree) {
+                    details = `${repoDocuments} files (via parent)`;
+                } else {
+                    details = `${repoDocuments} files, ${repoChunks} chunks, ${graphNodes} graph nodes`;
+                }
+            } else if (canonicalPath) {
                 details = 'Not indexed';
             } else {
                 details = 'No workspace open';
@@ -336,7 +352,7 @@ export class HealthCheckService {
                 chunksByType,
                 repoDocuments,
                 repoChunks,
-                repositoryPath: workspacePath,
+                repositoryPath: canonicalPath,
                 graphNodes,
                 graphEdges,
                 indexHealth,

@@ -453,6 +453,10 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
         var typeName = typeSymbol.Name;
         var testClassName = $"{typeName}Tests";
 
+        // Get the source project containing the type
+        var sourceProject = FindSourceProject(solution, typeSymbol);
+        var sourceProjectName = sourceProject?.Name;
+
         // First, check for existing test files
         foreach (var project in solution.Projects)
         {
@@ -466,8 +470,28 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
             }
         }
 
-        // Find the test project
-        var testProject = solution.Projects.FirstOrDefault(p =>
+        // Find the MATCHING test project for the source project
+        // Convention: SourceProject → SourceProject.Tests
+        Project? testProject = null;
+
+        if (!string.IsNullOrEmpty(sourceProjectName))
+        {
+            // Try exact match first: Aura.Module.Developer → Aura.Module.Developer.Tests
+            testProject = solution.Projects.FirstOrDefault(p =>
+                p.Name.Equals($"{sourceProjectName}.Tests", StringComparison.OrdinalIgnoreCase));
+
+            // If no exact match, try to find a test project that references the source project
+            if (testProject is null)
+            {
+                testProject = solution.Projects.FirstOrDefault(p =>
+                    p.Name.Contains("Test", StringComparison.OrdinalIgnoreCase) &&
+                    !p.Name.Contains("Integration", StringComparison.OrdinalIgnoreCase) &&
+                    p.ProjectReferences.Any(r => r.ProjectId == sourceProject?.Id));
+            }
+        }
+
+        // Fallback: Find any unit test project (not integration)
+        testProject ??= solution.Projects.FirstOrDefault(p =>
             p.Name.Contains("Test", StringComparison.OrdinalIgnoreCase) &&
             !p.Name.Contains("Integration", StringComparison.OrdinalIgnoreCase));
 
@@ -491,6 +515,29 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
         }
 
         throw new InvalidOperationException("Could not determine test file location");
+    }
+
+    private static Project? FindSourceProject(Solution solution, INamedTypeSymbol typeSymbol)
+    {
+        // Find the project that contains the source file for this type
+        var sourceLocation = typeSymbol.Locations.FirstOrDefault(l => l.IsInSource);
+        if (sourceLocation?.SourceTree?.FilePath is null)
+        {
+            return null;
+        }
+
+        var sourcePath = sourceLocation.SourceTree.FilePath;
+
+        foreach (var project in solution.Projects)
+        {
+            if (project.Documents.Any(d =>
+                string.Equals(d.FilePath, sourcePath, StringComparison.OrdinalIgnoreCase)))
+            {
+                return project;
+            }
+        }
+
+        return null;
     }
 
     private static List<GeneratedTestInfo> GenerateTestMethods(
@@ -629,7 +676,42 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
 
         // Arrange
         sb.AppendLine("        // Arrange");
-        sb.AppendLine($"        var sut = new {typeName}(); // TODO: Add constructor parameters/dependencies");
+
+        // Generate parameter declarations with realistic values
+        var paramDeclarations = new List<string>();
+        var paramNames = new List<string>();
+
+        if (method is not null)
+        {
+            foreach (var param in method.Parameters)
+            {
+                var (declaration, varName) = GenerateParameterSetup(param);
+                if (!string.IsNullOrEmpty(declaration))
+                {
+                    paramDeclarations.Add(declaration);
+                }
+                paramNames.Add(varName);
+            }
+        }
+
+        // Output parameter declarations
+        foreach (var decl in paramDeclarations)
+        {
+            sb.AppendLine($"        {decl}");
+        }
+
+        // Constructor - try to identify if it needs mocks
+        var needsMocks = HasDependencyInjection(method?.ContainingType);
+        if (needsMocks)
+        {
+            sb.AppendLine($"        // TODO: Create mocks for constructor dependencies");
+            sb.AppendLine($"        // var mockDependency = new Mock<IDependency>();");
+            sb.AppendLine($"        var sut = new {typeName}(/* inject mocks here */);");
+        }
+        else
+        {
+            sb.AppendLine($"        var sut = new {typeName}();");
+        }
         sb.AppendLine();
 
         // Act
@@ -637,7 +719,7 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
         var awaitKeyword = isAsync ? "await " : "";
         if (method is not null)
         {
-            var paramList = string.Join(", ", method.Parameters.Select(p => $"default /* {p.Name} */"));
+            var paramList = string.Join(", ", paramNames);
             var returnTypeStr = method.ReturnType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
 
             if (returnTypeStr != "void" && !returnTypeStr.StartsWith("Task", StringComparison.Ordinal))
@@ -744,5 +826,193 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
         }
 
         return "Test generation complete";
+    }
+
+    /// <summary>
+    /// Generate a variable declaration and value for a method parameter.
+    /// </summary>
+    private static (string declaration, string varName) GenerateParameterSetup(IParameterSymbol param)
+    {
+        var paramName = param.Name;
+        var varName = paramName;
+        var typeSymbol = param.Type;
+
+        // Handle common types with realistic test values
+        var value = GenerateTestValue(typeSymbol, paramName);
+
+        if (value.StartsWith("new ", StringComparison.Ordinal) ||
+            value.Contains('\n') ||
+            value.Length > 40)
+        {
+            // Complex value - use a variable
+            var declaration = $"var {varName} = {value};";
+            return (declaration, varName);
+        }
+        else
+        {
+            // Simple value - can be inlined
+            return (string.Empty, value);
+        }
+    }
+
+    /// <summary>
+    /// Generate a realistic test value for a given type.
+    /// </summary>
+    private static string GenerateTestValue(ITypeSymbol typeSymbol, string contextName)
+    {
+        var typeName = typeSymbol.Name;
+        var fullTypeName = typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
+        // Handle nullable types
+        if (typeSymbol is INamedTypeSymbol { IsGenericType: true } namedType &&
+            namedType.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T)
+        {
+            var innerType = namedType.TypeArguments[0];
+            return GenerateTestValue(innerType, contextName);
+        }
+
+        // Handle special types
+        switch (typeSymbol.SpecialType)
+        {
+            case SpecialType.System_String:
+                return $"\"test-{contextName}\"";
+            case SpecialType.System_Int32:
+            case SpecialType.System_Int64:
+            case SpecialType.System_Int16:
+                return "42";
+            case SpecialType.System_UInt32:
+            case SpecialType.System_UInt64:
+            case SpecialType.System_UInt16:
+                return "42u";
+            case SpecialType.System_Double:
+                return "3.14";
+            case SpecialType.System_Single:
+                return "3.14f";
+            case SpecialType.System_Decimal:
+                return "99.99m";
+            case SpecialType.System_Boolean:
+                return "true";
+            case SpecialType.System_DateTime:
+                return "DateTime.UtcNow";
+            case SpecialType.System_Byte:
+                return "(byte)1";
+            case SpecialType.System_Char:
+                return "'X'";
+        }
+
+        // Handle common framework types by name
+        return typeName switch
+        {
+            "Guid" => "Guid.NewGuid()",
+            "DateTimeOffset" => "DateTimeOffset.UtcNow",
+            "TimeSpan" => "TimeSpan.FromMinutes(5)",
+            "Uri" => "new Uri(\"https://example.com\")",
+            "CancellationToken" => "CancellationToken.None",
+            _ => GenerateComplexTypeValue(typeSymbol, contextName)
+        };
+    }
+
+    /// <summary>
+    /// Generate values for complex/custom types including enums.
+    /// </summary>
+    private static string GenerateComplexTypeValue(ITypeSymbol typeSymbol, string contextName)
+    {
+        // Handle enums - use the FIRST actual enum member
+        if (typeSymbol.TypeKind == TypeKind.Enum && typeSymbol is INamedTypeSymbol enumType)
+        {
+            var firstMember = enumType.GetMembers()
+                .OfType<IFieldSymbol>()
+                .Where(f => f.HasConstantValue)
+                .FirstOrDefault();
+
+            if (firstMember is not null)
+            {
+                return $"{enumType.Name}.{firstMember.Name}";
+            }
+
+            // Fallback to default if no members found
+            return $"default({enumType.Name})";
+        }
+
+        // Handle List<T>, IList<T>, IEnumerable<T>, etc.
+        if (typeSymbol is INamedTypeSymbol { IsGenericType: true } genericType)
+        {
+            var typeArg = genericType.TypeArguments[0];
+            var typeArgName = typeArg.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
+
+            if (genericType.Name is "List" or "IList" or "ICollection" or "IEnumerable")
+            {
+                var innerValue = GenerateTestValue(typeArg, "item");
+                return $"new List<{typeArgName}> {{ {innerValue} }}";
+            }
+
+            if (genericType.Name is "Dictionary" or "IDictionary" && genericType.TypeArguments.Length == 2)
+            {
+                var keyType = genericType.TypeArguments[0];
+                var valueType = genericType.TypeArguments[1];
+                var keyTypeName = keyType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
+                var valueTypeName = valueType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
+                var keyValue = GenerateTestValue(keyType, "key");
+                var valueValue = GenerateTestValue(valueType, "value");
+                return $"new Dictionary<{keyTypeName}, {valueTypeName}> {{ [{keyValue}] = {valueValue} }}";
+            }
+
+            if (genericType.Name is "Task" or "ValueTask")
+            {
+                if (genericType.TypeArguments.Length > 0)
+                {
+                    var innerValue = GenerateTestValue(typeArg, contextName);
+                    return $"Task.FromResult({innerValue})";
+                }
+                return "Task.CompletedTask";
+            }
+        }
+
+        // Handle arrays
+        if (typeSymbol is IArrayTypeSymbol arrayType)
+        {
+            var elementType = arrayType.ElementType;
+            var elementTypeName = elementType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
+            var innerValue = GenerateTestValue(elementType, "item");
+            return $"new {elementTypeName}[] {{ {innerValue} }}";
+        }
+
+        // Handle interfaces - suggest mock
+        if (typeSymbol.TypeKind == TypeKind.Interface)
+        {
+            return $"Mock.Of<{typeSymbol.Name}>()";
+        }
+
+        // For other types, try to instantiate with new()
+        // This will work for simple DTOs/records
+        if (typeSymbol.TypeKind is TypeKind.Class or TypeKind.Struct)
+        {
+            // Check if it has a parameterless constructor
+            if (typeSymbol is INamedTypeSymbol classType)
+            {
+                var hasParameterlessCtor = classType.Constructors
+                    .Any(c => c.Parameters.Length == 0 && c.DeclaredAccessibility == Accessibility.Public);
+
+                if (hasParameterlessCtor)
+                {
+                    return $"new {classType.Name}()";
+                }
+            }
+        }
+
+        // Fallback to default with comment
+        return $"default! /* {typeSymbol.Name} - provide test instance */";
+    }
+
+    /// <summary>
+    /// Check if a type has constructor dependencies (typically interfaces).
+    /// </summary>
+    private static bool HasDependencyInjection(INamedTypeSymbol? typeSymbol)
+    {
+        if (typeSymbol is null) return false;
+
+        return typeSymbol.Constructors
+            .Where(c => c.DeclaredAccessibility == Accessibility.Public)
+            .Any(c => c.Parameters.Any(p => p.Type.TypeKind == TypeKind.Interface));
     }
 }

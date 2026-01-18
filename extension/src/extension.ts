@@ -7,6 +7,7 @@ import { WorkflowPanelProvider } from './providers/workflowPanelProvider';
 import { WelcomeViewProvider } from './providers/welcomeViewProvider';
 import { HealthCheckService } from './services/healthCheckService';
 import { AuraApiService, AgentInfo } from './services/auraApiService';
+import { gitService } from './services/gitService';
 
 let auraApiService: AuraApiService;
 let healthCheckService: HealthCheckService;
@@ -409,6 +410,7 @@ async function indexWorkspace(): Promise<void> {
 /**
  * Check if the current workspace is onboarded and set VS Code context accordingly.
  * This controls which views are shown (welcome vs workflows).
+ * For worktrees, we check the parent repository's onboarding status.
  */
 async function checkOnboardingStatus(): Promise<void> {
     const workspaceFolders = vscode.workspace.workspaceFolders;
@@ -417,26 +419,42 @@ async function checkOnboardingStatus(): Promise<void> {
         console.log('[Aura] No workspace folders, setting not onboarded');
         await vscode.commands.executeCommand('setContext', 'aura.workspaceOnboarded', false);
         await vscode.commands.executeCommand('setContext', 'aura.workspaceNotOnboarded', true);
+        await vscode.commands.executeCommand('setContext', 'aura.isWorktree', false);
         return;
     }
 
     const workspacePath = workspaceFolders[0].uri.fsPath;
     console.log('[Aura] Checking onboarding status for:', workspacePath);
 
+    // Check if this is a worktree and get the canonical repository path
+    const repoInfo = await gitService.getRepositoryInfo(workspacePath);
+    const canonicalPath = repoInfo?.canonicalPath ?? workspacePath;
+    const isWorktree = repoInfo?.isWorktree ?? false;
+
+    await vscode.commands.executeCommand('setContext', 'aura.isWorktree', isWorktree);
+
+    if (isWorktree) {
+        console.log('[Aura] Workspace is a worktree, using parent path:', canonicalPath);
+    }
+
     try {
-        const status = await auraApiService.getWorkspaceStatus(workspacePath);
+        const status = await auraApiService.getWorkspaceStatus(canonicalPath);
         console.log('[Aura] API returned status:', JSON.stringify(status));
         
         if (status.isOnboarded) {
             console.log('[Aura] Workspace IS onboarded, hiding welcome view');
             await vscode.commands.executeCommand('setContext', 'aura.workspaceOnboarded', true);
             await vscode.commands.executeCommand('setContext', 'aura.workspaceNotOnboarded', false);
-            console.log(`Workspace onboarded: ${workspacePath} (${status.stats.files} files, ${status.stats.chunks} chunks)`);
+            if (isWorktree) {
+                console.log(`Worktree using parent index: ${canonicalPath} (${status.stats.files} files, ${status.stats.chunks} chunks)`);
+            } else {
+                console.log(`Workspace onboarded: ${canonicalPath} (${status.stats.files} files, ${status.stats.chunks} chunks)`);
+            }
         } else {
             console.log('[Aura] Workspace NOT onboarded, showing welcome view');
             await vscode.commands.executeCommand('setContext', 'aura.workspaceOnboarded', false);
             await vscode.commands.executeCommand('setContext', 'aura.workspaceNotOnboarded', true);
-            console.log(`Workspace not onboarded: ${workspacePath}`);
+            console.log(`Workspace not onboarded: ${canonicalPath}`);
         }
     } catch (error) {
         // If API call fails, assume not onboarded (will show welcome view)
