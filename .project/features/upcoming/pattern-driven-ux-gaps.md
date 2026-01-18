@@ -167,8 +167,9 @@ During dogfooding of the pattern-driven story workflow (test coverage story with
 - **Gap 9** - ✅ Test generation now creates more complete tests with realistic parameter values
 
 ### High - MCP Tool Reliability
+- **Gap 13** - ✅ aura_navigate definition now works for C# (uses Roslyn + code graph)
+- **Gap 14** - ✅ aura_validate now supports solution-level validation (omit projectName)
 - **Gap 12** - aura_inspect returns empty
-- **Gap 13** - aura_navigate definition fails
 - **Gap 15** - aura_search irrelevant results
 - **Gap 16** - aura_search fails to find enums
 
@@ -264,9 +265,11 @@ The following issues were identified during dogfooding the generate-tests patter
 
 ---
 
-### Gap 13: aura_navigate Definition Fails with Key Error (HIGH)
+### Gap 13: aura_navigate Definition Fails with Key Error (HIGH) ✅ IMPLEMENTED
 
 **Tool:** `aura_navigate(operation: "definition")`
+
+**Status:** Fixed in McpHandler.cs - Added `FindCSharpDefinitionAsync` with Roslyn and code graph support.
 
 **Problem:** Failed with "key not present" error when trying to find definition.
 
@@ -281,9 +284,11 @@ The following issues were identified during dogfooding the generate-tests patter
 
 ---
 
-### Gap 14: aura_validate Fails for Solution-Level Validation (MEDIUM)
+### Gap 14: aura_validate Fails for Solution-Level Validation (MEDIUM) ✅ IMPLEMENTED
 
 **Tool:** `aura_validate(operation: "compilation")`
+
+**Status:** Fixed in McpHandler.cs - `projectName` is now optional. If omitted, validates all projects in solution.
 
 **Problem:** Failed with "key not present" error when validating the entire solution.
 

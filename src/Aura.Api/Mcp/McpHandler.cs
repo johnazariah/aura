@@ -638,10 +638,201 @@ public sealed class McpHandler
             "by_attribute" => await FindByAttributeFromNavigate(args, ct),
             "extension_methods" => await FindExtensionMethodsFromNavigate(args, ct),
             "by_return_type" => await FindByReturnTypeFromNavigate(args, ct),
-            "references" => await PythonFindReferencesAsync(args, ct),
-            "definition" => await PythonFindDefinitionAsync(args, ct),
+            "references" => await FindReferencesAsync(args, ct),
+            "definition" => await FindDefinitionAsync(args, ct),
             _ => throw new ArgumentException($"Unknown navigate operation: {operation}")
         };
+    }
+
+    /// <summary>
+    /// Find references - auto-detects language from filePath.
+    /// </summary>
+    private async Task<object> FindReferencesAsync(JsonElement? args, CancellationToken ct)
+    {
+        // Check if filePath is provided and ends with .py
+        if (args.HasValue && args.Value.TryGetProperty("filePath", out var filePathEl))
+        {
+            var filePath = filePathEl.GetString() ?? "";
+            if (filePath.EndsWith(".py", StringComparison.OrdinalIgnoreCase))
+            {
+                return await PythonFindReferencesAsync(args, ct);
+            }
+        }
+
+        // For C#, use usages (references is an alias for usages)
+        return await FindUsagesAsync(args, ct);
+    }
+
+    /// <summary>
+    /// Find definition - auto-detects language from filePath.
+    /// </summary>
+    private async Task<object> FindDefinitionAsync(JsonElement? args, CancellationToken ct)
+    {
+        // Check if this is a Python request (has filePath ending in .py)
+        if (args.HasValue && args.Value.TryGetProperty("filePath", out var filePathEl))
+        {
+            var filePath = filePathEl.GetString() ?? "";
+            if (filePath.EndsWith(".py", StringComparison.OrdinalIgnoreCase))
+            {
+                // Validate required Python parameters
+                if (!args.Value.TryGetProperty("projectPath", out _))
+                {
+                    return new { error = "projectPath is required for Python definition lookup" };
+                }
+                if (!args.Value.TryGetProperty("offset", out _))
+                {
+                    return new { error = "offset is required for Python definition lookup" };
+                }
+                return await PythonFindDefinitionAsync(args, ct);
+            }
+        }
+
+        // For C#, find definition in code graph
+        return await FindCSharpDefinitionAsync(args, ct);
+    }
+
+    /// <summary>
+    /// Find C# symbol definition using Roslyn and code graph.
+    /// </summary>
+    private async Task<object> FindCSharpDefinitionAsync(JsonElement? args, CancellationToken ct)
+    {
+        string? symbolName = null;
+        string? solutionPath = null;
+        string? containingType = null;
+
+        if (args.HasValue)
+        {
+            if (args.Value.TryGetProperty("symbolName", out var symEl))
+                symbolName = symEl.GetString();
+            if (args.Value.TryGetProperty("solutionPath", out var solEl))
+                solutionPath = solEl.GetString();
+            if (args.Value.TryGetProperty("containingType", out var typeEl))
+                containingType = typeEl.GetString();
+        }
+
+        if (string.IsNullOrEmpty(symbolName))
+        {
+            return new { error = "symbolName is required for C# definition lookup" };
+        }
+
+        // First try code graph
+        var worktreeInfo = DetectWorktreeFromArgs(args);
+        var results = await _graphService.FindNodesAsync(symbolName, cancellationToken: ct);
+
+        if (results.Count > 0)
+        {
+            // Filter by containing type if specified
+            var filtered = containingType is not null
+                ? results.Where(n => n.FullName?.Contains(containingType) == true).ToList()
+                : results;
+
+            if (filtered.Count > 0)
+            {
+                var node = filtered.First();
+                return new
+                {
+                    found = true,
+                    name = node.Name,
+                    fullName = node.FullName,
+                    kind = node.NodeType.ToString(),
+                    filePath = TranslatePathIfWorktree(node.FilePath, worktreeInfo),
+                    line = node.LineNumber,
+                    message = $"Found {node.NodeType} {node.Name} at {node.FilePath}:{node.LineNumber}"
+                };
+            }
+        }
+
+        // If we have a solution, try Roslyn
+        if (!string.IsNullOrEmpty(solutionPath) && File.Exists(solutionPath))
+        {
+            try
+            {
+                var solution = await _roslynService.GetSolutionAsync(solutionPath, ct);
+
+                foreach (var project in solution.Projects)
+                {
+                    var compilation = await project.GetCompilationAsync(ct);
+                    if (compilation is null) continue;
+
+                    // Search all types
+                    foreach (var typeSymbol in GetAllTypes(compilation))
+                    {
+                        // Check if this is the symbol we're looking for
+                        if (typeSymbol.Name == symbolName)
+                        {
+                            var location = typeSymbol.Locations.FirstOrDefault(l => l.IsInSource);
+                            if (location is not null)
+                            {
+                                var lineSpan = location.GetLineSpan();
+                                return new
+                                {
+                                    found = true,
+                                    name = typeSymbol.Name,
+                                    fullName = typeSymbol.ToDisplayString(),
+                                    kind = typeSymbol.TypeKind.ToString(),
+                                    filePath = TranslatePathIfWorktree(lineSpan.Path, worktreeInfo),
+                                    line = lineSpan.StartLinePosition.Line + 1,
+                                    message = $"Found {typeSymbol.TypeKind} {typeSymbol.Name}"
+                                };
+                            }
+                        }
+
+                        // Check members
+                        var member = typeSymbol.GetMembers(symbolName).FirstOrDefault();
+                        if (member is not null && (containingType is null || typeSymbol.Name == containingType))
+                        {
+                            var location = member.Locations.FirstOrDefault(l => l.IsInSource);
+                            if (location is not null)
+                            {
+                                var lineSpan = location.GetLineSpan();
+                                return new
+                                {
+                                    found = true,
+                                    name = member.Name,
+                                    fullName = member.ToDisplayString(),
+                                    kind = member.Kind.ToString(),
+                                    filePath = TranslatePathIfWorktree(lineSpan.Path, worktreeInfo),
+                                    line = lineSpan.StartLinePosition.Line + 1,
+                                    message = $"Found {member.Kind} {member.Name} in {typeSymbol.Name}"
+                                };
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to find definition via Roslyn for {Symbol}", symbolName);
+            }
+        }
+
+        return new
+        {
+            found = false,
+            message = $"Symbol '{symbolName}' not found. Try specifying solutionPath for Roslyn-based lookup, or ensure the code graph is indexed."
+        };
+    }
+
+    private static IEnumerable<INamedTypeSymbol> GetAllTypes(Compilation compilation)
+    {
+        var stack = new Stack<INamespaceSymbol>();
+        stack.Push(compilation.GlobalNamespace);
+
+        while (stack.Count > 0)
+        {
+            var ns = stack.Pop();
+            foreach (var member in ns.GetMembers())
+            {
+                if (member is INamespaceSymbol childNs)
+                {
+                    stack.Push(childNs);
+                }
+                else if (member is INamedTypeSymbol type)
+                {
+                    yield return type;
+                }
+            }
+        }
     }
 
     // Navigation helpers - adapt from old parameter names to new unified schema
@@ -1528,8 +1719,20 @@ public sealed class McpHandler
 
     private async Task<object> ValidateCompilationAsync(JsonElement? args, CancellationToken ct)
     {
-        var solutionPath = args?.GetProperty("solutionPath").GetString() ?? "";
-        var projectName = args?.GetProperty("projectName").GetString() ?? "";
+        // Get solutionPath - required
+        string? solutionPath = null;
+        if (args.HasValue && args.Value.TryGetProperty("solutionPath", out var solEl))
+        {
+            solutionPath = solEl.GetString();
+        }
+
+        // Get projectName - optional (if omitted, validate all projects)
+        string? projectName = null;
+        if (args.HasValue && args.Value.TryGetProperty("projectName", out var projEl))
+        {
+            projectName = projEl.GetString();
+        }
+
         var includeWarnings = false;
         if (args.HasValue && args.Value.TryGetProperty("includeWarnings", out var warnEl))
         {
@@ -1544,60 +1747,104 @@ public sealed class McpHandler
         try
         {
             var solution = await _roslynService.GetSolutionAsync(solutionPath, ct);
-            var project = solution.Projects.FirstOrDefault(p =>
-                p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase));
 
-            if (project is null)
+            // If projectName is specified, validate just that project
+            if (!string.IsNullOrEmpty(projectName))
             {
-                var available = string.Join(", ", solution.Projects.Select(p => p.Name));
-                return new { error = $"Project '{projectName}' not found. Available: {available}" };
-            }
+                var project = solution.Projects.FirstOrDefault(p =>
+                    p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase));
 
-            var compilation = await project.GetCompilationAsync(ct);
-            if (compilation is null)
-            {
-                return new { error = "Failed to get compilation" };
-            }
-
-            var diagnostics = compilation.GetDiagnostics(ct)
-                .Where(d => d.Severity == DiagnosticSeverity.Error ||
-                           (includeWarnings && d.Severity == DiagnosticSeverity.Warning))
-                .Take(50)
-                .Select(d =>
+                if (project is null)
                 {
-                    var lineSpan = d.Location.GetLineSpan();
-                    return new
-                    {
-                        id = d.Id,
-                        severity = d.Severity.ToString(),
-                        message = d.GetMessage(),
-                        filePath = lineSpan.Path,
-                        line = lineSpan.StartLinePosition.Line + 1,
-                        column = lineSpan.StartLinePosition.Character + 1
-                    };
-                })
-                .ToList();
+                    var available = string.Join(", ", solution.Projects.Select(p => p.Name));
+                    return new { error = $"Project '{projectName}' not found. Available: {available}" };
+                }
 
-            var errorCount = diagnostics.Count(d => d.severity == "Error");
-            var warningCount = diagnostics.Count(d => d.severity == "Warning");
+                return await ValidateProjectAsync(project, includeWarnings, ct);
+            }
+
+            // No project specified - validate all projects in solution
+            var results = new List<object>();
+            var totalErrors = 0;
+            var totalWarnings = 0;
+
+            foreach (var project in solution.Projects.Where(p => !p.Name.Contains(".Tests")))
+            {
+                var result = await ValidateProjectAsync(project, includeWarnings, ct);
+                results.Add(new { project = project.Name, result });
+
+                // Extract counts from dynamic result
+                if (result is { } r)
+                {
+                    var props = r.GetType().GetProperties();
+                    var errorProp = props.FirstOrDefault(p => p.Name == "errorCount");
+                    var warnProp = props.FirstOrDefault(p => p.Name == "warningCount");
+                    if (errorProp?.GetValue(r) is int errors) totalErrors += errors;
+                    if (warnProp?.GetValue(r) is int warnings) totalWarnings += warnings;
+                }
+            }
 
             return new
             {
-                projectName = project.Name,
-                success = errorCount == 0,
-                errorCount,
-                warningCount,
-                diagnostics,
-                summary = errorCount == 0
-                    ? $"Project {project.Name} compiles successfully"
-                    : $"Project {project.Name} has {errorCount} error(s)"
+                solutionPath,
+                success = totalErrors == 0,
+                totalErrors,
+                totalWarnings,
+                projectCount = results.Count,
+                projects = results,
+                summary = totalErrors == 0
+                    ? $"Solution compiles successfully ({results.Count} projects)"
+                    : $"Solution has {totalErrors} error(s) across {results.Count} projects"
             };
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to validate compilation for {Project}", projectName);
+            _logger.LogError(ex, "Failed to validate compilation for {SolutionPath}", solutionPath);
             return new { error = $"Failed to validate compilation: {ex.Message}" };
         }
+    }
+
+    private async Task<object> ValidateProjectAsync(Project project, bool includeWarnings, CancellationToken ct)
+    {
+        var compilation = await project.GetCompilationAsync(ct);
+        if (compilation is null)
+        {
+            return new { error = "Failed to get compilation" };
+        }
+
+        var diagnostics = compilation.GetDiagnostics(ct)
+            .Where(d => d.Severity == DiagnosticSeverity.Error ||
+                       (includeWarnings && d.Severity == DiagnosticSeverity.Warning))
+            .Take(50)
+            .Select(d =>
+            {
+                var lineSpan = d.Location.GetLineSpan();
+                return new
+                {
+                    id = d.Id,
+                    severity = d.Severity.ToString(),
+                    message = d.GetMessage(),
+                    filePath = lineSpan.Path,
+                    line = lineSpan.StartLinePosition.Line + 1,
+                    column = lineSpan.StartLinePosition.Character + 1
+                };
+            })
+            .ToList();
+
+        var errorCount = diagnostics.Count(d => d.severity == "Error");
+        var warningCount = diagnostics.Count(d => d.severity == "Warning");
+
+        return new
+        {
+            projectName = project.Name,
+            success = errorCount == 0,
+            errorCount,
+            warningCount,
+            diagnostics,
+            summary = errorCount == 0
+                ? $"Project {project.Name} compiles successfully"
+                : $"Project {project.Name} has {errorCount} error(s)"
+        };
     }
 
     private async Task<object> RunTestsAsync(JsonElement? args, CancellationToken ct)
