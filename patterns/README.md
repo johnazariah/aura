@@ -9,6 +9,7 @@ A pattern is:
 - Uses **existing MCP primitives** (no custom code required)
 - **Deterministic** - same inputs → same steps
 - **Composable** - patterns can reference other patterns
+- **Polyglot base + language overlays** - language-agnostic workflow with optional language-specific guidance
 
 A pattern is NOT:
 - A persona (that's an agent)
@@ -17,10 +18,44 @@ A pattern is NOT:
 
 ## Available Patterns
 
-| Pattern | Purpose |
-|---------|---------|
-| [comprehensive-rename.md](comprehensive-rename.md) | Rename a domain concept across entire codebase |
-| [generate-tests.md](generate-tests.md) | Generate comprehensive tests for a class/module |
+| Pattern | Description | Overlays |
+|---------|-------------|----------|
+| [comprehensive-rename.md](comprehensive-rename.md) | Rename a domain concept across entire codebase | csharp |
+| [generate-tests.md](generate-tests.md) | Generate comprehensive tests for a class/module | csharp, python |
+
+## Language Overlays
+
+Language overlays provide language-specific guidance without duplicating the base pattern.
+
+```
+patterns/
+├── generate-tests.md           # Polyglot base (~100 lines)
+├── comprehensive-rename.md     # Polyglot base
+├── csharp/
+│   └── generate-tests.md       # C#-specific: Roslyn, xUnit, MockFileSystem
+└── python/
+    └── generate-tests.md       # Python-specific: pytest, mock
+```
+
+### Loading with Overlay
+
+```
+# Base only (~400 tokens)
+aura_pattern(operation: "get", name: "generate-tests")
+
+# Base + C# overlay (~1200 tokens)
+aura_pattern(operation: "get", name: "generate-tests", language: "csharp")
+```
+
+### Token Efficiency
+
+| Scenario | Tokens |
+|----------|--------|
+| Base pattern only | ~400 |
+| Base + C# overlay | ~1200 |
+| Base + Python overlay | ~600 |
+
+Non-C# projects save ~800 tokens per pattern load.
 
 ## Pattern Structure
 

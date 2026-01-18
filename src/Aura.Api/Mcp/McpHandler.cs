@@ -523,7 +523,7 @@ public sealed class McpHandler
             new McpToolDefinition
             {
                 Name = "aura_pattern",
-                Description = "Load operational patterns (step-by-step playbooks) for complex multi-step tasks. Patterns are dynamically discovered from the patterns/ folder. (Read)",
+                Description = "Load operational patterns (step-by-step playbooks) for complex multi-step tasks. Patterns are dynamically discovered from the patterns/ folder. Supports language overlays for language-specific guidance. (Read)",
                 InputSchema = new
                 {
                     type = "object",
@@ -535,7 +535,8 @@ public sealed class McpHandler
                             description = "Pattern operation: 'list' to see available patterns, 'get' to load a specific pattern",
                             @enum = new[] { "list", "get" }
                         },
-                        name = new { type = "string", description = "Pattern name (without .md extension), e.g., 'comprehensive-rename'" }
+                        name = new { type = "string", description = "Pattern name (without .md extension), e.g., 'comprehensive-rename'" },
+                        language = new { type = "string", description = "Language for overlay (e.g., 'csharp', 'python', 'typescript'). If specified, merges language-specific guidance with base pattern." }
                     },
                     required = new[] { "operation" }
                 }
@@ -1198,9 +1199,16 @@ public sealed class McpHandler
             {
                 success = false,
                 patterns = Array.Empty<object>(),
+                languages = Array.Empty<string>(),
                 message = $"Patterns directory not found: {patternsDir}"
             };
         }
+
+        // Get available languages (subdirectories)
+        var languages = Directory.GetDirectories(patternsDir)
+            .Select(d => Path.GetFileName(d))
+            .Where(n => !n.StartsWith('.'))
+            .ToArray();
 
         var patterns = Directory.GetFiles(patternsDir, "*.md")
             .Where(f => !Path.GetFileName(f).Equals("README.md", StringComparison.OrdinalIgnoreCase))
@@ -1213,7 +1221,12 @@ public sealed class McpHandler
                     ? firstLine.TrimStart('#', ' ')
                     : name;
 
-                return new { name, description };
+                // Check which languages have overlays for this pattern
+                var overlays = languages
+                    .Where(lang => File.Exists(Path.Combine(patternsDir, lang, $"{name}.md")))
+                    .ToArray();
+
+                return new { name, description, overlays };
             })
             .ToArray();
 
@@ -1221,7 +1234,8 @@ public sealed class McpHandler
         {
             success = true,
             patterns,
-            message = $"Found {patterns.Length} patterns. Use aura_pattern(operation: 'get', name: '...') to load one."
+            languages,
+            message = $"Found {patterns.Length} patterns. Use aura_pattern(operation: 'get', name: '...', language: '...') to load with overlay."
         };
     }
 
@@ -1229,6 +1243,10 @@ public sealed class McpHandler
     {
         var name = args?.TryGetProperty("name", out var nameProp) == true
             ? nameProp.GetString()
+            : null;
+
+        var language = args?.TryGetProperty("language", out var langProp) == true
+            ? langProp.GetString()
             : null;
 
         if (string.IsNullOrWhiteSpace(name))
@@ -1245,19 +1263,46 @@ public sealed class McpHandler
             {
                 success = false,
                 name,
+                language = (string?)null,
                 content = (string?)null,
                 message = $"Pattern '{name}' not found. Use aura_pattern(operation: 'list') to see available patterns."
             };
         }
 
-        var content = File.ReadAllText(patternPath);
+        var baseContent = File.ReadAllText(patternPath);
+        string? overlayContent = null;
+        var hasOverlay = false;
+
+        // Check for language overlay
+        if (!string.IsNullOrWhiteSpace(language))
+        {
+            var overlayPath = Path.Combine(patternsDir, language, $"{name}.md");
+            if (File.Exists(overlayPath))
+            {
+                overlayContent = File.ReadAllText(overlayPath);
+                hasOverlay = true;
+            }
+        }
+
+        // Merge base + overlay if overlay exists
+        var finalContent = hasOverlay
+            ? $"{baseContent}\n\n---\n\n# {language!.ToUpperInvariant()} Language Overlay\n\n{overlayContent}"
+            : baseContent;
+
+        var message = hasOverlay
+            ? $"Loaded pattern '{name}' with {language} overlay. Follow the steps in this pattern."
+            : !string.IsNullOrWhiteSpace(language)
+                ? $"Pattern '{name}' loaded (no {language} overlay found). Follow the steps in this pattern."
+                : "Follow the steps in this pattern. Do not deviate.";
 
         return new
         {
             success = true,
             name,
-            content,
-            message = $"Follow the steps in this pattern. Do not deviate."
+            language,
+            hasOverlay,
+            content = finalContent,
+            message
         };
     }
 
