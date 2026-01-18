@@ -790,9 +790,29 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
             return GenerateNewTestFile(typeSymbol, testMethods, framework);
         }
 
+        // Get existing method names to avoid duplicates
+        var existingMethodNames = testClass.Members
+            .OfType<MethodDeclarationSyntax>()
+            .Select(m => m.Identifier.Text)
+            .ToHashSet(StringComparer.Ordinal);
+
+        // Filter out tests that would duplicate existing methods
+        var methodsToAdd = testMethods
+            .Where(t => !existingMethodNames.Contains(t.TestName))
+            .ToList();
+
+        if (methodsToAdd.Count == 0)
+        {
+            _logger.LogInformation("All test methods already exist in {File}, skipping append", testFilePath);
+            return existingContent;
+        }
+
+        _logger.LogInformation("Appending {Count} new test methods to {File} (skipped {Skipped} duplicates)",
+            methodsToAdd.Count, testFilePath, testMethods.Count - methodsToAdd.Count);
+
         // Generate new methods as text
         var newMethods = new StringBuilder();
-        foreach (var test in testMethods)
+        foreach (var test in methodsToAdd)
         {
             var member = typeSymbol.GetMembers(test.TargetMethod).OfType<IMethodSymbol>().FirstOrDefault();
             GenerateTestMethod(newMethods, test, member, typeSymbol.Name, framework);

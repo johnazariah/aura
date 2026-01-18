@@ -376,6 +376,7 @@ public sealed class McpHandler
                         accessModifier = new { type = "string", description = "Access modifier (default: 'public')" },
                         isAsync = new { type = "boolean", description = "Whether method is async" },
                         body = new { type = "string", description = "Optional method body code" },
+                        testAttribute = new { type = "string", description = "Test attribute to add: Fact (xunit), Test (nunit), TestMethod (mstest). Auto-detects if omitted for test classes." },
                         preview = new { type = "boolean", description = "If true, return changes without applying (default: false)" }
                     },
                     required = new[] { "operation", "solutionPath" }
@@ -3054,6 +3055,7 @@ public sealed class McpHandler
         var accessModifier = "public";
         var isAsync = false;
         string? body = null;
+        string? testAttribute = null;
         var preview = false;
 
         if (args.HasValue)
@@ -3073,6 +3075,8 @@ public sealed class McpHandler
                 isAsync = asyncEl.GetBoolean();
             if (args.Value.TryGetProperty("body", out var bodyEl))
                 body = bodyEl.GetString();
+            if (args.Value.TryGetProperty("testAttribute", out var taEl))
+                testAttribute = taEl.GetString();
             if (args.Value.TryGetProperty("preview", out var prevEl))
                 preview = prevEl.GetBoolean();
         }
@@ -3087,6 +3091,7 @@ public sealed class McpHandler
             AccessModifier = accessModifier,
             IsAsync = isAsync,
             Body = body,
+            TestAttribute = testAttribute,
             Preview = preview
         }, ct);
 

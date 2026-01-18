@@ -440,6 +440,9 @@ public sealed record AddMethodRequest
     /// <summary>Optional method body. If null, generates throw NotImplementedException().</summary>
     public string? Body { get; init; }
 
+    /// <summary>Test attribute to add (Fact, Test, TestMethod). If null, auto-detects for test classes.</summary>
+    public string? TestAttribute { get; init; }
+
     /// <summary>If true, return preview without applying changes.</summary>
     public bool Preview { get; init; }
 }

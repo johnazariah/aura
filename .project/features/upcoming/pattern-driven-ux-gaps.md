@@ -181,10 +181,11 @@ During dogfooding of the pattern-driven story workflow (test coverage story with
 - **Gap 14** - ✅ aura_validate now supports solution-level validation (omit projectName)
 - **Gap 18** - ✅ Roslyn workspace cache now auto-clears after file writes
 - **Gap 12** - ✅ aura_inspect type_members now has Roslyn fallback (pass solutionPath)
+- **Gap 17** - ✅ Test generation now skips duplicate methods when appending
+- **Gap 19** - ✅ aura_generate method now adds test attributes (auto-detect or specify testAttribute)
 
 ### Critical - Blocking Pattern Execution
-- **Gap 17** - Test generation overwrites instead of appending
-- **Gap 19** - aura_generate method missing [Fact] attribute
+(All critical gaps resolved)
 
 ### High - MCP Tool Reliability
 - **Gap 15** - aura_search irrelevant results
@@ -358,20 +359,22 @@ The following issues were identified during dogfooding the generate-tests patter
 
 ---
 
-### Gap 17: Test Generation Overwrites Instead of Appending (HIGH)
+### Gap 17: Test Generation Overwrites Instead of Appending (HIGH) ✅ IMPLEMENTED
 
 **Tool:** `aura_generate(operation: "tests")`
+
+**Status:** Fixed in RoslynTestGenerator.cs - now checks for existing method names before appending.
 
 **Problem:** Each call to generate tests for a different method replaces the entire file content instead of appending to existing test class.
 
 **Impact:** Previously generated tests are lost; must generate all at once or manually merge.
 
-**Root Cause:** `GenerateTestCodeAsync` writes full file content without checking for existing tests.
+**Root Cause:** `AppendToExistingTestFileAsync` didn't check for duplicate method names.
 
-**Proposed Solution:**
-- Detect existing test file and parse its content
-- Append new test methods to existing test class
-- Avoid duplicating already-existing test methods
+**Solution Implemented:**
+- Added check for existing method names in test class
+- Filters out tests that would duplicate existing methods
+- Logs count of skipped duplicates
 
 ---
 
@@ -398,20 +401,24 @@ The following issues were identified during dogfooding the generate-tests patter
 
 ---
 
-### Gap 19: aura_generate method Missing Test Attributes (HIGH)
+### Gap 19: aura_generate method Missing Test Attributes (HIGH) ✅ IMPLEMENTED
 
 **Tool:** `aura_generate(operation: "method")`
+
+**Status:** Fixed in RoslynRefactoringService.cs - now auto-detects test class and adds appropriate attribute.
 
 **Problem:** Methods added to test classes lack `[Fact]` or `[Test]` attributes.
 
 **Impact:** xUnit analyzer errors; tests don't run.
 
-**Root Cause:** Method generator doesn't detect test class context.
+**Root Cause:** Method generator didn't detect test class context.
 
-**Proposed Solution:**
-- Detect if target class is a test class (by convention or by existing test attributes)
-- Add appropriate test framework attribute (`[Fact]`, `[Test]`, `[TestMethod]`)
-- Use detected framework from existing test methods in the class
+**Solution Implemented:**
+- Added `DetectTestFramework()` to identify test classes by naming convention and existing attributes
+- Added `CreateTestAttribute()` to generate appropriate attribute (Fact, Test, TestMethod)
+- Added optional `testAttribute` parameter to allow caller to specify (e.g., `testAttribute: "Fact"`)
+- Auto-detects framework from existing test methods in the class
+- Falls back to xUnit if class looks like a test class but framework can't be detected
 
 ---
 

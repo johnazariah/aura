@@ -1205,6 +1205,25 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
                 return RefactoringResult.Failed("Could not get syntax root");
             }
 
+            // Determine test attribute: use caller-specified, or auto-detect from class
+            string? testFramework = null;
+            if (!string.IsNullOrEmpty(request.TestAttribute))
+            {
+                // Caller specified the attribute directly (e.g., "Fact", "Test", "TestMethod")
+                testFramework = request.TestAttribute.ToLowerInvariant() switch
+                {
+                    "fact" or "theory" => "xunit",
+                    "test" or "testcase" => "nunit",
+                    "testmethod" or "datatestmethod" => "mstest",
+                    _ => request.TestAttribute // Use as-is for custom attributes
+                };
+            }
+            else
+            {
+                // Auto-detect if this is a test class
+                testFramework = DetectTestFramework(classNode);
+            }
+
             // Build modifiers
             var modifiers = new List<SyntaxToken>
             {
@@ -1256,6 +1275,17 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
                 .WithParameterList(SyntaxFactory.ParameterList(SyntaxFactory.SeparatedList(parameters)))
                 .WithBody(SyntaxFactory.Block(bodyStatements));
 
+            // Add test attribute if this is a test class
+            if (testFramework != null)
+            {
+                var testAttribute = CreateTestAttribute(testFramework);
+                method = method.WithAttributeLists(
+                    SyntaxFactory.SingletonList(
+                        SyntaxFactory.AttributeList(
+                            SyntaxFactory.SingletonSeparatedList(testAttribute))));
+                _logger.LogDebug("Added {Framework} test attribute to method {Method}", testFramework, request.MethodName);
+            }
+
             var newClassNode = classNode.AddMembers(method);
             var newRoot = root.ReplaceNode(classNode, newClassNode);
             var formattedRoot = Formatter.Format(newRoot, document.Project.Solution.Workspace);
@@ -1286,6 +1316,75 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
             _logger.LogError(ex, "Failed to add method");
             return RefactoringResult.Failed($"Failed to add method: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// Detects the test framework used by a test class by examining its existing methods and attributes.
+    /// </summary>
+    private static string? DetectTestFramework(ClassDeclarationSyntax classNode)
+    {
+        // Check if class name ends with "Tests" or "Test" (common convention)
+        var className = classNode.Identifier.Text;
+        var isTestClass = className.EndsWith("Tests", StringComparison.Ordinal) ||
+                          className.EndsWith("Test", StringComparison.Ordinal);
+
+        if (!isTestClass)
+        {
+            return null;
+        }
+
+        // Check existing method attributes to detect the framework
+        var allAttributes = classNode.Members
+            .OfType<MethodDeclarationSyntax>()
+            .SelectMany(m => m.AttributeLists)
+            .SelectMany(al => al.Attributes)
+            .Select(a => a.Name.ToString())
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        // xUnit
+        if (allAttributes.Any(a => a is "Fact" or "FactAttribute" or "Theory" or "TheoryAttribute"))
+        {
+            return "xunit";
+        }
+
+        // NUnit
+        if (allAttributes.Any(a => a is "Test" or "TestAttribute" or "TestCase" or "TestCaseAttribute"))
+        {
+            return "nunit";
+        }
+
+        // MSTest
+        if (allAttributes.Any(a => a is "TestMethod" or "TestMethodAttribute" or "DataTestMethod" or "DataTestMethodAttribute"))
+        {
+            return "mstest";
+        }
+
+        // If class looks like a test class but we can't detect the framework, default to xunit
+        return "xunit";
+    }
+
+    /// <summary>
+    /// Creates the appropriate test attribute syntax for the given framework or attribute name.
+    /// </summary>
+    private static AttributeSyntax CreateTestAttribute(string frameworkOrAttribute)
+    {
+        var attributeName = frameworkOrAttribute.ToLowerInvariant() switch
+        {
+            "xunit" => "Fact",
+            "nunit" => "Test",
+            "mstest" => "TestMethod",
+            // Handle direct attribute names
+            "fact" => "Fact",
+            "theory" => "Theory",
+            "test" => "Test",
+            "testcase" => "TestCase",
+            "testmethod" => "TestMethod",
+            "datatestmethod" => "DataTestMethod",
+            // Unknown - use as-is (might be custom attribute)
+            _ => frameworkOrAttribute
+        };
+
+        return SyntaxFactory.Attribute(SyntaxFactory.IdentifierName(attributeName));
     }
 
     /// <inheritdoc/>
