@@ -2134,7 +2134,7 @@ public sealed class McpHandler
             var failedMatch = System.Text.RegularExpressions.Regex.Match(outputText, @"Failed[:\s]+(\d+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
             var skippedMatch = System.Text.RegularExpressions.Regex.Match(outputText, @"Skipped[:\s]+(\d+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
             var totalMatch = System.Text.RegularExpressions.Regex.Match(outputText, @"Total[:\s]+(\d+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-            
+
             // Fallback: look for "Total tests: X" format
             if (!totalMatch.Success)
             {

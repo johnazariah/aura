@@ -197,7 +197,7 @@ During dogfooding of the pattern-driven story workflow (test coverage story with
 (All critical gaps resolved)
 
 ### High - MCP Tool Reliability
-(All high-priority gaps resolved)
+- **Gap 22** - ✅ File locking on parallel writes (per-file SemaphoreSlim locking)
 
 ### Medium - UX Improvements
 - **Gap 20** - ✅ aura_validate tests improved output parsing (multiple formats, larger buffer)
@@ -466,6 +466,24 @@ The following issues were identified during dogfooding the generate-tests patter
 - Use proper C# formatting after code generation
 - Apply .editorconfig settings
 - Consider running `dotnet format` on generated code
+
+---
+
+### Gap 22: File Locking on Parallel Writes (HIGH) ✅ IMPLEMENTED
+
+**Tool:** `aura_generate(operation: "method")`, `aura_refactor`
+
+**Problem:** When calling aura_generate method 3x in parallel to the same file, 2 fail with "file being used by another process". Sequential calls work fine.
+
+**Impact:** Agents calling tools in parallel get failures; must serialize operations.
+
+**Root Cause:** Roslyn workspace operations and file I/O are not thread-safe for concurrent access to the same file.
+
+**Solution Implemented:**
+- Added per-file locking using `SemaphoreSlim` keyed by normalized file path in `RoslynRefactoringService.cs`
+- `ConcurrentDictionary<string, SemaphoreSlim>` manages locks by file path
+- All 13 `File.WriteAllTextAsync` calls wrapped with `using (await AcquireFileLockAsync(...))`
+- Operations on the same file wait for lock; different files proceed in parallel
 
 ---
 

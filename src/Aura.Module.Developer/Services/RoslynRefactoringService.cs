@@ -4,6 +4,7 @@
 
 namespace Aura.Module.Developer.Services;
 
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -22,12 +23,42 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
     private readonly IRoslynWorkspaceService _workspaceService;
     private readonly ILogger<RoslynRefactoringService> _logger;
 
+    /// <summary>
+    /// Per-file locks to prevent concurrent writes to the same file.
+    /// Uses normalized absolute paths as keys.
+    /// </summary>
+    private static readonly ConcurrentDictionary<string, SemaphoreSlim> FileLocks = new(StringComparer.OrdinalIgnoreCase);
+
     public RoslynRefactoringService(
         IRoslynWorkspaceService workspaceService,
         ILogger<RoslynRefactoringService> logger)
     {
         _workspaceService = workspaceService;
         _logger = logger;
+    }
+
+    /// <summary>
+    /// Gets or creates a lock for the specified file path.
+    /// </summary>
+    private static SemaphoreSlim GetFileLock(string filePath)
+    {
+        var normalizedPath = Path.GetFullPath(filePath);
+        return FileLocks.GetOrAdd(normalizedPath, _ => new SemaphoreSlim(1, 1));
+    }
+
+    /// <summary>
+    /// Acquires exclusive access to a file for writing.
+    /// </summary>
+    private static async Task<IDisposable> AcquireFileLockAsync(string filePath, CancellationToken ct)
+    {
+        var semaphore = GetFileLock(filePath);
+        await semaphore.WaitAsync(ct);
+        return new FileLockReleaser(semaphore);
+    }
+
+    private sealed class FileLockReleaser(SemaphoreSlim semaphore) : IDisposable
+    {
+        public void Dispose() => semaphore.Release();
     }
 
     /// <inheritdoc/>
@@ -343,7 +374,10 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
             {
                 if (doc.FilePath is null) continue;
                 var text = await doc.GetTextAsync(ct);
-                await File.WriteAllTextAsync(doc.FilePath, text.ToString(), ct);
+                using (await AcquireFileLockAsync(doc.FilePath, ct))
+                {
+                    await File.WriteAllTextAsync(doc.FilePath, text.ToString(), ct);
+                }
                 modifiedFiles.Add(doc.FilePath);
                 _logger.LogDebug("Updated file: {Path}", doc.FilePath);
             }
@@ -484,7 +518,10 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
             // Write to disk
             if (document.FilePath != null)
             {
-                await File.WriteAllTextAsync(document.FilePath, formattedRoot.ToFullString(), ct);
+                using (await AcquireFileLockAsync(document.FilePath, ct))
+                {
+                    await File.WriteAllTextAsync(document.FilePath, formattedRoot.ToFullString(), ct);
+                }
                 modifiedFiles.Add(document.FilePath);
             }
 
@@ -519,7 +556,10 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
                             SyntaxFactory.ArgumentList(SyntaxFactory.SeparatedList(newArgs)));
 
                         var newCallRoot = callRoot.ReplaceNode(invocation, newInvocation);
-                        await File.WriteAllTextAsync(callDoc.FilePath, newCallRoot.ToFullString(), ct);
+                        using (await AcquireFileLockAsync(callDoc.FilePath, ct))
+                        {
+                            await File.WriteAllTextAsync(callDoc.FilePath, newCallRoot.ToFullString(), ct);
+                        }
                         modifiedFiles.Add(callDoc.FilePath);
                     }
                 }
@@ -653,7 +693,10 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
 
             if (document.FilePath != null)
             {
-                await File.WriteAllTextAsync(document.FilePath, formattedRoot.ToFullString(), ct);
+                using (await AcquireFileLockAsync(document.FilePath, ct))
+                {
+                    await File.WriteAllTextAsync(document.FilePath, formattedRoot.ToFullString(), ct);
+                }
                 _workspaceService.ClearCache();
             }
 
@@ -776,7 +819,10 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
 
             if (document.FilePath != null)
             {
-                await File.WriteAllTextAsync(document.FilePath, formattedRoot.ToFullString(), ct);
+                using (await AcquireFileLockAsync(document.FilePath, ct))
+                {
+                    await File.WriteAllTextAsync(document.FilePath, formattedRoot.ToFullString(), ct);
+                }
                 _workspaceService.ClearCache();
             }
 
@@ -926,10 +972,16 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
             }
 
             // Write files
-            await File.WriteAllTextAsync(interfaceFilePath, formattedInterfaceRoot.ToFullString(), ct);
+            using (await AcquireFileLockAsync(interfaceFilePath, ct))
+            {
+                await File.WriteAllTextAsync(interfaceFilePath, formattedInterfaceRoot.ToFullString(), ct);
+            }
             if (document.FilePath != null)
             {
-                await File.WriteAllTextAsync(document.FilePath, formattedClassRoot.ToFullString(), ct);
+                using (await AcquireFileLockAsync(document.FilePath, ct))
+                {
+                    await File.WriteAllTextAsync(document.FilePath, formattedClassRoot.ToFullString(), ct);
+                }
             }
 
             _workspaceService.ClearCache();
@@ -1042,7 +1094,10 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
             if (updatedRoot != null)
             {
                 var formatted = Formatter.Format(updatedRoot, document.Project.Solution.Workspace);
-                await File.WriteAllTextAsync(document.FilePath, formatted.ToFullString(), ct);
+                using (await AcquireFileLockAsync(document.FilePath, ct))
+                {
+                    await File.WriteAllTextAsync(document.FilePath, formatted.ToFullString(), ct);
+                }
                 _workspaceService.ClearCache();
             }
 
@@ -1145,7 +1200,10 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
 
             if (document.FilePath != null)
             {
-                await File.WriteAllTextAsync(document.FilePath, formattedRoot.ToFullString(), ct);
+                using (await AcquireFileLockAsync(document.FilePath, ct))
+                {
+                    await File.WriteAllTextAsync(document.FilePath, formattedRoot.ToFullString(), ct);
+                }
                 _workspaceService.ClearCache();
             }
 
@@ -1270,7 +1328,7 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
                 {
                     // Parse as individual statements - split by semicolons and newlines
                     var statements = new List<StatementSyntax>();
-                    
+
                     // Try parsing the whole thing as multiple statements
                     var parsed = SyntaxFactory.ParseStatement("{ " + bodyText + " }");
                     if (parsed is BlockSyntax block && !block.ContainsDiagnostics)
@@ -1282,7 +1340,7 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
                         // Fallback: parse as single statement
                         statements.Add(SyntaxFactory.ParseStatement(bodyText + (bodyText.EndsWith(';') ? "" : ";")));
                     }
-                    
+
                     methodBody = SyntaxFactory.Block(statements);
                 }
             }
@@ -1330,7 +1388,10 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
 
             if (document.FilePath != null)
             {
-                await File.WriteAllTextAsync(document.FilePath, formattedRoot.ToFullString(), ct);
+                using (await AcquireFileLockAsync(document.FilePath, ct))
+                {
+                    await File.WriteAllTextAsync(document.FilePath, formattedRoot.ToFullString(), ct);
+                }
                 _workspaceService.ClearCache();
             }
 
@@ -1628,10 +1689,16 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
         }
 
         // Write new file
-        await File.WriteAllTextAsync(targetPath, formattedNewFile.ToFullString(), ct);
+        using (await AcquireFileLockAsync(targetPath, ct))
+        {
+            await File.WriteAllTextAsync(targetPath, formattedNewFile.ToFullString(), ct);
+        }
 
         // Update source file
-        await File.WriteAllTextAsync(sourceDoc.FilePath!, formattedSource.ToFullString(), ct);
+        using (await AcquireFileLockAsync(sourceDoc.FilePath!, ct))
+        {
+            await File.WriteAllTextAsync(sourceDoc.FilePath!, formattedSource.ToFullString(), ct);
+        }
 
         _workspaceService.ClearCache();
 
@@ -1730,7 +1797,10 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
             }
 
             // Write the file
-            await File.WriteAllTextAsync(targetPath, fileContent, ct);
+            using (await AcquireFileLockAsync(targetPath, ct))
+            {
+                await File.WriteAllTextAsync(targetPath, fileContent, ct);
+            }
             _logger.LogInformation("Created type file: {Path}", targetPath);
 
             _workspaceService.ClearCache();
