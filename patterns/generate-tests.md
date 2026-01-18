@@ -2,6 +2,67 @@
 
 Generate comprehensive unit tests for a class or module, covering happy paths, edge cases, and error handling.
 
+## ⚠️ Aura Test Generation: What It Does vs. What You Must Do
+
+### What `aura_generate tests` Provides:
+
+| ✅ Aura Does | Description |
+|--------------|-------------|
+| Analyzes testable methods | Finds public methods, identifies gaps |
+| Creates test file | Correct namespace, test class structure |
+| Sets up skeleton | Arrange/Act/Assert pattern with mocks |
+| Detects test framework | xUnit, NUnit, MSTest auto-detection |
+
+### What Aura Gets Wrong (Requires Agent Domain Knowledge):
+
+| ❌ Aura Limitation | Agent Fix Required |
+|-------------------|-------------------|
+| Wrong folder placement (defaults to `Agents/`) | Move file or use `aura_generate method` individually |
+| Unqualified imports (`IFileSystem` not `System.IO.Abstractions.IFileSystem`) | Add full `using` statements |
+| Placeholder assertions (`// TODO: Add meaningful assertions`) | Replace with actual assertions that match behavior |
+| Tests fail because assertions don't match actual behavior | Agent must understand what the method actually returns |
+| Uses `Substitute.For<ILogger<T>>()` | Replace with `NullLogger<T>.Instance` |
+| No `IDisposable` cleanup pattern | Add `Dispose()` method if test class holds resources |
+| No test data generation | Create YAML/JSON fixtures for config loaders, etc. |
+
+### Domain Knowledge Only the Agent Has:
+
+- `IFileSystem` requires `System.IO.Abstractions.TestingHelpers.MockFileSystem`
+- Loggers should use `Microsoft.Extensions.Logging.Abstractions.NullLogger<T>.Instance`
+- Meaningful assertions require understanding what the method **actually does**
+- Realistic test data (YAML configs, JSON payloads) for the specific domain
+- Proper test fixtures with `IDisposable` for cleanup
+
+## Two Approaches
+
+### Approach A: Bulk Generation + Fix (Faster for Many Tests)
+
+1. `aura_generate(operation: "tests", analyzeOnly: true)` - Understand gaps
+2. `aura_generate(operation: "tests")` - Generate skeletons
+3. Fix imports with `replace_string_in_file`
+4. Fix infrastructure (loggers, mocks)
+5. Replace placeholder assertions
+6. Build and test
+
+### Approach B: Individual Method Generation (More Control)
+
+Use `aura_generate(operation: "method")` with `body` parameter for each test:
+
+```
+aura_generate(
+  operation: "method",
+  className: "MyServiceTests",
+  methodName: "MyMethod_WhenCondition_ShouldResult",
+  returnType: "void",
+  body: "// Arrange\nvar sut = new MyService();\n\n// Act\nvar result = sut.MyMethod();\n\n// Assert\nresult.Should().BeTrue();",
+  solutionPath: "..."
+)
+```
+
+**Benefits:** Full control over test logic, correct assertions from the start, Aura handles file manipulation.
+
+**Use when:** You need specific test logic, fixtures, or complex mocking.
+
 ## When to Use
 
 - User asks to "write tests for X"

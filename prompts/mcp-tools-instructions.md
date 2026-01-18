@@ -1,5 +1,27 @@
 ## Aura MCP Tools
 
+### ⚠️ CRITICAL: Tool Selection
+
+**Always prefer Aura semantic tools over text manipulation for C# code.**
+
+| Task | ✅ Use Aura Tool | ❌ Don't Use |
+|------|------------------|--------------|
+| Add method | `aura_generate(operation: "method")` | `replace_string_in_file` |
+| Add property | `aura_generate(operation: "property")` | `replace_string_in_file` |
+| Rename symbol | `aura_refactor(operation: "rename")` | Find/replace |
+| Create C# class | `aura_generate(operation: "create_type")` | `create_file` |
+| Implement interface | `aura_generate(operation: "implement_interface")` | Manual stubs |
+| Generate tests | `aura_generate(operation: "tests")` | Manual test writing |
+| Find usages | `aura_navigate(operation: "usages")` | `grep_search` |
+| Explore types | `aura_inspect` | Multiple `read_file` calls |
+
+**Text manipulation (`replace_string_in_file`) is ONLY for:**
+- Non-C# files (JSON, YAML, Markdown, TypeScript)
+- Simple one-line fixes where Aura overhead isn't justified
+- When Aura tools fail and fallback is needed
+
+---
+
 **Prefer these semantic tools over file-based exploration:**
 
 | Tool | Purpose |
@@ -122,6 +144,32 @@ aura_generate(
 | `count` | Explicit count (omit for comprehensive) |
 | `focus` | `all`, `happy_path`, `edge_cases`, `error_handling` |
 | `analyzeOnly` | Return analysis only, no generation |
+
+### ⚠️ Known Limitations
+
+| Issue | Fix With |
+|-------|----------|
+| Wrong folder placement | Move file manually |
+| Unqualified imports (`IFileSystem`) | Add full namespace with `replace_string_in_file` |
+| `Substitute.For<ILogger>()` | Replace with `NullLogger<T>.Instance` |
+| `// TODO:` placeholder assertions | Write real assertions |
+
+### Hybrid Approach: `aura_generate method` with `body`
+
+For maximum control, generate individual test methods with full implementation:
+
+```
+aura_generate(
+  operation: "method",
+  className: "MyServiceTests",
+  methodName: "MyMethod_WhenValid_ReturnsTrue",
+  returnType: "void",
+  body: "// Arrange\nvar sut = new MyService();\n\n// Act\nvar result = sut.DoThing();\n\n// Assert\nresult.Should().BeTrue();"
+)
+```
+
+**Aura handles:** File location, insertion point, formatting, test attribute
+**You provide:** Complete test logic with real assertions
 
 ---
 

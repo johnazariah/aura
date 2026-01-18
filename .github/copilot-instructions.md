@@ -161,6 +161,100 @@ This script can be installed as a pre-commit hook: `.\scripts\Validate-Features.
 
 ## MCP Tools & Aura Codebase Tools
 
+### Tool Selection: Aura Tools vs. Text Manipulation
+
+**CRITICAL**: When Aura MCP tools are available, prefer them over text manipulation (`replace_string_in_file`, `create_file`) for C# code changes. Aura tools understand code semantics; text tools don't.
+
+| Task | Use This | NOT This |
+|------|----------|----------|
+| Add method to class | `aura_generate(operation: "method")` | `replace_string_in_file` |
+| Add property to class | `aura_generate(operation: "property")` | `replace_string_in_file` |
+| Rename symbol | `aura_refactor(operation: "rename")` | Find/replace across files |
+| Create new C# type | `aura_generate(operation: "create_type")` | `create_file` |
+| Implement interface | `aura_generate(operation: "implement_interface")` | Manual stub writing |
+| Generate constructor | `aura_generate(operation: "constructor")` | `replace_string_in_file` |
+| Generate tests | `aura_generate(operation: "tests")` | Manual test writing |
+| Extract method/variable | `aura_refactor(operation: "extract_*")` | Cut/paste with text tools |
+| Find usages/callers | `aura_navigate` | `grep_search` |
+| Explore type structure | `aura_inspect` | `read_file` + manual parsing |
+| Search codebase semantically | `aura_search` | `semantic_search` or `grep_search` |
+
+**When text manipulation IS appropriate:**
+- Non-C# files (JSON, YAML, Markdown, TypeScript, etc.)
+- Simple one-line fixes in C# where Aura overhead isn't justified
+- Files outside the solution (scripts, docs)
+- When Aura tools fail and fallback is needed
+
+### Aura Tool Capabilities
+
+| Tool | Operations | When to Use |
+|------|------------|-------------|
+| `aura_search` | Semantic code search | First step to understand codebase |
+| `aura_navigate` | `callers`, `implementations`, `derived_types`, `usages`, `references`, `definition`, `by_attribute` | Understanding code relationships |
+| `aura_inspect` | `type_members`, `list_types` | Exploring class structure |
+| `aura_validate` | `compilation`, `tests` | After changes to verify correctness |
+| `aura_refactor` | `rename`, `extract_method`, `extract_variable`, `extract_interface`, `change_signature`, `safe_delete`, `move_type_to_file` | Semantic code transformations |
+| `aura_generate` | `create_type`, `tests`, `implement_interface`, `constructor`, `property`, `method` | Adding new code elements |
+| `aura_pattern` | `list`, `get` | Load step-by-step operational patterns |
+| `aura_workflow` | `list`, `get`, `get_by_path`, `create`, `enrich`, `update_step` | Manage development stories |
+
+### Workflow: Using Aura Tools Effectively
+
+1. **Explore first**: Use `aura_search` or `aura_inspect` to understand existing code
+2. **Navigate relationships**: Use `aura_navigate` to find callers, implementations, usages
+3. **Generate or refactor**: Use `aura_generate` for new code, `aura_refactor` for changes
+4. **Validate**: Run `aura_validate(operation: "compilation")` after changes
+5. **Only then** fall back to text manipulation if Aura tools don't cover the case
+
+### Test Generation: Hybrid Approach
+
+`aura_generate(operation: "tests")` has known limitations. Use this hybrid workflow:
+
+#### What Aura Provides vs. What You Must Fix:
+
+| ✅ Aura Does | ❌ Agent Must Fix |
+|--------------|------------------|
+| Analyzes testable methods | Wrong folder placement (defaults to `Agents/`) |
+| Creates test file with namespace | Unqualified imports (`IFileSystem` not full path) |
+| Sets up Arrange/Act/Assert skeleton | Placeholder assertions (`// TODO:`) that don't pass |
+| Detects test framework | Uses `Substitute.For<ILogger>()` instead of `NullLogger<T>.Instance` |
+| Generates mock setup | No `IDisposable` cleanup pattern |
+
+#### Domain Knowledge Only the Agent Has:
+
+- `IFileSystem` → `System.IO.Abstractions.IFileSystem` + `MockFileSystem` from TestingHelpers
+- Loggers → `Microsoft.Extensions.Logging.Abstractions.NullLogger<T>.Instance`
+- Assertions → Must understand what the method **actually returns**
+- Test data → Create YAML/JSON fixtures for the specific domain
+
+**For new test files:**
+```
+# 1. Analyze first
+aura_generate(operation: "tests", target: "MyService", analyzeOnly: true)
+
+# 2. Generate skeleton
+aura_generate(operation: "tests", target: "MyService")
+
+# 3. Fix with text tools (Aura generates skeletons, you complete them):
+#    - Add missing imports (IFileSystem → System.IO.Abstractions.IFileSystem)
+#    - Replace Substitute.For<ILogger>() with NullLogger<T>.Instance  
+#    - Replace // TODO: assertions with real assertions
+```
+
+**For adding individual tests with full control:**
+```
+aura_generate(
+  operation: "method",
+  className: "MyServiceTests",
+  methodName: "MyMethod_WhenCondition_ShouldResult",
+  body: "// Arrange\nvar sut = new MyService();\n// Act\nvar result = sut.DoThing();\n// Assert\nresult.Should().BeTrue();"
+)
+```
+
+This gives you Aura's file manipulation (correct insertion point, formatting) with your domain knowledge (assertions, fixtures).
+
+### Path Resolution
+
 When using MCP tools (prefixed with `mcp_aura_codebase_`) that require paths:
 
 **CRITICAL**: Always use the **current workspace root**, not worktree paths or cached paths from previous context.
