@@ -191,6 +191,12 @@ public sealed record TestGap
 
     /// <summary>Priority for addressing this gap.</summary>
     public TestPriority Priority { get; init; } = TestPriority.Medium;
+
+    /// <summary>Parameter name for null/boundary tests (optional, used for unique test naming).</summary>
+    public string? ParameterName { get; init; }
+
+    /// <summary>Exception type for error handling tests (optional).</summary>
+    public string? ExceptionType { get; init; }
 }
 
 /// <summary>

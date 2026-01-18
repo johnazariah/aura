@@ -5,6 +5,7 @@
 namespace Aura.Api.Mcp;
 
 using System.Text.Json;
+using Aura.Foundation.Data.Entities;
 using Aura.Foundation.Git;
 using Aura.Foundation.Rag;
 using Aura.Module.Developer.Data.Entities;
@@ -1373,10 +1374,33 @@ public sealed class McpHandler
             SourcePathPrefix = sourcePathPrefix
         };
 
-        // Phase 1.2: Check code graph for exact symbol match first
-        var exactMatches = await _graphService.FindNodesAsync(query, cancellationToken: ct);
-        var exactMatchResults = exactMatches
-            .Take(3) // Limit to top 3 exact matches
+        // Extract potential symbol names from query (words that look like identifiers)
+        // Handles multi-word queries like "IGitWorktreeService CreateAsync WorktreeResult"
+        var symbolCandidates = ExtractSymbolCandidates(query);
+
+        // Search for each symbol candidate in the code graph
+        var allExactMatches = new List<CodeNode>();
+        foreach (var symbol in symbolCandidates)
+        {
+            var matches = await _graphService.FindNodesAsync(symbol, cancellationToken: ct);
+            allExactMatches.AddRange(matches);
+        }
+
+        // Deduplicate by full name and prioritize: interfaces, classes, enums first
+        var exactMatchResults = allExactMatches
+            .DistinctBy(n => n.FullName)
+            .OrderByDescending(n => n.NodeType switch
+            {
+                CodeNodeType.Interface => 100,
+                CodeNodeType.Class => 90,
+                CodeNodeType.Enum => 85,
+                CodeNodeType.Record => 80,
+                CodeNodeType.Struct => 75,
+                CodeNodeType.Method => 50,
+                CodeNodeType.Property => 40,
+                _ => 0
+            })
+            .Take(5) // Limit to top 5 exact matches
             .Select(n => new
             {
                 content = $"[EXACT MATCH] {n.NodeType}: {n.FullName}",
@@ -1406,6 +1430,85 @@ public sealed class McpHandler
             .Take(limit);
 
         return combinedResults;
+    }
+
+    /// <summary>
+    /// Extracts potential symbol names from a search query.
+    /// Identifies words that look like code identifiers (PascalCase, camelCase, contain underscores, etc.)
+    /// </summary>
+    private static List<string> ExtractSymbolCandidates(string query)
+    {
+        if (string.IsNullOrWhiteSpace(query))
+            return new List<string>();
+
+        // Split on whitespace and common separators
+        var tokens = query.Split(new[] { ' ', '\t', '\n', '\r', ',', ';', ':', '(', ')', '[', ']', '{', '}' },
+            StringSplitOptions.RemoveEmptyEntries);
+
+        var candidates = new List<string>();
+        foreach (var token in tokens)
+        {
+            // Skip very short tokens (likely noise) unless they look like acronyms
+            if (token.Length < 2)
+                continue;
+
+            // Skip common English words that aren't likely symbol names
+            var lower = token.ToLowerInvariant();
+            if (IsCommonWord(lower))
+                continue;
+
+            // Keep tokens that look like identifiers:
+            // - Start with letter or underscore
+            // - Contain only alphanumeric and underscores
+            // - PascalCase or camelCase patterns
+            if (LooksLikeIdentifier(token))
+            {
+                candidates.Add(token);
+            }
+        }
+
+        return candidates.Distinct().ToList();
+    }
+
+    /// <summary>
+    /// Checks if a token looks like a code identifier.
+    /// </summary>
+    private static bool LooksLikeIdentifier(string token)
+    {
+        if (string.IsNullOrEmpty(token))
+            return false;
+
+        // Must start with letter or underscore
+        var first = token[0];
+        if (!char.IsLetter(first) && first != '_')
+            return false;
+
+        // All characters must be alphanumeric or underscore
+        foreach (var c in token)
+        {
+            if (!char.IsLetterOrDigit(c) && c != '_')
+                return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Checks if a word is a common English word that's unlikely to be a symbol name.
+    /// </summary>
+    private static bool IsCommonWord(string word)
+    {
+        // Common words to filter out
+        return word switch
+        {
+            "the" or "a" or "an" or "and" or "or" or "but" or "in" or "on" or "at" or "to" or "for" or
+            "of" or "with" or "by" or "from" or "as" or "is" or "was" or "are" or "were" or "be" or
+            "been" or "being" or "have" or "has" or "had" or "do" or "does" or "did" or "will" or
+            "would" or "could" or "should" or "may" or "might" or "must" or "can" or "this" or "that" or
+            "these" or "those" or "it" or "its" or "not" or "no" or "yes" or "all" or "any" or "some" or
+            "find" or "get" or "set" or "how" or "what" or "where" or "when" or "why" or "which" => true,
+            _ => false
+        };
     }
 
     /// <summary>

@@ -183,13 +183,20 @@ During dogfooding of the pattern-driven story workflow (test coverage story with
 - **Gap 12** - ✅ aura_inspect type_members now has Roslyn fallback (pass solutionPath)
 - **Gap 17** - ✅ Test generation now skips duplicate methods when appending
 - **Gap 19** - ✅ aura_generate method now adds test attributes (auto-detect or specify testAttribute)
+- **Gap 15** - ✅ aura_search now splits multi-word queries into symbol candidates
+- **Gap 16** - ✅ aura_search uses case-insensitive matching for enums
+
+### Test Generation Quality (NEW)
+- ✅ Deduplicate test names (include parameter name for null tests)
+- ✅ Generate NSubstitute mocks for constructor dependencies
+- ✅ Use NSubstitute syntax instead of Moq
+- ✅ Handle IReadOnlyDictionary/IReadOnlyList with proper generics
 
 ### Critical - Blocking Pattern Execution
 (All critical gaps resolved)
 
 ### High - MCP Tool Reliability
-- **Gap 15** - aura_search irrelevant results
-- **Gap 16** - aura_search fails to find enums
+(All high-priority gaps resolved)
 
 ### Medium - UX Improvements
 - **Gap 20** - aura_validate tests truncated output
@@ -325,37 +332,44 @@ The following issues were identified during dogfooding the generate-tests patter
 
 ---
 
-### Gap 15: aura_search Returns Irrelevant Results (HIGH)
+### Gap 15: aura_search Returns Irrelevant Results (HIGH) ✅ IMPLEMENTED
 
 **Tool:** `aura_search`
+
+**Status:** Fixed in McpHandler.cs and CodeGraphService.cs
 
 **Problem:** Searching for `IGitWorktreeService CreateAsync WorktreeResult` returned completely irrelevant results.
 
 **Impact:** Had to use navigation tools as workaround.
 
-**Root Cause:** Semantic search not finding exact symbol matches.
+**Root Cause:** Multi-word queries passed directly to exact name match. Semantic search not finding exact symbol matches.
 
-**Proposed Solution:**
-- Boost exact symbol name matches
-- Consider hybrid search (keyword + semantic)
-- Pre-filter by type/interface name
+**Solution Implemented:**
+- Extract potential symbol names from query (split on whitespace)
+- Search code graph for each symbol candidate individually
+- Case-insensitive matching using ILIKE in PostgreSQL
+- Partial FullName matching (e.g., `.ClassName` pattern)
+- Priority ordering: interfaces, classes, enums first
+- Combined results: exact matches first, then semantic results
 
 ---
 
-### Gap 16: aura_search Fails to Find Enums (HIGH)
+### Gap 16: aura_search Fails to Find Enums (HIGH) ✅ IMPLEMENTED
 
 **Tool:** `aura_search`
+
+**Status:** Fixed alongside Gap 15
 
 **Problem:** Failed to find `StepStatus` enum when searched directly.
 
 **Impact:** Manual file reading required.
 
-**Root Cause:** Enums may not be indexed or search not matching enum types.
+**Root Cause:** Case-sensitive exact matching in code graph query.
 
-**Proposed Solution:**
-- Ensure enums are indexed in RAG
-- Add enum-specific search handling
-- Index enum values as searchable content
+**Solution Implemented:**
+- Case-insensitive matching using EF.Functions.ILike
+- Enums already indexed as CodeNodeType.Enum
+- Enums now prioritized in result ordering (score 85)
 
 ---
 

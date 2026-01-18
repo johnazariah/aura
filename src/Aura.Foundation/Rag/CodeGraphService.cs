@@ -250,7 +250,12 @@ public class CodeGraphService(AuraDbContext dbContext, ILogger<CodeGraphService>
         // Only filter by name if a non-empty name is provided
         if (!string.IsNullOrEmpty(name))
         {
-            query = query.Where(n => n.Name == name || n.FullName == name);
+            // Use case-insensitive matching for better search results
+            // Prefer exact match on Name, but also match FullName ending with the name
+            query = query.Where(n =>
+                EF.Functions.ILike(n.Name, name) ||
+                EF.Functions.ILike(n.FullName!, name) ||
+                EF.Functions.ILike(n.FullName!, $"%.{name}"));
         }
 
         if (nodeType.HasValue)
