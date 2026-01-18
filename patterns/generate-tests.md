@@ -161,8 +161,6 @@ aura_generate(
   solutionPath: "{path}",
   className: "FooTests",
   methodName: "GetItem_WithValidId_ReturnsItem",
-  isAsync: true,
-  returnType: "Task",
   body: """
     // Arrange
     _fileSystem.AddFile("/items/test.json", new MockFileData("{...}"));
@@ -178,7 +176,12 @@ aura_generate(
 )
 ```
 
-This gives full control over test logic while Aura handles file manipulation.
+This gives full control over test logic while Aura handles:
+- **`[Fact]` attribute** - automatically added when class has xUnit reference
+- **Return type inference** - detects `async Task` from `await` keywords in body
+- **Method visibility** - defaults to `public` for test methods
+
+You do NOT need to specify `isAsync: true` or `returnType: "Task"` - Aura infers these from the body content.
 
 ## Anti-patterns
 
@@ -215,6 +218,23 @@ This gives full control over test logic while Aura handles file manipulation.
 | 5 | Uses NSubstitute for all mocks | Replace `ILogger` mocks with `NullLogger` |
 | 6 | No IDisposable cleanup pattern | Add `IDisposable` implementation if SUT requires disposal |
 | 7 | File locking on parallel writes | Sequential method additions only |
+
+## What Aura Does Correctly
+
+When using `aura_generate method` with a `body` parameter in a test class:
+
+| Feature | Behavior |
+|---------|----------|
+| `[Fact]` attribute | Auto-added when target class is in xUnit test project |
+| Async detection | Infers `async Task` return type from `await` in body |
+| Method visibility | Defaults to `public` for test methods |
+| Method insertion | Places new methods at end of class before closing brace |
+| Whitespace | Preserves class formatting and indentation |
+
+This means you only need to provide:
+- `className` - the test class name
+- `methodName` - following `Method_Condition_ExpectedResult` convention
+- `body` - the Arrange/Act/Assert code
 
 ## Framework-Specific Templates
 
