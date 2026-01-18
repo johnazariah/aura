@@ -316,6 +316,14 @@ public sealed class WorkflowService(
     }
 
     /// <inheritdoc/>
+    public async Task UpdateStepAsync(WorkflowStep step, CancellationToken ct = default)
+    {
+        _db.Entry(step).State = Microsoft.EntityFrameworkCore.EntityState.Modified;
+        await _db.SaveChangesAsync(ct);
+        _logger.LogInformation("Updated step {StepId}: {Name} -> {Status}", step.Id, step.Name, step.Status);
+    }
+
+    /// <inheritdoc/>
     public async Task<Workflow> AnalyzeAsync(Guid workflowId, CancellationToken ct = default)
     {
         var workflow = await _db.Workflows
@@ -1115,6 +1123,7 @@ public sealed class WorkflowService(
         string name,
         string capability,
         string? description = null,
+        string? input = null,
         int? afterOrder = null,
         CancellationToken ct = default)
     {
@@ -1149,6 +1158,7 @@ public sealed class WorkflowService(
             Name = name,
             Capability = capability,
             Description = description,
+            Input = input,
             Status = StepStatus.Pending,
         };
 

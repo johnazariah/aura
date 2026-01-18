@@ -443,7 +443,8 @@ public sealed class McpHandler
                                 {
                                     name = new { type = "string", description = "Step name" },
                                     capability = new { type = "string", description = "Required capability/tool (e.g., 'aura_refactor', 'run_in_terminal')" },
-                                    description = new { type = "string", description = "Step description with phase prefix like '[Analysis] Examine code structure'" }
+                                    description = new { type = "string", description = "Step description with phase prefix like '[Analysis] Examine code structure'" },
+                                    input = new { type = "object", description = "Tool arguments as JSON object" }
                                 },
                                 required = new[] { "name", "capability" }
                             }
@@ -1842,6 +1843,13 @@ public sealed class McpHandler
             var name = stepEl.TryGetProperty("name", out var nameEl) ? nameEl.GetString() ?? "" : "";
             var capability = stepEl.TryGetProperty("capability", out var capEl) ? capEl.GetString() ?? "" : "";
             var description = stepEl.TryGetProperty("description", out var descEl) ? descEl.GetString() : null;
+            string? input = null;
+            if (stepEl.TryGetProperty("input", out var inputEl))
+            {
+                input = inputEl.ValueKind == JsonValueKind.String
+                    ? inputEl.GetString()
+                    : inputEl.GetRawText();
+            }
 
             if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(capability))
             {
@@ -1853,6 +1861,7 @@ public sealed class McpHandler
                 name,
                 capability,
                 description,
+                input,
                 ct: ct);
 
             addedSteps.Add(new
@@ -1927,15 +1936,15 @@ public sealed class McpHandler
             case "completed":
                 step.Status = StepStatus.Completed;
                 step.Output = output;
-                step.CompletedAt = DateTime.UtcNow;
-                await _workflowService.UpdateAsync(workflow, ct);
+                step.CompletedAt = DateTimeOffset.UtcNow;
+                await _workflowService.UpdateStepAsync(step, ct);
                 updatedStep = step;
                 break;
 
             case "failed":
                 step.Status = StepStatus.Failed;
                 step.Error = error ?? "Step marked as failed";
-                await _workflowService.UpdateAsync(workflow, ct);
+                await _workflowService.UpdateStepAsync(step, ct);
                 updatedStep = step;
                 break;
 

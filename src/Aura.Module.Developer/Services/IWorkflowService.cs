@@ -87,6 +87,13 @@ public interface IWorkflowService
     Task UpdateAsync(Workflow workflow, CancellationToken ct = default);
 
     /// <summary>
+    /// Updates a workflow step.
+    /// </summary>
+    /// <param name="step">The step to update.</param>
+    /// <param name="ct">Cancellation token.</param>
+    Task UpdateStepAsync(WorkflowStep step, CancellationToken ct = default);
+
+    /// <summary>
     /// Enriches the workflow requirements using the issue-enrichment agent.
     /// </summary>
     /// <param name="workflowId">The workflow ID.</param>
@@ -138,6 +145,7 @@ public interface IWorkflowService
     /// <param name="name">Step name.</param>
     /// <param name="capability">Required capability.</param>
     /// <param name="description">Step description.</param>
+    /// <param name="input">Input context as JSON (tool arguments).</param>
     /// <param name="afterOrder">Insert after this order (null = end).</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>The created step.</returns>
@@ -146,6 +154,7 @@ public interface IWorkflowService
         string name,
         string capability,
         string? description = null,
+        string? input = null,
         int? afterOrder = null,
         CancellationToken ct = default);
 
