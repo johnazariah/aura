@@ -234,7 +234,7 @@ public sealed class McpHandler
                             @enum = new[] { "type_members", "list_types" }
                         },
                         typeName = new { type = "string", description = "Type name for type_members operation" },
-                        solutionPath = new { type = "string", description = "Path to solution file (.sln)" },
+                        solutionPath = new { type = "string", description = "Path to solution file (.sln) - enables Roslyn fallback when code graph is empty" },
                         projectName = new { type = "string", description = "Project name for list_types operation" },
                         namespaceFilter = new { type = "string", description = "Filter by namespace (partial match)" },
                         nameFilter = new { type = "string", description = "Filter by type name (partial match)" }
@@ -1502,15 +1502,126 @@ public sealed class McpHandler
     {
         var typeName = args?.GetProperty("typeName").GetString() ?? "";
         var worktreeInfo = DetectWorktreeFromArgs(args);
+
+        // Try code graph first
         var results = await _graphService.GetTypeMembersAsync(typeName, cancellationToken: ct);
 
-        return results.Select(n => new
+        if (results.Count > 0)
         {
-            name = n.Name,
-            kind = n.NodeType.ToString(),
-            filePath = TranslatePathIfWorktree(n.FilePath, worktreeInfo),
-            line = n.LineNumber
-        });
+            return results.Select(n => new
+            {
+                name = n.Name,
+                kind = n.NodeType.ToString(),
+                filePath = TranslatePathIfWorktree(n.FilePath, worktreeInfo),
+                line = n.LineNumber
+            });
+        }
+
+        // Fallback to Roslyn if code graph returns empty and solutionPath is provided
+        string? solutionPath = null;
+        if (args.HasValue && args.Value.TryGetProperty("solutionPath", out var solEl))
+        {
+            solutionPath = solEl.GetString();
+        }
+
+        if (string.IsNullOrEmpty(solutionPath) || !File.Exists(solutionPath))
+        {
+            return Array.Empty<object>();
+        }
+
+        return await GetTypeMembersViaRoslynAsync(solutionPath, typeName, worktreeInfo, ct);
+    }
+
+    private async Task<object> GetTypeMembersViaRoslynAsync(
+        string solutionPath,
+        string typeName,
+        DetectedWorktree? worktreeInfo,
+        CancellationToken ct)
+    {
+        try
+        {
+            var solution = await _roslynService.GetSolutionAsync(solutionPath, ct);
+            INamedTypeSymbol? typeSymbol = null;
+
+            foreach (var project in solution.Projects)
+            {
+                var compilation = await project.GetCompilationAsync(ct);
+                if (compilation is null) continue;
+
+                // Try exact match first, then partial match
+                typeSymbol = compilation.GetTypeByMetadataName(typeName);
+                if (typeSymbol is null)
+                {
+                    // Try finding by simple name
+                    foreach (var tree in compilation.SyntaxTrees)
+                    {
+                        var semanticModel = compilation.GetSemanticModel(tree);
+                        var root = await tree.GetRootAsync(ct);
+
+                        var typeDeclarations = root.DescendantNodes()
+                            .OfType<TypeDeclarationSyntax>()
+                            .Where(t => t.Identifier.Text == typeName ||
+                                         t.Identifier.Text.EndsWith(typeName));
+
+                        foreach (var typeDecl in typeDeclarations)
+                        {
+                            if (semanticModel.GetDeclaredSymbol(typeDecl) is INamedTypeSymbol found)
+                            {
+                                typeSymbol = found;
+                                break;
+                            }
+                        }
+
+                        if (typeSymbol != null) break;
+                    }
+                }
+
+                if (typeSymbol != null) break;
+            }
+
+            if (typeSymbol is null)
+            {
+                return Array.Empty<object>();
+            }
+
+            // Get all members
+            var members = typeSymbol.GetMembers()
+                .Where(m => !m.IsImplicitlyDeclared && m.CanBeReferencedByName)
+                .Select(m =>
+                {
+                    var location = m.Locations.FirstOrDefault();
+                    var filePath = location?.SourceTree?.FilePath ?? "";
+
+                    return new
+                    {
+                        name = m.Name,
+                        kind = m.Kind.ToString(),
+                        signature = GetMemberSignature(m),
+                        filePath = TranslatePathIfWorktree(filePath, worktreeInfo),
+                        line = location?.GetLineSpan().StartLinePosition.Line + 1 ?? 0
+                    };
+                })
+                .ToList();
+
+            return members;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Roslyn fallback for type_members failed for {TypeName}", typeName);
+            return Array.Empty<object>();
+        }
+    }
+
+    private static string GetMemberSignature(ISymbol member)
+    {
+        return member switch
+        {
+            IMethodSymbol method => $"{method.ReturnType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)} {method.Name}({string.Join(", ", method.Parameters.Select(p => $"{p.Type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)} {p.Name}"))})",
+            IPropertySymbol prop => $"{prop.Type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)} {prop.Name}",
+            IFieldSymbol field => $"{field.Type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)} {field.Name}",
+            IEventSymbol evt => $"event {evt.Type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)} {evt.Name}",
+            _ => member.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)
+        };
     }
 
     private async Task<object> FindDerivedTypesAsync(JsonElement? args, CancellationToken ct)

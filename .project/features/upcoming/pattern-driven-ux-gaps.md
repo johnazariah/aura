@@ -179,14 +179,14 @@ During dogfooding of the pattern-driven story workflow (test coverage story with
 - **Gap 11** - ✅ Test generation now reads actual enum values from Roslyn instead of hallucinating
 - **Gap 13** - ✅ aura_navigate definition now works for C# (uses Roslyn + code graph)
 - **Gap 14** - ✅ aura_validate now supports solution-level validation (omit projectName)
+- **Gap 18** - ✅ Roslyn workspace cache now auto-clears after file writes
+- **Gap 12** - ✅ aura_inspect type_members now has Roslyn fallback (pass solutionPath)
 
 ### Critical - Blocking Pattern Execution
 - **Gap 17** - Test generation overwrites instead of appending
-- **Gap 18** - Roslyn workspace cache staleness (causes multiple tool failures)
 - **Gap 19** - aura_generate method missing [Fact] attribute
 
 ### High - MCP Tool Reliability
-- **Gap 12** - aura_inspect returns empty for valid types
 - **Gap 15** - aura_search irrelevant results
 - **Gap 16** - aura_search fails to find enums
 
@@ -266,20 +266,23 @@ The following issues were identified during dogfooding the generate-tests patter
 
 ---
 
-### Gap 12: aura_inspect Returns Empty for Valid Types (HIGH)
+### Gap 12: aura_inspect Returns Empty for Valid Types (HIGH) ✅ IMPLEMENTED
 
 **Tool:** `aura_inspect(operation: "type_members")`
+
+**Status:** Fixed in McpHandler.cs - Added Roslyn fallback when code graph returns empty.
 
 **Problem:** Returned empty results when inspecting `WorkflowService`.
 
 **Impact:** Couldn't inspect class structure, had to manually read files.
 
-**Root Cause:** Unknown - possibly indexing issue or type resolution failure.
+**Root Cause:** Code graph (PostgreSQL) was not indexed or stale. The `type_members` operation only queried the code graph, with no Roslyn fallback.
 
-**Proposed Solution:**
-- Add diagnostic logging to identify why type wasn't found
-- Check if namespace qualification is required
-- Verify code graph has the type indexed
+**Solution Implemented:**
+- Added `GetTypeMembersViaRoslynAsync()` method as fallback
+- When code graph returns empty AND `solutionPath` is provided, uses Roslyn to find type and enumerate members
+- Returns full member signatures including return types and parameters
+- Updated schema description to document `solutionPath` enables Roslyn fallback
 
 ---
 
@@ -372,7 +375,9 @@ The following issues were identified during dogfooding the generate-tests patter
 
 ---
 
-### Gap 18: Roslyn Workspace Cache Staleness (HIGH)
+### Gap 18: Roslyn Workspace Cache Staleness (HIGH) ✅ IMPLEMENTED
+
+**Status:** Implemented - cache is now cleared after all file-writing operations
 
 **Tool:** Multiple (`aura_generate`, `aura_inspect`, `aura_navigate`)
 
@@ -385,10 +390,11 @@ The following issues were identified during dogfooding the generate-tests patter
 
 **Root Cause:** Roslyn workspace not automatically refreshed when files change.
 
-**Proposed Solution:**
-- Auto-invalidate cache when files are modified by any Aura tool
-- Consider incremental workspace updates instead of full invalidation
-- Document cache invalidation requirements in tool descriptions
+**Solution Implemented:**
+- Added `_workspaceService.ClearCache()` after all file-writing operations in:
+  - `RoslynRefactoringService`: ImplementInterfaceAsync, GenerateConstructorAsync, ExtractInterfaceAsync, SafeDeleteAsync, AddPropertyAsync, AddMethodAsync, ChangeSignatureAsync
+  - `RoslynTestGenerator`: GenerateTestsAsync
+- Existing methods that already cleared cache: RenameAsync, CreateTypeAsync, MoveTypeToFileAsync, file rename/move
 
 ---
 

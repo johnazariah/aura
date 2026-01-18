@@ -525,6 +525,8 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
                 }
             }
 
+            _workspaceService.ClearCache();
+
             return RefactoringResult.Succeeded(
                 $"Changed signature of '{request.ContainingType}.{request.MethodName}', updated {modifiedFiles.Count} files",
                 modifiedFiles);
@@ -652,6 +654,7 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
             if (document.FilePath != null)
             {
                 await File.WriteAllTextAsync(document.FilePath, formattedRoot.ToFullString(), ct);
+                _workspaceService.ClearCache();
             }
 
             return RefactoringResult.Succeeded(
@@ -774,6 +777,7 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
             if (document.FilePath != null)
             {
                 await File.WriteAllTextAsync(document.FilePath, formattedRoot.ToFullString(), ct);
+                _workspaceService.ClearCache();
             }
 
             return RefactoringResult.Succeeded(
@@ -928,6 +932,8 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
                 await File.WriteAllTextAsync(document.FilePath, formattedClassRoot.ToFullString(), ct);
             }
 
+            _workspaceService.ClearCache();
+
             return new RefactoringResult
             {
                 Success = true,
@@ -1037,6 +1043,7 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
             {
                 var formatted = Formatter.Format(updatedRoot, document.Project.Solution.Workspace);
                 await File.WriteAllTextAsync(document.FilePath, formatted.ToFullString(), ct);
+                _workspaceService.ClearCache();
             }
 
             return RefactoringResult.Succeeded(
@@ -1139,6 +1146,7 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
             if (document.FilePath != null)
             {
                 await File.WriteAllTextAsync(document.FilePath, formattedRoot.ToFullString(), ct);
+                _workspaceService.ClearCache();
             }
 
             return RefactoringResult.Succeeded(
@@ -1266,6 +1274,7 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
             if (document.FilePath != null)
             {
                 await File.WriteAllTextAsync(document.FilePath, formattedRoot.ToFullString(), ct);
+                _workspaceService.ClearCache();
             }
 
             return RefactoringResult.Succeeded(

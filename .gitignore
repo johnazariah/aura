@@ -48,4 +48,4 @@ secrets.json
 # Build cache
 cache/
 
-.fake
+.fake.update-temp/

@@ -439,6 +439,9 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
         }
         await File.WriteAllTextAsync(testFilePath, testCode, ct);
 
+        // Clear workspace cache so subsequent operations see the new file
+        _workspaceService.ClearCache();
+
         return new GeneratedTests
         {
             TestFilePath = testFilePath,
