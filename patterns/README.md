@@ -18,10 +18,17 @@ A pattern is NOT:
 
 ## Available Patterns
 
+### Polyglot (Base Patterns)
+
 | Pattern | Description | Overlays |
 |---------|-------------|----------|
-| [comprehensive-rename.md](comprehensive-rename.md) | Rename a domain concept across entire codebase | csharp |
 | [generate-tests.md](generate-tests.md) | Generate comprehensive tests for a class/module | csharp, python |
+
+### Language-Specific
+
+| Pattern | Language | Description |
+|---------|----------|-------------|
+| [csharp/comprehensive-rename.md](csharp/comprehensive-rename.md) | C# | Rename domain concept across codebase (Roslyn) |
 
 ## Language Overlays
 

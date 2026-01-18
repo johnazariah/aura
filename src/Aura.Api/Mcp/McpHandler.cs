@@ -1199,6 +1199,7 @@ public sealed class McpHandler
             {
                 success = false,
                 patterns = Array.Empty<object>(),
+                languagePatterns = Array.Empty<object>(),
                 languages = Array.Empty<string>(),
                 message = $"Patterns directory not found: {patternsDir}"
             };
@@ -1210,6 +1211,7 @@ public sealed class McpHandler
             .Where(n => !n.StartsWith('.'))
             .ToArray();
 
+        // Base patterns (polyglot)
         var patterns = Directory.GetFiles(patternsDir, "*.md")
             .Where(f => !Path.GetFileName(f).Equals("README.md", StringComparison.OrdinalIgnoreCase))
             .Select(f =>
@@ -1230,12 +1232,39 @@ public sealed class McpHandler
             })
             .ToArray();
 
+        // Language-specific patterns (no base, only in language folder)
+        var languagePatterns = languages
+            .SelectMany(lang =>
+            {
+                var langDir = Path.Combine(patternsDir, lang);
+                return Directory.GetFiles(langDir, "*.md")
+                    .Where(f =>
+                    {
+                        var name = Path.GetFileNameWithoutExtension(f);
+                        // Exclude patterns that are overlays of base patterns
+                        return !File.Exists(Path.Combine(patternsDir, $"{name}.md"));
+                    })
+                    .Select(f =>
+                    {
+                        var name = Path.GetFileNameWithoutExtension(f);
+                        var content = File.ReadAllText(f);
+                        var firstLine = content.Split('\n').FirstOrDefault()?.Trim() ?? "";
+                        var description = firstLine.StartsWith("#")
+                            ? firstLine.TrimStart('#', ' ')
+                            : name;
+
+                        return new { name, language = lang, description };
+                    });
+            })
+            .ToArray();
+
         return new
         {
             success = true,
             patterns,
+            languagePatterns,
             languages,
-            message = $"Found {patterns.Length} patterns. Use aura_pattern(operation: 'get', name: '...', language: '...') to load with overlay."
+            message = $"Found {patterns.Length} base patterns, {languagePatterns.Length} language-specific patterns. Use aura_pattern(operation: 'get', name: '...', language: '...') to load."
         };
     }
 
@@ -1255,54 +1284,83 @@ public sealed class McpHandler
         }
 
         var patternsDir = GetPatternsDirectory();
-        var patternPath = Path.Combine(patternsDir, $"{name}.md");
+        var basePatternPath = Path.Combine(patternsDir, $"{name}.md");
+        var hasBasePattern = File.Exists(basePatternPath);
 
-        if (!File.Exists(patternPath))
+        // Check for language-specific pattern (no base)
+        string? langOnlyPatternPath = null;
+        if (!string.IsNullOrWhiteSpace(language))
         {
+            langOnlyPatternPath = Path.Combine(patternsDir, language, $"{name}.md");
+        }
+
+        // Case 1: Base pattern exists
+        if (hasBasePattern)
+        {
+            var baseContent = File.ReadAllText(basePatternPath);
+            string? overlayContent = null;
+            var hasOverlay = false;
+
+            // Check for language overlay
+            if (!string.IsNullOrWhiteSpace(language))
+            {
+                var overlayPath = Path.Combine(patternsDir, language, $"{name}.md");
+                if (File.Exists(overlayPath))
+                {
+                    overlayContent = File.ReadAllText(overlayPath);
+                    hasOverlay = true;
+                }
+            }
+
+            // Merge base + overlay if overlay exists
+            var finalContent = hasOverlay
+                ? $"{baseContent}\n\n---\n\n# {language!.ToUpperInvariant()} Language Overlay\n\n{overlayContent}"
+                : baseContent;
+
+            var message = hasOverlay
+                ? $"Loaded pattern '{name}' with {language} overlay. Follow the steps in this pattern."
+                : !string.IsNullOrWhiteSpace(language)
+                    ? $"Pattern '{name}' loaded (no {language} overlay found). Follow the steps in this pattern."
+                    : "Follow the steps in this pattern. Do not deviate.";
+
             return new
             {
-                success = false,
+                success = true,
                 name,
-                language = (string?)null,
-                content = (string?)null,
-                message = $"Pattern '{name}' not found. Use aura_pattern(operation: 'list') to see available patterns."
+                language,
+                hasOverlay,
+                isLanguageSpecific = false,
+                content = finalContent,
+                message
             };
         }
 
-        var baseContent = File.ReadAllText(patternPath);
-        string? overlayContent = null;
-        var hasOverlay = false;
-
-        // Check for language overlay
-        if (!string.IsNullOrWhiteSpace(language))
+        // Case 2: Language-specific pattern (no base)
+        if (langOnlyPatternPath != null && File.Exists(langOnlyPatternPath))
         {
-            var overlayPath = Path.Combine(patternsDir, language, $"{name}.md");
-            if (File.Exists(overlayPath))
+            var content = File.ReadAllText(langOnlyPatternPath);
+            return new
             {
-                overlayContent = File.ReadAllText(overlayPath);
-                hasOverlay = true;
-            }
+                success = true,
+                name,
+                language,
+                hasOverlay = false,
+                isLanguageSpecific = true,
+                content,
+                message = $"Loaded {language}-specific pattern '{name}'. Follow the steps in this pattern."
+            };
         }
 
-        // Merge base + overlay if overlay exists
-        var finalContent = hasOverlay
-            ? $"{baseContent}\n\n---\n\n# {language!.ToUpperInvariant()} Language Overlay\n\n{overlayContent}"
-            : baseContent;
-
-        var message = hasOverlay
-            ? $"Loaded pattern '{name}' with {language} overlay. Follow the steps in this pattern."
-            : !string.IsNullOrWhiteSpace(language)
-                ? $"Pattern '{name}' loaded (no {language} overlay found). Follow the steps in this pattern."
-                : "Follow the steps in this pattern. Do not deviate.";
-
+        // Case 3: Not found
         return new
         {
-            success = true,
+            success = false,
             name,
             language,
-            hasOverlay,
-            content = finalContent,
-            message
+            hasOverlay = false,
+            isLanguageSpecific = false,
+            content = (string?)null,
+            message = $"Pattern '{name}' not found. Use aura_pattern(operation: 'list') to see available patterns."
         };
     }
 
