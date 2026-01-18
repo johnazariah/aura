@@ -419,7 +419,7 @@ public sealed class McpHandler
             new McpToolDefinition
             {
                 Name = "aura_workflow",
-                Description = "Manage Aura development workflows/stories: list, get details, create from GitHub issues. (CRUD)",
+                Description = "Manage Aura development workflows/stories: list, get details, get by worktree path, create from GitHub issues. Use get_by_path to auto-discover current story context. (CRUD)",
                 InputSchema = new
                 {
                     type = "object",
@@ -429,15 +429,17 @@ public sealed class McpHandler
                         {
                             type = "string",
                             description = "Workflow operation type",
-                            @enum = new[] { "list", "get", "create", "enrich", "update_step" }
+                            @enum = new[] { "list", "get", "get_by_path", "create", "enrich", "update_step" }
                         },
                         storyId = new { type = "string", description = "Story ID (GUID) - for get, enrich operations" },
+                        workspacePath = new { type = "string", description = "Workspace/worktree path - for get_by_path to auto-discover current story" },
                         issueUrl = new { type = "string", description = "GitHub issue URL - for create operation" },
                         repositoryPath = new { type = "string", description = "Local repository path for worktree creation" },
+                        pattern = new { type = "string", description = "Pattern name to apply - for enrich operation. Loads pattern and parses steps from it." },
                         steps = new
                         {
                             type = "array",
-                            description = "Steps to add - for enrich operation",
+                            description = "Steps to add - for enrich operation (optional if pattern is provided)",
                             items = new
                             {
                                 type = "object",
@@ -1040,6 +1042,7 @@ public sealed class McpHandler
         {
             "list" => await ListStoriesAsync(args, ct),
             "get" => await GetStoryContextAsync(args, ct),
+            "get_by_path" => await GetStoryByPathAsync(args, ct),
             "create" => await CreateStoryFromIssueAsync(args, ct),
             "enrich" => await EnrichStoryAsync(args, ct),
             "update_step" => await UpdateStepAsync(args, ct),
@@ -2123,22 +2126,37 @@ public sealed class McpHandler
             var outputText = output.ToString();
             var success = process.ExitCode == 0;
 
-            // Parse test results from output
-            var passedMatch = System.Text.RegularExpressions.Regex.Match(outputText, @"Passed:\s*(\d+)");
-            var failedMatch = System.Text.RegularExpressions.Regex.Match(outputText, @"Failed:\s*(\d+)");
-            var skippedMatch = System.Text.RegularExpressions.Regex.Match(outputText, @"Skipped:\s*(\d+)");
-            var totalMatch = System.Text.RegularExpressions.Regex.Match(outputText, @"Total:\s*(\d+)");
+            // Parse test results from output - handle multiple output formats
+            // Format 1: "Passed: 10" (normal)
+            // Format 2: "Passed:    10, Failed:     0" (summary line)
+            // Format 3: "Total tests: 10"
+            var passedMatch = System.Text.RegularExpressions.Regex.Match(outputText, @"Passed[:\s]+(\d+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            var failedMatch = System.Text.RegularExpressions.Regex.Match(outputText, @"Failed[:\s]+(\d+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            var skippedMatch = System.Text.RegularExpressions.Regex.Match(outputText, @"Skipped[:\s]+(\d+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            var totalMatch = System.Text.RegularExpressions.Regex.Match(outputText, @"Total[:\s]+(\d+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            
+            // Fallback: look for "Total tests: X" format
+            if (!totalMatch.Success)
+            {
+                totalMatch = System.Text.RegularExpressions.Regex.Match(outputText, @"Total tests:\s*(\d+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            }
+
+            // Calculate total from passed + failed + skipped if total not found
+            var passed = passedMatch.Success ? int.Parse(passedMatch.Groups[1].Value) : 0;
+            var failed = failedMatch.Success ? int.Parse(failedMatch.Groups[1].Value) : 0;
+            var skipped = skippedMatch.Success ? int.Parse(skippedMatch.Groups[1].Value) : 0;
+            var total = totalMatch.Success ? int.Parse(totalMatch.Groups[1].Value) : (passed + failed + skipped);
 
             return new
             {
                 projectPath,
                 success,
                 exitCode = process.ExitCode,
-                passed = passedMatch.Success ? int.Parse(passedMatch.Groups[1].Value) : 0,
-                failed = failedMatch.Success ? int.Parse(failedMatch.Groups[1].Value) : 0,
-                skipped = skippedMatch.Success ? int.Parse(skippedMatch.Groups[1].Value) : 0,
-                total = totalMatch.Success ? int.Parse(totalMatch.Groups[1].Value) : 0,
-                output = outputText.Length > 5000 ? outputText[..5000] + "\n... (truncated)" : outputText
+                passed,
+                failed,
+                skipped,
+                total,
+                output = outputText.Length > 10000 ? outputText[..10000] + "\n... (truncated)" : outputText
             };
         }
         catch (Exception ex)
@@ -2200,6 +2218,77 @@ public sealed class McpHandler
             gitBranch = workflow.GitBranch,
             worktreePath = workflow.WorktreePath,
             repositoryPath = workflow.RepositoryPath,
+            patternName = workflow.PatternName,
+            steps = workflow.Steps.OrderBy(s => s.Order).Select(s => new
+            {
+                id = s.Id,
+                name = s.Name,
+                description = s.Description,
+                status = s.Status.ToString(),
+                order = s.Order
+            }),
+            createdAt = workflow.CreatedAt,
+            updatedAt = workflow.UpdatedAt
+        };
+    }
+
+    private async Task<object> GetStoryByPathAsync(JsonElement? args, CancellationToken ct)
+    {
+        var workspacePath = args?.GetProperty("workspacePath").GetString() ?? "";
+        if (string.IsNullOrWhiteSpace(workspacePath))
+        {
+            return new { hasStory = false, message = "workspacePath is required" };
+        }
+
+        var normalizedPath = Path.GetFullPath(workspacePath);
+
+        // First try exact match on worktree path
+        var workflow = await _workflowService.GetByWorktreePathAsync(normalizedPath, ct);
+
+        // If not found, check if this is a worktree and try parent repo path
+        if (workflow is null)
+        {
+            var worktreeInfo = GitWorktreeDetector.Detect(normalizedPath);
+            if (worktreeInfo?.IsWorktree == true)
+            {
+                // Try the main repo path instead
+                workflow = await _workflowService.GetByWorktreePathAsync(worktreeInfo.Value.MainRepoPath, ct);
+            }
+        }
+
+        if (workflow is null)
+        {
+            return new
+            {
+                hasStory = false,
+                message = "No active story found for this workspace",
+                checkedPath = normalizedPath
+            };
+        }
+
+        // Return full story context
+        return new
+        {
+            hasStory = true,
+            id = workflow.Id,
+            title = workflow.Title,
+            description = workflow.Description,
+            status = workflow.Status.ToString(),
+            issueUrl = workflow.IssueUrl,
+            issueProvider = workflow.IssueProvider?.ToString(),
+            issueNumber = workflow.IssueNumber,
+            issueOwner = workflow.IssueOwner,
+            issueRepo = workflow.IssueRepo,
+            analyzedContext = workflow.AnalyzedContext,
+            gitBranch = workflow.GitBranch,
+            worktreePath = workflow.WorktreePath,
+            repositoryPath = workflow.RepositoryPath,
+            patternName = workflow.PatternName,
+            currentStep = workflow.Steps
+                .Where(s => s.Status == StepStatus.Pending || s.Status == StepStatus.Running)
+                .OrderBy(s => s.Order)
+                .Select(s => new { id = s.Id, name = s.Name, description = s.Description, order = s.Order })
+                .FirstOrDefault(),
             steps = workflow.Steps.OrderBy(s => s.Order).Select(s => new
             {
                 id = s.Id,
@@ -2288,15 +2377,57 @@ public sealed class McpHandler
             return new { error = $"Invalid story ID: {storyIdStr}" };
         }
 
-        if (!args.HasValue || !args.Value.TryGetProperty("steps", out var stepsEl) || stepsEl.ValueKind != JsonValueKind.Array)
-        {
-            return new { error = "steps array is required for enrich operation" };
-        }
-
         var workflow = await _workflowService.GetByIdWithStepsAsync(storyId, ct);
         if (workflow is null)
         {
             return new { error = $"Story not found: {storyId}" };
+        }
+
+        // Check for pattern parameter - if provided, load pattern and return it for agent to parse
+        string? patternName = null;
+        string? patternContent = null;
+        if (args.HasValue && args.Value.TryGetProperty("pattern", out var patternEl))
+        {
+            patternName = patternEl.GetString();
+            if (!string.IsNullOrWhiteSpace(patternName))
+            {
+                var patternsDir = GetPatternsDirectory();
+                var patternPath = Path.Combine(patternsDir, $"{patternName}.md");
+                if (File.Exists(patternPath))
+                {
+                    patternContent = File.ReadAllText(patternPath);
+                }
+                else
+                {
+                    return new
+                    {
+                        error = $"Pattern '{patternName}' not found. Use aura_pattern(operation: 'list') to see available patterns.",
+                        storyId
+                    };
+                }
+            }
+        }
+
+        // If pattern provided but no steps, return pattern content for agent to parse steps from
+        JsonElement stepsEl = default;
+        var hasSteps = args.HasValue && args.Value.TryGetProperty("steps", out stepsEl) && stepsEl.ValueKind == JsonValueKind.Array;
+
+        if (!string.IsNullOrEmpty(patternContent) && !hasSteps)
+        {
+            // Return pattern content - agent should parse steps and call enrich again with steps array
+            return new
+            {
+                storyId,
+                patternName,
+                patternContent,
+                message = "Pattern loaded. Parse the steps from the pattern content and call enrich again with the steps array.",
+                hint = "Look for numbered steps, checkboxes (- [ ]), or ### Step headers in the pattern markdown."
+            };
+        }
+
+        if (!hasSteps)
+        {
+            return new { error = "Either 'pattern' or 'steps' array is required for enrich operation" };
         }
 
         var addedSteps = new List<object>();
@@ -2337,12 +2468,20 @@ public sealed class McpHandler
             });
         }
 
+        // If pattern was provided, save it on the workflow
+        if (!string.IsNullOrWhiteSpace(patternName) && workflow.PatternName != patternName)
+        {
+            workflow.PatternName = patternName;
+            await _workflowService.UpdateAsync(workflow, ct);
+        }
+
         return new
         {
             storyId,
             stepsAdded = addedSteps.Count,
+            patternName,
             steps = addedSteps,
-            message = $"Added {addedSteps.Count} steps to story"
+            message = $"Added {addedSteps.Count} steps to story" + (patternName != null ? $" (pattern: {patternName})" : "")
         };
     }
 

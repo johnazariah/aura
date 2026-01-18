@@ -2371,6 +2371,7 @@ export class WorkflowPanelProvider {
     </div>
 
     <div class="meta">
+        ${workflow.patternName ? `<div class="meta-item">📋 Pattern: <strong>${workflow.patternName}</strong></div>` : ''}
         ${workflow.gitBranch ? `<div class="meta-item">🌿 ${workflow.gitBranch}</div>` : ''}
         ${workflow.worktreePath ? `<div class="meta-item">📁 ${workflow.worktreePath}</div>` : ''}
     </div>

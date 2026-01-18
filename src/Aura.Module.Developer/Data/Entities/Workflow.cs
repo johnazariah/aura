@@ -82,6 +82,9 @@ public sealed class Workflow
     /// <summary>Gets or sets the guardian ID if created by a guardian.</summary>
     public string? SourceGuardianId { get; set; }
 
+    /// <summary>Gets or sets the pattern name if this workflow follows a pattern (e.g., "generate-tests").</summary>
+    public string? PatternName { get; set; }
+
     /// <summary>Gets or sets the priority for UI sorting.</summary>
     public WorkflowPriority Priority { get; set; } = WorkflowPriority.Medium;
 

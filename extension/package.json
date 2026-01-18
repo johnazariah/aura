@@ -200,6 +200,11 @@
         "command": "aura.openStoryWorktree",
         "title": "Open Story Worktree",
         "icon": "$(folder-opened)"
+      },
+      {
+        "command": "aura.showCurrentStory",
+        "title": "Aura: Show Current Story",
+        "icon": "$(tasklist)"
       }
     ],
     "menus": {
@@ -290,6 +295,12 @@
         "command": "aura.showHelp",
         "key": "ctrl+shift+/",
         "mac": "cmd+shift+/"
+      },
+      {
+        "command": "aura.showCurrentStory",
+        "key": "ctrl+shift+s",
+        "mac": "cmd+shift+s",
+        "when": "workspaceFolderCount > 0"
       }
     ],
     "walkthroughs": [

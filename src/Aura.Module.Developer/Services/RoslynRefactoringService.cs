@@ -1255,17 +1255,44 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
             }).ToList() ?? [];
 
             // Build body
-            var bodyStatements = new List<StatementSyntax>();
-            if (request.Body != null)
+            BlockSyntax methodBody;
+            if (!string.IsNullOrWhiteSpace(request.Body))
             {
-                bodyStatements.Add(SyntaxFactory.ParseStatement(request.Body));
+                // Try to parse as a block first (e.g., "{ statement1; statement2; }")
+                // If not wrapped in braces, parse as individual statements
+                var bodyText = request.Body.Trim();
+                if (bodyText.StartsWith('{') && bodyText.EndsWith('}'))
+                {
+                    // Parse entire block
+                    methodBody = (BlockSyntax)SyntaxFactory.ParseStatement(bodyText);
+                }
+                else
+                {
+                    // Parse as individual statements - split by semicolons and newlines
+                    var statements = new List<StatementSyntax>();
+                    
+                    // Try parsing the whole thing as multiple statements
+                    var parsed = SyntaxFactory.ParseStatement("{ " + bodyText + " }");
+                    if (parsed is BlockSyntax block && !block.ContainsDiagnostics)
+                    {
+                        statements.AddRange(block.Statements);
+                    }
+                    else
+                    {
+                        // Fallback: parse as single statement
+                        statements.Add(SyntaxFactory.ParseStatement(bodyText + (bodyText.EndsWith(';') ? "" : ";")));
+                    }
+                    
+                    methodBody = SyntaxFactory.Block(statements);
+                }
             }
             else
             {
-                bodyStatements.Add(SyntaxFactory.ThrowStatement(
-                    SyntaxFactory.ObjectCreationExpression(
-                        SyntaxFactory.ParseTypeName("NotImplementedException"))
-                        .WithArgumentList(SyntaxFactory.ArgumentList())));
+                methodBody = SyntaxFactory.Block(
+                    SyntaxFactory.ThrowStatement(
+                        SyntaxFactory.ObjectCreationExpression(
+                            SyntaxFactory.ParseTypeName("NotImplementedException"))
+                            .WithArgumentList(SyntaxFactory.ArgumentList())));
             }
 
             var method = SyntaxFactory.MethodDeclaration(
@@ -1273,7 +1300,7 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
                     SyntaxFactory.Identifier(request.MethodName))
                 .WithModifiers(SyntaxFactory.TokenList(modifiers))
                 .WithParameterList(SyntaxFactory.ParameterList(SyntaxFactory.SeparatedList(parameters)))
-                .WithBody(SyntaxFactory.Block(bodyStatements));
+                .WithBody(methodBody);
 
             // Add test attribute if this is a test class
             if (testFramework != null)

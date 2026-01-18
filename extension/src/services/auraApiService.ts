@@ -167,6 +167,7 @@ export interface Workflow {
     gitBranch?: string;
     worktreePath?: string;
     repositoryPath?: string;
+    patternName?: string;
     issueUrl?: string;
     issueProvider?: string;
     issueNumber?: number;

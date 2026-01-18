@@ -191,6 +191,7 @@ During dogfooding of the pattern-driven story workflow (test coverage story with
 - ✅ Generate NSubstitute mocks for constructor dependencies
 - ✅ Use NSubstitute syntax instead of Moq
 - ✅ Handle IReadOnlyDictionary/IReadOnlyList with proper generics
+- ✅ Detect mocking library (NSubstitute, Moq, FakeItEasy) instead of hardcoding
 
 ### Critical - Blocking Pattern Execution
 (All critical gaps resolved)
@@ -199,17 +200,17 @@ During dogfooding of the pattern-driven story workflow (test coverage story with
 (All high-priority gaps resolved)
 
 ### Medium - UX Improvements
-- **Gap 20** - aura_validate tests truncated output
-- **Gap 21** - aura_generate method formatting issues
-- **Gap 3** - Pattern + Enrich connection
-- **Gap 1** - Story context injection
-- **Gap 7** - Panel recovery
-- **Gap 4** - Resume story experience
-- **Gap 6** - Pattern binding
+- **Gap 20** - ✅ aura_validate tests improved output parsing (multiple formats, larger buffer)
+- **Gap 21** - ✅ aura_generate method multi-statement body parsing
+- **Gap 3** - ✅ Pattern + Enrich connection (pattern parameter loads and returns content)
+- **Gap 1** - ✅ Story context injection (get_by_path operation)
+- **Gap 7** - ✅ Panel recovery (showCurrentStory command, status bar click, Ctrl+Shift+S)
+- **Gap 4** - ✅ Resume story experience (progress indicator, action buttons)
+- **Gap 6** - ✅ Pattern binding (PatternName field on Workflow entity)
 
 ### Low
-- **Gap 2** - Panel pinning
-- **Gap 5** - Template steps
+- **Gap 2** - ✅ Panel pinning (retainContextWhenHidden already enabled)
+- **Gap 5** - ✅ Template steps visibility (patternName shown in panel UI)
 
 ---
 

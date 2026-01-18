@@ -67,9 +67,9 @@ export async function activate(context: vscode.ExtensionContext) {
         showCollapseAll: true
     });
 
-    // Create status bar item
+    // Create status bar item - clicking opens current story panel
     statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
-    statusBarItem.command = 'aura.refreshStatus';
+    statusBarItem.command = 'aura.showCurrentStory';
     statusBarItem.show();
     updateStatusBar('checking');
 
@@ -264,6 +264,10 @@ export async function activate(context: vscode.ExtensionContext) {
         }
     });
 
+    const showCurrentStoryCommand = vscode.commands.registerCommand('aura.showCurrentStory', async () => {
+        await showCurrentStory();
+    });
+
     // Subscribe to configuration changes
     const configWatcher = vscode.workspace.onDidChangeConfiguration(e => {
         if (e.affectsConfiguration('aura')) {
@@ -341,6 +345,7 @@ export async function activate(context: vscode.ExtensionContext) {
         refreshFromIssueCommand,
         postUpdateToIssueCommand,
         openStoryWorktreeCommand,
+        showCurrentStoryCommand,
         configWatcher
     );
     
@@ -481,15 +486,78 @@ async function checkAndOpenWorkflowForWorktree(): Promise<void> {
         const workflow = await auraApiService.getWorkflowByPath(workspacePath);
         if (workflow) {
             console.log('[Aura] Found workflow for worktree:', workflow.id, workflow.title);
-            // Auto-open the workflow panel
-            await workflowPanelProvider.openWorkflowPanel(workflow.id);
-            vscode.window.showInformationMessage(`📖 Continuing story: ${workflow.title}`);
+            
+            // Find current/next step
+            const steps = workflow.steps || [];
+            const currentStep = steps.find((s: any) => s.status === 'Running' || s.status === 'Pending');
+            const completedCount = steps.filter((s: any) => s.status === 'Completed').length;
+            const totalCount = steps.length;
+            
+            // Build message with progress
+            let message = `📖 ${workflow.title}`;
+            if (totalCount > 0) {
+                message += ` (${completedCount}/${totalCount} steps)`;
+            }
+            if (currentStep) {
+                message += `\n→ Next: ${currentStep.name}`;
+            }
+
+            // Show notification with action buttons
+            const action = await vscode.window.showInformationMessage(
+                message,
+                'Open Story Panel',
+                'Dismiss'
+            );
+
+            if (action === 'Open Story Panel') {
+                await workflowPanelProvider.openWorkflowPanel(workflow.id);
+            }
         } else {
             console.log('[Aura] No workflow found for this path');
         }
     } catch (error) {
         // Silently fail - this is an enhancement, not critical
         console.log('[Aura] Failed to check for workflow worktree:', error);
+    }
+}
+
+/**
+ * Show the current story panel for this workspace.
+ * Called via command palette or keyboard shortcut.
+ */
+async function showCurrentStory(): Promise<void> {
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (!workspaceFolders || workspaceFolders.length === 0) {
+        vscode.window.showWarningMessage('No workspace folder open');
+        return;
+    }
+
+    const workspacePath = workspaceFolders[0].uri.fsPath;
+
+    try {
+        const workflow = await auraApiService.getWorkflowByPath(workspacePath);
+        if (workflow) {
+            await workflowPanelProvider.openWorkflowPanel(workflow.id);
+        } else {
+            // No workflow for this path - offer to pick from list or create new
+            const items: vscode.QuickPickItem[] = [
+                { label: '$(add) Create New Story', description: 'Start a new development story' },
+                { label: '$(list-unordered) Browse All Stories', description: 'View existing stories' }
+            ];
+
+            const selected = await vscode.window.showQuickPick(items, {
+                placeHolder: 'No active story for this workspace'
+            });
+
+            if (selected?.label.includes('Create New')) {
+                await vscode.commands.executeCommand('aura.createWorkflow');
+            } else if (selected?.label.includes('Browse All')) {
+                // Focus the workflows sidebar
+                await vscode.commands.executeCommand('aura.workflows.focus');
+            }
+        }
+    } catch (error) {
+        vscode.window.showErrorMessage(`Failed to find current story: ${error}`);
     }
 }
 
@@ -750,7 +818,7 @@ function updateStatusBar(status: 'healthy' | 'degraded' | 'error' | 'checking'):
 
     statusBarItem.text = `${icons[status]} Aura`;
     statusBarItem.backgroundColor = colors[status];
-    statusBarItem.tooltip = `Aura Status: ${status}`;
+    statusBarItem.tooltip = `Aura: ${status} (click to show current story)`;
 }
 
 function setupAutoRefresh(): void {
