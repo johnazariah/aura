@@ -744,7 +744,7 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
         {
             foreach (var param in method.Parameters)
             {
-                var (declaration, varName) = GenerateParameterSetup(param);
+                var (declaration, varName) = GenerateParameterSetup(param, mockingLibrary);
                 if (!string.IsNullOrEmpty(declaration))
                 {
                     paramDeclarations.Add(declaration);
@@ -921,14 +921,14 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
     /// <summary>
     /// Generate a variable declaration and value for a method parameter.
     /// </summary>
-    private static (string declaration, string varName) GenerateParameterSetup(IParameterSymbol param)
+    private static (string declaration, string varName) GenerateParameterSetup(IParameterSymbol param, string mockingLibrary)
     {
         var paramName = param.Name;
         var varName = paramName;
         var typeSymbol = param.Type;
 
         // Handle common types with realistic test values
-        var value = GenerateTestValue(typeSymbol, paramName);
+        var value = GenerateTestValue(typeSymbol, paramName, mockingLibrary);
 
         if (value.StartsWith("new ", StringComparison.Ordinal) ||
             value.Contains('\n') ||
@@ -948,7 +948,7 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
     /// <summary>
     /// Generate a realistic test value for a given type.
     /// </summary>
-    private static string GenerateTestValue(ITypeSymbol typeSymbol, string contextName)
+    private static string GenerateTestValue(ITypeSymbol typeSymbol, string contextName, string mockingLibrary)
     {
         var typeName = typeSymbol.Name;
         var fullTypeName = typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
@@ -958,7 +958,7 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
             namedType.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T)
         {
             var innerType = namedType.TypeArguments[0];
-            return GenerateTestValue(innerType, contextName);
+            return GenerateTestValue(innerType, contextName, mockingLibrary);
         }
 
         // Handle special types
@@ -998,14 +998,14 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
             "TimeSpan" => "TimeSpan.FromMinutes(5)",
             "Uri" => "new Uri(\"https://example.com\")",
             "CancellationToken" => "CancellationToken.None",
-            _ => GenerateComplexTypeValue(typeSymbol, contextName)
+            _ => GenerateComplexTypeValue(typeSymbol, contextName, mockingLibrary)
         };
     }
 
     /// <summary>
     /// Generate values for complex/custom types including enums.
     /// </summary>
-    private static string GenerateComplexTypeValue(ITypeSymbol typeSymbol, string contextName)
+    private static string GenerateComplexTypeValue(ITypeSymbol typeSymbol, string contextName, string mockingLibrary)
     {
         // Handle enums - use the FIRST actual enum member
         if (typeSymbol.TypeKind == TypeKind.Enum && typeSymbol is INamedTypeSymbol enumType)
@@ -1032,7 +1032,7 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
 
             if (genericType.Name is "List" or "IList" or "ICollection" or "IEnumerable" or "IReadOnlyList" or "IReadOnlyCollection")
             {
-                var innerValue = GenerateTestValue(typeArg, "item");
+                var innerValue = GenerateTestValue(typeArg, "item", mockingLibrary);
                 return $"new List<{typeArgName}> {{ {innerValue} }}";
             }
 
@@ -1042,8 +1042,8 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
                 var valueType = genericType.TypeArguments[1];
                 var keyTypeName = keyType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
                 var valueTypeName = valueType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
-                var keyValue = GenerateTestValue(keyType, "key");
-                var valueValue = GenerateTestValue(valueType, "value");
+                var keyValue = GenerateTestValue(keyType, "key", mockingLibrary);
+                var valueValue = GenerateTestValue(valueType, "value", mockingLibrary);
                 return $"new Dictionary<{keyTypeName}, {valueTypeName}> {{ [{keyValue}] = {valueValue} }}";
             }
 
@@ -1051,7 +1051,7 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
             {
                 if (genericType.TypeArguments.Length > 0)
                 {
-                    var innerValue = GenerateTestValue(typeArg, contextName);
+                    var innerValue = GenerateTestValue(typeArg, contextName, mockingLibrary);
                     return $"Task.FromResult({innerValue})";
                 }
                 return "Task.CompletedTask";
@@ -1063,15 +1063,15 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
         {
             var elementType = arrayType.ElementType;
             var elementTypeName = elementType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
-            var innerValue = GenerateTestValue(elementType, "item");
+            var innerValue = GenerateTestValue(elementType, "item", mockingLibrary);
             return $"new {elementTypeName}[] {{ {innerValue} }}";
         }
 
-        // Handle interfaces - use NSubstitute
+        // Handle interfaces - use detected mocking library
         if (typeSymbol.TypeKind == TypeKind.Interface)
         {
-            var fullTypeName = typeSymbol.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
-            return $"Substitute.For<{fullTypeName}>()";
+            var interfaceTypeName = typeSymbol.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
+            return GenerateInlineMock(interfaceTypeName, mockingLibrary);
         }
 
         // For other types, try to instantiate with new()
