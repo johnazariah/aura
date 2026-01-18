@@ -3,10 +3,22 @@
 **Status:** 🔄 In Progress
 **Created:** 2025-01-18
 **Priority:** High
+**Source:** Dogfooding session - Story 9c43eea5-a229-4869-a60d-d8107fabb542
 
 ## Overview
 
-During dogfooding of the pattern-driven story workflow (test coverage story with generate-tests pattern), we identified several UX gaps that prevent smooth execution of pattern-driven stories in worktree-based workflows.
+During dogfooding of the pattern-driven story workflow (test coverage story with generate-tests pattern), we identified several UX gaps and MCP tool deficiencies that prevent smooth execution of pattern-driven stories in worktree-based workflows.
+
+### Dogfooding Context
+- **Task:** Generate unit tests for `WorkflowService` (25 public methods, 0 existing tests)
+- **Pattern:** `generate-tests`
+- **Outcome:** 32 tests created, 124 total in `Aura.Module.Developer.Tests`
+- **Result:** Significant manual intervention required due to tool deficiencies
+
+### Summary
+- **21 gaps identified** (6 fixed, 15 remaining)
+- **Key blockers:** Cache staleness, test file overwriting, missing test attributes
+- **UX issues:** Story context injection, panel recovery, pattern binding
 
 ## Identified Gaps
 
@@ -162,19 +174,25 @@ During dogfooding of the pattern-driven story workflow (test coverage story with
 
 ### Completed
 - **Gap 8** - ✅ Worktree onboarding detection
+- **Gap 9** - ✅ Test generation now creates more complete tests with realistic parameter values
 - **Gap 10** - ✅ Test generation now places files in correct project (matches source project to test project by convention)
 - **Gap 11** - ✅ Test generation now reads actual enum values from Roslyn instead of hallucinating
-- **Gap 9** - ✅ Test generation now creates more complete tests with realistic parameter values
-
-### High - MCP Tool Reliability
 - **Gap 13** - ✅ aura_navigate definition now works for C# (uses Roslyn + code graph)
 - **Gap 14** - ✅ aura_validate now supports solution-level validation (omit projectName)
-- **Gap 12** - aura_inspect returns empty
+
+### Critical - Blocking Pattern Execution
+- **Gap 17** - Test generation overwrites instead of appending
+- **Gap 18** - Roslyn workspace cache staleness (causes multiple tool failures)
+- **Gap 19** - aura_generate method missing [Fact] attribute
+
+### High - MCP Tool Reliability
+- **Gap 12** - aura_inspect returns empty for valid types
 - **Gap 15** - aura_search irrelevant results
 - **Gap 16** - aura_search fails to find enums
 
 ### Medium - UX Improvements
-- **Gap 14** - aura_validate solution-level fails
+- **Gap 20** - aura_validate tests truncated output
+- **Gap 21** - aura_generate method formatting issues
 - **Gap 3** - Pattern + Enrich connection
 - **Gap 1** - Story context injection
 - **Gap 7** - Panel recovery
@@ -334,6 +352,92 @@ The following issues were identified during dogfooding the generate-tests patter
 - Ensure enums are indexed in RAG
 - Add enum-specific search handling
 - Index enum values as searchable content
+
+---
+
+### Gap 17: Test Generation Overwrites Instead of Appending (HIGH)
+
+**Tool:** `aura_generate(operation: "tests")`
+
+**Problem:** Each call to generate tests for a different method replaces the entire file content instead of appending to existing test class.
+
+**Impact:** Previously generated tests are lost; must generate all at once or manually merge.
+
+**Root Cause:** `GenerateTestCodeAsync` writes full file content without checking for existing tests.
+
+**Proposed Solution:**
+- Detect existing test file and parse its content
+- Append new test methods to existing test class
+- Avoid duplicating already-existing test methods
+
+---
+
+### Gap 18: Roslyn Workspace Cache Staleness (HIGH)
+
+**Tool:** Multiple (`aura_generate`, `aura_inspect`, `aura_navigate`)
+
+**Problem:** After generating new files or modifying code:
+- `aura_inspect list_types` doesn't show newly created files
+- `aura_generate method` can't find classes until cache invalidated
+- `roslynWorkspaceCached: false` in worktrees
+
+**Impact:** Tools fail silently or produce wrong results; requires manual `aura_workspace invalidate_cache` calls.
+
+**Root Cause:** Roslyn workspace not automatically refreshed when files change.
+
+**Proposed Solution:**
+- Auto-invalidate cache when files are modified by any Aura tool
+- Consider incremental workspace updates instead of full invalidation
+- Document cache invalidation requirements in tool descriptions
+
+---
+
+### Gap 19: aura_generate method Missing Test Attributes (HIGH)
+
+**Tool:** `aura_generate(operation: "method")`
+
+**Problem:** Methods added to test classes lack `[Fact]` or `[Test]` attributes.
+
+**Impact:** xUnit analyzer errors; tests don't run.
+
+**Root Cause:** Method generator doesn't detect test class context.
+
+**Proposed Solution:**
+- Detect if target class is a test class (by convention or by existing test attributes)
+- Add appropriate test framework attribute (`[Fact]`, `[Test]`, `[TestMethod]`)
+- Use detected framework from existing test methods in the class
+
+---
+
+### Gap 20: aura_validate tests Returns Truncated/Zero Results (MEDIUM)
+
+**Tool:** `aura_validate(operation: "tests")`
+
+**Problem:** Returns `total: 0` with truncated build output, even when tests exist and pass.
+
+**Impact:** Can't verify test results through the tool.
+
+**Root Cause:** Output parsing or test discovery issue.
+
+**Proposed Solution:**
+- Fix test result parsing
+- Increase output buffer size
+- Return structured test results (passed/failed/skipped counts)
+
+---
+
+### Gap 21: aura_generate method Formatting Issues (MEDIUM)
+
+**Tool:** `aura_generate(operation: "method")`
+
+**Problem:** Generated method body has inconsistent indentation, closing brace on same line as code.
+
+**Impact:** Code style violations, harder to read.
+
+**Proposed Solution:**
+- Use proper C# formatting after code generation
+- Apply .editorconfig settings
+- Consider running `dotnet format` on generated code
 
 ---
 
