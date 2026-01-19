@@ -17,6 +17,7 @@ using Aura.Foundation.Rag;
 using Aura.Foundation.Tools;
 using Aura.Module.Developer.Data;
 using Aura.Module.Developer.Data.Entities;
+using Aura.Module.Developer.Services.Verification;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -39,6 +40,7 @@ public sealed class WorkflowService(
     IToolRegistry toolRegistry,
     IReActExecutor reactExecutor,
     ILlmProviderRegistry llmProviderRegistry,
+    IWorkflowVerificationService verificationService,
     IOptions<DeveloperModuleOptions> options,
     ILogger<WorkflowService> logger) : IWorkflowService
 {
@@ -53,6 +55,7 @@ public sealed class WorkflowService(
     private readonly IToolRegistry _toolRegistry = toolRegistry;
     private readonly IReActExecutor _reactExecutor = reactExecutor;
     private readonly ILlmProviderRegistry _llmProviderRegistry = llmProviderRegistry;
+    private readonly IWorkflowVerificationService _verificationService = verificationService;
     private readonly DeveloperModuleOptions _options = options.Value;
     private readonly ILogger<WorkflowService> _logger = logger;
 
@@ -1222,6 +1225,38 @@ public sealed class WorkflowService(
         {
             var stepNames = string.Join(", ", pendingSteps.Select(s => s.Name));
             throw new InvalidOperationException($"Cannot complete workflow: {pendingSteps.Count} step(s) still pending: {stepNames}");
+        }
+
+        // Run verification checks before finalizing
+        if (!string.IsNullOrEmpty(workflow.WorktreePath))
+        {
+            var verificationResult = await _verificationService.VerifyAsync(workflow.WorktreePath, ct);
+            workflow.VerificationResult = System.Text.Json.JsonSerializer.Serialize(verificationResult);
+            workflow.VerificationPassed = verificationResult.Success;
+
+            if (!verificationResult.Success)
+            {
+                _logger.LogWarning(
+                    "Verification failed for workflow {WorkflowId}: {Summary}",
+                    workflowId,
+                    verificationResult.Summary);
+
+                // Log details of failed steps
+                foreach (var failedStep in verificationResult.StepResults.Where(r => !r.Success && r.Required))
+                {
+                    _logger.LogWarning(
+                        "  - {StepType}: {Error}",
+                        failedStep.Step.StepType,
+                        failedStep.ErrorMessage);
+                }
+            }
+            else
+            {
+                _logger.LogInformation(
+                    "Verification passed for workflow {WorkflowId}: {Summary}",
+                    workflowId,
+                    verificationResult.Summary);
+            }
         }
 
         // Finalize git changes: commit any uncommitted work, squash into single commit, push, and create PR

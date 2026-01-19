@@ -71,6 +71,7 @@ features/
 | [Pattern-Driven Stories](completed/pattern-driven-stories.md) | Patterns generate user-modifiable stories with discrete items | 2026-01-19 |
 | [Pattern-Driven UX Gaps](completed/pattern-driven-ux-gaps.md) | 35 UX fixes for pattern-driven workflows (test gen, validation, etc.) | 2025-06-25 |
 | [Agent Reflection](completed/agent-reflection.md) | Self-critique step for agent responses | 2026-01-19 |
+| [Workflow Verification](completed/workflow-verification-stage.md) | Run build/lint/format checks before workflow completion | 2026-01-19 |
 
 ## Upcoming Features
 
@@ -87,7 +88,6 @@ features/
 | [Multi-Language Refactoring](upcoming/multi-language-refactoring.md) | TypeScript (ts-morph), Go/Rust/Java (LSP) support |
 | [Multi-Workspace](upcoming/multi-workspace.md) | Multiple workspace support |
 | [macOS Support](upcoming/macos-support.md) | Native macOS build, installer, and CI |
-| [Workflow Verification](upcoming/workflow-verification-stage.md) | Run tests/linting before commit |
 | [API Harmonization](upcoming/api-review-harmonization.md) | Consistent REST API design |
 
 ### Lower Priority (Advanced)

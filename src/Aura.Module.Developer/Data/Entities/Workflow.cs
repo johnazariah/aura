@@ -98,6 +98,14 @@ public sealed class Workflow
 
     /// <summary>Gets or sets the workflow-level chat history as JSON array of messages.</summary>
     public string? ChatHistory { get; set; }
+
+    // === Verification ===
+
+    /// <summary>Gets or sets whether verification passed before completion.</summary>
+    public bool? VerificationPassed { get; set; }
+
+    /// <summary>Gets or sets the verification result as JSON.</summary>
+    public string? VerificationResult { get; set; }
 }
 
 /// <summary>

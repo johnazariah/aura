@@ -13,6 +13,7 @@ using Aura.Module.Developer.Data;
 using Aura.Module.Developer.GitHub;
 using Aura.Module.Developer.Services;
 using Aura.Module.Developer.Services.Testing;
+using Aura.Module.Developer.Services.Verification;
 using Aura.Module.Developer.Tools;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -81,6 +82,10 @@ public sealed class DeveloperModule : IAuraModule
 
         // Register test generation service
         services.AddSingleton<ITestGenerationService, RoslynTestGenerator>();
+
+        // Register verification services
+        services.AddSingleton<IProjectVerificationDetector, ProjectVerificationDetector>();
+        services.AddSingleton<IWorkflowVerificationService, WorkflowVerificationService>();
 
         // Register Code Graph indexer (for Graph RAG)
         services.AddScoped<ICodeGraphIndexer, CodeGraphIndexer>();
