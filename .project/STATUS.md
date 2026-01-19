@@ -1,12 +1,13 @@
 # Aura Project Status
 
-> **Last Updated**: 2026-01-13
+> **Last Updated**: 2026-01-19
+> **Current Release**: v1.3.0
 > **Branch**: main
-> **Overall Status**: ✅ MVP Complete
+> **Overall Status**: ✅ Production Ready
 
 ## Quick Summary
 
-Aura is a **local-first, privacy-safe AI foundation** for knowledge work. The Developer Module MVP is complete with full workflow UI, multi-language code indexing, and cloud LLM support.
+Aura is a **local-first, privacy-safe AI foundation** for knowledge work. The Developer Module is production-ready with MCP integration for GitHub Copilot, Roslyn refactoring tools, pattern-driven workflows, and multi-language support.
 
 ## Component Status
 
@@ -17,7 +18,7 @@ Aura is a **local-first, privacy-safe AI foundation** for knowledge work. The De
 | **Aura.Api** | ✅ Complete | `src/Aura.Api/Program.cs` |
 | **Aura.AppHost** | ✅ Complete | `src/Aura.AppHost/` |
 | **VS Code Extension** | ✅ Complete | `extension/src/` |
-| **Tests** | ✅ 400 passing | `tests/` |
+| **Tests** | ✅ 628 passing | `tests/` |
 
 ## Feature Inventory
 
@@ -155,6 +156,29 @@ prompts/                      # Handlebars prompt templates
 | [spec/assisted-workflow-ui.md](spec/assisted-workflow-ui.md) | UI collaboration model |
 | [progress/2025-12-11.md](progress/2025-12-11.md) | Latest weekly progress |
 
+## Release v1.3.0 (Jan 19, 2026)
+
+Major release with 121 commits since v1.2.0.
+
+### Highlights
+
+- **MCP Tools Consolidation** - 28 tools consolidated into 8 meta-tools (`aura_search`, `aura_navigate`, `aura_inspect`, `aura_validate`, `aura_refactor`, `aura_generate`, `aura_pattern`, `aura_workflow`)
+- **Roslyn Refactoring** - Full semantic refactoring: rename, extract method/variable/interface, move type to file, change signature, safe delete
+- **Python Refactoring** - Cross-language refactoring support via rope
+- **Blast Radius Protocol** - Analyze mode shows affected files before executing refactorings
+- **Agent Reflection** - Agents self-critique responses before returning
+- **Workflow Verification** - Verification stage ensures work is complete before finishing
+- **Pattern System** - Tiered patterns with language overlays for complex multi-step operations
+- **Guardian System** - Background guardians for CI, test coverage, and documentation
+- **Worktree Support** - Path translation and cache invalidation for git worktrees
+- **macOS Development** - Local development support for macOS
+- **Test Generation** - Improved quality with compilation validation and proper namespace handling
+- **GitHub Integration** - MCP server for Copilot, GitHub Actions tools
+
+### Breaking Changes
+
+None - all changes are additive.
+
 ## Recent Changes (Jan 13, 2026)
 
 1. **Structured Output Mode (Complete)**
@@ -270,6 +294,7 @@ prompts/                      # Handlebars prompt templates
 - [x] Update progress documentation ✅
 - [x] Remove duplicate language agents (PythonCodingAgent, GoCodingAgent, TypeScriptCodingAgent, FSharpCodingAgent) ✅
 - [x] Create MVP release tag ✅ (v1.0.0-mvp)
+- [x] Release v1.3.0 ✅ (Jan 19, 2026)
 - [ ] User testing with real workflows
 
 ## Principles
