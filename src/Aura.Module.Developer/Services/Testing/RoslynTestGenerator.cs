@@ -864,6 +864,7 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
     private static HashSet<string> CollectRequiredNamespaces(INamedTypeSymbol typeSymbol, List<GeneratedTestInfo> testMethods)
     {
         var namespaces = new HashSet<string>(StringComparer.Ordinal);
+        var visitedTypes = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
 
         foreach (var test in testMethods)
         {
@@ -871,12 +872,12 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
             foreach (var method in methods)
             {
                 // Collect from return type
-                CollectNamespacesFromType(method.ReturnType, namespaces);
+                CollectNamespacesFromType(method.ReturnType, namespaces, visitedTypes);
 
                 // Collect from parameters
                 foreach (var param in method.Parameters)
                 {
-                    CollectNamespacesFromType(param.Type, namespaces);
+                    CollectNamespacesFromType(param.Type, namespaces, visitedTypes);
                 }
             }
         }
@@ -897,10 +898,16 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
     }
 
     /// <summary>
-    /// Recursively collects namespaces from a type symbol, including generic type arguments.
+    /// Recursively collects namespaces from a type symbol, including generic type arguments
+    /// and required properties (since we generate object initializers for them).
     /// </summary>
-    private static void CollectNamespacesFromType(ITypeSymbol typeSymbol, HashSet<string> namespaces)
+    private static void CollectNamespacesFromType(ITypeSymbol typeSymbol, HashSet<string> namespaces, HashSet<ITypeSymbol>? visitedTypes = null)
     {
+        // Prevent infinite recursion for cyclic type references
+        visitedTypes ??= new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
+        if (!visitedTypes.Add(typeSymbol))
+            return;
+
         // Skip special types (int, string, etc.)
         if (typeSymbol.SpecialType != SpecialType.None)
             return;
@@ -917,14 +924,24 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
         {
             foreach (var typeArg in namedType.TypeArguments)
             {
-                CollectNamespacesFromType(typeArg, namespaces);
+                CollectNamespacesFromType(typeArg, namespaces, visitedTypes);
             }
         }
 
         // Handle arrays
         if (typeSymbol is IArrayTypeSymbol arrayType)
         {
-            CollectNamespacesFromType(arrayType.ElementType, namespaces);
+            CollectNamespacesFromType(arrayType.ElementType, namespaces, visitedTypes);
+        }
+
+        // Collect from required properties (since we generate object initializers for them)
+        if (typeSymbol is INamedTypeSymbol classType && typeSymbol.TypeKind is TypeKind.Class or TypeKind.Struct)
+        {
+            var requiredProps = GetRequiredProperties(classType);
+            foreach (var prop in requiredProps)
+            {
+                CollectNamespacesFromType(prop.Type, namespaces, visitedTypes);
+            }
         }
     }
 
