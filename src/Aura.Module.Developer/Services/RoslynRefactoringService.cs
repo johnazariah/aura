@@ -6,6 +6,7 @@ namespace Aura.Module.Developer.Services;
 
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using Aura.Module.Developer.Services.Testing;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -20,22 +21,16 @@ using Microsoft.Extensions.Logging;
 /// </summary>
 public sealed class RoslynRefactoringService : IRoslynRefactoringService
 {
-    #region Constants
-
-    // Test framework identifiers (lowercase for comparison)
-    private const string FrameworkXUnit = "xunit";
-    private const string FrameworkNUnit = "nunit";
-    private const string FrameworkMsTest = "mstest";
-
-    // Test attribute names
-    private const string AttrFact = "Fact";
-    private const string AttrTheory = "Theory";
-    private const string AttrTest = "Test";
-    private const string AttrTestCase = "TestCase";
-    private const string AttrTestMethod = "TestMethod";
-    private const string AttrDataTestMethod = "DataTestMethod";
-
-    #endregion
+    // Import constants from shared class
+    private const string FrameworkXUnit = TestFrameworkConstants.FrameworkXUnit;
+    private const string FrameworkNUnit = TestFrameworkConstants.FrameworkNUnit;
+    private const string FrameworkMsTest = TestFrameworkConstants.FrameworkMsTest;
+    private const string AttrFact = TestFrameworkConstants.AttrFact;
+    private const string AttrTheory = TestFrameworkConstants.AttrTheory;
+    private const string AttrTest = TestFrameworkConstants.AttrTest;
+    private const string AttrTestCase = TestFrameworkConstants.AttrTestCase;
+    private const string AttrTestMethod = TestFrameworkConstants.AttrTestMethod;
+    private const string AttrDataTestMethod = TestFrameworkConstants.AttrDataTestMethod;
 
     private readonly IRoslynWorkspaceService _workspaceService;
     private readonly ILogger<RoslynRefactoringService> _logger;
@@ -1285,18 +1280,18 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
             if (!string.IsNullOrEmpty(request.TestAttribute))
             {
                 // Caller specified the attribute directly (e.g., "Fact", "Test", "TestMethod")
-                testFramework = request.TestAttribute.ToLowerInvariant() switch
+                testFramework = TestFrameworkConstants.InferFrameworkFromAttribute(request.TestAttribute);
+                if (testFramework == FrameworkXUnit && !request.TestAttribute.Equals("fact", StringComparison.OrdinalIgnoreCase)
+                    && !request.TestAttribute.Equals("theory", StringComparison.OrdinalIgnoreCase))
                 {
-                    "fact" or "theory" => FrameworkXUnit,
-                    "test" or "testcase" => FrameworkNUnit,
-                    "testmethod" or "datatestmethod" => FrameworkMsTest,
-                    _ => request.TestAttribute // Use as-is for custom attributes
-                };
+                    // Unknown attribute, use as-is
+                    testFramework = request.TestAttribute;
+                }
             }
             else
             {
                 // Auto-detect if this is a test class
-                testFramework = DetectTestFramework(classNode);
+                testFramework = TestFrameworkConstants.DetectFrameworkFromAttributes(classNode);
             }
 
             // Build modifiers
@@ -1424,71 +1419,11 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
     }
 
     /// <summary>
-    /// Detects the test framework used by a test class by examining its existing methods and attributes.
-    /// </summary>
-    private static string? DetectTestFramework(ClassDeclarationSyntax classNode)
-    {
-        // Check if class name ends with "Tests" or "Test" (common convention)
-        var className = classNode.Identifier.Text;
-        var isTestClass = className.EndsWith("Tests", StringComparison.Ordinal) ||
-                          className.EndsWith("Test", StringComparison.Ordinal);
-
-        if (!isTestClass)
-        {
-            return null;
-        }
-
-        // Check existing method attributes to detect the framework
-        var allAttributes = classNode.Members
-            .OfType<MethodDeclarationSyntax>()
-            .SelectMany(m => m.AttributeLists)
-            .SelectMany(al => al.Attributes)
-            .Select(a => a.Name.ToString())
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-        // xUnit
-        if (allAttributes.Any(a => a is AttrFact or AttrFact + "Attribute" or AttrTheory or AttrTheory + "Attribute"))
-        {
-            return FrameworkXUnit;
-        }
-
-        // NUnit
-        if (allAttributes.Any(a => a is AttrTest or AttrTest + "Attribute" or AttrTestCase or AttrTestCase + "Attribute"))
-        {
-            return FrameworkNUnit;
-        }
-
-        // MSTest
-        if (allAttributes.Any(a => a is AttrTestMethod or AttrTestMethod + "Attribute" or AttrDataTestMethod or AttrDataTestMethod + "Attribute"))
-        {
-            return FrameworkMsTest;
-        }
-
-        // If class looks like a test class but we can't detect the framework, default to xunit
-        return FrameworkXUnit;
-    }
-
-    /// <summary>
     /// Creates the appropriate test attribute syntax for the given framework or attribute name.
     /// </summary>
     private static AttributeSyntax CreateTestAttribute(string frameworkOrAttribute)
     {
-        var attributeName = frameworkOrAttribute.ToLowerInvariant() switch
-        {
-            FrameworkXUnit => AttrFact,
-            FrameworkNUnit => AttrTest,
-            FrameworkMsTest => AttrTestMethod,
-            // Handle direct attribute names
-            "fact" => AttrFact,
-            "theory" => AttrTheory,
-            "test" => AttrTest,
-            "testcase" => AttrTestCase,
-            "testmethod" => AttrTestMethod,
-            "datatestmethod" => AttrDataTestMethod,
-            // Unknown - use as-is (might be custom attribute)
-            _ => frameworkOrAttribute
-        };
-
+        var attributeName = TestFrameworkConstants.GetTestAttributeName(frameworkOrAttribute);
         return SyntaxFactory.Attribute(SyntaxFactory.IdentifierName(attributeName));
     }
 

@@ -16,30 +16,20 @@ using Microsoft.Extensions.Logging;
 /// </summary>
 public sealed partial class RoslynTestGenerator : ITestGenerationService
 {
-    #region Constants
-
-    // Test framework identifiers (lowercase for comparison)
-    private const string FrameworkXUnit = "xunit";
-    private const string FrameworkNUnit = "nunit";
-    private const string FrameworkMsTest = "mstest";
-
-    // Mocking library identifiers (lowercase for comparison)
-    private const string MockLibNSubstitute = "nsubstitute";
-    private const string MockLibMoq = "moq";
-    private const string MockLibFakeItEasy = "fakeiteasy";
-
-    // Namespace names for mocking libraries
-    private const string NsNSubstitute = "NSubstitute";
-    private const string NsMoq = "Moq";
-    private const string NsFakeItEasy = "FakeItEasy";
-
-    // Test attribute names (used for detecting test methods)
-    private const string AttrFact = "Fact";
-    private const string AttrTheory = "Theory";
-    private const string AttrTest = "Test";
-    private const string AttrTestMethod = "TestMethod";
-
-    #endregion
+    // Import constants from shared class
+    private const string FrameworkXUnit = TestFrameworkConstants.FrameworkXUnit;
+    private const string FrameworkNUnit = TestFrameworkConstants.FrameworkNUnit;
+    private const string FrameworkMsTest = TestFrameworkConstants.FrameworkMsTest;
+    private const string MockLibNSubstitute = TestFrameworkConstants.MockLibNSubstitute;
+    private const string MockLibMoq = TestFrameworkConstants.MockLibMoq;
+    private const string MockLibFakeItEasy = TestFrameworkConstants.MockLibFakeItEasy;
+    private const string NsNSubstitute = TestFrameworkConstants.NsNSubstitute;
+    private const string NsMoq = TestFrameworkConstants.NsMoq;
+    private const string NsFakeItEasy = TestFrameworkConstants.NsFakeItEasy;
+    private const string AttrFact = TestFrameworkConstants.AttrFact;
+    private const string AttrTheory = TestFrameworkConstants.AttrTheory;
+    private const string AttrTest = TestFrameworkConstants.AttrTest;
+    private const string AttrTestMethod = TestFrameworkConstants.AttrTestMethod;
 
     private readonly IRoslynWorkspaceService _workspaceService;
     private readonly ILogger<RoslynTestGenerator> _logger;
@@ -51,24 +41,6 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
         _workspaceService = workspaceService;
         _logger = logger;
     }
-
-    #region Project Classification Helpers
-
-    /// <summary>
-    /// Determines if a project is a test project based on naming conventions.
-    /// </summary>
-    private static bool IsTestProject(Project project) =>
-        project.Name.Contains("Test", StringComparison.OrdinalIgnoreCase) ||
-        project.Name.Contains("Tests", StringComparison.OrdinalIgnoreCase);
-
-    /// <summary>
-    /// Determines if a project is a unit test project (excludes integration tests).
-    /// </summary>
-    private static bool IsUnitTestProject(Project project) =>
-        IsTestProject(project) &&
-        !project.Name.Contains("Integration", StringComparison.OrdinalIgnoreCase);
-
-    #endregion
 
     /// <inheritdoc/>
     public async Task<TestGenerationResult> GenerateTestsAsync(TestGenerationRequest request, CancellationToken ct = default)
@@ -288,24 +260,17 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
     [GeneratedRegex(@"<exception cref=""T:([^""]+)""")]
     private static partial Regex ExceptionDocRegex();
 
-    private async Task<string> DetectTestFrameworkAsync(Solution solution, INamedTypeSymbol typeSymbol, CancellationToken ct)
+    private static bool IsTestProject(Project project) => TestFrameworkConstants.IsTestProject(project);
+
+    private static bool IsUnitTestProject(Project project) => TestFrameworkConstants.IsUnitTestProject(project);
+
+    private Task<string> DetectTestFrameworkAsync(Solution solution, INamedTypeSymbol typeSymbol, CancellationToken ct)
     {
-        // Find test projects by convention
-        var testProjects = solution.Projects.Where(IsTestProject);
+        var testProject = solution.Projects.FirstOrDefault(IsTestProject);
+        if (testProject is null)
+            return Task.FromResult(FrameworkXUnit);
 
-        foreach (var project in testProjects)
-        {
-            var refs = project.MetadataReferences.Select(r => r.Display ?? "").ToList();
-
-            if (refs.Any(r => r.Contains("xunit", StringComparison.OrdinalIgnoreCase)))
-                return FrameworkXUnit;
-            if (refs.Any(r => r.Contains("nunit", StringComparison.OrdinalIgnoreCase)))
-                return FrameworkNUnit;
-            if (refs.Any(r => r.Contains("MSTest", StringComparison.OrdinalIgnoreCase)))
-                return FrameworkMsTest;
-        }
-
-        return FrameworkXUnit; // default
+        return Task.FromResult(TestFrameworkConstants.DetectFrameworkFromReferences(testProject.MetadataReferences));
     }
 
     /// <summary>
@@ -313,23 +278,11 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
     /// </summary>
     private string DetectMockingLibrary(Solution solution)
     {
-        // Find test projects by convention
-        var testProjects = solution.Projects.Where(IsTestProject);
+        var testProject = solution.Projects.FirstOrDefault(IsTestProject);
+        if (testProject is null)
+            return MockLibNSubstitute;
 
-        foreach (var project in testProjects)
-        {
-            var refs = project.MetadataReferences.Select(r => r.Display ?? "").ToList();
-
-            if (refs.Any(r => r.Contains("NSubstitute", StringComparison.OrdinalIgnoreCase)))
-                return MockLibNSubstitute;
-            if (refs.Any(r => r.Contains("Moq", StringComparison.OrdinalIgnoreCase) &&
-                         !r.Contains("NSubstitute", StringComparison.OrdinalIgnoreCase)))
-                return MockLibMoq;
-            if (refs.Any(r => r.Contains("FakeItEasy", StringComparison.OrdinalIgnoreCase)))
-                return MockLibFakeItEasy;
-        }
-
-        return MockLibNSubstitute; // default - most common in modern .NET
+        return TestFrameworkConstants.DetectMockingLibraryFromReferences(testProject.MetadataReferences);
     }
 
     private async Task<List<ExistingTestInfo>> FindExistingTestsAsync(Solution solution, INamedTypeSymbol typeSymbol, CancellationToken ct)
@@ -1808,16 +1761,8 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
     /// <summary>
     /// Gets the namespace for a mocking library (e.g., "NSubstitute").
     /// </summary>
-    private static string GetMockingLibraryNamespace(string mockingLibrary)
-    {
-        return mockingLibrary.ToLowerInvariant() switch
-        {
-            MockLibNSubstitute => NsNSubstitute,
-            MockLibMoq => NsMoq,
-            MockLibFakeItEasy => NsFakeItEasy,
-            _ => NsNSubstitute
-        };
-    }
+    private static string GetMockingLibraryNamespace(string mockingLibrary) =>
+        TestFrameworkConstants.GetMockingLibraryNamespace(mockingLibrary) ?? NsNSubstitute;
 
     /// <summary>
     /// Gets the using statement for a mocking library.
