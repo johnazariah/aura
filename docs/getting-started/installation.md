@@ -1,21 +1,35 @@
 # Installing Aura
 
-This guide walks you through installing Aura on Windows.
+This guide walks you through installing Aura on **Windows** or **macOS**.
 
 ## Prerequisites
 
 Before installing Aura, ensure you have:
 
+### Windows
+
 | Requirement | Details |
 |-------------|---------|
-
 | **Windows 10/11** | 64-bit, version 1903 or later |
 | **Ollama** | Local LLM runtime - [download here](https://ollama.com) |
 | **RAM** | 8GB minimum (16GB+ recommended for larger models) |
 | **Disk Space** | ~500MB for Aura + space for LLM models (2-8GB each) |
 | **GPU** | Optional but recommended for faster inference |
 
-## Download
+### macOS
+
+| Requirement | Details |
+|-------------|---------|
+| **macOS 12+** | Intel or Apple Silicon (M1/M2/M3/M4) |
+| **Homebrew** | Package manager - [install from brew.sh](https://brew.sh) |
+| **RAM** | 8GB minimum (16GB+ recommended for larger models) |
+| **Disk Space** | ~500MB for Aura + space for LLM models (2-8GB each) |
+
+---
+
+## Windows Installation
+
+### Download
 
 1. Go to the [Releases page](https://github.com/johnazariah/aura/releases)
 2. Download the latest `Aura-Setup-X.Y.Z.exe`
@@ -58,7 +72,7 @@ After installation:
 2. Click it to see the status window
 3. All indicators should show green checkmarks
 
-## What Gets Installed
+### What Gets Installed (Windows)
 
 Aura installs to `C:\Program Files\Aura\` by default:
 
@@ -76,15 +90,83 @@ C:\ProgramData\Aura\
 └── data\                   # PostgreSQL database files
 ```
 
-## Windows Services
+### Windows Services
 
 Two services are created:
 
 | Service | Purpose |
 |---------|---------|
-
 | **AuraDB** | PostgreSQL database for storing workflows and code index |
 | **AuraService** | Main Aura API (optional, if you chose service install) |
+
+---
+
+## macOS Installation
+
+### Quick Start (Homebrew)
+
+For developers building from source, we provide a setup script that installs all prerequisites:
+
+```bash
+# Clone the repository
+git clone https://github.com/johnazariah/aura.git
+cd aura
+
+# Run the macOS setup script
+./setup/install-mac.sh
+```
+
+The script installs:
+
+| Component | Purpose |
+|-----------|---------|
+| **OrbStack** | Docker-compatible container runtime |
+| **PostgreSQL 16** | Database with pgvector extension |
+| **Ollama** | Local LLM runtime |
+| **nomic-embed-text** | Embedding model for RAG |
+| **qwen2.5-coder:7b** | Code generation model |
+| **.NET SDK** | Runtime for Aura |
+
+### Manual Installation
+
+If you prefer to install components manually:
+
+```bash
+# Install prerequisites
+brew install --cask orbstack
+brew install postgresql@16 pgvector
+brew install --cask ollama dotnet-sdk
+
+# Start services
+brew services start postgresql@16
+open -a OrbStack
+open -a Ollama
+
+# Set up database
+psql postgres -c "CREATE ROLE aura WITH LOGIN PASSWORD 'aura';"
+createdb -O aura aura
+psql -d aura -c "CREATE EXTENSION IF NOT EXISTS vector;"
+
+# Pull LLM models
+ollama pull nomic-embed-text
+ollama pull qwen2.5-coder:7b
+
+# Build and run Aura
+cd aura
+dotnet build
+dotnet run --project src/Aura.AppHost
+```
+
+### Verify Installation (macOS)
+
+After running the setup:
+
+1. Check that PostgreSQL is running: `brew services list`
+2. Check that Ollama is running: `curl http://localhost:11434/api/tags`
+3. Start Aura: `dotnet run --project src/Aura.AppHost`
+4. API available at: `http://localhost:5280`
+
+---
 
 ## Next Steps
 

@@ -14,7 +14,6 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        # macOS support planned for future - see .project/features/upcoming/macos-support.md
         os: [ubuntu-latest, windows-latest]
 
     steps:
