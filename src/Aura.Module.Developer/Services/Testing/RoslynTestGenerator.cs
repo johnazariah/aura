@@ -659,13 +659,33 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
 
         if (testProject is not null)
         {
-            // Get a reference document to determine the directory structure
-            var refDoc = testProject.Documents.FirstOrDefault();
-            if (refDoc?.FilePath is not null)
+            var testProjectDir = Path.GetDirectoryName(testProject.FilePath)!;
+
+            // Mirror the source file's folder structure in the test project
+            // e.g., Services/Testing/Foo.cs → Services/Testing/FooTests.cs
+            var typeSourceLocation = typeSymbol.Locations.FirstOrDefault(l => l.IsInSource);
+            if (typeSourceLocation?.SourceTree?.FilePath is not null && sourceProject?.FilePath is not null)
             {
-                var projectDir = Path.GetDirectoryName(refDoc.FilePath)!;
-                return (Path.Combine(projectDir, $"{testClassName}.cs"), false);
+                var sourceProjectDir = Path.GetDirectoryName(sourceProject.FilePath)!;
+                var sourceFilePath = typeSourceLocation.SourceTree.FilePath;
+
+                // Get relative path from source project to source file
+                if (sourceFilePath.StartsWith(sourceProjectDir, StringComparison.OrdinalIgnoreCase))
+                {
+                    var relativePath = Path.GetRelativePath(sourceProjectDir, sourceFilePath);
+                    var relativeDir = Path.GetDirectoryName(relativePath);
+
+                    if (!string.IsNullOrEmpty(relativeDir))
+                    {
+                        // Create same folder structure in test project
+                        var testDir = Path.Combine(testProjectDir, relativeDir);
+                        return (Path.Combine(testDir, $"{testClassName}.cs"), false);
+                    }
+                }
             }
+
+            // Fallback: place in test project root
+            return (Path.Combine(testProjectDir, $"{testClassName}.cs"), false);
         }
 
         // Fallback: Create next to source

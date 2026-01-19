@@ -660,6 +660,25 @@ aura_generate(operation: "tests", target: "MyClass", validateCompilation: true)
 
 ---
 
+### Gap 30: Test Files Created in Wrong Folder ✅ FIXED
+
+**Tool:** `aura_generate(operation: "tests")`
+
+**Problem:** New test files were placed in an arbitrary folder instead of mirroring the source file's folder structure. For example, `CodeGraphIndexer` in `Services/` was getting tests in `Agents/`.
+
+**Impact:** Test files scattered incorrectly, requiring manual move to correct location.
+
+**Root Cause:** `DetermineTestFilePath` was just using the first document in the test project to determine the target directory, rather than computing the relative path from the source.
+
+**Solution Implemented:**
+1. Get source file's relative path from its project root
+2. Mirror that relative path in the test project
+3. Example: `src/Aura.Module.Developer/Services/Testing/Foo.cs` → `tests/Aura.Module.Developer.Tests/Services/Testing/FooTests.cs`
+
+**Result:** Test files are now created in the correct folder, matching the source file structure.
+
+---
+
 ## Net Assessment: Test Generation
 
 **Works Well:**
@@ -673,6 +692,7 @@ aura_generate(operation: "tests", target: "MyClass", validateCompilation: true)
 - **NEW**: Required properties properly initialized (Gap 27)
 - **NEW**: Generic dependency namespaces collected (Gap 28)
 - **NEW**: Missing usings added when appending to existing files (Gap 29)
+- **NEW**: Test files placed in correct folder mirroring source structure (Gap 30)
 
 **Needs Work:**
 - Validation adds latency (~1-2s) so is opt-in

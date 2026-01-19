@@ -264,6 +264,7 @@ src/Aura.Module.Developer/
 - [x] Required property initialization (Gap 27)
 - [x] Generic dependency namespace collection (Gap 28)
 - [x] Missing usings added when appending to existing files (Gap 29)
+- [x] Test files placed in correct folder mirroring source structure (Gap 30)
 
 ### Phase 2: Python (tree-sitter)
 - [ ] `PythonTestGenerator` implementation
