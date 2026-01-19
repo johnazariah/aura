@@ -639,6 +639,27 @@ aura_generate(operation: "tests", target: "MyClass", validateCompilation: true)
 
 ---
 
+### Gap 29: Append Mode Missing Using Statements ✅ FIXED
+
+**Tool:** `aura_generate(operation: "tests")`
+
+**Problem:** When appending tests to an existing file, new `using` statements aren't added for types that weren't previously imported.
+
+**Impact:** Tests that use types not already imported in the file fail to compile.
+
+**Root Cause:** `AppendToExistingTestFileAsync` only inserted test method bodies before the class closing brace. It didn't check if new tests required namespaces not already in the file.
+
+**Solution Implemented:**
+1. Added namespace collection for the tests being appended (using existing `CollectRequiredNamespaces()`)
+2. Extract existing usings from the file via Roslyn `UsingDirectiveSyntax`
+3. Compute missing usings (required - existing)
+4. Insert missing usings after the last existing `using` statement
+5. Re-parse the file to get correct insertion position for test methods
+
+**Result:** When appending tests to existing files, any missing `using` statements are automatically added.
+
+---
+
 ## Net Assessment: Test Generation
 
 **Works Well:**
@@ -651,6 +672,7 @@ aura_generate(operation: "tests", target: "MyClass", validateCompilation: true)
 - **NEW**: Optional compilation validation (Gap 26)
 - **NEW**: Required properties properly initialized (Gap 27)
 - **NEW**: Generic dependency namespaces collected (Gap 28)
+- **NEW**: Missing usings added when appending to existing files (Gap 29)
 
 **Needs Work:**
 - Validation adds latency (~1-2s) so is opt-in

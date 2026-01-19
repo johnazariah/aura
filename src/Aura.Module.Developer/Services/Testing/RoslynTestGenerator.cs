@@ -1278,6 +1278,22 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
         _logger.LogInformation("Appending {Count} new test methods to {File} (skipped {Skipped} duplicates)",
             methodsToAdd.Count, testFilePath, testMethods.Count - methodsToAdd.Count);
 
+        // Collect required namespaces for the new tests
+        var requiredNamespaces = CollectRequiredNamespaces(typeSymbol, methodsToAdd);
+
+        // Get existing usings in the file
+        var existingUsings = root.DescendantNodes()
+            .OfType<UsingDirectiveSyntax>()
+            .Select(u => u.Name?.ToString() ?? "")
+            .Where(n => !string.IsNullOrEmpty(n))
+            .ToHashSet(StringComparer.Ordinal);
+
+        // Find missing usings that need to be added
+        var missingUsings = requiredNamespaces
+            .Where(ns => !string.IsNullOrEmpty(ns) && !existingUsings.Contains(ns))
+            .OrderBy(ns => ns, StringComparer.Ordinal)
+            .ToList();
+
         // Generate new methods as text
         var newMethods = new StringBuilder();
         foreach (var test in methodsToAdd)
@@ -1286,11 +1302,77 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
             GenerateTestMethod(newMethods, test, member, typeSymbol.Name, framework, mockingLibrary);
         }
 
-        // Insert before the closing brace of the class
-        var closingBrace = testClass.CloseBraceToken;
-        var insertPosition = closingBrace.SpanStart;
+        // Start with existing content
+        var newContent = existingContent;
 
-        var newContent = existingContent.Insert(insertPosition, newMethods.ToString());
+        // Add missing usings at the top of the file (after any existing usings)
+        if (missingUsings.Count > 0)
+        {
+            // Find the last using directive to insert after it
+            var lastUsing = root.DescendantNodes()
+                .OfType<UsingDirectiveSyntax>()
+                .LastOrDefault();
+
+            if (lastUsing is not null)
+            {
+                var insertAfterUsing = lastUsing.Span.End;
+                var newUsingsText = new StringBuilder();
+                foreach (var ns in missingUsings)
+                {
+                    newUsingsText.AppendLine();
+                    newUsingsText.Append($"using {ns};");
+                }
+
+                newContent = newContent.Insert(insertAfterUsing, newUsingsText.ToString());
+
+                // Recalculate the closing brace position since we modified the file
+                var updatedTree = CSharpSyntaxTree.ParseText(newContent);
+                var updatedRoot = await updatedTree.GetRootAsync(ct);
+                var updatedTestClass = updatedRoot.DescendantNodes()
+                    .OfType<ClassDeclarationSyntax>()
+                    .FirstOrDefault(c => c.Identifier.Text.EndsWith("Tests", StringComparison.Ordinal));
+
+                if (updatedTestClass is not null)
+                {
+                    var updatedClosingBrace = updatedTestClass.CloseBraceToken;
+                    newContent = newContent.Insert(updatedClosingBrace.SpanStart, newMethods.ToString());
+                }
+            }
+            else
+            {
+                // No existing usings, add at the very top
+                var newUsingsText = new StringBuilder();
+                foreach (var ns in missingUsings)
+                {
+                    newUsingsText.AppendLine($"using {ns};");
+                }
+                newUsingsText.AppendLine();
+                newContent = newUsingsText.ToString() + newContent;
+
+                // Insert test methods before closing brace (recalculate position)
+                var updatedTree = CSharpSyntaxTree.ParseText(newContent);
+                var updatedRoot = await updatedTree.GetRootAsync(ct);
+                var updatedTestClass = updatedRoot.DescendantNodes()
+                    .OfType<ClassDeclarationSyntax>()
+                    .FirstOrDefault(c => c.Identifier.Text.EndsWith("Tests", StringComparison.Ordinal));
+
+                if (updatedTestClass is not null)
+                {
+                    var updatedClosingBrace = updatedTestClass.CloseBraceToken;
+                    newContent = newContent.Insert(updatedClosingBrace.SpanStart, newMethods.ToString());
+                }
+            }
+
+            _logger.LogInformation("Added {Count} missing using statements to {File}", missingUsings.Count, testFilePath);
+        }
+        else
+        {
+            // No missing usings, just insert test methods before the closing brace of the class
+            var closingBrace = testClass.CloseBraceToken;
+            var insertPosition = closingBrace.SpanStart;
+            newContent = newContent.Insert(insertPosition, newMethods.ToString());
+        }
+
         return newContent;
     }
 
