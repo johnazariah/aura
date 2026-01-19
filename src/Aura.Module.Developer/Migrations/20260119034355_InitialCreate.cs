@@ -3,10 +3,10 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace Aura.Module.Developer.Data.Migrations
+namespace Aura.Module.Developer.Migrations
 {
     /// <inheritdoc />
-    public partial class InitialDeveloper : Migration
+    public partial class InitialCreate : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -27,7 +27,20 @@ namespace Aura.Module.Developer.Data.Migrations
                     created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     completed_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
-                    pull_request_url = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true)
+                    pull_request_url = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true),
+                    issue_url = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true),
+                    issue_provider = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: true),
+                    issue_number = table.Column<int>(type: "integer", nullable: true),
+                    issue_owner = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true),
+                    issue_repo = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true),
+                    automation_mode = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
+                    Source = table.Column<int>(type: "integer", nullable: false),
+                    SourceGuardianId = table.Column<string>(type: "text", nullable: true),
+                    pattern_name = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    pattern_language = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: true),
+                    Priority = table.Column<int>(type: "integer", nullable: false),
+                    SuggestedCapability = table.Column<string>(type: "text", nullable: true),
+                    chat_history = table.Column<string>(type: "jsonb", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -85,6 +98,11 @@ namespace Aura.Module.Developer.Data.Migrations
                 name: "IX_workflows_created_at",
                 table: "workflows",
                 column: "created_at");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_workflows_issue_url",
+                table: "workflows",
+                column: "issue_url");
 
             migrationBuilder.CreateIndex(
                 name: "IX_workflows_status",

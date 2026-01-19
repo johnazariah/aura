@@ -9,11 +9,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
-namespace Aura.Module.Developer.Data.Migrations
+namespace Aura.Module.Developer.Migrations
 {
     [DbContext(typeof(DeveloperDbContext))]
-    [Migration("20260117231200_RemoveWorkflowMode")]
-    partial class RemoveWorkflowMode
+    [Migration("20260119034355_InitialCreate")]
+    partial class InitialCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -90,6 +90,16 @@ namespace Aura.Module.Developer.Data.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)")
                         .HasColumnName("issue_url");
+
+                    b.Property<string>("PatternLanguage")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("pattern_language");
+
+                    b.Property<string>("PatternName")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("pattern_name");
 
                     b.Property<int>("Priority")
                         .HasColumnType("integer");
