@@ -1,7 +1,8 @@
 # Pattern-Driven Story UX Gaps
 
-**Status:** 🔄 In Progress
+**Status:** ✅ Complete
 **Created:** 2025-01-18
+**Completed:** 2025-06-25
 **Priority:** High
 **Source:** Dogfooding session - Story 9c43eea5-a229-4869-a60d-d8107fabb542
 
@@ -725,10 +726,10 @@ Added `outputDirectory` parameter to test generation:
 - **NEW**: Static classes handled correctly - no SUT instantiation (Gap 32)
 - **NEW**: Mocking library namespace always included (Gap 33)
 - **NEW**: `IOptions<T>` uses `Options.Create()` instead of mock (Gap 34)
+- **NEW**: File-system heavy classes flagged as integration test candidates (Gap 35)
 
 **Needs Work:**
 - Validation adds latency (~1-2s) so is opt-in
-- File-system heavy classes flagged as integration test candidates (Gap 35)
 
 ---
 
@@ -774,7 +775,7 @@ Added `outputDirectory` parameter to test generation:
 
 ---
 
-### Gap 35: File-System Heavy Classes ⏳ TODO
+### Gap 35: File-System Heavy Classes ✅ IMPLEMENTED
 
 **Tool:** `aura_generate(operation: "tests")`
 
@@ -786,6 +787,11 @@ Added `outputDirectory` parameter to test generation:
 1. Flag in analysis as "integration test candidate"
 2. Skip unit test generation with explanation
 3. Generate integration test scaffolding instead
+
+**Implementation:** Added `IsIntegrationTestCandidate` and `IntegrationTestReason` properties to `TestAnalysis` record. The `DetectIntegrationTestCandidate()` method in `RoslynTestGenerator` checks for:
+- File-system dependencies: `IFileSystem`, `IFile`, `IDirectory`, `IPath`, etc.
+- I/O dependencies: `IFileProvider`, `Stream`, `FileStream`, etc.
+- Class name patterns suggesting file operations (only as supporting evidence)
 
 ---
 

@@ -69,6 +69,7 @@ features/
 | [Operational Patterns](completed/operational-patterns.md) | Multi-step playbooks for complex operations | 2026-01-17 |
 | [Worktree-Aware Indexing](completed/worktree-aware-indexing.md) | Isolated workspaces per worktree, cache invalidation | 2026-01-17 |
 | [Pattern-Driven Stories](completed/pattern-driven-stories.md) | Patterns generate user-modifiable stories with discrete items | 2026-01-19 |
+| [Pattern-Driven UX Gaps](completed/pattern-driven-ux-gaps.md) | 35 UX fixes for pattern-driven workflows (test gen, validation, etc.) | 2025-06-25 |
 
 ## Upcoming Features
 
