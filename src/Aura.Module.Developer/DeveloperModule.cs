@@ -62,7 +62,7 @@ public sealed class DeveloperModule : IAuraModule
             var options = config.GetSection(GitHubOptions.SectionName).Get<GitHubOptions>() ?? new();
             client.BaseAddress = new Uri(options.BaseUrl);
             client.DefaultRequestHeaders.Add("Accept", "application/vnd.github+json");
-            client.DefaultRequestHeaders.Add("User-Agent", "Aura/1.2.0");
+            client.DefaultRequestHeaders.Add("User-Agent", "Aura/1.3.0");
             client.DefaultRequestHeaders.Add("X-GitHub-Api-Version", "2022-11-28");
             if (!string.IsNullOrEmpty(options.Token))
             {

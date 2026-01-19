@@ -3,7 +3,7 @@
 ; Download: https://jrsoftware.org/isdl.php
 
 #define MyAppName "Aura"
-#define MyAppVersion "1.2.0"
+#define MyAppVersion "1.3.0"
 #define MyAppPublisher "John Azariah"
 #define MyAppURL "https://github.com/johnazariah/aura"
 #define MyAppExeName "Aura.Api.exe"
