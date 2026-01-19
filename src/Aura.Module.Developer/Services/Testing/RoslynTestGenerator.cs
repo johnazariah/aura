@@ -502,7 +502,7 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
         }
 
         // Find or determine test file location
-        var (testFilePath, fileExists) = DetermineTestFilePath(solution, typeSymbol);
+        var (testFilePath, fileExists) = DetermineTestFilePath(solution, typeSymbol, request.OutputDirectory);
 
         // Generate test methods based on gaps
         var testMethods = GenerateTestMethods(analysis, testsToGenerate, request.Focus, analysis.DetectedFramework);
@@ -610,7 +610,7 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
         }
     }
 
-    private (string path, bool exists) DetermineTestFilePath(Solution solution, INamedTypeSymbol typeSymbol)
+    private (string path, bool exists) DetermineTestFilePath(Solution solution, INamedTypeSymbol typeSymbol, string? outputDirectory = null)
     {
         var typeName = typeSymbol.Name;
         var testClassName = $"{typeName}Tests";
@@ -660,6 +660,17 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
         if (testProject is not null)
         {
             var testProjectDir = Path.GetDirectoryName(testProject.FilePath)!;
+
+            // If outputDirectory is specified, use it
+            if (!string.IsNullOrEmpty(outputDirectory))
+            {
+                // If it's an absolute path, use it directly
+                // Otherwise, treat it as relative to the test project
+                var targetDir = Path.IsPathRooted(outputDirectory)
+                    ? outputDirectory
+                    : Path.Combine(testProjectDir, outputDirectory);
+                return (Path.Combine(targetDir, $"{testClassName}.cs"), false);
+            }
 
             // Mirror the source file's folder structure in the test project
             // e.g., Services/Testing/Foo.cs → Services/Testing/FooTests.cs

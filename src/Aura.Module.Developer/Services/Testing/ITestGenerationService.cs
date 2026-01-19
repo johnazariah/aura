@@ -42,6 +42,9 @@ public sealed record TestGenerationRequest
     /// <summary>Optional: override framework detection (xunit, nunit, mstest).</summary>
     public string? TestFramework { get; init; }
 
+    /// <summary>Optional: output directory for the test file (relative to test project or absolute).</summary>
+    public string? OutputDirectory { get; init; }
+
     /// <summary>If true, return analysis only without generating code.</summary>
     public bool AnalyzeOnly { get; init; }
 

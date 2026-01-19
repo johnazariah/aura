@@ -337,6 +337,7 @@ public sealed class McpHandler
                         maxTests = new { type = "integer", description = "Maximum tests to generate, default: 20 (for tests)" },
                         focus = new { type = "string", description = "Focus area for tests", @enum = new[] { "all", "happy_path", "edge_cases", "error_handling" } },
                         testFramework = new { type = "string", description = "Override framework detection: xunit, nunit, mstest (for tests)" },
+                        outputDirectory = new { type = "string", description = "Output directory for test file - relative path under test project (e.g., 'Services/Testing') or absolute path (for tests)" },
                         analyzeOnly = new { type = "boolean", description = "If true, return analysis without generating code (for tests)" },
                         validateCompilation = new { type = "boolean", description = "If true, validate generated code compiles before returning - adds latency (for tests)" },
                         baseClass = new { type = "string", description = "Base class to inherit from (for create_type)" },
@@ -3697,6 +3698,10 @@ public sealed class McpHandler
                 validateCompilation = vcEl.GetBoolean();
         }
 
+        string? outputDirectory = null;
+        if (args?.TryGetProperty("outputDirectory", out var odEl) == true)
+            outputDirectory = odEl.GetString();
+
         var result = await _testGenerationService.GenerateTestsAsync(new TestGenerationRequest
         {
             Target = target,
@@ -3705,6 +3710,7 @@ public sealed class McpHandler
             MaxTests = maxTests,
             Focus = focus,
             TestFramework = testFramework,
+            OutputDirectory = outputDirectory,
             AnalyzeOnly = analyzeOnly,
             ValidateCompilation = validateCompilation
         }, ct);

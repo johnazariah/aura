@@ -265,6 +265,7 @@ src/Aura.Module.Developer/
 - [x] Generic dependency namespace collection (Gap 28)
 - [x] Missing usings added when appending to existing files (Gap 29)
 - [x] Test files placed in correct folder mirroring source structure (Gap 30)
+- [x] `outputDirectory` parameter to control test file placement (Gap 31)
 
 ### Phase 2: Python (tree-sitter)
 - [ ] `PythonTestGenerator` implementation

@@ -679,6 +679,34 @@ aura_generate(operation: "tests", target: "MyClass", validateCompilation: true)
 
 ---
 
+### Gap 31: No Way to Specify Output Directory ✅ FIXED
+
+**Tool:** `aura_generate(operation: "tests")`
+
+**Problem:** Users couldn't specify where test files should be placed. Even with the Gap 30 fix (mirroring source structure), if the source structure didn't match the desired test structure, users had to manually move files.
+
+**Impact:** Extra manual step to move test files to preferred location.
+
+**Solution Implemented:**
+Added `outputDirectory` parameter to test generation:
+- If relative path (e.g., `Services/Testing`): relative to the test project root
+- If absolute path: uses it directly
+- Overrides the automatic source-structure mirroring
+
+**Usage:**
+```json
+{
+  "operation": "tests",
+  "target": "CodeGraphIndexer",
+  "solutionPath": "c:\\work\\aura\\Aura.sln",
+  "outputDirectory": "Services"
+}
+```
+
+**Result:** Users can now control exactly where test files are created.
+
+---
+
 ## Net Assessment: Test Generation
 
 **Works Well:**
@@ -693,6 +721,7 @@ aura_generate(operation: "tests", target: "MyClass", validateCompilation: true)
 - **NEW**: Generic dependency namespaces collected (Gap 28)
 - **NEW**: Missing usings added when appending to existing files (Gap 29)
 - **NEW**: Test files placed in correct folder mirroring source structure (Gap 30)
+- **NEW**: `outputDirectory` parameter to control test file placement (Gap 31)
 
 **Needs Work:**
 - Validation adds latency (~1-2s) so is opt-in
