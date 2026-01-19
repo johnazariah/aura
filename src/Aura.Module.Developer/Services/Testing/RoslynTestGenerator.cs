@@ -816,6 +816,9 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
         // Check if any dependencies use IOptions<T>
         var hasOptionsPattern = constructorDeps.Any(d => d.TypeName.StartsWith("IOptions<", StringComparison.Ordinal));
 
+        // Check if any method parameters are interfaces (will need mocking)
+        var hasInterfaceParameters = HasInterfaceParameters(typeSymbol, testMethods);
+
         // Collect all required namespaces from method parameters and return types
         var requiredNamespaces = CollectRequiredNamespaces(typeSymbol, testMethods);
 
@@ -838,8 +841,8 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
                 break;
         }
 
-        // Add mocking library using if there are dependencies
-        if (hasDependencies)
+        // Add mocking library using if there are constructor dependencies OR interface method parameters
+        if (hasDependencies || hasInterfaceParameters)
         {
             sb.AppendLine(GetMockingLibraryUsing(mockingLibrary));
         }
@@ -896,6 +899,30 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
         sb.AppendLine("}");
 
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// Checks if any method parameters in the test methods are interfaces.
+    /// Used to determine if mocking library namespace is needed.
+    /// </summary>
+    private static bool HasInterfaceParameters(INamedTypeSymbol typeSymbol, List<GeneratedTestInfo> testMethods)
+    {
+        foreach (var test in testMethods)
+        {
+            var methods = typeSymbol.GetMembers(test.TargetMethod).OfType<IMethodSymbol>();
+            foreach (var method in methods)
+            {
+                foreach (var param in method.Parameters)
+                {
+                    if (param.Type.TypeKind == TypeKind.Interface)
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -1350,9 +1377,10 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
         // Collect required namespaces for the new tests
         var requiredNamespaces = CollectRequiredNamespaces(typeSymbol, methodsToAdd);
 
-        // Add mocking library namespace if there are dependencies (mocks will be generated)
+        // Add mocking library namespace if there are dependencies OR interface method parameters
         var constructorDeps = GetConstructorDependencies(typeSymbol);
-        if (constructorDeps.Count > 0)
+        var hasInterfaceParams = HasInterfaceParameters(typeSymbol, methodsToAdd);
+        if (constructorDeps.Count > 0 || hasInterfaceParams)
         {
             var mockLibNs = mockingLibrary.ToLowerInvariant() switch
             {
@@ -1362,12 +1390,12 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
                 _ => "NSubstitute"
             };
             requiredNamespaces.Add(mockLibNs);
+        }
 
-            // Add Microsoft.Extensions.Options if IOptions<T> is used
-            if (constructorDeps.Any(d => d.TypeName.StartsWith("IOptions<", StringComparison.Ordinal)))
-            {
-                requiredNamespaces.Add("Microsoft.Extensions.Options");
-            }
+        // Add Microsoft.Extensions.Options if IOptions<T> is used in constructor
+        if (constructorDeps.Any(d => d.TypeName.StartsWith("IOptions<", StringComparison.Ordinal)))
+        {
+            requiredNamespaces.Add("Microsoft.Extensions.Options");
         }
 
         // Get existing usings in the file
