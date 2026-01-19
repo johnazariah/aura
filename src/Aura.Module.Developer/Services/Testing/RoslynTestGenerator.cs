@@ -33,6 +33,12 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
     private const string NsMoq = "Moq";
     private const string NsFakeItEasy = "FakeItEasy";
 
+    // Test attribute names (used for detecting test methods)
+    private const string AttrFact = "Fact";
+    private const string AttrTheory = "Theory";
+    private const string AttrTest = "Test";
+    private const string AttrTestMethod = "TestMethod";
+
     #endregion
 
     private readonly IRoslynWorkspaceService _workspaceService;
@@ -191,8 +197,8 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
                 TestableMembers = testableMembers,
                 ExistingTests = existingTests,
                 Gaps = gaps,
-                DetectedFramework = "xunit",
-                DetectedMockingLibrary = "nsubstitute",
+                DetectedFramework = FrameworkXUnit,
+                DetectedMockingLibrary = MockLibNSubstitute,
                 SuggestedTestCount = 0
             };
         }
@@ -292,14 +298,14 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
             var refs = project.MetadataReferences.Select(r => r.Display ?? "").ToList();
 
             if (refs.Any(r => r.Contains("xunit", StringComparison.OrdinalIgnoreCase)))
-                return "xunit";
+                return FrameworkXUnit;
             if (refs.Any(r => r.Contains("nunit", StringComparison.OrdinalIgnoreCase)))
-                return "nunit";
+                return FrameworkNUnit;
             if (refs.Any(r => r.Contains("MSTest", StringComparison.OrdinalIgnoreCase)))
-                return "mstest";
+                return FrameworkMsTest;
         }
 
-        return "xunit"; // default
+        return FrameworkXUnit; // default
     }
 
     /// <summary>
@@ -315,15 +321,15 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
             var refs = project.MetadataReferences.Select(r => r.Display ?? "").ToList();
 
             if (refs.Any(r => r.Contains("NSubstitute", StringComparison.OrdinalIgnoreCase)))
-                return "nsubstitute";
+                return MockLibNSubstitute;
             if (refs.Any(r => r.Contains("Moq", StringComparison.OrdinalIgnoreCase) &&
                          !r.Contains("NSubstitute", StringComparison.OrdinalIgnoreCase)))
-                return "moq";
+                return MockLibMoq;
             if (refs.Any(r => r.Contains("FakeItEasy", StringComparison.OrdinalIgnoreCase)))
-                return "fakeiteasy";
+                return MockLibFakeItEasy;
         }
 
-        return "nsubstitute"; // default - most common in modern .NET
+        return MockLibNSubstitute; // default - most common in modern .NET
     }
 
     private async Task<List<ExistingTestInfo>> FindExistingTestsAsync(Solution solution, INamedTypeSymbol typeSymbol, CancellationToken ct)
@@ -356,8 +362,8 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
                         .Any(attr =>
                         {
                             var name = attr.Name.ToString();
-                            return name is "Fact" or "Theory" or "Test" or "TestMethod"
-                                or "FactAttribute" or "TheoryAttribute" or "TestAttribute" or "TestMethodAttribute";
+                            return name is AttrFact or AttrTheory or AttrTest or AttrTestMethod
+                                or AttrFact + "Attribute" or AttrTheory + "Attribute" or AttrTest + "Attribute" or AttrTestMethod + "Attribute";
                         }))
                     .ToList();
 
@@ -859,13 +865,13 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
 
         switch (framework)
         {
-            case "xunit":
+            case FrameworkXUnit:
                 sb.AppendLine("using Xunit;");
                 break;
-            case "nunit":
+            case FrameworkNUnit:
                 sb.AppendLine("using NUnit.Framework;");
                 break;
-            case "mstest":
+            case FrameworkMsTest:
                 sb.AppendLine("using Microsoft.VisualStudio.TestTools.UnitTesting;");
                 break;
         }
@@ -906,11 +912,11 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
         sb.AppendLine($"namespace {typeNamespace}.Tests;");
         sb.AppendLine();
 
-        if (framework == "mstest")
+        if (framework == FrameworkMsTest)
         {
             sb.AppendLine("[TestClass]");
         }
-        else if (framework == "nunit")
+        else if (framework == FrameworkNUnit)
         {
             sb.AppendLine("[TestFixture]");
         }
@@ -1061,7 +1067,7 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
         IMethodSymbol? method,
         string typeName,
         string framework,
-        string mockingLibrary = "nsubstitute")
+        string mockingLibrary = MockLibNSubstitute)
     {
         var isAsync = method?.IsAsync == true ||
                       method?.ReturnType.Name is "Task" or "ValueTask";
@@ -1071,9 +1077,9 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
         // Attribute
         var attr = framework switch
         {
-            "xunit" => "[Fact]",
-            "nunit" => "[Test]",
-            "mstest" => "[TestMethod]",
+            FrameworkXUnit => "[Fact]",
+            FrameworkNUnit => "[Test]",
+            FrameworkMsTest => "[TestMethod]",
             _ => "[Fact]"
         };
         sb.AppendLine($"    {attr}");
@@ -1296,9 +1302,9 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
     {
         var assertion = framework switch
         {
-            "xunit" => "Assert.True(result);",
-            "nunit" => "Assert.That(result, Is.True);",
-            "mstest" => "Assert.IsTrue(result);",
+            FrameworkXUnit => "Assert.True(result);",
+            FrameworkNUnit => "Assert.That(result, Is.True);",
+            FrameworkMsTest => "Assert.IsTrue(result);",
             _ => "Assert.True(result);"
         };
         sb.AppendLine($"        {assertion}");
@@ -1308,9 +1314,9 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
     {
         var assertions = framework switch
         {
-            "xunit" => ("Assert.NotNull(result);", "Assert.NotEmpty(result);"),
-            "nunit" => ("Assert.That(result, Is.Not.Null);", "Assert.That(result, Is.Not.Empty);"),
-            "mstest" => ("Assert.IsNotNull(result);", "Assert.IsFalse(string.IsNullOrEmpty(result));"),
+            FrameworkXUnit => ("Assert.NotNull(result);", "Assert.NotEmpty(result);"),
+            FrameworkNUnit => ("Assert.That(result, Is.Not.Null);", "Assert.That(result, Is.Not.Empty);"),
+            FrameworkMsTest => ("Assert.IsNotNull(result);", "Assert.IsFalse(string.IsNullOrEmpty(result));"),
             _ => ("Assert.NotNull(result);", "Assert.NotEmpty(result);")
         };
         sb.AppendLine($"        {assertions.Item1}");
@@ -1321,9 +1327,9 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
     {
         var assertion = framework switch
         {
-            "xunit" => "Assert.True(result >= 0); // Adjust expected value",
-            "nunit" => "Assert.That(result, Is.GreaterThanOrEqualTo(0)); // Adjust expected value",
-            "mstest" => "Assert.IsTrue(result >= 0); // Adjust expected value",
+            FrameworkXUnit => "Assert.True(result >= 0); // Adjust expected value",
+            FrameworkNUnit => "Assert.That(result, Is.GreaterThanOrEqualTo(0)); // Adjust expected value",
+            FrameworkMsTest => "Assert.IsTrue(result >= 0); // Adjust expected value",
             _ => "Assert.True(result >= 0);"
         };
         sb.AppendLine($"        {assertion}");
@@ -1333,9 +1339,9 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
     {
         var assertions = framework switch
         {
-            "xunit" => ("Assert.NotNull(result);", "Assert.NotEmpty(result);"),
-            "nunit" => ("Assert.That(result, Is.Not.Null);", "Assert.That(result, Is.Not.Empty);"),
-            "mstest" => ("Assert.IsNotNull(result);", "Assert.IsTrue(result.Any());"),
+            FrameworkXUnit => ("Assert.NotNull(result);", "Assert.NotEmpty(result);"),
+            FrameworkNUnit => ("Assert.That(result, Is.Not.Null);", "Assert.That(result, Is.Not.Empty);"),
+            FrameworkMsTest => ("Assert.IsNotNull(result);", "Assert.IsTrue(result.Any());"),
             _ => ("Assert.NotNull(result);", "Assert.NotEmpty(result);")
         };
         sb.AppendLine($"        {assertions.Item1}");
@@ -1346,9 +1352,9 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
     {
         var assertion = framework switch
         {
-            "xunit" => "Assert.NotNull(result);",
-            "nunit" => "Assert.That(result, Is.Not.Null);",
-            "mstest" => "Assert.IsNotNull(result);",
+            FrameworkXUnit => "Assert.NotNull(result);",
+            FrameworkNUnit => "Assert.That(result, Is.Not.Null);",
+            FrameworkMsTest => "Assert.IsNotNull(result);",
             _ => "Assert.NotNull(result);"
         };
         sb.AppendLine($"        {assertion}");
