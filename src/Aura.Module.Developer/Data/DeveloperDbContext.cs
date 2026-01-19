@@ -62,6 +62,10 @@ public sealed class DeveloperDbContext(DbContextOptions<DeveloperDbContext> opti
             entity.Property(e => e.IssueRepo).HasColumnName("issue_repo").HasMaxLength(200);
             entity.Property(e => e.AutomationMode).HasColumnName("automation_mode").HasConversion<string>().HasMaxLength(20);
 
+            // Pattern binding
+            entity.Property(e => e.PatternName).HasColumnName("pattern_name").HasMaxLength(100);
+            entity.Property(e => e.PatternLanguage).HasColumnName("pattern_language").HasMaxLength(50);
+
             // Chat
             entity.Property(e => e.ChatHistory).HasColumnName("chat_history").HasColumnType("jsonb");
 

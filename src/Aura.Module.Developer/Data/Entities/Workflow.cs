@@ -85,6 +85,9 @@ public sealed class Workflow
     /// <summary>Gets or sets the pattern name if this workflow follows a pattern (e.g., "generate-tests").</summary>
     public string? PatternName { get; set; }
 
+    /// <summary>Gets or sets the pattern language for language-specific overlays (e.g., "csharp", "python").</summary>
+    public string? PatternLanguage { get; set; }
+
     /// <summary>Gets or sets the priority for UI sorting.</summary>
     public WorkflowPriority Priority { get; set; } = WorkflowPriority.Medium;
 

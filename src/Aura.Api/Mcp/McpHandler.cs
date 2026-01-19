@@ -419,7 +419,7 @@ public sealed class McpHandler
             new McpToolDefinition
             {
                 Name = "aura_workflow",
-                Description = "Manage Aura development workflows/stories: list, get details, get by worktree path, create from GitHub issues. Use get_by_path to auto-discover current story context. (CRUD)",
+                Description = "Manage Aura development workflows/stories: list, get details, get by worktree path, create from GitHub issues. Use get_by_path to auto-discover current story context. Pattern content is auto-included when story has a bound pattern. (CRUD)",
                 InputSchema = new
                 {
                     type = "object",
@@ -435,7 +435,8 @@ public sealed class McpHandler
                         workspacePath = new { type = "string", description = "Workspace/worktree path - for get_by_path to auto-discover current story" },
                         issueUrl = new { type = "string", description = "GitHub issue URL - for create operation" },
                         repositoryPath = new { type = "string", description = "Local repository path for worktree creation" },
-                        pattern = new { type = "string", description = "Pattern name to apply - for enrich operation. Loads pattern and parses steps from it." },
+                        pattern = new { type = "string", description = "Pattern name to apply - for enrich operation. Binds pattern to story and loads content." },
+                        language = new { type = "string", description = "Language for pattern overlay (e.g., 'csharp', 'python') - for enrich operation. Stored with story." },
                         steps = new
                         {
                             type = "array",
@@ -1389,6 +1390,48 @@ public sealed class McpHandler
         return Path.Combine(basePath, "patterns");
     }
 
+    /// <summary>
+    /// Loads pattern content with optional language overlay.
+    /// Returns merged base + overlay if both exist, or just the pattern if no overlay.
+    /// </summary>
+    private static string? LoadPatternContent(string patternName, string? language)
+    {
+        var patternsDir = GetPatternsDirectory();
+        var basePatternPath = Path.Combine(patternsDir, $"{patternName}.md");
+        var hasBasePattern = File.Exists(basePatternPath);
+
+        // Check for language-specific pattern path
+        string? langPatternPath = null;
+        if (!string.IsNullOrWhiteSpace(language))
+        {
+            langPatternPath = Path.Combine(patternsDir, language, $"{patternName}.md");
+        }
+
+        // Case 1: Base pattern exists
+        if (hasBasePattern)
+        {
+            var baseContent = File.ReadAllText(basePatternPath);
+
+            // Check for language overlay
+            if (langPatternPath != null && File.Exists(langPatternPath))
+            {
+                var overlayContent = File.ReadAllText(langPatternPath);
+                return $"{baseContent}\n\n---\n\n# {language!.ToUpperInvariant()} Language Overlay\n\n{overlayContent}";
+            }
+
+            return baseContent;
+        }
+
+        // Case 2: Language-specific pattern only (no base)
+        if (langPatternPath != null && File.Exists(langPatternPath))
+        {
+            return File.ReadAllText(langPatternPath);
+        }
+
+        // Pattern not found
+        return null;
+    }
+
     // =========================================================================
     // Existing Tool Implementations (used by meta-tool routers)
     // =========================================================================
@@ -2306,6 +2349,13 @@ public sealed class McpHandler
             return new { error = $"Story not found: {storyId}" };
         }
 
+        // Auto-load pattern content if story has a pattern
+        string? patternContent = null;
+        if (!string.IsNullOrWhiteSpace(workflow.PatternName))
+        {
+            patternContent = LoadPatternContent(workflow.PatternName, workflow.PatternLanguage);
+        }
+
         return new
         {
             id = workflow.Id,
@@ -2322,6 +2372,8 @@ public sealed class McpHandler
             worktreePath = workflow.WorktreePath,
             repositoryPath = workflow.RepositoryPath,
             patternName = workflow.PatternName,
+            patternLanguage = workflow.PatternLanguage,
+            patternContent,
             steps = workflow.Steps.OrderBy(s => s.Order).Select(s => new
             {
                 id = s.Id,
@@ -2369,6 +2421,13 @@ public sealed class McpHandler
             };
         }
 
+        // Auto-load pattern content if story has a pattern
+        string? patternContent = null;
+        if (!string.IsNullOrWhiteSpace(workflow.PatternName))
+        {
+            patternContent = LoadPatternContent(workflow.PatternName, workflow.PatternLanguage);
+        }
+
         // Return full story context
         return new
         {
@@ -2387,6 +2446,8 @@ public sealed class McpHandler
             worktreePath = workflow.WorktreePath,
             repositoryPath = workflow.RepositoryPath,
             patternName = workflow.PatternName,
+            patternLanguage = workflow.PatternLanguage,
+            patternContent,
             currentStep = workflow.Steps
                 .Where(s => s.Status == StepStatus.Pending || s.Status == StepStatus.Running)
                 .OrderBy(s => s.Order)
@@ -2486,28 +2547,32 @@ public sealed class McpHandler
             return new { error = $"Story not found: {storyId}" };
         }
 
-        // Check for pattern parameter - if provided, load pattern and return it for agent to parse
+        // Check for pattern and language parameters
         string? patternName = null;
+        string? patternLanguage = null;
         string? patternContent = null;
+
         if (args.HasValue && args.Value.TryGetProperty("pattern", out var patternEl))
         {
             patternName = patternEl.GetString();
-            if (!string.IsNullOrWhiteSpace(patternName))
+        }
+
+        if (args.HasValue && args.Value.TryGetProperty("language", out var langEl))
+        {
+            patternLanguage = langEl.GetString();
+        }
+
+        // Load pattern content using tiered loading (base + overlay)
+        if (!string.IsNullOrWhiteSpace(patternName))
+        {
+            patternContent = LoadPatternContent(patternName, patternLanguage);
+            if (patternContent is null)
             {
-                var patternsDir = GetPatternsDirectory();
-                var patternPath = Path.Combine(patternsDir, $"{patternName}.md");
-                if (File.Exists(patternPath))
+                return new
                 {
-                    patternContent = File.ReadAllText(patternPath);
-                }
-                else
-                {
-                    return new
-                    {
-                        error = $"Pattern '{patternName}' not found. Use aura_pattern(operation: 'list') to see available patterns.",
-                        storyId
-                    };
-                }
+                    error = $"Pattern '{patternName}' not found. Use aura_pattern(operation: 'list') to see available patterns.",
+                    storyId
+                };
             }
         }
 
@@ -2517,13 +2582,22 @@ public sealed class McpHandler
 
         if (!string.IsNullOrEmpty(patternContent) && !hasSteps)
         {
+            // Store pattern name and language on the workflow for future reference
+            if (workflow.PatternName != patternName || workflow.PatternLanguage != patternLanguage)
+            {
+                workflow.PatternName = patternName;
+                workflow.PatternLanguage = patternLanguage;
+                await _workflowService.UpdateAsync(workflow, ct);
+            }
+
             // Return pattern content - agent should parse steps and call enrich again with steps array
             return new
             {
                 storyId,
                 patternName,
+                patternLanguage,
                 patternContent,
-                message = "Pattern loaded. Parse the steps from the pattern content and call enrich again with the steps array.",
+                message = "Pattern loaded and bound to story. Parse the steps from the pattern content and call enrich again with the steps array.",
                 hint = "Look for numbered steps, checkboxes (- [ ]), or ### Step headers in the pattern markdown."
             };
         }
