@@ -487,6 +487,106 @@ The following issues were identified during dogfooding the generate-tests patter
 
 ---
 
+### Gap 23: Duplicate Test Method Names for Overloads ✅ FIXED
+
+**Tool:** `aura_generate(operation: "tests")`
+
+**Problem:** When a class has overloaded methods (e.g., two `ExecuteAsync` overloads), Aura generates tests with identical names like `ExecuteAsync_WhenAwaited_CompletesSuccessfully` for both. This causes compile errors.
+
+**Impact:** Generated tests don't compile; user must manually rename.
+
+**Expected:** Differentiate test names by parameter signature:
+- `ExecuteAsync_WithContext_WhenAwaited_CompletesSuccessfully`
+- `ExecuteAsync_Simple_WhenAwaited_CompletesSuccessfully`
+
+**Root Cause:** `RoslynTestGenerator.GenerateTestMethodName()` doesn't consider parameter types for uniqueness.
+
+**Solution Implemented:**
+1. Added `ParameterSignature` property to `TestGap` record
+2. `IdentifyTestGaps()` now detects overloaded methods and computes a simplified parameter signature (e.g., "String_Int")
+3. `GenerateTestName()` appends `_With{ParameterSignature}` when gap has overload disambiguation
+4. Helper methods `ComputeParameterSignature()` and `SimplifyTypeName()` handle type normalization
+
+**Result:** For overloaded methods, test names now include parameter types:
+- `ExecuteAsync_WithString_WhenCalled_ReturnsExpectedResult`
+- `ExecuteAsync_WithContext_CancellationToken_WhenCalled_ReturnsExpectedResult`
+
+---
+
+### Gap 24: Generated Tests Use Wrong Type/Property Names (HIGH)
+
+**Tool:** `aura_generate(operation: "tests")`
+
+**Problem:** Generated tests reference types and properties that don't exist:
+- `GuardianCheck` (doesn't exist - should be `GuardianDefinition`)
+- `Check` property (doesn't exist - should be `Detection`)
+- `Scheduled` enum value (doesn't exist - should be `Schedule`)
+- `RepositoryPath` (doesn't exist - should be `WorkspacePath`)
+
+**Impact:** Generated tests don't compile; user must fix all type references.
+
+**Root Cause:** Generator may be:
+1. Using cached/stale semantic model
+2. Guessing property names from method signatures without resolving actual types
+3. Not deeply analyzing return types and their members
+
+**Proposed Solution:**
+- Validate all generated type references against semantic model before output
+- Use `GetTypeInfo()` to resolve actual types, not inferred names
+- Add compilation validation pass before returning generated code
+
+---
+
+### Gap 25: Skeleton TODOs Instead of Real Assertions (MEDIUM)
+
+**Tool:** `aura_generate(operation: "tests")`
+
+**Problem:** Many generated tests have `// TODO: Assert` placeholders instead of real assertions based on return types.
+
+**Impact:** User must write all assertions manually; defeats purpose of generation.
+
+**Expected:** Generator should infer basic assertions from return types:
+- `bool` → `result.Should().BeTrue()` or `BeFalse()`
+- `Task<T>` → `result.Should().NotBeNull()` + type-appropriate assertion
+- `void` → `action.Should().NotThrow()`
+- Collections → `result.Should().NotBeEmpty()` or `HaveCount()`
+
+**Proposed Solution:**
+- Add return type analysis to `GenerateAssertion()` method
+- Generate assertions based on return type patterns
+- Fall back to `TODO` only for truly unknown scenarios
+
+---
+
+### Gap 26: No Compile Validation Before Output (MEDIUM)
+
+**Tool:** `aura_generate(operation: "tests")`
+
+**Problem:** Generated test code is returned even if it won't compile. User discovers errors only after file is written.
+
+**Impact:** Wastes time fixing avoidable errors.
+
+**Proposed Solution:**
+- Run generated code through Roslyn compilation before returning
+- Report diagnostics if errors found
+- Option to auto-fix common issues (missing usings, etc.)
+
+---
+
+## Net Assessment: Test Generation
+
+**Works Well:**
+- `analyzeOnly: true` - Excellent for coverage gap discovery
+- Simple classes (DTOs, modules with properties) - Time saver
+- Quick scaffolding of test structure
+
+**Needs Work:**
+- Complex classes with overloads, deep type hierarchies
+- User reports rewriting 80%+ of generated code for non-trivial classes
+- `analyzeOnly` is the reliable productivity feature; actual generation needs improvement
+
+---
+
 ## Related Documents
 
 - [pattern-driven-stories.md](../completed/pattern-driven-stories.md) - Original spec

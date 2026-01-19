@@ -200,6 +200,9 @@ public sealed record TestGap
 
     /// <summary>Exception type for error handling tests (optional).</summary>
     public string? ExceptionType { get; init; }
+
+    /// <summary>Parameter signature for disambiguating overloads (e.g., "string_int" for method(string, int)).</summary>
+    public string? ParameterSignature { get; init; }
 }
 
 /// <summary>

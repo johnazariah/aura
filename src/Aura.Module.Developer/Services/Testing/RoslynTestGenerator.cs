@@ -370,8 +370,15 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
         var gaps = new List<TestGap>();
         var testedMethods = existingTests.SelectMany(t => t.TestedMethods).ToHashSet();
 
+        // Identify overloaded methods (same name appears multiple times)
+        var methodNameCounts = members.GroupBy(m => m.Name).ToDictionary(g => g.Key, g => g.Count());
+
         foreach (var member in members)
         {
+            // Compute parameter signature for overload disambiguation
+            var hasOverloads = methodNameCounts.TryGetValue(member.Name, out var count) && count > 1;
+            var paramSignature = hasOverloads ? ComputeParameterSignature(member.Parameters) : null;
+
             // Check if method has any tests
             if (!testedMethods.Contains(member.Name))
             {
@@ -380,7 +387,8 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
                     MethodName = member.Name,
                     Kind = TestGapKind.NoTests,
                     Description = $"No tests found for {member.Name}",
-                    Priority = TestPriority.High
+                    Priority = TestPriority.High,
+                    ParameterSignature = paramSignature
                 });
             }
 
@@ -393,7 +401,8 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
                     Kind = TestGapKind.NullHandling,
                     Description = $"Missing null handling test for parameter '{param.Name}'",
                     Priority = TestPriority.Medium,
-                    ParameterName = param.Name
+                    ParameterName = param.Name,
+                    ParameterSignature = paramSignature
                 });
             }
 
@@ -406,7 +415,8 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
                     Kind = TestGapKind.ErrorHandling,
                     Description = $"Missing test for {exception} exception",
                     Priority = TestPriority.Medium,
-                    ExceptionType = exception
+                    ExceptionType = exception,
+                    ParameterSignature = paramSignature
                 });
             }
 
@@ -418,12 +428,52 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
                     MethodName = member.Name,
                     Kind = TestGapKind.AsyncBehavior,
                     Description = "Consider testing async completion behavior",
-                    Priority = TestPriority.Low
+                    Priority = TestPriority.Low,
+                    ParameterSignature = paramSignature
                 });
             }
         }
 
         return gaps;
+    }
+
+    /// <summary>
+    /// Computes a simplified parameter signature for use in test method names.
+    /// E.g., for (string name, int count) returns "String_Int".
+    /// </summary>
+    private static string ComputeParameterSignature(IReadOnlyList<ParameterInfo> parameters)
+    {
+        if (parameters.Count == 0)
+            return "NoParams";
+
+        var parts = parameters.Select(p => SimplifyTypeName(p.Type));
+        return string.Join("_", parts);
+    }
+
+    /// <summary>
+    /// Simplifies a type name for use in test method names.
+    /// Removes generics, namespaces, and converts to PascalCase.
+    /// </summary>
+    private static string SimplifyTypeName(string typeName)
+    {
+        // Remove nullable suffix
+        typeName = typeName.TrimEnd('?');
+
+        // Handle generic types: take just the base name
+        var genericIndex = typeName.IndexOf('<');
+        if (genericIndex > 0)
+            typeName = typeName[..genericIndex];
+
+        // Remove namespace if present
+        var dotIndex = typeName.LastIndexOf('.');
+        if (dotIndex >= 0)
+            typeName = typeName[(dotIndex + 1)..];
+
+        // Ensure first letter is uppercase
+        if (typeName.Length > 0 && char.IsLower(typeName[0]))
+            typeName = char.ToUpperInvariant(typeName[0]) + typeName[1..];
+
+        return typeName;
     }
 
     private static int DetermineTestCount(TestGenerationRequest request, TestAnalysis analysis)
@@ -613,18 +663,23 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
     {
         var member = analysis.TestableMembers.FirstOrDefault(m => m.Name == gap.MethodName);
 
+        // Build base method name, appending parameter signature for overloads
+        var methodPart = !string.IsNullOrEmpty(gap.ParameterSignature)
+            ? $"{gap.MethodName}_With{gap.ParameterSignature}"
+            : gap.MethodName;
+
         return gap.Kind switch
         {
-            TestGapKind.NoTests => $"{gap.MethodName}_WhenCalled_ReturnsExpectedResult",
+            TestGapKind.NoTests => $"{methodPart}_WhenCalled_ReturnsExpectedResult",
             TestGapKind.NullHandling when !string.IsNullOrEmpty(gap.ParameterName) =>
-                $"{gap.MethodName}_WithNull{ToPascalCase(gap.ParameterName)}_ThrowsArgumentNullException",
-            TestGapKind.NullHandling => $"{gap.MethodName}_WithNullInput_ThrowsArgumentNullException",
+                $"{methodPart}_WithNull{ToPascalCase(gap.ParameterName)}_ThrowsArgumentNullException",
+            TestGapKind.NullHandling => $"{methodPart}_WithNullInput_ThrowsArgumentNullException",
             TestGapKind.ErrorHandling when !string.IsNullOrEmpty(gap.ExceptionType) =>
-                $"{gap.MethodName}_WhenInvalid_Throws{GetExceptionShortName(gap.ExceptionType)}",
-            TestGapKind.ErrorHandling => $"{gap.MethodName}_WithInvalidInput_ThrowsExpectedException",
-            TestGapKind.BoundaryValues => $"{gap.MethodName}_WithBoundaryValue_HandlesCorrectly",
-            TestGapKind.AsyncBehavior => $"{gap.MethodName}_WhenAwaited_CompletesSuccessfully",
-            _ => $"{gap.MethodName}_Test"
+                $"{methodPart}_WhenInvalid_Throws{GetExceptionShortName(gap.ExceptionType)}",
+            TestGapKind.ErrorHandling => $"{methodPart}_WithInvalidInput_ThrowsExpectedException",
+            TestGapKind.BoundaryValues => $"{methodPart}_WithBoundaryValue_HandlesCorrectly",
+            TestGapKind.AsyncBehavior => $"{methodPart}_WhenAwaited_CompletesSuccessfully",
+            _ => $"{methodPart}_Test"
         };
     }
 
