@@ -420,7 +420,7 @@ public sealed class McpHandler
             new McpToolDefinition
             {
                 Name = "aura_workflow",
-                Description = "Manage Aura development workflows/stories: list, get details, get by worktree path, create from GitHub issues. Use get_by_path to auto-discover current story context. Pattern content is auto-included when story has a bound pattern. (CRUD)",
+                Description = "Manage Aura development workflows/stories: list, get details, get by worktree path, create from GitHub issues, complete with squash merge. Use get_by_path to auto-discover current story context. Use complete to finalize: squash commits, push, create draft PR. Pattern content is auto-included when story has a bound pattern. (CRUD)",
                 InputSchema = new
                 {
                     type = "object",
@@ -430,7 +430,7 @@ public sealed class McpHandler
                         {
                             type = "string",
                             description = "Workflow operation type",
-                            @enum = new[] { "list", "get", "get_by_path", "create", "enrich", "update_step" }
+                            @enum = new[] { "list", "get", "get_by_path", "create", "enrich", "update_step", "complete" }
                         },
                         storyId = new { type = "string", description = "Story ID (GUID) - for get, enrich operations" },
                         workspacePath = new { type = "string", description = "Workspace/worktree path - for get_by_path to auto-discover current story" },
@@ -1034,7 +1034,7 @@ public sealed class McpHandler
 
     /// <summary>
     /// aura_workflow - Manage development workflows.
-    /// Routes to: list, get, create, enrich, update_step.
+    /// Routes to: list, get, create, enrich, update_step, complete.
     /// </summary>
     private async Task<object> WorkflowAsync(JsonElement? args, CancellationToken ct)
     {
@@ -1049,6 +1049,7 @@ public sealed class McpHandler
             "create" => await CreateStoryFromIssueAsync(args, ct),
             "enrich" => await EnrichStoryAsync(args, ct),
             "update_step" => await UpdateStepAsync(args, ct),
+            "complete" => await CompleteStoryAsync(args, ct),
             _ => throw new ArgumentException($"Unknown workflow operation: {operation}")
         };
     }
@@ -2749,6 +2750,44 @@ public sealed class McpHandler
             skipReason = updatedStep.SkipReason,
             message = $"Step status updated to {updatedStep.Status}"
         };
+    }
+
+    /// <summary>
+    /// Complete a workflow/story: validates all steps are done, squash merges commits, pushes branch, creates draft PR.
+    /// </summary>
+    private async Task<object> CompleteStoryAsync(JsonElement? args, CancellationToken ct)
+    {
+        var storyIdStr = args?.GetProperty("storyId").GetString() ?? "";
+        if (!Guid.TryParse(storyIdStr, out var storyId))
+        {
+            return new { error = "storyId is required and must be a valid GUID" };
+        }
+
+        try
+        {
+            var workflow = await _workflowService.CompleteAsync(storyId, ct);
+
+            return new
+            {
+                storyId = workflow.Id,
+                title = workflow.Title,
+                status = workflow.Status.ToString(),
+                completedAt = workflow.CompletedAt,
+                gitBranch = workflow.GitBranch,
+                pullRequestUrl = workflow.PullRequestUrl,
+                message = "Workflow completed successfully" +
+                    (workflow.PullRequestUrl is not null ? $". Draft PR created: {workflow.PullRequestUrl}" : "")
+            };
+        }
+        catch (InvalidOperationException ex)
+        {
+            return new
+            {
+                error = ex.Message,
+                storyId,
+                hint = "Ensure all steps are completed or skipped before completing the workflow."
+            };
+        }
     }
 
     private async Task<object> FindByAttributeAsync(JsonElement? args, CancellationToken ct)
