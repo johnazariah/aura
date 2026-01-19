@@ -521,7 +521,7 @@ public static class VisualizationTools
     // Helpers
     // ========================================================================
 
-    private static string SanitizeForMermaid(string name)
+    internal static string SanitizeForMermaid(string name)
     {
         // Mermaid node IDs can't have special characters
         return new string(name.Where(c => char.IsLetterOrDigit(c) || c == '_').ToArray());

@@ -10,6 +10,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Aura.Module.Developer.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Cronos" Version="0.8.*" />
     <PackageReference Include="FSharp.Compiler.Service" Version="43.9.*" />
     <PackageReference Include="Microsoft.Build.Locator" Version="1.9.*" />
