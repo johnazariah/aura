@@ -257,6 +257,12 @@ src/Aura.Module.Developer/
 - [x] NUnit and MSTest template support
 - [x] Nullable parameter gap detection
 - [x] Exception documentation gap detection
+- [x] Unique test names for overloaded methods (Gap 23)
+- [x] Complete namespace collection for all types (Gap 24)
+- [x] Return-type aware assertions (Gap 25)
+- [x] Optional compilation validation (Gap 26)
+- [x] Required property initialization (Gap 27)
+- [x] Generic dependency namespace collection (Gap 28)
 
 ### Phase 2: Python (tree-sitter)
 - [ ] `PythonTestGenerator` implementation

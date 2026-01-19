@@ -596,6 +596,49 @@ aura_generate(operation: "tests", target: "MyClass", validateCompilation: true)
 
 ---
 
+### Gap 27: Required Properties Not Initialized ✅ FIXED
+
+**Tool:** `aura_generate(operation: "tests")`
+
+**Problem:** C# 11+ `required` properties on dependency types are not set during test object creation, causing compile errors like "Required member 'WorkflowStep.StepId' must be set".
+
+**Impact:** Generated tests don't compile; user must manually add object initializers.
+
+**Root Cause:** `GenerateComplexTypeValue()` didn't detect or handle `required` modifier on properties.
+
+**Solution Implemented:**
+1. Added `GetRequiredProperties()` method using Roslyn to find properties with `required` modifier
+2. Modified `GenerateComplexTypeValue()` to use object initializer syntax when required properties exist
+3. Generates `new TypeName { RequiredProp1 = value, RequiredProp2 = value }` instead of `new TypeName()`
+4. Uses `GenerateDefaultValue()` for each required property type
+
+**Result:** Types with `required` properties now get proper object initializers with all required properties set.
+
+---
+
+### Gap 28: Constructor Dependency Namespaces Missing ✅ FIXED
+
+**Tool:** `aura_generate(operation: "tests")`
+
+**Problem:** Generic constructor dependencies like `ILogger<SomeClass>` don't get their namespace collected, causing "The type or namespace 'ILogger<>' could not be found" errors.
+
+**Impact:** Generated tests don't compile due to missing `using Microsoft.Extensions.Logging;`.
+
+**Root Cause:** Constructor dependencies were parsed as strings using `dep.TypeName.LastIndexOf('.')`, which fails for generic types like `ILogger<GuardianExecutor>` (no dot in minimally qualified format).
+
+**Solution Implemented:**
+1. Added `CollectConstructorDependencyNamespaces()` method
+2. Uses actual `IParameterSymbol` from constructor to get real `ITypeSymbol`
+3. Calls `CollectNamespacesFromType()` on each parameter type, which properly handles:
+   - Generic types (collects namespace from generic definition and all type arguments)
+   - Nested types
+   - Array element types
+4. Integrated into `CollectRequiredNamespaces()` pipeline
+
+**Result:** `ILogger<T>`, `IOptions<T>`, and other generic dependencies now get proper namespace imports.
+
+---
+
 ## Net Assessment: Test Generation
 
 **Works Well:**
@@ -606,9 +649,10 @@ aura_generate(operation: "tests", target: "MyClass", validateCompilation: true)
 - **NEW**: All type namespaces included in usings (Gap 24)
 - **NEW**: Return-type aware assertions instead of TODOs (Gap 25)
 - **NEW**: Optional compilation validation (Gap 26)
+- **NEW**: Required properties properly initialized (Gap 27)
+- **NEW**: Generic dependency namespaces collected (Gap 28)
 
 **Needs Work:**
-- Complex classes with deep type hierarchies may still need manual fixes
 - Validation adds latency (~1-2s) so is opt-in
 
 ---
