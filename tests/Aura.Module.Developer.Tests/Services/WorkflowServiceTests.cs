@@ -20,6 +20,7 @@ using Microsoft.Extensions.Options;
 using NSubstitute;
 using Xunit;
 using Aura.Module.Developer;
+using Aura.Module.Developer.Services.Verification;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Threading;
@@ -40,6 +41,7 @@ public class WorkflowServiceTests : IDisposable
     private readonly IToolRegistry _toolRegistry;
     private readonly IReActExecutor _reactExecutor;
     private readonly ILlmProviderRegistry _llmProviderRegistry;
+    private readonly IWorkflowVerificationService _verificationService;
     private readonly IOptions<DeveloperModuleOptions> _options;
     private readonly WorkflowService _sut;
 
@@ -65,6 +67,7 @@ public class WorkflowServiceTests : IDisposable
         _toolRegistry = Substitute.For<IToolRegistry>();
         _reactExecutor = Substitute.For<IReActExecutor>();
         _llmProviderRegistry = Substitute.For<ILlmProviderRegistry>();
+        _verificationService = Substitute.For<IWorkflowVerificationService>();
         _options = Options.Create(new DeveloperModuleOptions { BranchPrefix = "workflow/" });
 
         _sut = new WorkflowService(
@@ -79,6 +82,7 @@ public class WorkflowServiceTests : IDisposable
             _toolRegistry,
             _reactExecutor,
             _llmProviderRegistry,
+            _verificationService,
             _options,
             NullLogger<WorkflowService>.Instance);
     }
