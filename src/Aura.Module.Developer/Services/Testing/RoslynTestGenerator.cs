@@ -882,19 +882,32 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
             }
         }
 
-        // Collect from constructor dependencies
-        var deps = GetConstructorDependencies(typeSymbol);
-        foreach (var dep in deps)
-        {
-            // dep.TypeName may be qualified - try to get the namespace
-            var lastDot = dep.TypeName.LastIndexOf('.');
-            if (lastDot > 0)
-            {
-                namespaces.Add(dep.TypeName[..lastDot]);
-            }
-        }
+        // Collect from constructor dependencies (using actual type symbols, not strings)
+        CollectConstructorDependencyNamespaces(typeSymbol, namespaces, visitedTypes);
 
         return namespaces;
+    }
+
+    /// <summary>
+    /// Collects namespaces from constructor parameter types.
+    /// </summary>
+    private static void CollectConstructorDependencyNamespaces(
+        INamedTypeSymbol typeSymbol,
+        HashSet<string> namespaces,
+        HashSet<ITypeSymbol> visitedTypes)
+    {
+        // Find the primary constructor (usually the one with the most interface parameters)
+        var primaryCtor = typeSymbol.Constructors
+            .Where(c => c.DeclaredAccessibility == Accessibility.Public)
+            .OrderByDescending(c => c.Parameters.Count(p => p.Type.TypeKind == TypeKind.Interface))
+            .FirstOrDefault();
+
+        if (primaryCtor is null) return;
+
+        foreach (var param in primaryCtor.Parameters)
+        {
+            CollectNamespacesFromType(param.Type, namespaces, visitedTypes);
+        }
     }
 
     /// <summary>
