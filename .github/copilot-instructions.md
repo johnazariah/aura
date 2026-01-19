@@ -208,37 +208,47 @@ This script can be installed as a pre-commit hook: `.\scripts\Validate-Features.
 
 ### Test Generation: Hybrid Approach
 
-`aura_generate(operation: "tests")` has known limitations. Use this hybrid workflow:
+`aura_generate(operation: "tests")` provides good scaffolding but may need minor fixes for complex classes.
 
-#### What Aura Provides vs. What You Must Fix:
+#### What Aura Provides:
 
-| ✅ Aura Does | ❌ Agent Must Fix |
-|--------------|------------------|
-| Analyzes testable methods | Wrong folder placement (defaults to `Agents/`) |
-| Creates test file with namespace | Unqualified imports (`IFileSystem` not full path) |
-| Sets up Arrange/Act/Assert skeleton | Placeholder assertions (`// TODO:`) that don't pass |
-| Detects test framework | Uses `Substitute.For<ILogger>()` instead of `NullLogger<T>.Instance` |
-| Generates mock setup | No `IDisposable` cleanup pattern |
+| Feature | Details |
+|---------|---------|
+| Testable method analysis | `analyzeOnly: true` for coverage gap discovery |
+| Unique test names for overloads | Methods like `DoThing(string)` vs `DoThing(int)` get unique test names |
+| Complete namespace collection | All parameter/return types get proper `using` statements |
+| Return-type aware assertions | `bool` → `Assert.True`, `string` → `Assert.NotEmpty`, collections → `Assert.NotEmpty` |
+| Optional compile validation | `validateCompilation: true` returns diagnostics before you see errors |
+| Framework detection | xUnit, NUnit, MSTest |
+| Mocking library detection | NSubstitute, Moq, FakeItEasy |
+
+#### What Agent May Still Need to Fix:
+
+| Issue | Fix |
+|-------|-----|
+| Wrong test folder placement | Move file to correct location |
+| `IFileSystem` without full namespace | Add `using System.IO.Abstractions;` + use `MockFileSystem` |
+| `Substitute.For<ILogger>()` | Replace with `NullLogger<T>.Instance` |
+| Complex assertion logic | Enhance generated assertions for domain-specific validation |
 
 #### Domain Knowledge Only the Agent Has:
 
 - `IFileSystem` → `System.IO.Abstractions.IFileSystem` + `MockFileSystem` from TestingHelpers
 - Loggers → `Microsoft.Extensions.Logging.Abstractions.NullLogger<T>.Instance`
-- Assertions → Must understand what the method **actually returns**
+- Domain-specific assertions → Must understand business logic
 - Test data → Create YAML/JSON fixtures for the specific domain
 
-**For new test files:**
+**Recommended workflow:**
 ```
 # 1. Analyze first
 aura_generate(operation: "tests", target: "MyService", analyzeOnly: true)
 
-# 2. Generate skeleton
-aura_generate(operation: "tests", target: "MyService")
+# 2. Generate with validation
+aura_generate(operation: "tests", target: "MyService", validateCompilation: true)
 
-# 3. Fix with text tools (Aura generates skeletons, you complete them):
-#    - Add missing imports (IFileSystem → System.IO.Abstractions.IFileSystem)
-#    - Replace Substitute.For<ILogger>() with NullLogger<T>.Instance  
-#    - Replace // TODO: assertions with real assertions
+# 3. If compilesSuccessfully: false, fix reported diagnostics
+# 4. Run tests
+aura_validate(operation: "tests", projectPath: "...", filter: "MyServiceTests")
 ```
 
 **For adding individual tests with full control:**

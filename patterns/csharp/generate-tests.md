@@ -13,15 +13,26 @@ C# has full semantic tooling via Roslyn:
 | `aura_validate` | `compilation` | Verify tests compile |
 | `aura_validate` | `tests` | Run tests |
 
-## What `aura_generate tests` Provides vs. Requires Fixing
+## What `aura_generate tests` Provides
 
-| ✅ Aura Does | ❌ Agent Must Fix |
-|--------------|------------------|
-| Analyzes testable methods | Wrong folder placement (defaults to `Agents/`) |
-| Creates test file with namespace | Unqualified imports (`IFileSystem` not full path) |
-| Sets up Arrange/Act/Assert skeleton | Placeholder assertions (`// TODO:`) |
-| Detects test framework (xUnit/NUnit/MSTest) | Uses `Substitute.For<ILogger>()` |
-| Detects mocking library (NSubstitute/Moq/FakeItEasy) | No `IDisposable` cleanup pattern |
+| Feature | Details |
+|---------|---------|
+| Testable method analysis | `analyzeOnly: true` for gap discovery |
+| **Unique test names for overloads** | `DoAsync_WithString_...` vs `DoAsync_WithInt_...` |
+| **Complete namespace collection** | All parameter/return type namespaces in usings |
+| **Return-type aware assertions** | `bool` → `Assert.True`, `string` → `Assert.NotEmpty`, collections → `Assert.NotEmpty` |
+| **Optional compile validation** | `validateCompilation: true` returns diagnostics |
+| Framework detection | xUnit, NUnit, MSTest |
+| Mocking library detection | NSubstitute, Moq, FakeItEasy |
+
+## What Agent May Still Need to Fix
+
+| Issue | Fix |
+|-------|-----|
+| `IFileSystem` without TestingHelpers | Add `using System.IO.Abstractions.TestingHelpers;` + use `MockFileSystem` |
+| `Substitute.For<ILogger>()` | Replace with `NullLogger<T>.Instance` |
+| Wrong test folder placement | Move file to correct project/folder |
+| Complex domain assertions | Enhance for business logic validation |
 
 ## Common Import Fixes
 
@@ -76,24 +87,25 @@ public sealed class MyServiceTests : IDisposable
 
 ## Recommended Workflow
 
-### Approach A: Bulk Generation + Fix
+### Approach A: Generate with Validation (Recommended)
 
 ```
-# 1. Analyze
+# 1. Analyze coverage gaps
 aura_generate(operation: "tests", target: "MyService", analyzeOnly: true, solutionPath: "...")
 
-# 2. Generate skeletons
-aura_generate(operation: "tests", target: "MyService", solutionPath: "...")
+# 2. Generate with compile validation
+aura_generate(operation: "tests", target: "MyService", validateCompilation: true, solutionPath: "...")
 
-# 3. Fix imports (use replace_string_in_file)
-# 4. Fix infrastructure (NullLogger, MockFileSystem)
-# 5. Replace placeholder assertions
-# 6. Build and test
-aura_validate(operation: "compilation", solutionPath: "...")
+# Response includes:
+# - compilesSuccessfully: true/false
+# - compilationDiagnostics: ["CS0246 - Type not found (line 15)"]
+
+# 3. If errors, fix diagnostics (usually domain-specific like MockFileSystem)
+# 4. Run tests
 aura_validate(operation: "tests", projectPath: "...", filter: "MyServiceTests")
 ```
 
-### Approach B: Individual Method Generation (More Control)
+### Approach B: Individual Method Generation (Full Control)
 
 ```
 aura_generate(
