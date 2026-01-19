@@ -21,6 +21,7 @@ public sealed class ConfigurableAgent : IAgent
     private readonly ILlmProviderRegistry _providerRegistry;
     private readonly IToolRegistry? _toolRegistry;
     private readonly IToolConfirmationService? _confirmationService;
+    private readonly IAgentReflectionService? _reflectionService;
     private readonly IHandlebars _handlebars;
     private readonly HandlebarsTemplate<object, object> _compiledTemplate;
     private readonly ILogger _logger;
@@ -35,6 +36,7 @@ public sealed class ConfigurableAgent : IAgent
     /// <param name="logger">Logger instance.</param>
     /// <param name="toolRegistry">Optional tool registry for tool execution.</param>
     /// <param name="confirmationService">Optional confirmation service for tool approval.</param>
+    /// <param name="reflectionService">Optional reflection service for self-critique.</param>
     /// <param name="maxToolIterations">Maximum number of tool execution iterations.</param>
     public ConfigurableAgent(
         AgentDefinition definition,
@@ -43,12 +45,14 @@ public sealed class ConfigurableAgent : IAgent
         ILogger<ConfigurableAgent> logger,
         IToolRegistry? toolRegistry = null,
         IToolConfirmationService? confirmationService = null,
+        IAgentReflectionService? reflectionService = null,
         int maxToolIterations = 10)
     {
         _definition = definition;
         _providerRegistry = providerRegistry;
         _toolRegistry = toolRegistry;
         _confirmationService = confirmationService;
+        _reflectionService = reflectionService;
         _handlebars = handlebars;
         _logger = logger;
         _maxToolIterations = maxToolIterations;
@@ -107,11 +111,32 @@ public sealed class ConfigurableAgent : IAgent
                 _definition.Temperature,
                 cancellationToken).ConfigureAwait(false);
 
+            var totalTokens = response.TokensUsed;
+            var content = response.Content;
+
+            // Apply reflection if enabled
+            if (_definition.Reflection && _reflectionService is not null)
+            {
+                var reflectionResult = await _reflectionService.ReflectAsync(
+                    context.Prompt,
+                    content,
+                    _definition.ToMetadata(),
+                    cancellationToken).ConfigureAwait(false);
+
+                content = reflectionResult.Content;
+                totalTokens += reflectionResult.TokensUsed;
+
+                if (reflectionResult.WasModified)
+                {
+                    _logger.LogInformation("Agent {AgentId} response was modified by reflection", AgentId);
+                }
+            }
+
             _logger.LogInformation(
                 "Agent {AgentId} completed, tokens={Tokens}",
-                AgentId, response.TokensUsed);
+                AgentId, totalTokens);
 
-            return new AgentOutput(response.Content, response.TokensUsed);
+            return new AgentOutput(content, totalTokens);
         }
         catch (OperationCanceledException)
         {
@@ -202,12 +227,32 @@ public sealed class ConfigurableAgent : IAgent
             // If no function calls, we're done - return the content
             if (!response.HasFunctionCalls)
             {
+                var content = response.Content ?? string.Empty;
+
+                // Apply reflection if enabled
+                if (_definition.Reflection && _reflectionService is not null)
+                {
+                    var reflectionResult = await _reflectionService.ReflectAsync(
+                        context.Prompt,
+                        content,
+                        _definition.ToMetadata(),
+                        cancellationToken).ConfigureAwait(false);
+
+                    content = reflectionResult.Content;
+                    totalTokens += reflectionResult.TokensUsed;
+
+                    if (reflectionResult.WasModified)
+                    {
+                        _logger.LogInformation("Agent {AgentId} response was modified by reflection", AgentId);
+                    }
+                }
+
                 _logger.LogInformation(
                     "Agent {AgentId} completed after {Iterations} iteration(s), tokens={Tokens}, tool_calls={ToolCalls}",
                     AgentId, iteration + 1, totalTokens, allToolCalls.Count);
 
                 return new AgentOutput(
-                    response.Content ?? string.Empty,
+                    content,
                     totalTokens,
                     allToolCalls.Count > 0 ? allToolCalls : null);
             }

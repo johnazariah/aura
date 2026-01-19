@@ -83,6 +83,12 @@ public sealed partial class MarkdownAgentLoader(
             var temperatureStr = metadata.GetValueOrDefault("temperature", AgentDefinition.DefaultTemperature.ToString(CultureInfo.InvariantCulture));
             var priorityStr = metadata.GetValueOrDefault("priority", AgentDefinition.DefaultPriority.ToString(CultureInfo.InvariantCulture));
 
+            // Parse reflection settings
+            var reflectionStr = metadata.GetValueOrDefault("reflection", "false");
+            var reflection = reflectionStr.Equals("true", StringComparison.OrdinalIgnoreCase);
+            var reflectionPrompt = metadata.TryGetValue("reflectionprompt", out var rp) ? rp : null;
+            var reflectionModel = metadata.TryGetValue("reflectionmodel", out var rm) ? rm : null;
+
             if (!double.TryParse(temperatureStr, NumberStyles.Float, CultureInfo.InvariantCulture, out var temperature))
             {
                 temperature = AgentDefinition.DefaultTemperature;
@@ -127,7 +133,10 @@ public sealed partial class MarkdownAgentLoader(
                 Priority: priority,
                 Languages: languages,
                 Tags: tags,
-                Tools: tools);
+                Tools: tools,
+                Reflection: reflection,
+                ReflectionPrompt: reflectionPrompt,
+                ReflectionModel: reflectionModel);
         }
         catch (Exception ex)
         {

@@ -70,6 +70,7 @@ features/
 | [Worktree-Aware Indexing](completed/worktree-aware-indexing.md) | Isolated workspaces per worktree, cache invalidation | 2026-01-17 |
 | [Pattern-Driven Stories](completed/pattern-driven-stories.md) | Patterns generate user-modifiable stories with discrete items | 2026-01-19 |
 | [Pattern-Driven UX Gaps](completed/pattern-driven-ux-gaps.md) | 35 UX fixes for pattern-driven workflows (test gen, validation, etc.) | 2025-06-25 |
+| [Agent Reflection](completed/agent-reflection.md) | Self-critique step for agent responses | 2026-01-19 |
 
 ## Upcoming Features
 
@@ -93,7 +94,6 @@ features/
 
 | Feature | Description |
 |---------|-------------|
-| [Agent Reflection](upcoming/agent-reflection.md) | Self-critique step for agent responses |
 | [Condensed Export](upcoming/condensed-export.md) | Export indexed context |
 | [Internationalization](upcoming/internationalization.md) | Multi-language UI support |
 

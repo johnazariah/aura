@@ -17,6 +17,9 @@ namespace Aura.Foundation.Agents;
 /// <param name="Temperature">Temperature for LLM sampling (0.0-1.0).</param>
 /// <param name="Tools">List of tool names this agent can use.</param>
 /// <param name="Tags">User-defined tags for filtering (open vocabulary).</param>
+/// <param name="Reflection">Whether to enable self-critique before returning responses.</param>
+/// <param name="ReflectionPrompt">Custom reflection prompt template name (default: agent-reflection).</param>
+/// <param name="ReflectionModel">Model to use for reflection (default: same as agent).</param>
 public sealed record AgentMetadata(
     string Name,
     string Description,
@@ -27,7 +30,10 @@ public sealed record AgentMetadata(
     string? Model = null,
     double Temperature = 0.7,
     IReadOnlyList<string>? Tools = null,
-    IReadOnlyList<string>? Tags = null)
+    IReadOnlyList<string>? Tags = null,
+    bool Reflection = false,
+    string? ReflectionPrompt = null,
+    string? ReflectionModel = null)
 {
     /// <summary>
     /// Gets the capabilities for this agent (fixed vocabulary for routing).

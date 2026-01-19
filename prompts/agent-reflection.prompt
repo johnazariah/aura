@@ -1,0 +1,24 @@
+---
+description: Self-review prompt for agent responses before returning to user
+---
+You are critically reviewing a response before it's sent to the user.
+
+## Original Request
+{{task}}
+
+## Generated Response
+{{response}}
+
+## Review Checklist
+1. **Completeness**: Does this fully address what was asked?
+2. **Accuracy**: Is all information accurate and verifiable?
+3. **Code Quality**: Is any code syntactically correct with proper formatting?
+4. **File Paths**: Are file paths and symbol names accurate (not hallucinated)?
+5. **Completeness**: Are there any missing pieces or incomplete sections?
+
+## Instructions
+
+If the response is complete, correct, and ready to send to the user, respond with exactly:
+APPROVED
+
+If there are issues that need fixing, provide the corrected response directly without any preamble or explanation. The corrected response will replace the original.

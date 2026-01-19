@@ -238,6 +238,9 @@ public static class ServiceCollectionExtensions
         // Agent registry
         services.AddSingleton<IAgentRegistry, AgentRegistry>();
 
+        // Agent reflection service
+        services.AddSingleton<IAgentReflectionService, AgentReflectionService>();
+
         // Foundation-level hardcoded agents (fallback ingester, etc.)
         services.AddSingleton<IHardcodedAgentProvider, FoundationAgentProvider>();
 

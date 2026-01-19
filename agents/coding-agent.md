@@ -5,6 +5,7 @@ A polyglot coding agent that handles implementation, tests, refactoring, and doc
 ## Metadata
 
 - **Priority**: 70
+- **Reflection**: true
 
 ## Capabilities
 

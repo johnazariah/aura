@@ -595,4 +595,69 @@ public class MarkdownAgentLoaderTests
         metadata.Tags.Should().BeEquivalentTo(["tag1"]);
         metadata.Tools.Should().BeEquivalentTo(["validate_code"]);
     }
+
+    [Fact]
+    public void Parse_ExtractsReflectionSettings()
+    {
+        // Arrange
+        var content = """
+            # Test Agent
+
+            ## Metadata
+
+            - **Name**: Test Agent
+            - **Description**: A test agent with reflection
+            - **Reflection**: true
+            - **ReflectionPrompt**: custom-reflection
+            - **ReflectionModel**: gpt-4o-mini
+
+            ## Capabilities
+
+            - coding
+
+            ## System Prompt
+
+            You are a test agent.
+            """;
+
+        // Act
+        var definition = _loader.Parse("test-agent", content);
+
+        // Assert
+        definition.Should().NotBeNull();
+        definition!.Reflection.Should().BeTrue();
+        definition.ReflectionPrompt.Should().Be("custom-reflection");
+        definition.ReflectionModel.Should().Be("gpt-4o-mini");
+    }
+
+    [Fact]
+    public void Parse_ReflectionDefaultsToFalse()
+    {
+        // Arrange
+        var content = """
+            # Test Agent
+
+            ## Metadata
+
+            - **Name**: Test Agent
+            - **Description**: A test agent without reflection
+
+            ## Capabilities
+
+            - coding
+
+            ## System Prompt
+
+            You are a test agent.
+            """;
+
+        // Act
+        var definition = _loader.Parse("test-agent", content);
+
+        // Assert
+        definition.Should().NotBeNull();
+        definition!.Reflection.Should().BeFalse();
+        definition.ReflectionPrompt.Should().BeNull();
+        definition.ReflectionModel.Should().BeNull();
+    }
 }

@@ -19,6 +19,9 @@ namespace Aura.Foundation.Agents;
 /// <param name="Languages">Languages this agent supports (empty = polyglot).</param>
 /// <param name="Tags">User-defined tags for filtering.</param>
 /// <param name="Tools">List of tools available to the agent.</param>
+/// <param name="Reflection">Whether to enable self-critique before returning responses.</param>
+/// <param name="ReflectionPrompt">Custom reflection prompt template name (default: agent-reflection).</param>
+/// <param name="ReflectionModel">Model to use for reflection (default: same as agent).</param>
 public sealed record AgentDefinition(
     string AgentId,
     string Name,
@@ -31,7 +34,10 @@ public sealed record AgentDefinition(
     int Priority,
     IReadOnlyList<string> Languages,
     IReadOnlyList<string> Tags,
-    IReadOnlyList<string> Tools)
+    IReadOnlyList<string> Tools,
+    bool Reflection = false,
+    string? ReflectionPrompt = null,
+    string? ReflectionModel = null)
 {
     /// <summary>
     /// Gets the default provider.
@@ -67,5 +73,8 @@ public sealed record AgentDefinition(
         Model: Model,
         Temperature: Temperature,
         Tools: Tools,
-        Tags: Tags);
+        Tags: Tags,
+        Reflection: Reflection,
+        ReflectionPrompt: ReflectionPrompt,
+        ReflectionModel: ReflectionModel);
 }

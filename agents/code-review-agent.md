@@ -5,6 +5,7 @@ Reviews code changes and suggests improvements.
 ## Metadata
 
 - **Priority**: 50
+- **Reflection**: true
 
 ## Capabilities
 

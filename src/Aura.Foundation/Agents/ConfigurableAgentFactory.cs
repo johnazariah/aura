@@ -22,6 +22,7 @@ using Microsoft.Extensions.Options;
 /// <param name="loggerFactory">Logger factory.</param>
 /// <param name="toolRegistry">Optional tool registry for tool execution.</param>
 /// <param name="confirmationService">Optional confirmation service for tool approval.</param>
+/// <param name="reflectionService">Optional reflection service for self-critique.</param>
 /// <param name="toolOptions">Optional tool execution configuration.</param>
 public sealed class ConfigurableAgentFactory(
     ILlmProviderRegistry providerRegistry,
@@ -30,6 +31,7 @@ public sealed class ConfigurableAgentFactory(
     ILoggerFactory loggerFactory,
     IToolRegistry? toolRegistry = null,
     IToolConfirmationService? confirmationService = null,
+    IAgentReflectionService? reflectionService = null,
     IOptions<ToolConfirmationOptions>? toolOptions = null) : IAgentFactory
 {
     private readonly ILlmProviderRegistry _providerRegistry = providerRegistry;
@@ -38,6 +40,7 @@ public sealed class ConfigurableAgentFactory(
     private readonly ILoggerFactory _loggerFactory = loggerFactory;
     private readonly IToolRegistry? _toolRegistry = toolRegistry;
     private readonly IToolConfirmationService? _confirmationService = confirmationService;
+    private readonly IAgentReflectionService? _reflectionService = reflectionService;
     private readonly ToolConfirmationOptions _toolOptions = toolOptions?.Value ?? new ToolConfirmationOptions();
 
     /// <inheritdoc/>
@@ -83,6 +86,7 @@ public sealed class ConfigurableAgentFactory(
             logger,
             effectiveToolRegistry,
             effectiveConfirmationService,
+            _reflectionService,
             _toolOptions.MaxIterations);
     }
 }
