@@ -16,6 +16,25 @@ using Microsoft.Extensions.Logging;
 /// </summary>
 public sealed partial class RoslynTestGenerator : ITestGenerationService
 {
+    #region Constants
+
+    // Test framework identifiers (lowercase for comparison)
+    private const string FrameworkXUnit = "xunit";
+    private const string FrameworkNUnit = "nunit";
+    private const string FrameworkMsTest = "mstest";
+
+    // Mocking library identifiers (lowercase for comparison)
+    private const string MockLibNSubstitute = "nsubstitute";
+    private const string MockLibMoq = "moq";
+    private const string MockLibFakeItEasy = "fakeiteasy";
+
+    // Namespace names for mocking libraries
+    private const string NsNSubstitute = "NSubstitute";
+    private const string NsMoq = "Moq";
+    private const string NsFakeItEasy = "FakeItEasy";
+
+    #endregion
+
     private readonly IRoslynWorkspaceService _workspaceService;
     private readonly ILogger<RoslynTestGenerator> _logger;
 
@@ -26,6 +45,24 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
         _workspaceService = workspaceService;
         _logger = logger;
     }
+
+    #region Project Classification Helpers
+
+    /// <summary>
+    /// Determines if a project is a test project based on naming conventions.
+    /// </summary>
+    private static bool IsTestProject(Project project) =>
+        project.Name.Contains("Test", StringComparison.OrdinalIgnoreCase) ||
+        project.Name.Contains("Tests", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Determines if a project is a unit test project (excludes integration tests).
+    /// </summary>
+    private static bool IsUnitTestProject(Project project) =>
+        IsTestProject(project) &&
+        !project.Name.Contains("Integration", StringComparison.OrdinalIgnoreCase);
+
+    #endregion
 
     /// <inheritdoc/>
     public async Task<TestGenerationResult> GenerateTestsAsync(TestGenerationRequest request, CancellationToken ct = default)
@@ -248,9 +285,7 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
     private async Task<string> DetectTestFrameworkAsync(Solution solution, INamedTypeSymbol typeSymbol, CancellationToken ct)
     {
         // Find test projects by convention
-        var testProjects = solution.Projects.Where(p =>
-            p.Name.Contains("Test", StringComparison.OrdinalIgnoreCase) ||
-            p.Name.Contains("Tests", StringComparison.OrdinalIgnoreCase));
+        var testProjects = solution.Projects.Where(IsTestProject);
 
         foreach (var project in testProjects)
         {
@@ -273,9 +308,7 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
     private string DetectMockingLibrary(Solution solution)
     {
         // Find test projects by convention
-        var testProjects = solution.Projects.Where(p =>
-            p.Name.Contains("Test", StringComparison.OrdinalIgnoreCase) ||
-            p.Name.Contains("Tests", StringComparison.OrdinalIgnoreCase));
+        var testProjects = solution.Projects.Where(IsTestProject);
 
         foreach (var project in testProjects)
         {
@@ -562,8 +595,7 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
             if (testProject is null)
             {
                 // Try to find any test project
-                testProject = solution.Projects.FirstOrDefault(p =>
-                    p.Name.Contains("Test", StringComparison.OrdinalIgnoreCase));
+                testProject = solution.Projects.FirstOrDefault(IsTestProject);
             }
 
             if (testProject is null)
@@ -646,16 +678,13 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
             if (testProject is null)
             {
                 testProject = solution.Projects.FirstOrDefault(p =>
-                    p.Name.Contains("Test", StringComparison.OrdinalIgnoreCase) &&
-                    !p.Name.Contains("Integration", StringComparison.OrdinalIgnoreCase) &&
+                    IsUnitTestProject(p) &&
                     p.ProjectReferences.Any(r => r.ProjectId == sourceProject?.Id));
             }
         }
 
         // Fallback: Find any unit test project (not integration)
-        testProject ??= solution.Projects.FirstOrDefault(p =>
-            p.Name.Contains("Test", StringComparison.OrdinalIgnoreCase) &&
-            !p.Name.Contains("Integration", StringComparison.OrdinalIgnoreCase));
+        testProject ??= solution.Projects.FirstOrDefault(IsUnitTestProject);
 
         if (testProject is not null)
         {
@@ -1382,14 +1411,7 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
         var hasInterfaceParams = HasInterfaceParameters(typeSymbol, methodsToAdd);
         if (constructorDeps.Count > 0 || hasInterfaceParams)
         {
-            var mockLibNs = mockingLibrary.ToLowerInvariant() switch
-            {
-                "nsubstitute" => "NSubstitute",
-                "moq" => "Moq",
-                "fakeiteasy" => "FakeItEasy",
-                _ => "NSubstitute"
-            };
-            requiredNamespaces.Add(mockLibNs);
+            requiredNamespaces.Add(GetMockingLibraryNamespace(mockingLibrary));
         }
 
         // Add Microsoft.Extensions.Options if IOptions<T> is used in constructor
@@ -1748,18 +1770,6 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
     }
 
     /// <summary>
-    /// Check if a type has constructor dependencies (typically interfaces).
-    /// </summary>
-    private static bool HasDependencyInjection(INamedTypeSymbol? typeSymbol)
-    {
-        if (typeSymbol is null) return false;
-
-        return typeSymbol.Constructors
-            .Where(c => c.DeclaredAccessibility == Accessibility.Public)
-            .Any(c => c.Parameters.Any(p => p.Type.TypeKind == TypeKind.Interface));
-    }
-
-    /// <summary>
     /// Gets constructor dependencies for the primary public constructor.
     /// </summary>
     private static List<(string ParameterName, string TypeName)> GetConstructorDependencies(INamedTypeSymbol? typeSymbol)
@@ -1787,18 +1797,28 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
         return char.ToLowerInvariant(name[0]) + name[1..];
     }
 
+    #region Mocking Library Helpers
+
+    /// <summary>
+    /// Gets the namespace for a mocking library (e.g., "NSubstitute").
+    /// </summary>
+    private static string GetMockingLibraryNamespace(string mockingLibrary)
+    {
+        return mockingLibrary.ToLowerInvariant() switch
+        {
+            MockLibNSubstitute => NsNSubstitute,
+            MockLibMoq => NsMoq,
+            MockLibFakeItEasy => NsFakeItEasy,
+            _ => NsNSubstitute
+        };
+    }
+
     /// <summary>
     /// Gets the using statement for a mocking library.
     /// </summary>
     private static string GetMockingLibraryUsing(string mockingLibrary)
     {
-        return mockingLibrary.ToLowerInvariant() switch
-        {
-            "nsubstitute" => "using NSubstitute;",
-            "moq" => "using Moq;",
-            "fakeiteasy" => "using FakeItEasy;",
-            _ => "using NSubstitute;"
-        };
+        return $"using {GetMockingLibraryNamespace(mockingLibrary)};";
     }
 
     /// <summary>
@@ -1808,9 +1828,9 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
     {
         return mockingLibrary.ToLowerInvariant() switch
         {
-            "nsubstitute" => $"Substitute.For<{typeName}>()",
-            "moq" => $"new Mock<{typeName}>()",
-            "fakeiteasy" => $"A.Fake<{typeName}>()",
+            MockLibNSubstitute => $"Substitute.For<{typeName}>()",
+            MockLibMoq => $"new Mock<{typeName}>()",
+            MockLibFakeItEasy => $"A.Fake<{typeName}>()",
             _ => $"Substitute.For<{typeName}>()"
         };
     }
@@ -1823,7 +1843,7 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
     {
         return mockingLibrary.ToLowerInvariant() switch
         {
-            "moq" => $"{varName}.Object",
+            MockLibMoq => $"{varName}.Object",
             _ => varName
         };
     }
@@ -1835,10 +1855,12 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
     {
         return mockingLibrary.ToLowerInvariant() switch
         {
-            "nsubstitute" => $"Substitute.For<{typeName}>()",
-            "moq" => $"Mock.Of<{typeName}>()",
-            "fakeiteasy" => $"A.Fake<{typeName}>()",
+            MockLibNSubstitute => $"Substitute.For<{typeName}>()",
+            MockLibMoq => $"Mock.Of<{typeName}>()",
+            MockLibFakeItEasy => $"A.Fake<{typeName}>()",
             _ => $"Substitute.For<{typeName}>()"
         };
     }
+
+    #endregion
 }
