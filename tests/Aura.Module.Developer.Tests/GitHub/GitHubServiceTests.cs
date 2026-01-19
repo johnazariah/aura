@@ -449,15 +449,16 @@ public class GitHubServiceTests
     {
         // Arrange
         var emptyOptions = new GitHubOptions { Token = string.Empty };
-var httpClient = new HttpClient(CreateMockHandler(HttpStatusCode.OK, new { }))
-{
-    BaseAddress = new Uri("https://api.github.com")
-};
-var sut = new GitHubService(httpClient, Options.Create(emptyOptions), NullLogger<GitHubService>.Instance);
+        var httpClient = new HttpClient(CreateMockHandler(HttpStatusCode.OK, new { }))
+        {
+            BaseAddress = new Uri("https://api.github.com")
+        };
+        var sut = new GitHubService(httpClient, Options.Create(emptyOptions), NullLogger<GitHubService>.Instance);
 
-// Act
-var isConfigured = sut.IsConfigured;
+        // Act
+        var isConfigured = sut.IsConfigured;
 
-// Assert
-isConfigured.Should().BeFalse();}
+        // Assert
+        isConfigured.Should().BeFalse();
+    }
 }
