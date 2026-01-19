@@ -68,6 +68,7 @@ features/
 | [Story Chat](completed/story-chat.md) | Chat-first workflow interaction | 2026-01-15 |
 | [Operational Patterns](completed/operational-patterns.md) | Multi-step playbooks for complex operations | 2026-01-17 |
 | [Worktree-Aware Indexing](completed/worktree-aware-indexing.md) | Isolated workspaces per worktree, cache invalidation | 2026-01-17 |
+| [Pattern-Driven Stories](completed/pattern-driven-stories.md) | Patterns generate user-modifiable stories with discrete items | 2026-01-19 |
 
 ## Upcoming Features
 
@@ -75,7 +76,6 @@ features/
 
 | Feature | Description |
 |---------|-------------|
-| [Pattern-Driven Stories](upcoming/pattern-driven-stories.md) | Patterns generate user-modifiable stories with discrete items |
 | [Pattern Catalog](upcoming/pattern-catalog.md) | 15+ patterns: refactoring, code generation, quality, architecture |
 
 ### Medium Priority (User Experience)

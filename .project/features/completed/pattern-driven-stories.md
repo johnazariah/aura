@@ -1,6 +1,7 @@
 # Feature: Pattern-Driven Stories
 
-**Status:** 🚧 In Progress
+**Status:** ✅ Complete
+**Completed:** 2026-01-19
 **Priority:** High
 
 ## Implementation Progress
@@ -12,7 +13,7 @@
 | `aura_workflow` update_step operation | ✅ Complete | Commit 7599e1f |
 | Step model compatibility | ✅ Complete | Existing WorkflowStep entity works |
 | Pattern loading in agent | ✅ Complete | `aura_pattern` tool + pattern binding in enrich |
-| UI for phase grouping | ⏳ Not started | Parse `[Phase]` prefix in Description |
+| UI for phase grouping | ✅ Complete | Parses `[Phase]` prefix, groups steps visually |
 | Worktree isolation | ✅ Complete | `WorkflowService.CreateAsync` auto-creates worktrees |
 | Squash merge on completion | ✅ Complete | `WorkflowService.CompleteAsync` + MCP `complete` operation |
 

@@ -6341,8 +6341,31 @@ class WorkflowPanelProvider {
             }
             return true;
         };
-        // Show in order
-        return steps.map((step, index) => {
+        // Parse phase from description (e.g., "[Analysis] Examine code" -> { phase: "Analysis", description: "Examine code" })
+        const parsePhase = (description) => {
+            if (!description)
+                return { phase: null, cleanDescription: '' };
+            const match = description.match(/^\[([^\]]+)\]\s*(.*)$/);
+            if (match) {
+                return { phase: match[1], cleanDescription: match[2] };
+            }
+            return { phase: null, cleanDescription: description };
+        };
+        const phases = [];
+        let currentPhase = null;
+        steps.forEach((step, index) => {
+            const { phase, cleanDescription } = parsePhase(step.description);
+            const phaseName = phase || 'Steps';
+            if (!currentPhase || currentPhase.phase !== phaseName) {
+                currentPhase = { phase: phaseName, steps: [] };
+                phases.push(currentPhase);
+            }
+            currentPhase.steps.push({ step, index, cleanDescription });
+        });
+        // Check if we actually have meaningful phases (more than one, or named phases)
+        const hasMeaningfulPhases = phases.length > 1 || (phases.length === 1 && phases[0].phase !== 'Steps');
+        // Render step card helper
+        const renderStepCard = (step, index, cleanDescription) => {
             const statusClass = step.status.toLowerCase();
             const canExecute = canExecuteStep(index);
             const isBlocked = step.status === 'Pending' && !canExecute;
@@ -6629,7 +6652,7 @@ class WorkflowPanelProvider {
                             <span class="step-agent">${step.assignedAgentId || step.capability}</span>
                             ${reworkBadge}
                         </div>
-                        <div class="step-description">${step.description ? this.escapeHtml(step.description) : ''}</div>
+                        <div class="step-description">${cleanDescription ? this.escapeHtml(cleanDescription) : ''}</div>
                         ${metaRow}
                     </div>
                     <div class="step-actions">
@@ -6653,7 +6676,28 @@ class WorkflowPanelProvider {
                 ${chatHtml}
             </div>
             `;
-        }).join('');
+        };
+        // Render with phase grouping if we have meaningful phases
+        if (hasMeaningfulPhases) {
+            return phases.map(phaseGroup => {
+                // Check if all steps in this phase are completed
+                const allCompleted = phaseGroup.steps.every(s => s.step.status === 'Completed' || s.step.status === 'Skipped');
+                const phaseClass = allCompleted ? 'phase-section completed' : 'phase-section';
+                const phaseIcon = allCompleted ? '✓' : '○';
+                const stepsHtml = phaseGroup.steps
+                    .map(s => renderStepCard(s.step, s.index, s.cleanDescription))
+                    .join('');
+                return `
+                <div class="${phaseClass}">
+                    <div class="phase-title">${phaseIcon} ${this.escapeHtml(phaseGroup.phase)}</div>
+                    ${stepsHtml}
+                </div>`;
+            }).join('');
+        }
+        // No meaningful phases - render flat list
+        return phases[0].steps
+            .map(s => renderStepCard(s.step, s.index, s.cleanDescription))
+            .join('');
     }
     getChatPlaceholder(workflow) {
         switch (workflow.status) {
