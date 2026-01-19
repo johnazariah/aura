@@ -20,6 +20,23 @@ using Microsoft.Extensions.Logging;
 /// </summary>
 public sealed class RoslynRefactoringService : IRoslynRefactoringService
 {
+    #region Constants
+
+    // Test framework identifiers (lowercase for comparison)
+    private const string FrameworkXUnit = "xunit";
+    private const string FrameworkNUnit = "nunit";
+    private const string FrameworkMsTest = "mstest";
+
+    // Test attribute names
+    private const string AttrFact = "Fact";
+    private const string AttrTheory = "Theory";
+    private const string AttrTest = "Test";
+    private const string AttrTestCase = "TestCase";
+    private const string AttrTestMethod = "TestMethod";
+    private const string AttrDataTestMethod = "DataTestMethod";
+
+    #endregion
+
     private readonly IRoslynWorkspaceService _workspaceService;
     private readonly ILogger<RoslynRefactoringService> _logger;
 
@@ -1270,9 +1287,9 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
                 // Caller specified the attribute directly (e.g., "Fact", "Test", "TestMethod")
                 testFramework = request.TestAttribute.ToLowerInvariant() switch
                 {
-                    "fact" or "theory" => "xunit",
-                    "test" or "testcase" => "nunit",
-                    "testmethod" or "datatestmethod" => "mstest",
+                    "fact" or "theory" => FrameworkXUnit,
+                    "test" or "testcase" => FrameworkNUnit,
+                    "testmethod" or "datatestmethod" => FrameworkMsTest,
                     _ => request.TestAttribute // Use as-is for custom attributes
                 };
             }
@@ -1430,25 +1447,25 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         // xUnit
-        if (allAttributes.Any(a => a is "Fact" or "FactAttribute" or "Theory" or "TheoryAttribute"))
+        if (allAttributes.Any(a => a is AttrFact or AttrFact + "Attribute" or AttrTheory or AttrTheory + "Attribute"))
         {
-            return "xunit";
+            return FrameworkXUnit;
         }
 
         // NUnit
-        if (allAttributes.Any(a => a is "Test" or "TestAttribute" or "TestCase" or "TestCaseAttribute"))
+        if (allAttributes.Any(a => a is AttrTest or AttrTest + "Attribute" or AttrTestCase or AttrTestCase + "Attribute"))
         {
-            return "nunit";
+            return FrameworkNUnit;
         }
 
         // MSTest
-        if (allAttributes.Any(a => a is "TestMethod" or "TestMethodAttribute" or "DataTestMethod" or "DataTestMethodAttribute"))
+        if (allAttributes.Any(a => a is AttrTestMethod or AttrTestMethod + "Attribute" or AttrDataTestMethod or AttrDataTestMethod + "Attribute"))
         {
-            return "mstest";
+            return FrameworkMsTest;
         }
 
         // If class looks like a test class but we can't detect the framework, default to xunit
-        return "xunit";
+        return FrameworkXUnit;
     }
 
     /// <summary>
@@ -1458,16 +1475,16 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
     {
         var attributeName = frameworkOrAttribute.ToLowerInvariant() switch
         {
-            "xunit" => "Fact",
-            "nunit" => "Test",
-            "mstest" => "TestMethod",
+            FrameworkXUnit => AttrFact,
+            FrameworkNUnit => AttrTest,
+            FrameworkMsTest => AttrTestMethod,
             // Handle direct attribute names
-            "fact" => "Fact",
-            "theory" => "Theory",
-            "test" => "Test",
-            "testcase" => "TestCase",
-            "testmethod" => "TestMethod",
-            "datatestmethod" => "DataTestMethod",
+            "fact" => AttrFact,
+            "theory" => AttrTheory,
+            "test" => AttrTest,
+            "testcase" => AttrTestCase,
+            "testmethod" => AttrTestMethod,
+            "datatestmethod" => AttrDataTestMethod,
             // Unknown - use as-is (might be custom attribute)
             _ => frameworkOrAttribute
         };
