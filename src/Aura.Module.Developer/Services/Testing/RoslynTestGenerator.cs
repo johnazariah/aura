@@ -1457,13 +1457,65 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
 
                 if (hasParameterlessCtor)
                 {
+                    // Check for required properties - must be initialized in object initializer
+                    var requiredProps = GetRequiredProperties(classType);
+                    if (requiredProps.Count > 0)
+                    {
+                        var initializers = requiredProps
+                            .Select(p => $"{p.Name} = {GenerateTestValue(p.Type, p.Name.ToLowerInvariant(), mockingLibrary)}")
+                            .ToList();
+                        return $"new {classType.Name} {{ {string.Join(", ", initializers)} }}";
+                    }
+
                     return $"new {classType.Name}()";
+                }
+
+                // No parameterless constructor - check for primary constructor or required-only init
+                // Try to find a constructor we can call, or fall through to default
+                var requiredPropsNoctor = GetRequiredProperties(classType);
+                if (requiredPropsNoctor.Count > 0)
+                {
+                    // Type has required properties but no parameterless ctor - might be a record or have primary ctor
+                    // Generate object creation with required properties
+                    var initializers = requiredPropsNoctor
+                        .Select(p => $"{p.Name} = {GenerateTestValue(p.Type, p.Name.ToLowerInvariant(), mockingLibrary)}")
+                        .ToList();
+                    return $"new {classType.Name} {{ {string.Join(", ", initializers)} }}";
                 }
             }
         }
 
         // Fallback to default with comment
         return $"default! /* {typeSymbol.Name} - provide test instance */";
+    }
+
+    /// <summary>
+    /// Get all required properties from a type (C# 11+ required modifier).
+    /// </summary>
+    private static List<IPropertySymbol> GetRequiredProperties(INamedTypeSymbol typeSymbol)
+    {
+        var result = new List<IPropertySymbol>();
+
+        // Walk up the inheritance chain to find all required properties
+        var current = typeSymbol;
+        while (current is not null)
+        {
+            foreach (var member in current.GetMembers())
+            {
+                if (member is IPropertySymbol prop && prop.IsRequired)
+                {
+                    // Avoid duplicates from inheritance
+                    if (!result.Any(p => p.Name == prop.Name))
+                    {
+                        result.Add(prop);
+                    }
+                }
+            }
+
+            current = current.BaseType;
+        }
+
+        return result;
     }
 
     /// <summary>
