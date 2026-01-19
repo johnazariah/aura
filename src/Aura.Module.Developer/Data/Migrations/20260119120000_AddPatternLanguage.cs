@@ -2,28 +2,36 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace Aura.Module.Developer.Data.Migrations
+namespace Aura.Module.Developer.Data.Migrations;
+
+/// <inheritdoc />
+public partial class AddPatternLanguage : Migration
 {
     /// <inheritdoc />
-    public partial class AddPatternLanguage : Migration
+    protected override void Up(MigrationBuilder migrationBuilder)
     {
-        /// <inheritdoc />
-        protected override void Up(MigrationBuilder migrationBuilder)
-        {
-            migrationBuilder.AddColumn<string>(
-                name: "pattern_language",
-                table: "workflows",
-                type: "character varying(50)",
-                maxLength: 50,
-                nullable: true);
-        }
+        migrationBuilder.AddColumn<string>(
+            name: "pattern_name",
+            table: "workflows",
+            type: "text",
+            nullable: true);
 
-        /// <inheritdoc />
-        protected override void Down(MigrationBuilder migrationBuilder)
-        {
-            migrationBuilder.DropColumn(
-                name: "pattern_language",
-                table: "workflows");
-        }
+        migrationBuilder.AddColumn<string>(
+            name: "pattern_language",
+            table: "workflows",
+            type: "text",
+            nullable: true);
+    }
+
+    /// <inheritdoc />
+    protected override void Down(MigrationBuilder migrationBuilder)
+    {
+        migrationBuilder.DropColumn(
+            name: "pattern_name",
+            table: "workflows");
+
+        migrationBuilder.DropColumn(
+            name: "pattern_language",
+            table: "workflows");
     }
 }
