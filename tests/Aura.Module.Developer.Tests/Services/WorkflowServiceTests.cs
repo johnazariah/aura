@@ -19,6 +19,11 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using Xunit;
+using Aura.Module.Developer;
+using Microsoft.Extensions.Logging;
+using System;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Aura.Module.Developer.Tests.Services;
 
@@ -457,6 +462,74 @@ public class WorkflowServiceTests : IDisposable
 
         // Assert
         result.Status.Should().Be(StepStatus.Pending);
+    }
+
+    #endregion
+
+    #region RejectStepAsync Tests
+
+    [Fact]
+    public async Task RejectStepAsync_SetsApprovalToRejectedAndResetsStatus()
+    {
+        // Arrange
+        var workflow = await _sut.CreateAsync("Test");
+        var step = await _sut.AddStepAsync(workflow.Id, "Step", "cap");
+
+        // First complete the step (RejectStepAsync requires Completed status)
+        step.Status = StepStatus.Completed;
+        step.Output = "Some output";
+        await _sut.UpdateStepAsync(step);
+
+        // Act
+        var result = await _sut.RejectStepAsync(workflow.Id, step.Id, "Needs changes");
+
+        // Assert
+        result.Approval.Should().Be(StepApproval.Rejected);
+        result.ApprovalFeedback.Should().Be("Needs changes");
+        result.Status.Should().Be(StepStatus.Pending); // Reset to pending for re-execution
+    }
+
+    #endregion
+
+    #region ReassignStepAsync Tests
+
+    [Fact]
+    public async Task ReassignStepAsync_UpdatesAgentId()
+    {
+        // Arrange
+        var workflow = await _sut.CreateAsync("Test");
+        var step = await _sut.AddStepAsync(workflow.Id, "Step", "cap");
+
+        // Act
+        var result = await _sut.ReassignStepAsync(workflow.Id, step.Id, "new-agent-id");
+
+        // Assert
+        result.AssignedAgentId.Should().Be("new-agent-id");
+    }
+
+    #endregion
+
+    #region GetByWorktreePathAsync Tests
+
+    // Note: GetByWorktreePathAsync uses PostgreSQL's ILike function which isn't supported
+    // by InMemory database. These tests require integration tests with a real PostgreSQL database.
+
+    #endregion
+
+    #region UpdateStepDescriptionAsync Tests
+
+    [Fact]
+    public async Task UpdateStepDescriptionAsync_UpdatesDescription()
+    {
+        // Arrange
+        var workflow = await _sut.CreateAsync("Test");
+        var step = await _sut.AddStepAsync(workflow.Id, "Step", "cap", description: "Old description");
+
+        // Act
+        var result = await _sut.UpdateStepDescriptionAsync(workflow.Id, step.Id, "New description");
+
+        // Assert
+        result.Description.Should().Be("New description");
     }
 
     #endregion
