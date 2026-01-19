@@ -122,6 +122,12 @@ public sealed record TestAnalysis
 
     /// <summary>Suggested number of tests to generate.</summary>
     public int SuggestedTestCount { get; init; }
+
+    /// <summary>Whether this class is an integration test candidate (heavy file-system or external dependencies).</summary>
+    public bool IsIntegrationTestCandidate { get; init; }
+
+    /// <summary>Reason why this class is flagged as an integration test candidate (if applicable).</summary>
+    public string? IntegrationTestReason { get; init; }
 }
 
 /// <summary>

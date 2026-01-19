@@ -171,7 +171,9 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
                 Gaps = gaps,
                 DetectedFramework = FrameworkXUnit,
                 DetectedMockingLibrary = MockLibNSubstitute,
-                SuggestedTestCount = 0
+                SuggestedTestCount = 0,
+                IsIntegrationTestCandidate = false,
+                IntegrationTestReason = null
             };
         }
 
@@ -211,6 +213,9 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
         var suggestedCount = gaps.Count(g => g.Kind == TestGapKind.NoTests) +
                              Math.Min(5, gaps.Count(g => g.Kind != TestGapKind.NoTests));
 
+        // Detect integration test candidates (file-system heavy, I/O heavy)
+        var (isIntegrationCandidate, integrationReason) = DetectIntegrationTestCandidate(typeSymbol);
+
         return new TestAnalysis
         {
             TestableMembers = testableMembers,
@@ -218,7 +223,9 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
             Gaps = gaps,
             DetectedFramework = detectedFramework,
             DetectedMockingLibrary = detectedMockingLibrary,
-            SuggestedTestCount = suggestedCount
+            SuggestedTestCount = suggestedCount,
+            IsIntegrationTestCandidate = isIntegrationCandidate,
+            IntegrationTestReason = integrationReason
         };
     }
 
@@ -1726,6 +1733,78 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Detects if a class is a good integration test candidate due to file-system or I/O heavy dependencies.
+    /// </summary>
+    /// <param name="typeSymbol">The type to analyze.</param>
+    /// <param name="constructorDeps">Constructor dependencies (if already computed).</param>
+    /// <returns>A tuple with (isCandidate, reason) if the class should be flagged.</returns>
+    private static (bool IsCandidate, string? Reason) DetectIntegrationTestCandidate(
+        INamedTypeSymbol? typeSymbol,
+        List<(string ParameterName, string TypeName)>? constructorDeps = null)
+    {
+        if (typeSymbol is null)
+            return (false, null);
+
+        constructorDeps ??= GetConstructorDependencies(typeSymbol);
+
+        // File-system heavy patterns to detect
+        var fileSystemTypes = new[]
+        {
+            "IFileSystem", "FileSystem",
+            "IFile", "IDirectory", "IPath", "IDriveInfo",
+            "IFileInfo", "IDirectoryInfo", "IFileSystemInfo",
+            "IFileStreamFactory", "IFileInfoFactory", "IDirectoryInfoFactory"
+        };
+
+        var ioHeavyTypes = new[]
+        {
+            "IFileProvider", "PhysicalFileProvider",
+            "Stream", "FileStream", "StreamReader", "StreamWriter",
+            "TextReader", "TextWriter"
+        };
+
+        var matchedFileSystemDeps = constructorDeps
+            .Where(d => fileSystemTypes.Any(fs =>
+                d.TypeName.Equals(fs, StringComparison.Ordinal) ||
+                d.TypeName.EndsWith("." + fs, StringComparison.Ordinal)))
+            .Select(d => d.TypeName)
+            .ToList();
+
+        var matchedIoDeps = constructorDeps
+            .Where(d => ioHeavyTypes.Any(io =>
+                d.TypeName.Equals(io, StringComparison.Ordinal) ||
+                d.TypeName.EndsWith("." + io, StringComparison.Ordinal)))
+            .Select(d => d.TypeName)
+            .ToList();
+
+        // Class name patterns that suggest file operations
+        var className = typeSymbol.Name;
+        var classNameSuggestsFileOps = className.Contains("File", StringComparison.OrdinalIgnoreCase) ||
+                                        className.Contains("Directory", StringComparison.OrdinalIgnoreCase) ||
+                                        className.Contains("Workspace", StringComparison.OrdinalIgnoreCase) ||
+                                        className.Contains("Storage", StringComparison.OrdinalIgnoreCase) ||
+                                        className.Contains("Disk", StringComparison.OrdinalIgnoreCase);
+
+        // Build reason string
+        var reasons = new List<string>();
+
+        if (matchedFileSystemDeps.Count > 0)
+            reasons.Add($"File-system dependencies: {string.Join(", ", matchedFileSystemDeps)}");
+
+        if (matchedIoDeps.Count > 0)
+            reasons.Add($"I/O dependencies: {string.Join(", ", matchedIoDeps)}");
+
+        // Only use class name as a hint if there are also dependencies
+        if (classNameSuggestsFileOps && (matchedFileSystemDeps.Count > 0 || matchedIoDeps.Count > 0))
+            reasons.Add($"Class name '{className}' suggests file operations");
+
+        if (reasons.Count > 0)
+            return (true, string.Join("; ", reasons));
+
+        return (false, null);
     }
 
     /// <summary>
