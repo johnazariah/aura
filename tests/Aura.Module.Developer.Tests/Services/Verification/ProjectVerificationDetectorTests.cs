@@ -5,30 +5,41 @@
 namespace Aura.Module.Developer.Tests.Services.Verification;
 
 using System.IO.Abstractions.TestingHelpers;
+using System.Runtime.InteropServices;
 using Aura.Module.Developer.Services.Verification;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 public sealed class ProjectVerificationDetectorTests
 {
-    private readonly MockFileSystem _fileSystem = new();
+    private readonly MockFileSystem _fileSystem;
     private readonly ProjectVerificationDetector _detector;
+    private readonly string _testRoot;
 
     public ProjectVerificationDetectorTests()
     {
+        // Use platform-appropriate paths
+        _testRoot = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+            ? @"C:\project"
+            : "/tmp/project";
+
+        _fileSystem = new MockFileSystem();
         _detector = new ProjectVerificationDetector(
             _fileSystem,
             NullLogger<ProjectVerificationDetector>.Instance);
     }
 
+    private string P(string relativePath) =>
+        Path.Combine(_testRoot, relativePath.Replace('\\', Path.DirectorySeparatorChar));
+
     [Fact]
     public async Task DetectProjectsAsync_EmptyDirectory_ReturnsEmpty()
     {
         // Arrange
-        _fileSystem.AddDirectory(@"C:\project");
+        _fileSystem.AddDirectory(_testRoot);
 
         // Act
-        var projects = await _detector.DetectProjectsAsync(@"C:\project");
+        var projects = await _detector.DetectProjectsAsync(_testRoot);
 
         // Assert
         Assert.Empty(projects);
@@ -38,7 +49,7 @@ public sealed class ProjectVerificationDetectorTests
     public async Task DetectProjectsAsync_NonexistentDirectory_ReturnsEmpty()
     {
         // Act
-        var projects = await _detector.DetectProjectsAsync(@"C:\nonexistent");
+        var projects = await _detector.DetectProjectsAsync(P("nonexistent"));
 
         // Assert
         Assert.Empty(projects);
@@ -48,11 +59,11 @@ public sealed class ProjectVerificationDetectorTests
     public async Task DetectProjectsAsync_DotNetSolution_DetectsBuildAndFormat()
     {
         // Arrange
-        _fileSystem.AddDirectory(@"C:\project");
-        _fileSystem.AddFile(@"C:\project\MyApp.sln", new MockFileData(""));
+        _fileSystem.AddDirectory(_testRoot);
+        _fileSystem.AddFile(P("MyApp.sln"), new MockFileData(""));
 
         // Act
-        var projects = await _detector.DetectProjectsAsync(@"C:\project");
+        var projects = await _detector.DetectProjectsAsync(_testRoot);
 
         // Assert
         var project = Assert.Single(projects);
@@ -67,11 +78,11 @@ public sealed class ProjectVerificationDetectorTests
     public async Task DetectProjectsAsync_DotNetCsproj_DetectsBuild()
     {
         // Arrange
-        _fileSystem.AddDirectory(@"C:\project\src\MyLib");
-        _fileSystem.AddFile(@"C:\project\src\MyLib\MyLib.csproj", new MockFileData(""));
+        _fileSystem.AddDirectory(P("src/MyLib"));
+        _fileSystem.AddFile(P("src/MyLib/MyLib.csproj"), new MockFileData(""));
 
         // Act
-        var projects = await _detector.DetectProjectsAsync(@"C:\project");
+        var projects = await _detector.DetectProjectsAsync(_testRoot);
 
         // Assert
         var project = Assert.Single(projects);
@@ -85,8 +96,8 @@ public sealed class ProjectVerificationDetectorTests
     public async Task DetectProjectsAsync_NpmWithBuildAndLint_DetectsBoth()
     {
         // Arrange
-        _fileSystem.AddDirectory(@"C:\project");
-        _fileSystem.AddFile(@"C:\project\package.json", new MockFileData("""
+        _fileSystem.AddDirectory(_testRoot);
+        _fileSystem.AddFile(P("package.json"), new MockFileData("""
         {
             "name": "my-app",
             "scripts": {
@@ -97,7 +108,7 @@ public sealed class ProjectVerificationDetectorTests
         """));
 
         // Act
-        var projects = await _detector.DetectProjectsAsync(@"C:\project");
+        var projects = await _detector.DetectProjectsAsync(_testRoot);
 
         // Assert
         var project = Assert.Single(projects);
@@ -111,16 +122,16 @@ public sealed class ProjectVerificationDetectorTests
     public async Task DetectProjectsAsync_NpmWithYarnLock_UsesYarn()
     {
         // Arrange
-        _fileSystem.AddDirectory(@"C:\project");
-        _fileSystem.AddFile(@"C:\project\package.json", new MockFileData("""
+        _fileSystem.AddDirectory(_testRoot);
+        _fileSystem.AddFile(P("package.json"), new MockFileData("""
         {
             "scripts": { "build": "tsc" }
         }
         """));
-        _fileSystem.AddFile(@"C:\project\yarn.lock", new MockFileData(""));
+        _fileSystem.AddFile(P("yarn.lock"), new MockFileData(""));
 
         // Act
-        var projects = await _detector.DetectProjectsAsync(@"C:\project");
+        var projects = await _detector.DetectProjectsAsync(_testRoot);
 
         // Assert
         var project = Assert.Single(projects);
@@ -132,11 +143,11 @@ public sealed class ProjectVerificationDetectorTests
     public async Task DetectProjectsAsync_Cargo_DetectsCheckFormatClippy()
     {
         // Arrange
-        _fileSystem.AddDirectory(@"C:\project");
-        _fileSystem.AddFile(@"C:\project\Cargo.toml", new MockFileData(""));
+        _fileSystem.AddDirectory(_testRoot);
+        _fileSystem.AddFile(P("Cargo.toml"), new MockFileData(""));
 
         // Act
-        var projects = await _detector.DetectProjectsAsync(@"C:\project");
+        var projects = await _detector.DetectProjectsAsync(_testRoot);
 
         // Assert
         var project = Assert.Single(projects);
@@ -151,11 +162,11 @@ public sealed class ProjectVerificationDetectorTests
     public async Task DetectProjectsAsync_GoMod_DetectsBuildVet()
     {
         // Arrange
-        _fileSystem.AddDirectory(@"C:\project");
-        _fileSystem.AddFile(@"C:\project\go.mod", new MockFileData("module example.com/myapp"));
+        _fileSystem.AddDirectory(_testRoot);
+        _fileSystem.AddFile(P("go.mod"), new MockFileData("module example.com/myapp"));
 
         // Act
-        var projects = await _detector.DetectProjectsAsync(@"C:\project");
+        var projects = await _detector.DetectProjectsAsync(_testRoot);
 
         // Assert
         var project = Assert.Single(projects);
@@ -170,14 +181,14 @@ public sealed class ProjectVerificationDetectorTests
     public async Task DetectProjectsAsync_PythonWithRuff_DetectsLintFormat()
     {
         // Arrange
-        _fileSystem.AddDirectory(@"C:\project");
-        _fileSystem.AddFile(@"C:\project\pyproject.toml", new MockFileData("""
+        _fileSystem.AddDirectory(_testRoot);
+        _fileSystem.AddFile(P("pyproject.toml"), new MockFileData("""
         [tool.ruff]
         line-length = 88
         """));
 
         // Act
-        var projects = await _detector.DetectProjectsAsync(@"C:\project");
+        var projects = await _detector.DetectProjectsAsync(_testRoot);
 
         // Assert
         var project = Assert.Single(projects);
@@ -190,15 +201,15 @@ public sealed class ProjectVerificationDetectorTests
     public async Task DetectProjectsAsync_MultipleProjectTypes_DetectsAll()
     {
         // Arrange
-        _fileSystem.AddDirectory(@"C:\project");
-        _fileSystem.AddFile(@"C:\project\MyApp.sln", new MockFileData(""));
-        _fileSystem.AddDirectory(@"C:\project\frontend");
-        _fileSystem.AddFile(@"C:\project\frontend\package.json", new MockFileData("""
+        _fileSystem.AddDirectory(_testRoot);
+        _fileSystem.AddFile(P("MyApp.sln"), new MockFileData(""));
+        _fileSystem.AddDirectory(P("frontend"));
+        _fileSystem.AddFile(P("frontend/package.json"), new MockFileData("""
         { "scripts": { "build": "vite build" } }
         """));
 
         // Act
-        var projects = await _detector.DetectProjectsAsync(@"C:\project");
+        var projects = await _detector.DetectProjectsAsync(_testRoot);
 
         // Assert
         Assert.Equal(2, projects.Count);
@@ -210,17 +221,17 @@ public sealed class ProjectVerificationDetectorTests
     public async Task DetectProjectsAsync_SkipsNodeModules()
     {
         // Arrange
-        _fileSystem.AddDirectory(@"C:\project");
-        _fileSystem.AddFile(@"C:\project\package.json", new MockFileData("""
+        _fileSystem.AddDirectory(_testRoot);
+        _fileSystem.AddFile(P("package.json"), new MockFileData("""
         { "scripts": { "build": "tsc" } }
         """));
-        _fileSystem.AddDirectory(@"C:\project\node_modules\some-dep");
-        _fileSystem.AddFile(@"C:\project\node_modules\some-dep\package.json", new MockFileData("""
+        _fileSystem.AddDirectory(P("node_modules/some-dep"));
+        _fileSystem.AddFile(P("node_modules/some-dep/package.json"), new MockFileData("""
         { "scripts": { "build": "tsc" } }
         """));
 
         // Act
-        var projects = await _detector.DetectProjectsAsync(@"C:\project");
+        var projects = await _detector.DetectProjectsAsync(_testRoot);
 
         // Assert
         Assert.Single(projects);
@@ -230,11 +241,11 @@ public sealed class ProjectVerificationDetectorTests
     public async Task DetectedProject_VerificationStep_HasCorrectDefaults()
     {
         // Arrange
-        _fileSystem.AddDirectory(@"C:\project");
-        _fileSystem.AddFile(@"C:\project\MyApp.sln", new MockFileData(""));
+        _fileSystem.AddDirectory(_testRoot);
+        _fileSystem.AddFile(P("MyApp.sln"), new MockFileData(""));
 
         // Act
-        var projects = await _detector.DetectProjectsAsync(@"C:\project");
+        var projects = await _detector.DetectProjectsAsync(_testRoot);
 
         // Assert
         var buildStep = projects[0].VerificationSteps.First(s => s.StepType == "build");

@@ -4,6 +4,7 @@
 
 namespace Aura.Module.Developer.Tests.Services.Verification;
 
+using System.Runtime.InteropServices;
 using Aura.Module.Developer.Services.Verification;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
@@ -13,12 +14,26 @@ public sealed class WorkflowVerificationServiceTests
 {
     private readonly IProjectVerificationDetector _detector = Substitute.For<IProjectVerificationDetector>();
     private readonly WorkflowVerificationService _service;
+    private readonly string _testDir;
+    private readonly string _shell;
 
     public WorkflowVerificationServiceTests()
     {
         _service = new WorkflowVerificationService(
             _detector,
             NullLogger<WorkflowVerificationService>.Instance);
+
+        // Platform-specific settings
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            _testDir = @"C:\";
+            _shell = "cmd";
+        }
+        else
+        {
+            _testDir = "/tmp";
+            _shell = "/bin/sh";
+        }
     }
 
     [Fact]
@@ -29,7 +44,7 @@ public sealed class WorkflowVerificationServiceTests
             .Returns(Task.FromResult<IReadOnlyList<DetectedProject>>([]));
 
         // Act
-        var result = await _service.VerifyAsync(@"C:\project");
+        var result = await _service.VerifyAsync(_testDir);
 
         // Assert
         Assert.True(result.Success);
@@ -42,21 +57,25 @@ public sealed class WorkflowVerificationServiceTests
     public async Task VerifyAsync_AllRequiredStepsPass_ReturnsSuccess()
     {
         // Arrange
+        var echoArgs = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+            ? new[] { "/c", "echo", "hello" }
+            : new[] { "-c", "echo hello" };
+
         var projects = new List<DetectedProject>
         {
             new()
             {
                 ProjectType = "test",
-                ProjectPath = @"C:\project\test.proj",
+                ProjectPath = Path.Combine(_testDir, "test.proj"),
                 ProjectName = "test",
                 VerificationSteps =
                 [
                     new VerificationStep
                     {
                         StepType = "echo",
-                        Command = "cmd",
-                        Arguments = ["/c", "echo", "hello"],
-                        WorkingDirectory = @"C:\",
+                        Command = _shell,
+                        Arguments = echoArgs,
+                        WorkingDirectory = _testDir,
                         Required = true,
                         TimeoutSeconds = 10,
                     },
@@ -67,7 +86,7 @@ public sealed class WorkflowVerificationServiceTests
             .Returns(Task.FromResult<IReadOnlyList<DetectedProject>>(projects));
 
         // Act
-        var result = await _service.VerifyAsync(@"C:\project");
+        var result = await _service.VerifyAsync(_testDir);
 
         // Assert
         Assert.True(result.Success);
@@ -79,21 +98,25 @@ public sealed class WorkflowVerificationServiceTests
     public async Task VerifyAsync_OptionalStepFails_StillReturnsSuccess()
     {
         // Arrange
+        var exitArgs = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+            ? new[] { "/c", "exit", "1" }
+            : new[] { "-c", "exit 1" };
+
         var projects = new List<DetectedProject>
         {
             new()
             {
                 ProjectType = "test",
-                ProjectPath = @"C:\project\test.proj",
+                ProjectPath = Path.Combine(_testDir, "test.proj"),
                 ProjectName = "test",
                 VerificationSteps =
                 [
                     new VerificationStep
                     {
                         StepType = "fail",
-                        Command = "cmd",
-                        Arguments = ["/c", "exit", "1"],
-                        WorkingDirectory = @"C:\",
+                        Command = _shell,
+                        Arguments = exitArgs,
+                        WorkingDirectory = _testDir,
                         Required = false, // Optional
                         TimeoutSeconds = 10,
                     },
@@ -104,7 +127,7 @@ public sealed class WorkflowVerificationServiceTests
             .Returns(Task.FromResult<IReadOnlyList<DetectedProject>>(projects));
 
         // Act
-        var result = await _service.VerifyAsync(@"C:\project");
+        var result = await _service.VerifyAsync(_testDir);
 
         // Assert
         Assert.True(result.Success); // Optional failure doesn't block
@@ -117,21 +140,25 @@ public sealed class WorkflowVerificationServiceTests
     public async Task VerifyAsync_RequiredStepFails_ReturnsFailure()
     {
         // Arrange
+        var exitArgs = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+            ? new[] { "/c", "exit", "1" }
+            : new[] { "-c", "exit 1" };
+
         var projects = new List<DetectedProject>
         {
             new()
             {
                 ProjectType = "test",
-                ProjectPath = @"C:\project\test.proj",
+                ProjectPath = Path.Combine(_testDir, "test.proj"),
                 ProjectName = "test",
                 VerificationSteps =
                 [
                     new VerificationStep
                     {
                         StepType = "fail",
-                        Command = "cmd",
-                        Arguments = ["/c", "exit", "1"],
-                        WorkingDirectory = @"C:\",
+                        Command = _shell,
+                        Arguments = exitArgs,
+                        WorkingDirectory = _testDir,
                         Required = true,
                         TimeoutSeconds = 10,
                     },
@@ -142,7 +169,7 @@ public sealed class WorkflowVerificationServiceTests
             .Returns(Task.FromResult<IReadOnlyList<DetectedProject>>(projects));
 
         // Act
-        var result = await _service.VerifyAsync(@"C:\project");
+        var result = await _service.VerifyAsync(_testDir);
 
         // Assert
         Assert.False(result.Success);
@@ -153,12 +180,16 @@ public sealed class WorkflowVerificationServiceTests
     public async Task RunStepAsync_CommandSucceeds_ReturnsSuccess()
     {
         // Arrange
+        var echoArgs = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+            ? new[] { "/c", "echo", "hello" }
+            : new[] { "-c", "echo hello" };
+
         var step = new VerificationStep
         {
             StepType = "echo",
-            Command = "cmd",
-            Arguments = ["/c", "echo", "hello"],
-            WorkingDirectory = @"C:\",
+            Command = _shell,
+            Arguments = echoArgs,
+            WorkingDirectory = _testDir,
             Required = true,
             TimeoutSeconds = 10,
         };
@@ -177,12 +208,16 @@ public sealed class WorkflowVerificationServiceTests
     public async Task RunStepAsync_CommandFails_ReturnsFailureWithExitCode()
     {
         // Arrange
+        var exitArgs = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+            ? new[] { "/c", "exit", "42" }
+            : new[] { "-c", "exit 42" };
+
         var step = new VerificationStep
         {
             StepType = "fail",
-            Command = "cmd",
-            Arguments = ["/c", "exit", "42"],
-            WorkingDirectory = @"C:\",
+            Command = _shell,
+            Arguments = exitArgs,
+            WorkingDirectory = _testDir,
             Required = true,
             TimeoutSeconds = 10,
         };
@@ -205,7 +240,7 @@ public sealed class WorkflowVerificationServiceTests
             StepType = "missing",
             Command = "nonexistent-command-xyz123",
             Arguments = [],
-            WorkingDirectory = @"C:\",
+            WorkingDirectory = _testDir,
             Required = true,
             TimeoutSeconds = 10,
         };
@@ -222,30 +257,37 @@ public sealed class WorkflowVerificationServiceTests
     public async Task VerificationResult_Summary_FormatsCorrectly()
     {
         // Arrange
+        var echoArgs1 = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+            ? new[] { "/c", "echo", "1" }
+            : new[] { "-c", "echo 1" };
+        var echoArgs2 = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+            ? new[] { "/c", "echo", "2" }
+            : new[] { "-c", "echo 2" };
+
         var projects = new List<DetectedProject>
         {
             new()
             {
                 ProjectType = "test",
-                ProjectPath = @"C:\test",
+                ProjectPath = Path.Combine(_testDir, "test"),
                 ProjectName = "test",
                 VerificationSteps =
                 [
                     new VerificationStep
                     {
                         StepType = "pass1",
-                        Command = "cmd",
-                        Arguments = ["/c", "echo", "1"],
-                        WorkingDirectory = @"C:\",
+                        Command = _shell,
+                        Arguments = echoArgs1,
+                        WorkingDirectory = _testDir,
                         Required = true,
                         TimeoutSeconds = 5,
                     },
                     new VerificationStep
                     {
                         StepType = "pass2",
-                        Command = "cmd",
-                        Arguments = ["/c", "echo", "2"],
-                        WorkingDirectory = @"C:\",
+                        Command = _shell,
+                        Arguments = echoArgs2,
+                        WorkingDirectory = _testDir,
                         Required = true,
                         TimeoutSeconds = 5,
                     },
@@ -256,14 +298,14 @@ public sealed class WorkflowVerificationServiceTests
             .Returns(Task.FromResult<IReadOnlyList<DetectedProject>>(projects));
 
         // Act
-        var result = await _service.VerifyAsync(@"C:\project");
+        var result = await _service.VerifyAsync(_testDir);
 
         // Assert
         Assert.Equal("2/2 steps passed", result.Summary);
     }
 
     [Fact]
-    public async Task VerificationStepResult_ErrorMessage_ReturnsAppropriateMessage()
+    public void VerificationStepResult_ErrorMessage_ReturnsAppropriateMessage()
     {
         // Arrange & Act
         var successResult = new VerificationStepResult
@@ -273,7 +315,7 @@ public sealed class WorkflowVerificationServiceTests
                 StepType = "test",
                 Command = "echo",
                 Arguments = [],
-                WorkingDirectory = @"C:\",
+                WorkingDirectory = _testDir,
                 TimeoutSeconds = 10,
             },
             Success = true,
@@ -288,7 +330,7 @@ public sealed class WorkflowVerificationServiceTests
                 StepType = "test",
                 Command = "fail",
                 Arguments = [],
-                WorkingDirectory = @"C:\",
+                WorkingDirectory = _testDir,
                 TimeoutSeconds = 10,
             },
             Success = false,
@@ -304,7 +346,7 @@ public sealed class WorkflowVerificationServiceTests
                 StepType = "test",
                 Command = "sleep",
                 Arguments = [],
-                WorkingDirectory = @"C:\",
+                WorkingDirectory = _testDir,
                 TimeoutSeconds = 5,
             },
             Success = false,
