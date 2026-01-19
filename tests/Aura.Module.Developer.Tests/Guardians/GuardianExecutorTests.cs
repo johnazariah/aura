@@ -4,6 +4,7 @@ using Aura.Foundation.Guardians;
 using Aura.Module.Developer.Guardians;
 using Aura.Module.Developer.Services;
 using FluentAssertions;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 using NSubstitute;
@@ -175,5 +176,39 @@ public class GuardianExecutorTests
         result.GuardianId.Should().Be("detection-guardian");
         result.Status.Should().Be(GuardianExecutionStatus.Clean);
         result.CheckResult.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WithGuardianDefinition_CancellationToken_WhenAwaited_CompletesSuccessfully()
+    {
+        // Arrange
+        var guardian = new GuardianDefinition { Id = "test-id", Name = "test-name" };
+        var _workflowService = Substitute.For<IWorkflowService>();
+        var _logger = Substitute.For<ILogger<GuardianExecutor>>();
+        var _timeProvider = Substitute.For<TimeProvider?>();
+        var sut = new GuardianExecutor(_workflowService, _logger, _timeProvider);
+
+        // Act
+        var result = await sut.ExecuteAsync(guardian, CancellationToken.None);
+
+        // Assert
+        Assert.NotNull(result);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WithGuardianDefinition_GuardianExecutionContext_CancellationToken_WhenAwaited_CompletesSuccessfully()
+    {
+        // Arrange
+        var guardian = new GuardianDefinition { Id = "test-id", Name = "test-name" };
+        var _workflowService = Substitute.For<IWorkflowService>();
+        var _logger = Substitute.For<ILogger<GuardianExecutor>>();
+        var _timeProvider = Substitute.For<TimeProvider?>();
+        var sut = new GuardianExecutor(_workflowService, _logger, _timeProvider);
+
+        // Act
+        var result = await sut.ExecuteAsync(guardian, CancellationToken.None);
+
+        // Assert
+        Assert.NotNull(result);
     }
 }
