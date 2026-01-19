@@ -372,7 +372,7 @@ public static class BuildFixLoopTools
         });
     }
 
-    private static List<BuildError> ParseBuildErrors(string output, string language)
+    internal static List<BuildError> ParseBuildErrors(string output, string language)
     {
         var errors = new List<BuildError>();
 
@@ -487,7 +487,7 @@ public static class BuildFixLoopTools
         return appliedFixes;
     }
 
-    private record BuildError
+    internal record BuildError
     {
         public string FilePath { get; init; } = "";
         public int Line { get; init; }
