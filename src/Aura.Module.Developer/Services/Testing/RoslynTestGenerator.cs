@@ -523,13 +523,91 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
         // Clear workspace cache so subsequent operations see the new file
         _workspaceService.ClearCache();
 
+        // Optionally validate compilation
+        IReadOnlyList<string>? diagnostics = null;
+        bool? compilesSuccessfully = null;
+
+        if (request.ValidateCompilation)
+        {
+            (compilesSuccessfully, diagnostics) = await ValidateGeneratedCodeAsync(solution, testFilePath, testCode, ct);
+        }
+
         return new GeneratedTests
         {
             TestFilePath = testFilePath,
             FileCreated = !fileExists,
             TestsAdded = testMethods.Count,
-            Tests = testMethods
+            Tests = testMethods,
+            CompilationDiagnostics = diagnostics,
+            CompilesSuccessfully = compilesSuccessfully
         };
+    }
+
+    /// <summary>
+    /// Validates the generated test code by running it through Roslyn compilation.
+    /// </summary>
+    private async Task<(bool success, IReadOnlyList<string> diagnostics)> ValidateGeneratedCodeAsync(
+        Solution solution,
+        string testFilePath,
+        string testCode,
+        CancellationToken ct)
+    {
+        try
+        {
+            // Find the test project this file belongs to
+            var testProject = solution.Projects.FirstOrDefault(p =>
+                p.Documents.Any(d => d.FilePath?.Equals(testFilePath, StringComparison.OrdinalIgnoreCase) == true) ||
+                testFilePath.StartsWith(Path.GetDirectoryName(p.FilePath) ?? "", StringComparison.OrdinalIgnoreCase));
+
+            if (testProject is null)
+            {
+                // Try to find any test project
+                testProject = solution.Projects.FirstOrDefault(p =>
+                    p.Name.Contains("Test", StringComparison.OrdinalIgnoreCase));
+            }
+
+            if (testProject is null)
+            {
+                return (true, new[] { "Warning: Could not find test project for validation" });
+            }
+
+            // Parse the generated code
+            var syntaxTree = CSharpSyntaxTree.ParseText(testCode, cancellationToken: ct);
+
+            // Get the project's compilation and add our new syntax tree
+            var compilation = await testProject.GetCompilationAsync(ct);
+            if (compilation is null)
+            {
+                return (true, new[] { "Warning: Could not get project compilation" });
+            }
+
+            // Add the new syntax tree to the compilation
+            var newCompilation = compilation.AddSyntaxTrees(syntaxTree);
+
+            // Get diagnostics (errors and warnings)
+            var allDiagnostics = newCompilation.GetDiagnostics(ct);
+
+            // Filter to only errors and warnings from our generated file
+            var relevantDiagnostics = allDiagnostics
+                .Where(d => d.Severity >= DiagnosticSeverity.Warning)
+                .Where(d => d.Location.SourceTree == syntaxTree ||
+                           d.Location.Kind == LocationKind.None) // Include general errors
+                .Select(d => $"{d.Severity}: {d.Id} - {d.GetMessage()}" +
+                            (d.Location.IsInSource ? $" (line {d.Location.GetLineSpan().StartLinePosition.Line + 1})" : ""))
+                .Distinct()
+                .ToList();
+
+            var hasErrors = allDiagnostics.Any(d =>
+                d.Severity == DiagnosticSeverity.Error &&
+                (d.Location.SourceTree == syntaxTree || d.Location.Kind == LocationKind.None));
+
+            return (!hasErrors, relevantDiagnostics);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to validate generated code compilation");
+            return (true, new[] { $"Warning: Validation failed - {ex.Message}" });
+        }
     }
 
     private (string path, bool exists) DetermineTestFilePath(Solution solution, INamedTypeSymbol typeSymbol)

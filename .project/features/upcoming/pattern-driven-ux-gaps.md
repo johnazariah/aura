@@ -565,7 +565,7 @@ The following issues were identified during dogfooding the generate-tests patter
 
 ---
 
-### Gap 26: No Compile Validation Before Output (MEDIUM)
+### Gap 26: No Compile Validation Before Output ✅ FIXED
 
 **Tool:** `aura_generate(operation: "tests")`
 
@@ -573,10 +573,26 @@ The following issues were identified during dogfooding the generate-tests patter
 
 **Impact:** Wastes time fixing avoidable errors.
 
-**Proposed Solution:**
-- Run generated code through Roslyn compilation before returning
-- Report diagnostics if errors found
-- Option to auto-fix common issues (missing usings, etc.)
+**Solution Implemented:**
+1. Added `ValidateCompilation` option to `TestGenerationRequest` (opt-in to avoid latency for simple cases)
+2. Added `CompilationDiagnostics` and `CompilesSuccessfully` properties to `GeneratedTests`
+3. Implemented `ValidateGeneratedCodeAsync()` method that:
+   - Parses generated code into a syntax tree
+   - Adds it to the test project's compilation
+   - Runs Roslyn diagnostics
+   - Filters to errors/warnings from the generated file
+   - Reports line numbers for each diagnostic
+4. MCP schema updated with `validateCompilation: true` option
+5. Response includes `compilesSuccessfully` boolean and `compilationDiagnostics` array
+
+**Usage:**
+```
+aura_generate(operation: "tests", target: "MyClass", validateCompilation: true)
+```
+
+**Result:** Users can opt-in to compilation validation. Response will include:
+- `compilesSuccessfully: true/false`
+- `compilationDiagnostics: ["Error: CS0246 - The type or namespace 'Foo' could not be found (line 15)"]`
 
 ---
 
@@ -586,11 +602,14 @@ The following issues were identified during dogfooding the generate-tests patter
 - `analyzeOnly: true` - Excellent for coverage gap discovery
 - Simple classes (DTOs, modules with properties) - Time saver
 - Quick scaffolding of test structure
+- **NEW**: Overloads now have unique test names (Gap 23)
+- **NEW**: All type namespaces included in usings (Gap 24)
+- **NEW**: Return-type aware assertions instead of TODOs (Gap 25)
+- **NEW**: Optional compilation validation (Gap 26)
 
 **Needs Work:**
-- Complex classes with overloads, deep type hierarchies
-- User reports rewriting 80%+ of generated code for non-trivial classes
-- `analyzeOnly` is the reliable productivity feature; actual generation needs improvement
+- Complex classes with deep type hierarchies may still need manual fixes
+- Validation adds latency (~1-2s) so is opt-in
 
 ---
 

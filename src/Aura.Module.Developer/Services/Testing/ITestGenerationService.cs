@@ -44,6 +44,9 @@ public sealed record TestGenerationRequest
 
     /// <summary>If true, return analysis only without generating code.</summary>
     public bool AnalyzeOnly { get; init; }
+
+    /// <summary>If true, validate generated code compiles before returning (adds latency).</summary>
+    public bool ValidateCompilation { get; init; }
 }
 
 /// <summary>
@@ -257,6 +260,12 @@ public sealed record GeneratedTests
 
     /// <summary>Summary of each generated test.</summary>
     public required IReadOnlyList<GeneratedTestInfo> Tests { get; init; }
+
+    /// <summary>Compilation diagnostics if ValidateCompilation was enabled (errors/warnings).</summary>
+    public IReadOnlyList<string>? CompilationDiagnostics { get; init; }
+
+    /// <summary>Whether the generated code compiles successfully (null if validation not run).</summary>
+    public bool? CompilesSuccessfully { get; init; }
 }
 
 /// <summary>

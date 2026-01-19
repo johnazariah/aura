@@ -338,6 +338,7 @@ public sealed class McpHandler
                         focus = new { type = "string", description = "Focus area for tests", @enum = new[] { "all", "happy_path", "edge_cases", "error_handling" } },
                         testFramework = new { type = "string", description = "Override framework detection: xunit, nunit, mstest (for tests)" },
                         analyzeOnly = new { type = "boolean", description = "If true, return analysis without generating code (for tests)" },
+                        validateCompilation = new { type = "boolean", description = "If true, validate generated code compiles before returning - adds latency (for tests)" },
                         baseClass = new { type = "string", description = "Base class to inherit from (for create_type)" },
                         implements = new { type = "array", items = new { type = "string" }, description = "Interfaces to implement (for create_type)" },
                         isSealed = new { type = "boolean", description = "Whether class is sealed (for create_type)" },
@@ -3631,6 +3632,7 @@ public sealed class McpHandler
         var focus = TestFocus.All;
         string? testFramework = null;
         bool analyzeOnly = false;
+        bool validateCompilation = false;
 
         if (args.HasValue)
         {
@@ -3652,6 +3654,8 @@ public sealed class McpHandler
                 testFramework = fwEl.GetString();
             if (args.Value.TryGetProperty("analyzeOnly", out var aoEl))
                 analyzeOnly = aoEl.GetBoolean();
+            if (args.Value.TryGetProperty("validateCompilation", out var vcEl))
+                validateCompilation = vcEl.GetBoolean();
         }
 
         var result = await _testGenerationService.GenerateTestsAsync(new TestGenerationRequest
@@ -3662,7 +3666,8 @@ public sealed class McpHandler
             MaxTests = maxTests,
             Focus = focus,
             TestFramework = testFramework,
-            AnalyzeOnly = analyzeOnly
+            AnalyzeOnly = analyzeOnly,
+            ValidateCompilation = validateCompilation
         }, ct);
 
         return new
@@ -3707,7 +3712,9 @@ public sealed class McpHandler
                     t.TestName,
                     t.Description,
                     t.TargetMethod
-                })
+                }),
+                compilesSuccessfully = result.Generated.CompilesSuccessfully,
+                compilationDiagnostics = result.Generated.CompilationDiagnostics
             } : null,
             stoppingReason = result.StoppingReason,
             error = result.Error
