@@ -810,7 +810,11 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
         var sb = new StringBuilder();
         var typeName = typeSymbol.Name;
         var typeNamespace = typeSymbol.ContainingNamespace.ToDisplayString();
-        var hasDependencies = GetConstructorDependencies(typeSymbol).Count > 0;
+        var constructorDeps = GetConstructorDependencies(typeSymbol);
+        var hasDependencies = constructorDeps.Count > 0;
+
+        // Check if any dependencies use IOptions<T>
+        var hasOptionsPattern = constructorDeps.Any(d => d.TypeName.StartsWith("IOptions<", StringComparison.Ordinal));
 
         // Collect all required namespaces from method parameters and return types
         var requiredNamespaces = CollectRequiredNamespaces(typeSymbol, testMethods);
@@ -838,6 +842,12 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
         if (hasDependencies)
         {
             sb.AppendLine(GetMockingLibraryUsing(mockingLibrary));
+        }
+
+        // Add Microsoft.Extensions.Options if IOptions<T> is used
+        if (hasOptionsPattern)
+        {
+            sb.AppendLine("using Microsoft.Extensions.Options;");
         }
 
         sb.AppendLine($"using {typeNamespace};");
@@ -1044,33 +1054,61 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
             sb.AppendLine($"        {decl}");
         }
 
-        // Constructor - try to identify if it needs mocks
-        var constructorDeps = GetConstructorDependencies(method?.ContainingType);
-        if (constructorDeps.Count > 0)
-        {
-            // Generate mocks for each dependency using detected library
-            var mockVarNames = new List<string>();
-            foreach (var dep in constructorDeps)
-            {
-                var varName = $"_{ToCamelCase(dep.ParameterName)}";
-                var typeName2 = dep.TypeName;
-                var mockCreation = GenerateMockCreation(typeName2, mockingLibrary);
-                sb.AppendLine($"        var {varName} = {mockCreation};");
-                mockVarNames.Add(GetMockValue(varName, mockingLibrary));
-            }
+        // Check if the class is static - static classes can't be instantiated
+        var containingType = method?.ContainingType;
+        var isStaticClass = containingType?.IsStatic == true;
 
-            var ctorArgs = string.Join(", ", mockVarNames);
-            sb.AppendLine($"        var sut = new {typeName}({ctorArgs});");
+        if (isStaticClass)
+        {
+            // Static class - no SUT instantiation needed, methods are called directly on the type
+            // No mock setup since static classes typically don't have constructor dependencies
         }
         else
         {
-            sb.AppendLine($"        var sut = new {typeName}();");
+            // Constructor - try to identify if it needs mocks
+            var constructorDeps = GetConstructorDependencies(containingType);
+            if (constructorDeps.Count > 0)
+            {
+                // Generate mocks for each dependency using detected library
+                var mockVarNames = new List<string>();
+                foreach (var dep in constructorDeps)
+                {
+                    var varName = $"_{ToCamelCase(dep.ParameterName)}";
+                    var typeName2 = dep.TypeName;
+
+                    // Special handling for IOptions<T> - use Options.Create() instead of mocking
+                    if (typeName2.StartsWith("IOptions<", StringComparison.Ordinal))
+                    {
+                        // Extract the inner type: IOptions<FooConfig> -> FooConfig
+                        var innerType = typeName2.Substring(9, typeName2.Length - 10); // Remove "IOptions<" and ">"
+                        sb.AppendLine($"        var {varName} = Options.Create(new {innerType}());");
+                        mockVarNames.Add(varName);
+                    }
+                    else
+                    {
+                        var mockCreation = GenerateMockCreation(typeName2, mockingLibrary);
+                        sb.AppendLine($"        var {varName} = {mockCreation};");
+                        mockVarNames.Add(GetMockValue(varName, mockingLibrary));
+                    }
+                }
+
+                var ctorArgs = string.Join(", ", mockVarNames);
+                sb.AppendLine($"        var sut = new {typeName}({ctorArgs});");
+            }
+            else
+            {
+                sb.AppendLine($"        var sut = new {typeName}();");
+            }
         }
         sb.AppendLine();
 
         // Act
         sb.AppendLine("        // Act");
         var awaitKeyword = isAsync ? "await " : "";
+
+        // For static classes, call the method on the type directly; otherwise on sut
+        var callTarget = isStaticClass ? typeName : "sut";
+
         if (method is not null)
         {
             var paramList = string.Join(", ", paramNames);
@@ -1078,15 +1116,15 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
 
             if (returnTypeStr != "void" && !returnTypeStr.StartsWith("Task", StringComparison.Ordinal))
             {
-                sb.AppendLine($"        var result = {awaitKeyword}sut.{method.Name}({paramList});");
+                sb.AppendLine($"        var result = {awaitKeyword}{callTarget}.{method.Name}({paramList});");
             }
             else if (returnTypeStr.StartsWith("Task<", StringComparison.Ordinal))
             {
-                sb.AppendLine($"        var result = {awaitKeyword}sut.{method.Name}({paramList});");
+                sb.AppendLine($"        var result = {awaitKeyword}{callTarget}.{method.Name}({paramList});");
             }
             else
             {
-                sb.AppendLine($"        {awaitKeyword}sut.{method.Name}({paramList});");
+                sb.AppendLine($"        {awaitKeyword}{callTarget}.{method.Name}({paramList});");
             }
         }
         else
@@ -1311,6 +1349,26 @@ public sealed partial class RoslynTestGenerator : ITestGenerationService
 
         // Collect required namespaces for the new tests
         var requiredNamespaces = CollectRequiredNamespaces(typeSymbol, methodsToAdd);
+
+        // Add mocking library namespace if there are dependencies (mocks will be generated)
+        var constructorDeps = GetConstructorDependencies(typeSymbol);
+        if (constructorDeps.Count > 0)
+        {
+            var mockLibNs = mockingLibrary.ToLowerInvariant() switch
+            {
+                "nsubstitute" => "NSubstitute",
+                "moq" => "Moq",
+                "fakeiteasy" => "FakeItEasy",
+                _ => "NSubstitute"
+            };
+            requiredNamespaces.Add(mockLibNs);
+
+            // Add Microsoft.Extensions.Options if IOptions<T> is used
+            if (constructorDeps.Any(d => d.TypeName.StartsWith("IOptions<", StringComparison.Ordinal)))
+            {
+                requiredNamespaces.Add("Microsoft.Extensions.Options");
+            }
+        }
 
         // Get existing usings in the file
         var existingUsings = root.DescendantNodes()

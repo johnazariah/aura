@@ -266,6 +266,9 @@ src/Aura.Module.Developer/
 - [x] Missing usings added when appending to existing files (Gap 29)
 - [x] Test files placed in correct folder mirroring source structure (Gap 30)
 - [x] `outputDirectory` parameter to control test file placement (Gap 31)
+- [x] Static class detection - generates static method calls (Gap 32)
+- [x] Mocking library namespace always included (Gap 33)
+- [x] `IOptions<T>` uses `Options.Create()` pattern (Gap 34)
 
 ### Phase 2: Python (tree-sitter)
 - [ ] `PythonTestGenerator` implementation

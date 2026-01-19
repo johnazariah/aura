@@ -722,9 +722,70 @@ Added `outputDirectory` parameter to test generation:
 - **NEW**: Missing usings added when appending to existing files (Gap 29)
 - **NEW**: Test files placed in correct folder mirroring source structure (Gap 30)
 - **NEW**: `outputDirectory` parameter to control test file placement (Gap 31)
+- **NEW**: Static classes handled correctly - no SUT instantiation (Gap 32)
+- **NEW**: Mocking library namespace always included (Gap 33)
+- **NEW**: `IOptions<T>` uses `Options.Create()` instead of mock (Gap 34)
 
 **Needs Work:**
 - Validation adds latency (~1-2s) so is opt-in
+- File-system heavy classes flagged as integration test candidates (Gap 35)
+
+---
+
+### Gap 32: Static Class Detection ✅ FIXED
+
+**Tool:** `aura_generate(operation: "tests")`
+
+**Problem:** Aura generates instance-based tests for static classes (e.g., `var sut = new GuardianRegistryInitializer();`) when static classes can't be instantiated.
+
+**Impact:** Generated tests don't compile for static classes.
+
+**Root Cause:** `RoslynTestGenerator` doesn't check `INamedTypeSymbol.IsStatic` before generating constructor calls.
+
+**Solution Implemented:** Check `typeSymbol.IsStatic` and generate static method calls (e.g., `TypeName.Method()`) instead of `sut.Method()`.
+
+---
+
+### Gap 33: Missing NSubstitute Using ✅ FIXED
+
+**Tool:** `aura_generate(operation: "tests")`
+
+**Problem:** Generated tests sometimes lack `using NSubstitute;` even when mocks are generated.
+
+**Impact:** Tests don't compile - missing namespace.
+
+**Root Cause:** NSubstitute namespace not added to required namespaces when mocking library is detected and appending to existing files.
+
+**Solution Implemented:** Add mocking library namespace to `requiredNamespaces` when dependencies exist, for both new files and appends.
+
+---
+
+### Gap 34: IOptions<T> Mocking Pattern ✅ FIXED
+
+**Tool:** `aura_generate(operation: "tests")`
+
+**Problem:** Aura generates `Substitute.For<IOptions<T>>()` but NSubstitute can't mock `IOptions<T>.Value` properly - it returns null.
+
+**Impact:** Tests fail at runtime with null reference.
+
+**Root Cause:** `IOptions<T>.Value` is a property getter that NSubstitute doesn't handle well.
+
+**Solution Implemented:** Detect `IOptions<T>` parameters and generate `Options.Create(new T())` instead of `Substitute.For<>()`. Also adds `using Microsoft.Extensions.Options;`.
+
+---
+
+### Gap 35: File-System Heavy Classes ⏳ TODO
+
+**Tool:** `aura_generate(operation: "tests")`
+
+**Problem:** Classes like `RoslynWorkspaceService`, `GitWorktreeService` are too file-system dependent for unit tests.
+
+**Impact:** Generated unit tests are not meaningful - need integration tests instead.
+
+**Solution:** Detect classes with heavy file-system dependencies (constructor takes `IFileSystem`, multiple file operations) and either:
+1. Flag in analysis as "integration test candidate"
+2. Skip unit test generation with explanation
+3. Generate integration test scaffolding instead
 
 ---
 
