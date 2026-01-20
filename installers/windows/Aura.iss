@@ -30,6 +30,8 @@ PrivilegesRequired=admin
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0.17763
+; Always create install log in %TEMP%\Aura-Setup-{version}.log
+SetupLogging=yes
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -55,6 +57,8 @@ Source: "..\..\publish\win-x64\patterns\*"; DestDir: "{app}\patterns"; Flags: ig
 Source: "..\..\publish\win-x64\extension\*.vsix"; DestDir: "{app}\extension"; Flags: ignoreversion
 ; Scripts
 Source: "..\..\publish\win-x64\scripts\*"; DestDir: "{app}\scripts"; Flags: ignoreversion
+; Diagnostic script
+Source: "Diagnose-Aura.ps1"; DestDir: "{app}\scripts"; Flags: ignoreversion
 ; PostgreSQL
 Source: "..\..\publish\win-x64\pgsql\*"; DestDir: "{app}\pgsql"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; Version info
@@ -62,6 +66,7 @@ Source: "..\..\publish\win-x64\version.json"; DestDir: "{app}"; Flags: ignorever
 
 [Icons]
 Name: "{group}\{#MyAppName} Tray"; Filename: "{app}\tray\{#MyTrayExeName}"
+Name: "{group}\Diagnose {#MyAppName}"; Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -File ""{app}\scripts\Diagnose-Aura.ps1"""; Comment: "Check Aura installation status"
 Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
 
 [Registry]
@@ -70,13 +75,15 @@ Root: HKCU; Subkey: "SOFTWARE\Microsoft\Windows\CurrentVersion\Run"; ValueType: 
 
 [Run]
 ; Initialize PostgreSQL database (first install only)
-Filename: "{app}\pgsql\bin\initdb.exe"; Parameters: "-D ""{commonappdata}\Aura\data"" -U postgres -E UTF8"; Flags: runhidden; Check: not DatabaseExists
+Filename: "{app}\pgsql\bin\initdb.exe"; Parameters: "-D ""{commonappdata}\Aura\data"" -U postgres -E UTF8"; Flags: runhidden; Check: not DataDirectoryExists
 ; Register PostgreSQL as Windows service
 Filename: "{app}\pgsql\bin\pg_ctl.exe"; Parameters: "register -N AuraDB -D ""{commonappdata}\Aura\data"" -o ""-p 5433"""; Flags: runhidden; Check: not AuraDBServiceExists
 ; Start PostgreSQL service
 Filename: "sc.exe"; Parameters: "start AuraDB"; Flags: runhidden
-; Create auradb database (wait for service to start)
-Filename: "{app}\pgsql\bin\createdb.exe"; Parameters: "-h localhost -p 5433 -U postgres auradb"; Flags: runhidden; Check: not DatabaseExists
+; Wait for PostgreSQL to be ready (up to 30 seconds)
+Filename: "{app}\pgsql\bin\pg_isready.exe"; Parameters: "-h localhost -p 5433 -t 30"; Flags: runhidden
+; Create auradb database (only if it doesn't exist - safe to run on upgrade)
+Filename: "{app}\pgsql\bin\createdb.exe"; Parameters: "-h localhost -p 5433 -U postgres auradb"; Flags: runhidden; Check: not AuraDbDatabaseExists
 ; Enable pgvector extension
 Filename: "{app}\pgsql\bin\psql.exe"; Parameters: "-h localhost -p 5433 -U postgres -d auradb -c ""CREATE EXTENSION IF NOT EXISTS vector"""; Flags: runhidden
 ; Install as Windows Service
@@ -89,6 +96,8 @@ Filename: "sc.exe"; Parameters: "start AuraService"; Flags: runhidden; Tasks: in
 Filename: "{code:GetVSCodePath}"; Parameters: "--install-extension ""{app}\extension\aura-{#MyAppVersion}.vsix"" --force"; Flags: runhidden nowait; Tasks: installextension
 ; Start tray app
 Filename: "{app}\tray\{#MyTrayExeName}"; Parameters: "--minimized"; Flags: nowait postinstall; Tasks: starttray
+; Offer to run diagnostics if user wants to verify installation
+Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -File ""{app}\scripts\Diagnose-Aura.ps1"""; Description: "Run installation diagnostics"; Flags: postinstall nowait skipifsilent unchecked
 
 [UninstallRun]
 ; Stop and remove Windows Service
@@ -99,7 +108,11 @@ Filename: "sc.exe"; Parameters: "stop AuraDB"; Flags: runhidden
 Filename: "{app}\pgsql\bin\pg_ctl.exe"; Parameters: "unregister -N AuraDB"; Flags: runhidden
 
 [Code]
-function DatabaseExists(): Boolean;
+var
+  Port5433InUse: Boolean;
+  Port5300InUse: Boolean;
+
+function DataDirectoryExists(): Boolean;
 begin
   // Check if the data directory already exists in ProgramData (upgrade scenario)
   Result := DirExists(ExpandConstant('{commonappdata}\Aura\data'));
@@ -111,6 +124,49 @@ var
 begin
   // Check if AuraDB service already exists
   Result := Exec('sc.exe', 'query AuraDB', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) and (ResultCode = 0);
+end;
+
+function AuraDbDatabaseExists(): Boolean;
+var
+  ResultCode: Integer;
+begin
+  // Check if auradb database already exists by querying it
+  // pg_isready with database check - returns 0 if can connect to specific database
+  Result := FileExists(ExpandConstant('{app}\pgsql\bin\psql.exe')) and 
+            Exec(ExpandConstant('{app}\pgsql\bin\psql.exe'), 
+                 '-h localhost -p 5433 -U postgres -d auradb -c "SELECT 1" -t', 
+                 '', SW_HIDE, ewWaitUntilTerminated, ResultCode) and (ResultCode = 0);
+end;
+
+function IsPortInUse(Port: Integer): Boolean;
+var
+  ResultCode: Integer;
+  TempFile: String;
+  Lines: TArrayOfString;
+  i: Integer;
+  PortStr: String;
+begin
+  Result := False;
+  PortStr := ':' + IntToStr(Port);
+  TempFile := ExpandConstant('{tmp}\portcheck.txt');
+  
+  // Use netstat to check port
+  Exec('cmd.exe', '/c netstat -an | findstr "' + PortStr + '" > "' + TempFile + '"', 
+       '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  
+  if LoadStringsFromFile(TempFile, Lines) then
+  begin
+    for i := 0 to GetArrayLength(Lines) - 1 do
+    begin
+      if Pos('LISTENING', Lines[i]) > 0 then
+      begin
+        Result := True;
+        Break;
+      end;
+    end;
+  end;
+  
+  DeleteFile(TempFile);
 end;
 
 function VSCodeExists(): Boolean;
@@ -136,6 +192,37 @@ end;
 function InitializeSetup(): Boolean;
 begin
   Result := True;
+  
+  // Check for port conflicts (unless our services are already using them)
+  if not AuraDBServiceExists() then
+  begin
+    Port5433InUse := IsPortInUse(5433);
+    if Port5433InUse then
+    begin
+      if MsgBox('Port 5433 is already in use by another application.' + #13#10 +
+                'This port is required for the Aura PostgreSQL database.' + #13#10 + #13#10 +
+                'Please close the application using port 5433 and try again.' + #13#10 + #13#10 +
+                'Continue anyway? (PostgreSQL setup may fail)', mbError, MB_YESNO) = IDNO then
+      begin
+        Result := False;
+        Exit;
+      end;
+    end;
+  end;
+  
+  Port5300InUse := IsPortInUse(5300);
+  if Port5300InUse then
+  begin
+    if MsgBox('Port 5300 is already in use by another application.' + #13#10 +
+              'This port is required for the Aura API server.' + #13#10 + #13#10 +
+              'Please close the application using port 5300 and try again.' + #13#10 + #13#10 +
+              'Continue anyway? (Aura API may fail to start)', mbError, MB_YESNO) = IDNO then
+    begin
+      Result := False;
+      Exit;
+    end;
+  end;
+  
   // Check for Ollama
   if not FileExists(ExpandConstant('{localappdata}\Programs\Ollama\ollama.exe')) and
      not FileExists('C:\Program Files\Ollama\ollama.exe') then
