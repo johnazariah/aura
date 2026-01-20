@@ -41,6 +41,33 @@ public sealed class OllamaProvider(
     /// <inheritdoc/>
     public bool SupportsStreaming => true;
 
+    /// <summary>
+    /// Creates model options with GPU and context settings from configuration.
+    /// </summary>
+    private OllamaModelOptions CreateModelOptions(double temperature = 0.7) => new()
+    {
+        Temperature = temperature,
+        NumGpu = _options.NumGpu,
+        NumCtx = _options.NumCtx,
+    };
+
+    /// <summary>
+    /// Truncates text to the maximum embedding length if needed.
+    /// </summary>
+    private string TruncateForEmbedding(string text)
+    {
+        if (text.Length <= _options.MaxEmbeddingTextLength)
+        {
+            return text;
+        }
+
+        _logger.LogDebug(
+            "Truncating text from {OriginalLength} to {MaxLength} chars for embedding",
+            text.Length, _options.MaxEmbeddingTextLength);
+
+        return text[.._options.MaxEmbeddingTextLength];
+    }
+
     /// <inheritdoc/>
     public async Task<LlmResponse> GenerateAsync(
         string? model,
@@ -60,7 +87,7 @@ public sealed class OllamaProvider(
                 Model = effectiveModel,
                 Prompt = prompt,
                 Stream = false,
-                Options = new OllamaModelOptions { Temperature = temperature },
+                Options = CreateModelOptions(temperature),
             };
 
             using var cts = CreateTimeoutCts(cancellationToken);
@@ -126,7 +153,7 @@ public sealed class OllamaProvider(
                     Content = m.Content,
                 }).ToList(),
                 Stream = false,
-                Options = new OllamaModelOptions { Temperature = temperature },
+                Options = CreateModelOptions(temperature),
             };
 
             using var cts = CreateTimeoutCts(cancellationToken);
@@ -218,7 +245,7 @@ public sealed class OllamaProvider(
                 Model = effectiveModel,
                 Messages = effectiveMessages.Select(m => new OllamaChatMessage { Role = m.Role.ToString().ToLowerInvariant(), Content = m.Content }).ToList(),
                 Stream = false,
-                Options = new OllamaModelOptions { Temperature = options.Temperature },
+                Options = CreateModelOptions(options.Temperature),
                 Format = format,
             };
 
@@ -281,7 +308,7 @@ public sealed class OllamaProvider(
                 Content = m.Content,
             }).ToList(),
             Stream = true,
-            Options = new OllamaModelOptions { Temperature = temperature },
+            Options = CreateModelOptions(temperature),
         };
 
         HttpResponseMessage? response = null;
@@ -429,7 +456,7 @@ public sealed class OllamaProvider(
                 Messages = ollamaMessages,
                 Tools = tools,
                 Stream = false,
-                Options = new OllamaModelOptions { Temperature = temperature },
+                Options = CreateModelOptions(temperature),
             };
 
             using var cts = CreateTimeoutCts(cancellationToken);
@@ -502,11 +529,13 @@ public sealed class OllamaProvider(
         string text,
         CancellationToken cancellationToken = default)
     {
-        _logger.LogDebug("Ollama embed: model={Model}, text_length={TextLength}", model, text.Length);
+        // Truncate text if it exceeds the maximum length for embeddings
+        var truncatedText = TruncateForEmbedding(text);
+        _logger.LogDebug("Ollama embed: model={Model}, text_length={TextLength}", model, truncatedText.Length);
 
         try
         {
-            var request = new OllamaEmbedRequest { Model = model, Input = text };
+            var request = new OllamaEmbedRequest { Model = model, Input = truncatedText };
             using var cts = CreateTimeoutCts(cancellationToken);
 
             var response = await _httpClient.PostAsJsonAsync(
@@ -562,12 +591,14 @@ public sealed class OllamaProvider(
             return [single];
         }
 
-        _logger.LogDebug("Ollama embed batch: model={Model}, count={Count}", model, texts.Count);
+        // Truncate all texts to avoid context length errors
+        var truncatedTexts = texts.Select(TruncateForEmbedding).ToList();
+        _logger.LogDebug("Ollama embed batch: model={Model}, count={Count}", model, truncatedTexts.Count);
 
         try
         {
             // Use batch embedding API with array input
-            var request = new OllamaEmbedBatchRequest { Model = model, Input = texts.ToList() };
+            var request = new OllamaEmbedBatchRequest { Model = model, Input = truncatedTexts };
             using var cts = CreateTimeoutCts(cancellationToken);
 
             var response = await _httpClient.PostAsJsonAsync(
@@ -715,6 +746,22 @@ public sealed class OllamaProvider(
     private sealed record OllamaModelOptions
     {
         public double Temperature { get; init; } = 0.7;
+
+        /// <summary>
+        /// Number of GPU layers to use. Set to -1 to use all available GPU layers.
+        /// Default: null (let Ollama decide).
+        /// </summary>
+        [System.Text.Json.Serialization.JsonPropertyName("num_gpu")]
+        [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+        public int? NumGpu { get; init; }
+
+        /// <summary>
+        /// Context window size in tokens.
+        /// Default: null (use model default).
+        /// </summary>
+        [System.Text.Json.Serialization.JsonPropertyName("num_ctx")]
+        [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+        public int? NumCtx { get; init; }
     }
 
     private sealed record OllamaTagsResponse
@@ -819,4 +866,25 @@ public sealed class OllamaOptions
 
     /// <summary>Gets or sets the default embedding model. Required - must be set in configuration.</summary>
     public required string DefaultEmbeddingModel { get; set; }
+
+    /// <summary>
+    /// Gets or sets the number of GPU layers to use.
+    /// Set to -1 to use all available GPU layers (recommended for NVIDIA/AMD GPUs).
+    /// Set to 0 to force CPU only.
+    /// Default: null (let Ollama auto-detect).
+    /// </summary>
+    public int? NumGpu { get; set; }
+
+    /// <summary>
+    /// Gets or sets the context window size in tokens.
+    /// Default: null (use model's default context size).
+    /// </summary>
+    public int? NumCtx { get; set; }
+
+    /// <summary>
+    /// Gets or sets the maximum text length (in characters) for embeddings.
+    /// Texts longer than this will be truncated to avoid context overflow errors.
+    /// Default: 30000 (approximately 8000 tokens for nomic-embed-text).
+    /// </summary>
+    public int MaxEmbeddingTextLength { get; set; } = 30000;
 }
