@@ -1,72 +1,229 @@
 ---
 mode: agent
-description: Create a new release for the Aura product
-tools: ['run_in_terminal', 'read_file', 'replace_string_in_file']
+description: Analyze changes, prepare documentation, validate quality, and execute an Aura release
+tools: ['run_in_terminal', 'read_file', 'replace_string_in_file', 'create_file']
 ---
 
-# Create a New Aura Release
+# Prepare and Execute an Aura Release
 
-Create and publish a new release of Aura with the Windows installer and VS Code extension.
+Analyze changes since the last release, prepare documentation, validate quality, and execute the release ceremony.
 
-## Prerequisites Check
+---
 
-Before creating a release, verify:
+## Phase 1: Analyze Release Scope
 
-1. All tests pass: `dotnet test`
-2. No uncommitted changes: `git status`
-3. You're on the main branch: `git branch --show-current`
-4. Main is up to date: `git pull origin main`
+1. **Get the current version** from `extension/package.json`:
+   ```powershell
+   (Get-Content extension/package.json | ConvertFrom-Json).version
+   ```
 
-## Release Process
+2. **List changes since last release**:
+   ```powershell
+   $lastTag = git describe --tags --abbrev=0 2>$null
+   if ($lastTag) {
+       git log "$lastTag..HEAD" --oneline
+   } else {
+       git log --oneline -20
+   }
+   ```
 
-### Step 1: Determine Version
+3. **Categorize changes** and determine version bump:
 
-Ask the user for the version number. Follow semantic versioning:
-- **Major** (X.0.0): Breaking changes
-- **Minor** (0.X.0): New features, backward compatible
-- **Patch** (0.0.X): Bug fixes only
+   | Change Type | Version Bump | Examples |
+   |-------------|--------------|----------|
+   | Breaking API changes | **MAJOR** (X.0.0) | Removed MCP tools, changed agent format |
+   | New features | **MINOR** (0.X.0) | New MCP tools, new indexing languages |
+   | Bug fixes, docs, tests | **PATCH** (0.0.X) | Fixed edge cases, improved coverage |
 
-Version format: `X.Y.Z` (e.g., `1.0.0`, `1.1.0`, `1.0.1`)
+4. **Report recommendation** to user:
+   ```
+   ## Release Analysis
 
-For pre-releases, append suffix:
-- `-alpha` for early testing
-- `-beta` for feature-complete testing
-- `-rc1`, `-rc2` for release candidates
-- `-preview` for preview releases
+   Current version: X.Y.Z
+   Recommended bump: MINOR → X.(Y+1).0
 
-### Step 2: Update Changelog (Optional)
+   ### Changes included:
+   - feat: ...
+   - fix: ...
+   - docs: ...
 
-If there's a CHANGELOG.md, update it with the new version and changes.
+   ### Breaking changes: None / [list them]
+   ```
 
-### Step 3: Create and Push Tag
+5. **Ask for confirmation** before proceeding.
 
-```powershell
-# Create annotated tag
-git tag -a v{VERSION} -m "Release {VERSION}"
+---
 
-# Push tag to trigger release workflow
-git push origin v{VERSION}
-```
+## Phase 2: Prepare Documentation
 
-### Step 4: Monitor Release
+1. **Update CHANGELOG.md** (create if missing):
+   ```markdown
+   ## [X.Y.Z] - YYYY-MM-DD
 
-The GitHub Actions workflow will automatically:
-1. Run tests
-2. Build Windows installer with bundled PostgreSQL
-3. Build and package VS Code extension
-4. Create GitHub Release with artifacts
-5. Generate changelog from commits
+   ### Added
+   - New feature 1
+   - New feature 2
 
-Monitor at: https://github.com/johnazariah/aura/actions
+   ### Changed
+   - Changed behavior 1
 
-### Step 5: Verify Release
+   ### Fixed
+   - Bug fix 1
 
-Once complete, verify:
-1. GitHub Release page has correct artifacts:
-   - `Aura-Setup-{VERSION}.exe`
-   - `aura-{VERSION}.vsix`
-2. Release notes are accurate
-3. Pre-release flag is correct (if applicable)
+   ### Deprecated
+   - Deprecated feature 1 (if any)
+   ```
+
+2. **Validate README.md** is current:
+
+   a. **Check feature coverage** — Ensure all major features are documented:
+      - Compare README against current MCP tools in `src/Aura.Api/Mcp/McpHandler.cs`
+      - New agents, tools, or indexing features should be mentioned
+
+   b. **Verify installation instructions** match current setup:
+      - Windows installer process
+      - VS Code extension installation
+      - Prerequisites (Ollama, etc.)
+
+   c. **Check version references** — Ensure no hardcoded old versions
+
+3. **Update docs/** if needed:
+   - Check `docs/getting-started/` for accuracy
+   - Verify `docs/user-guide/` reflects current features
+
+---
+
+## Phase 3: Quality Validation
+
+1. **Run full test suite**:
+   ```powershell
+   dotnet test --configuration Release --verbosity minimal
+   ```
+   - All tests must pass
+   - Note test count and any skipped tests
+
+2. **Run linting and formatting**:
+   ```powershell
+   dotnet format Aura.sln --verify-no-changes
+   ```
+   - No formatting issues allowed
+
+3. **Build the solution**:
+   ```powershell
+   dotnet build -c Release
+   ```
+
+4. **Build VS Code extension**:
+   ```powershell
+   .\scripts\Build-Extension.ps1
+   ```
+
+5. **Verify pre-commit hooks pass**:
+   ```powershell
+   git stash  # Temporarily stash any changes
+   .\scripts\hooks\pre-commit
+   git stash pop  # Restore changes
+   ```
+
+6. **Report quality status**:
+   ```
+   ## Quality Validation
+
+   | Check | Status |
+   |-------|--------|
+   | Tests | ✅ XXX passed |
+   | Formatting | ✅ Clean |
+   | Build (Release) | ✅ Success |
+   | Extension Build | ✅ Success |
+   | Pre-commit | ✅ Passed |
+   ```
+
+---
+
+## Phase 4: Execute Release
+
+1. **Update version** in `extension/package.json`:
+   ```powershell
+   # Edit extension/package.json to update "version": "X.Y.Z"
+   ```
+
+2. **Commit version bump** (if any changes):
+   ```powershell
+   git add extension/package.json CHANGELOG.md
+   git commit -m "chore: bump version to X.Y.Z"
+   git push origin main
+   ```
+
+3. **Create annotated tag**:
+   ```powershell
+   git tag -a vX.Y.Z -m "Release vX.Y.Z
+
+   Highlights:
+   - Feature 1
+   - Feature 2
+   - Bug fix 1"
+   ```
+
+4. **Push tag to trigger release workflow**:
+   ```powershell
+   git push origin vX.Y.Z
+   ```
+
+---
+
+## Phase 5: Monitor and Verify
+
+1. **Watch the release workflow**:
+   ```powershell
+   gh run list --limit 5
+   gh run watch  # Interactive watch
+   ```
+
+2. **If pipeline fails**:
+   ```powershell
+   # Get failure details
+   gh run view <run-id> --log-failed
+
+   # Fix the issue, then delete and recreate tag
+   git tag -d vX.Y.Z
+   git push origin --delete vX.Y.Z
+
+   # After fix, re-tag and push
+   git tag -a vX.Y.Z -m "Release vX.Y.Z"
+   git push origin vX.Y.Z
+   ```
+
+3. **Verify GitHub Release**:
+   - Check https://github.com/johnazariah/aura/releases
+   - Confirm artifacts are present:
+     - `Aura-Setup-X.Y.Z.exe`
+     - `aura-X.Y.Z.vsix`
+   - Verify release notes are accurate
+   - Confirm pre-release flag is correct (if applicable)
+
+4. **Test installation** (optional but recommended):
+   ```powershell
+   # Download and run installer on a clean machine or VM
+   # Verify VS Code extension activates
+   # Verify API server starts
+   ```
+
+5. **Report final status**:
+   ```
+   ## Release Complete ✅
+
+   - **Version**: X.Y.Z
+   - **Release**: https://github.com/johnazariah/aura/releases/tag/vX.Y.Z
+   - **Installer**: Aura-Setup-X.Y.Z.exe
+   - **Extension**: aura-X.Y.Z.vsix
+
+   ### Post-release tasks:
+   - [ ] Announce on social media
+   - [ ] Update roadmap in .project/STATUS.md
+   - [ ] Close related issues/PRs
+   ```
+
+---
 
 ## Release Artifacts
 
@@ -75,41 +232,74 @@ Once complete, verify:
 | `Aura-Setup-{VERSION}.exe` | Windows installer with bundled PostgreSQL, VS Code extension, and all components |
 | `aura-{VERSION}.vsix` | Standalone VS Code extension for manual installation |
 
-## Rollback
+---
 
-If something goes wrong:
+## Pre-Release Versions
 
-```powershell
-# Delete remote tag
-git push origin --delete v{VERSION}
+For pre-releases, append suffix to version:
+- `-alpha` for early testing
+- `-beta` for feature-complete testing  
+- `-rc1`, `-rc2` for release candidates
+- `-preview` for preview releases
 
-# Delete local tag
-git tag -d v{VERSION}
-```
-
-Then fix the issue and try again.
-
-## User Instructions
-
-Provide these instructions in the release notes:
-
-1. Download `Aura-Setup-{VERSION}.exe` and run the installer
-2. The VS Code extension will be installed automatically if VS Code is detected
-3. Ensure Ollama is installed: https://ollama.com
-4. Open VS Code and look for the Aura icon in the sidebar
-
-## Example
-
-To create release 1.0.0:
-
-```powershell
-git tag -a v1.0.0 -m "Release 1.0.0 - Developer Module MVP"
-git push origin v1.0.0
-```
-
-To create a preview release:
-
+Example:
 ```powershell
 git tag -a v1.1.0-preview -m "Preview: New indexing features"
 git push origin v1.1.0-preview
 ```
+
+---
+
+## Rollback Procedure
+
+If a release has critical issues after publication:
+
+1. **Remove the release** (or mark as pre-release):
+   - Go to GitHub Releases page
+   - Edit the release and either delete or mark as pre-release
+
+2. **Create hotfix**:
+   ```powershell
+   git checkout -b hotfix/X.Y.(Z+1)
+   # Fix the issue
+   git commit -m "fix: critical issue in X.Y.Z"
+   git checkout main
+   git merge hotfix/X.Y.(Z+1)
+   ```
+
+3. **Release patch version** following the same ceremony.
+
+---
+
+## Automation Notes
+
+This prompt works with GitHub Actions workflows:
+- `.github/workflows/ci.yml` - Runs tests on every push
+- `.github/workflows/release.yml` - Builds and publishes on tag push
+
+The release workflow:
+1. Runs tests
+2. Builds Windows self-contained binaries
+3. Creates Windows installer with Inno Setup
+4. Packages VS Code extension
+5. Creates GitHub Release with all artifacts
+6. Auto-generates changelog from commits
+
+---
+
+## Checklist Summary
+
+**Before tagging:**
+- [ ] All tests pass
+- [ ] Formatting is clean
+- [ ] Solution builds in Release mode
+- [ ] Extension builds successfully
+- [ ] CHANGELOG.md updated (if maintained)
+- [ ] Version bumped in extension/package.json
+- [ ] Changes committed and pushed
+
+**After tagging:**
+- [ ] CI/CD pipeline succeeds
+- [ ] GitHub Release created with artifacts
+- [ ] Installer and VSIX available for download
+- [ ] Release notes are accurate
