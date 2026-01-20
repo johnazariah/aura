@@ -162,6 +162,21 @@
         "icon": "$(rocket)"
       },
       {
+        "command": "aura.showLogs",
+        "title": "Aura: Show Logs",
+        "icon": "$(output)"
+      },
+      {
+        "command": "aura.openLogFile",
+        "title": "Aura: Open Log File",
+        "icon": "$(file)"
+      },
+      {
+        "command": "aura.openLogFolder",
+        "title": "Aura: Open Log Folder",
+        "icon": "$(folder-opened)"
+      },
+      {
         "command": "aura.onboardWorkspace",
         "title": "Aura: Enable for Workspace",
         "icon": "$(add)"

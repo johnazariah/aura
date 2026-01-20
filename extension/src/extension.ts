@@ -8,9 +8,11 @@ import { WelcomeViewProvider } from './providers/welcomeViewProvider';
 import { HealthCheckService } from './services/healthCheckService';
 import { AuraApiService, AgentInfo } from './services/auraApiService';
 import { gitService } from './services/gitService';
+import { LogService } from './services/logService';
 
 let auraApiService: AuraApiService;
 let healthCheckService: HealthCheckService;
+let logService: LogService;
 let statusTreeProvider: StatusTreeProvider;
 let agentTreeProvider: AgentTreeProvider;
 let workflowTreeProvider: WorkflowTreeProvider;
@@ -37,6 +39,7 @@ export async function activate(context: vscode.ExtensionContext) {
     // Initialize services
     auraApiService = new AuraApiService();
     healthCheckService = new HealthCheckService(auraApiService);
+    logService = new LogService();
 
     // Initialize tree providers
     statusTreeProvider = new StatusTreeProvider(healthCheckService);
@@ -203,6 +206,7 @@ export async function activate(context: vscode.ExtensionContext) {
             { label: '$(book) Documentation', description: 'Open full documentation' },
             { label: '$(note) Quick Reference', description: 'Show keyboard shortcuts and tips' },
             { label: '$(comment-discussion) Use Cases', description: 'See practical examples' },
+            { label: '$(output) View Logs', description: 'Show Aura API logs' },
         ];
         const selected = await vscode.window.showQuickPick(items, {
             placeHolder: 'How can we help?'
@@ -216,6 +220,8 @@ export async function activate(context: vscode.ExtensionContext) {
                 vscode.commands.executeCommand('aura.showCheatSheet');
             } else if (selected.label.includes('Use Cases')) {
                 openDocFile('user-guide/use-cases.md');
+            } else if (selected.label.includes('View Logs')) {
+                vscode.commands.executeCommand('aura.showLogs');
             }
         }
     });
@@ -230,6 +236,19 @@ export async function activate(context: vscode.ExtensionContext) {
 
     const openGettingStartedCommand = vscode.commands.registerCommand('aura.openGettingStarted', async () => {
         vscode.commands.executeCommand('workbench.action.openWalkthrough', 'aura.aura#aura.gettingStarted');
+    });
+
+    // Log commands
+    const showLogsCommand = vscode.commands.registerCommand('aura.showLogs', () => {
+        logService.showLogs();
+    });
+
+    const openLogFileCommand = vscode.commands.registerCommand('aura.openLogFile', async () => {
+        await logService.openLogFile();
+    });
+
+    const openLogFolderCommand = vscode.commands.registerCommand('aura.openLogFolder', () => {
+        logService.openLogFolder();
     });
 
     // Code Graph query commands
@@ -338,6 +357,9 @@ export async function activate(context: vscode.ExtensionContext) {
         openDocsCommand,
         showCheatSheetCommand,
         openGettingStartedCommand,
+        showLogsCommand,
+        openLogFileCommand,
+        openLogFolderCommand,
         findImplementationsCommand,
         findCallersCommand,
         showTypeMembersCommand,
@@ -346,7 +368,8 @@ export async function activate(context: vscode.ExtensionContext) {
         postUpdateToIssueCommand,
         openStoryWorktreeCommand,
         showCurrentStoryCommand,
-        configWatcher
+        configWatcher,
+        { dispose: () => logService.dispose() }
     );
     
     // Add MCP provider if available
