@@ -7,7 +7,11 @@ The main backend that provides AI capabilities.
 
 **Status indicators:**
 - ✅ **Online** - Ready to use
-- ❌ **Offline** - Start the server with `Start-Api` in PowerShell
+- ❌ **Offline** - See below to start
+
+**Starting the API:**
+- **Installed version**: The AuraService should start automatically. Check Windows Services or use the Aura system tray app.
+- **Development**: Run `Start-Api` in PowerShell from the repo folder.
 
 ## 2. Ollama (or Cloud LLM)
 Provides the AI models for code generation and chat.
@@ -17,7 +21,7 @@ Provides the AI models for code generation and chat.
 - Run `ollama serve` or use the Ollama app
 
 **For cloud (Azure OpenAI/OpenAI):**
-- Configure in `appsettings.json`
+- Configure in settings or `appsettings.json`
 - See documentation for setup
 
 ## Quick Check

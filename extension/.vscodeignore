@@ -28,4 +28,7 @@ node_modules/**
 .gitignore
 *.vsix
 .git/**
-**/*.md
+
+# Exclude markdown except walkthrough resources (needed for VS Code walkthrough feature)
+*.md
+!resources/walkthrough/*.md

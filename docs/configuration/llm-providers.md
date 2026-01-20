@@ -41,13 +41,39 @@ In `C:\Program Files\Aura\api\appsettings.json`:
           "BaseUrl": "http://localhost:11434",
           "DefaultModel": "qwen2.5-coder:7b",
           "DefaultEmbeddingModel": "nomic-embed-text",
-          "TimeoutSeconds": 300
+          "TimeoutSeconds": 300,
+          "NumGpu": -1,
+          "MaxEmbeddingTextLength": 30000
         }
       }
     }
   }
 }
 ```
+
+### GPU Configuration
+
+| Setting | Value | Description |
+|---------|-------|-------------|
+| `NumGpu` | `-1` | Use all available GPU layers (recommended) |
+| `NumGpu` | `0` | Force CPU only |
+| `NumGpu` | `null` | Let Ollama auto-detect (may sometimes fail) |
+| `NumCtx` | `8192` | Context window size (optional, use model default) |
+
+**If Ollama is using CPU when a GPU is available:**
+
+1. Set `"NumGpu": -1` in the configuration
+2. Restart the Aura service
+3. Verify GPU drivers are installed correctly
+4. Check Ollama logs: `ollama show --verbose qwen2.5-coder:7b`
+
+### Embedding Text Limits
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `MaxEmbeddingTextLength` | `30000` | Maximum characters per text for embeddings |
+
+Large files (e.g., big XML/JSON files) are automatically truncated to prevent "context length exceeded" errors from the embedding model.
 
 ### Recommended Models
 

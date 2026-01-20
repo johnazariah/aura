@@ -2,12 +2,14 @@
 
 ## Documentation
 
-Full documentation is available in the `docs/` folder:
+Full documentation is available online and in the installation folder:
 
-- **[Use Cases](docs/user-guide/use-cases.md)** - Practical examples
-- **[Cheat Sheet](docs/user-guide/cheat-sheet.md)** - Quick reference
-- **[Workflows](docs/user-guide/workflows.md)** - Deep dive on workflows
-- **[Chat](docs/user-guide/chat.md)** - Advanced chat features
+- **Use Cases** - Practical examples for common tasks
+- **Cheat Sheet** - Quick reference for commands
+- **Workflows** - Deep dive on multi-step development
+- **Chat** - Advanced code-aware chat features
+
+Run the command **Aura: Open Documentation** to access the docs.
 
 ## Keyboard Shortcuts
 
