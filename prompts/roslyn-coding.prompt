@@ -11,6 +11,7 @@ tools:
   - roslyn.get_project_references
   - roslyn.find_usages
   - dotnet.run_tests
+  - spawn_subagent
 ---
 # C# Development Task
 
@@ -46,8 +47,34 @@ When modifying files:
 
 When you're done, provide a clear summary of what was changed.
 
-{{#if workspacePath}}
-## Workspace
+
+## Sub-Agent Spawning
+
+When working on complex tasks, you can spawn sub-agents for isolated subtasks using `spawn_subagent`:
+
+**Use `spawn_subagent` when:**
+- A subtask is self-contained (code review, test generation, documentation)
+- Context is filling up (approaching token limits)
+- You need a "fresh perspective" on a problem
+- Parallel-style work: review while implementing
+
+**Do NOT spawn sub-agents for:**
+- Simple single-step operations
+- Tasks requiring shared state with current work
+- When you're close to finishing
+
+**Example usage:**
+```json
+{
+  "agent": "code-review-agent",
+  "task": "Review the changes made to src/MyFile.cs for best practices",
+  "context": "I added a new method ProcessData() at line 45",
+  "maxSteps": 5
+}
+```
+
+When you're done, provide a clear summary of what was changed.
+
 Working directory: {{workspacePath}}
 {{/if}}
 
