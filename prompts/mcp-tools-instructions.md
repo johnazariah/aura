@@ -14,6 +14,8 @@
 | Generate tests | `aura_generate(operation: "tests")` | Manual test writing |
 | Find usages | `aura_navigate(operation: "usages")` | `grep_search` |
 | Explore types | `aura_inspect` | Multiple `read_file` calls |
+| Generic class | `aura_generate` with `typeParameters` | Manual generics |
+| Extension method | `aura_generate` with `isExtension: true` | Manual `this` modifier |
 
 **Text manipulation (`replace_string_in_file`) is ONLY for:**
 - Non-C# files (JSON, YAML, Markdown, TypeScript)
@@ -70,6 +72,18 @@ When in a git worktree:
 
 **aura_generate:**
 `create_type`, `tests`, `implement_interface`, `constructor`, `property`, `method`
+
+**aura_generate modern C# parameters:**
+| Parameter | Description | Operations |
+|-----------|-------------|------------|
+| `isRequired` | C# 11 `required` modifier | property |
+| `hasInit` | C# 9 `init` accessor | property |
+| `methodModifier` | `virtual`/`override`/`abstract`/`sealed`/`new` | method |
+| `primaryConstructorParameters` | C# 12 primary constructor | create_type |
+| `typeParameters` | Generic type params with constraints | create_type, method |
+| `attributes` | `[Attribute(args)]` syntax | property, method |
+| `isExtension` | Extension method (`this` first param) | method |
+| `documentation` | XML doc summary | property, method |
 
 **aura_validate:**
 `compilation`, `tests`

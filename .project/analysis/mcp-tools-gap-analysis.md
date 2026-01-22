@@ -12,13 +12,13 @@
 | `aura_navigate` | Find callers, implementations, usages | ✅ Working well |
 | `aura_inspect` | Examine type members, list types | ✅ Working |
 | `aura_refactor` | Rename, extract, change signature | ✅ Working |
-| `aura_generate` | Create types, add members, generate tests | ✅ Fixed (records, access modifiers, fields) |
+| `aura_generate` | Create types, add members, generate tests | ✅ **Enhanced** (modern C# support) |
 | `aura_validate` | Check compilation, run tests | ✅ Not tested |
 | `aura_workflow` | Story/workflow management | ✅ Working |
 | `aura_architect` | Architectural analysis | 🔲 Placeholder |
 | `aura_workspace` | Worktree detection, cache invalidation | ✅ Working |
 | `aura_pattern` | Load operational patterns | ✅ Working |
-| `aura_edit` | Surgical text editing (line-based) | ✅ **NEW** |
+| `aura_edit` | Surgical text editing (line-based) | ✅ Working |
 
 ## Issues Fixed This Session
 
@@ -26,6 +26,54 @@
 2. **Access Modifiers** - `accessModifier` parameter now respected (was hardcoded to public)
 3. **Field Generation** - New `isField`, `isReadonly`, `isStatic` parameters for field generation
 4. **Simple Text Editing** - New `aura_edit` tool for surgical line-based edits
+
+## Modern C# Support (New)
+
+Comprehensive modern C# (9-13) features added to `aura_generate`:
+
+| Feature | Parameter | C# Version | Applies To |
+|---------|-----------|------------|------------|
+| Required properties | `isRequired: true` | C# 11 | property |
+| Init-only setters | `hasInit: true` | C# 9 | property |
+| Method modifiers | `methodModifier: "virtual\|override\|abstract\|sealed\|new"` | All | method |
+| Primary constructors | `primaryConstructorParameters: [...]` | C# 12 | create_type (class) |
+| Positional records | `primaryConstructorParameters: [...]` | C# 9 | create_type (record) |
+| Generic types | `typeParameters: [{name, constraints}]` | All | create_type, method |
+| Attributes | `attributes: [{name, arguments}]` | All | property, method |
+| Extension methods | `isExtension: true` | All | method |
+| XML documentation | `documentation: "..."` | All | property, method |
+
+### Example: Generic Repository with Primary Constructor
+
+```json
+{
+  "operation": "create_type",
+  "typeName": "Repository",
+  "typeKind": "class",
+  "typeParameters": [{"name": "TEntity", "constraints": ["class", "IEntity"]}],
+  "primaryConstructorParameters": [
+    {"name": "context", "type": "DbContext"},
+    {"name": "logger", "type": "ILogger<Repository<TEntity>>"}
+  ],
+  "documentationSummary": "Generic repository for entity operations."
+}
+```
+
+### Example: Extension Method with Attributes
+
+```json
+{
+  "operation": "method",
+  "className": "StringExtensions",
+  "methodName": "IsNullOrEmpty",
+  "returnType": "bool",
+  "isStatic": true,
+  "isExtension": true,
+  "parameters": [{"name": "value", "type": "string?"}],
+  "documentation": "Checks if a string is null or empty.",
+  "body": "return string.IsNullOrEmpty(value);"
+}
+```
 
 ## Remaining Gaps
 
