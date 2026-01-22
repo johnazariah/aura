@@ -139,6 +139,7 @@ public partial class ReActExecutor(IToolRegistry toolRegistry, ILogger<ReActExec
         options ??= new ReActOptions();
         var steps = new List<ReActStep>();
         var totalTokens = 0;
+        var tokenTracker = new TokenTracker(options.TokenBudget);
         var startTime = DateTime.UtcNow;
 
         var systemPrompt = BuildSystemPrompt(availableTools, options.AdditionalContext, options.UseStructuredOutput);
@@ -205,6 +206,15 @@ public partial class ReActExecutor(IToolRegistry toolRegistry, ILogger<ReActExec
             }
 
             totalTokens += llmResponse.TokensUsed;
+            tokenTracker.Add(llmResponse.TokensUsed);
+
+            // Check token budget threshold
+            if (tokenTracker.IsAboveThreshold(options.BudgetWarningThreshold))
+            {
+                _logger.LogWarning(
+                    "[REACT] Token budget {Percent:F1}% used ({Used}/{Budget}). Recommendation: {Recommendation}",
+                    tokenTracker.UsagePercent, tokenTracker.Used, tokenTracker.Budget, tokenTracker.GetRecommendation());
+            }
             var llmDuration = DateTime.UtcNow - stepStart;
             _logger.LogWarning("[REACT-DEBUG] Step {Step}: LLM call completed in {Duration:F1}s, tokens={Tokens}", step, llmDuration.TotalSeconds, llmResponse.TokensUsed);
 
@@ -232,7 +242,8 @@ public partial class ReActExecutor(IToolRegistry toolRegistry, ILogger<ReActExec
                     Action = "finish",
                     ActionInput = parsed.ActionInput,
                     Observation = "Task completed",
-                    Duration = DateTime.UtcNow - stepStart
+                    Duration = DateTime.UtcNow - stepStart,
+                    CumulativeTokens = tokenTracker.Used
                 });
 
                 // Extract the final answer - unwrap JSON if the LLM wrapped it
@@ -308,7 +319,8 @@ public partial class ReActExecutor(IToolRegistry toolRegistry, ILogger<ReActExec
                 Action = parsed.Action,
                 ActionInput = parsed.ActionInput,
                 Observation = observation,
-                Duration = DateTime.UtcNow - stepStart
+                Duration = DateTime.UtcNow - stepStart,
+                CumulativeTokens = tokenTracker.Used
             };
 
             steps.Add(reactStep);
