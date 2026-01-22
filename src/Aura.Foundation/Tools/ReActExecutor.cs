@@ -56,6 +56,19 @@ public record ReActOptions
     /// Default is false for backward compatibility.
     /// </summary>
     public bool UseStructuredOutput { get; init; } = false;
+
+    /// <summary>
+    /// Approximate token budget for this execution.
+    /// When usage exceeds BudgetWarningThreshold%, agent may consider spawning sub-agents.
+    /// Default: 100,000 (typical context window).
+    /// </summary>
+    public int TokenBudget { get; init; } = 100_000;
+
+    /// <summary>
+    /// Threshold percentage at which to warn agent about budget.
+    /// Default: 70%.
+    /// </summary>
+    public double BudgetWarningThreshold { get; init; } = 70.0;
 }
 
 /// <summary>
@@ -104,6 +117,8 @@ public record ReActStep
 
     /// <summary>Duration of this step</summary>
     public TimeSpan Duration { get; init; }
+    /// <summary>Cumulative tokens used up to and including this step</summary>
+    public int CumulativeTokens { get; init; }
 }
 
 /// <summary>
