@@ -420,6 +420,20 @@ public sealed class McpHandler
                         isAsync = new { type = "boolean", description = "Whether method is async" },
                         body = new { type = "string", description = "Optional method body code" },
                         testAttribute = new { type = "string", description = "Test attribute to add: Fact (xunit), Test (nunit), TestMethod (mstest). Auto-detects if omitted for test classes." },
+                        attributes = new
+                        {
+                            type = "array",
+                            items = new
+                            {
+                                type = "object",
+                                properties = new
+                                {
+                                    name = new { type = "string", description = "Attribute name (e.g., 'JsonPropertyName', 'HttpGet')" },
+                                    arguments = new { type = "array", items = new { type = "string" }, description = "Attribute arguments as strings (e.g., '\"value\"', 'typeof(User)')" }
+                                }
+                            },
+                            description = "Attributes to apply to the member (e.g., [JsonPropertyName(\"user_name\")], [HttpGet(\"{id}\")])"
+                        },
                         preview = new { type = "boolean", description = "If true, return changes without applying (default: false)" }
                     },
                     required = new[] { "operation", "solutionPath" }
@@ -3838,6 +3852,13 @@ public sealed class McpHandler
                 preview = prevEl.GetBoolean();
         }
 
+        // Parse attributes
+        List<AttributeInfo>? attributes = null;
+        if (args?.TryGetProperty("attributes", out var attrEl) == true && attrEl.ValueKind == JsonValueKind.Array)
+        {
+            attributes = ParseAttributeInfoList(attrEl);
+        }
+
         var result = await _refactoringService.AddPropertyAsync(new AddPropertyRequest
         {
             ClassName = className,
@@ -3853,6 +3874,7 @@ public sealed class McpHandler
             IsField = isField,
             IsReadonly = isReadonly,
             IsStatic = isStatic,
+            Attributes = attributes,
             Preview = preview
         }, ct);
 
@@ -3931,6 +3953,13 @@ public sealed class McpHandler
                 .ToList();
         }
 
+        // Parse attributes for method
+        List<AttributeInfo>? attributes = null;
+        if (args?.TryGetProperty("attributes", out var attrEl) == true && attrEl.ValueKind == JsonValueKind.Array)
+        {
+            attributes = ParseAttributeInfoList(attrEl);
+        }
+
         var result = await _refactoringService.AddMethodAsync(new AddMethodRequest
         {
             ClassName = className,
@@ -3945,6 +3974,7 @@ public sealed class McpHandler
             Body = body,
             TestAttribute = testAttribute,
             TypeParameters = typeParameters,
+            Attributes = attributes,
             Preview = preview
         }, ct);
 
@@ -4343,6 +4373,26 @@ public sealed class McpHandler
     // =========================================================================
     // Helpers
     // =========================================================================
+
+    private static List<AttributeInfo> ParseAttributeInfoList(JsonElement attrEl)
+    {
+        return attrEl.EnumerateArray()
+            .Select(attr =>
+            {
+                var name = attr.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "";
+                List<string>? arguments = null;
+                if (attr.TryGetProperty("arguments", out var argsEl) && argsEl.ValueKind == JsonValueKind.Array)
+                {
+                    arguments = argsEl.EnumerateArray()
+                        .Select(a => a.GetString())
+                        .Where(s => s != null)
+                        .Cast<string>()
+                        .ToList();
+                }
+                return new AttributeInfo(name, arguments);
+            })
+            .ToList();
+    }
 
     private static JsonRpcResponse ErrorResponse(object? id, int code, string message) =>
         new()

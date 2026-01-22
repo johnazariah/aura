@@ -311,6 +311,13 @@ public sealed record ParameterInfo(string Name, string Type, string? DefaultValu
 public sealed record TypeParameterInfo(string Name, IReadOnlyList<string>? Constraints = null);
 
 /// <summary>
+/// Information about an attribute to apply to a member.
+/// </summary>
+/// <param name="Name">The attribute name (e.g., "JsonPropertyName", "Required", "HttpGet").</param>
+/// <param name="Arguments">Optional: attribute arguments as strings (e.g., "\"user_name\"", "typeof(User)").</param>
+public sealed record AttributeInfo(string Name, IReadOnlyList<string>? Arguments = null);
+
+/// <summary>
 /// Request to implement an interface.
 /// </summary>
 public sealed record ImplementInterfaceRequest
@@ -434,6 +441,9 @@ public sealed record AddPropertyRequest
 
     /// <summary>If true, use init accessor instead of set (C# 9+).</summary>
     public bool HasInit { get; init; }
+
+    /// <summary>Attributes to apply to the property.</summary>
+    public IReadOnlyList<AttributeInfo>? Attributes { get; init; }
 }
 
 /// <summary>
@@ -482,6 +492,9 @@ public sealed record AddMethodRequest
     /// Example: T Create&lt;T&gt;() where T : new()
     /// </summary>
     public IReadOnlyList<TypeParameterInfo>? TypeParameters { get; init; }
+
+    /// <summary>Attributes to apply to the method.</summary>
+    public IReadOnlyList<AttributeInfo>? Attributes { get; init; }
 }
 
 /// <summary>

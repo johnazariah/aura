@@ -1232,6 +1232,12 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
                         .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken));
                 }
 
+                // Add attributes if provided
+                if (request.Attributes?.Count > 0)
+                {
+                    property = property.WithAttributeLists(BuildAttributeListSyntax(request.Attributes));
+                }
+
                 member = property;
             }
 
@@ -1308,6 +1314,29 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
         }
 
         return SyntaxFactory.TokenList(tokens);
+    }
+
+    private static SyntaxList<AttributeListSyntax> BuildAttributeListSyntax(IReadOnlyList<AttributeInfo> attributes)
+    {
+        var attributeLists = new List<AttributeListSyntax>();
+        foreach (var attr in attributes)
+        {
+            AttributeSyntax attributeSyntax;
+            if (attr.Arguments != null && attr.Arguments.Count > 0)
+            {
+                var args = attr.Arguments.Select(a =>
+                    SyntaxFactory.AttributeArgument(SyntaxFactory.ParseExpression(a)));
+                attributeSyntax = SyntaxFactory.Attribute(
+                    SyntaxFactory.IdentifierName(attr.Name),
+                    SyntaxFactory.AttributeArgumentList(SyntaxFactory.SeparatedList(args)));
+            }
+            else
+            {
+                attributeSyntax = SyntaxFactory.Attribute(SyntaxFactory.IdentifierName(attr.Name));
+            }
+            attributeLists.Add(SyntaxFactory.AttributeList(SyntaxFactory.SingletonSeparatedList(attributeSyntax)));
+        }
+        return SyntaxFactory.List(attributeLists);
     }
 
     private static (TypeParameterListSyntax, SyntaxList<TypeParameterConstraintClauseSyntax>) BuildTypeParameterSyntax(
@@ -1672,15 +1701,27 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
                 method = method.WithBody(methodBody);
             }
 
+            // Build attribute lists (combine test framework attribute with custom attributes)
+            var allAttributeLists = new List<AttributeListSyntax>();
+
             // Add test attribute if this is a test class
             if (testFramework != null)
             {
                 var testAttribute = CreateTestAttribute(testFramework);
-                method = method.WithAttributeLists(
-                    SyntaxFactory.SingletonList(
-                        SyntaxFactory.AttributeList(
-                            SyntaxFactory.SingletonSeparatedList(testAttribute))));
+                allAttributeLists.Add(SyntaxFactory.AttributeList(
+                    SyntaxFactory.SingletonSeparatedList(testAttribute)));
                 _logger.LogDebug("Added {Framework} test attribute to method {Method}", testFramework, request.MethodName);
+            }
+
+            // Add custom attributes if provided
+            if (request.Attributes?.Count > 0)
+            {
+                allAttributeLists.AddRange(BuildAttributeListSyntax(request.Attributes));
+            }
+
+            if (allAttributeLists.Count > 0)
+            {
+                method = method.WithAttributeLists(SyntaxFactory.List(allAttributeLists));
             }
 
             var newClassNode = classNode.AddMembers(method);
