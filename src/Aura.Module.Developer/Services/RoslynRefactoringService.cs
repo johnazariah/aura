@@ -1127,8 +1127,9 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
     /// <inheritdoc/>
     public async Task<RefactoringResult> AddPropertyAsync(AddPropertyRequest request, CancellationToken ct = default)
     {
-        _logger.LogInformation("Adding property {Property} to {Class} in {Solution}",
-            request.PropertyName, request.ClassName, request.SolutionPath);
+        var memberKind = request.IsField ? "field" : "property";
+        _logger.LogInformation("Adding {Kind} {Name} to {Class} in {Solution}",
+            memberKind, request.PropertyName, request.ClassName, request.SolutionPath);
 
         if (!File.Exists(request.SolutionPath))
         {
@@ -1139,25 +1140,33 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
         {
             var solution = await _workspaceService.GetSolutionAsync(request.SolutionPath, ct);
 
-            var classSymbol = await FindTypeAsync(solution, request.ClassName, ct);
-            if (classSymbol is null)
+            var typeSymbol = await FindTypeAsync(solution, request.ClassName, ct);
+            if (typeSymbol is null)
             {
-                return RefactoringResult.Failed($"Class '{request.ClassName}' not found");
+                return RefactoringResult.Failed($"Type '{request.ClassName}' not found");
             }
 
-            var classDecl = classSymbol.DeclaringSyntaxReferences.FirstOrDefault();
-            if (classDecl is null)
+            var typeDecl = typeSymbol.DeclaringSyntaxReferences.FirstOrDefault();
+            if (typeDecl is null)
             {
-                return RefactoringResult.Failed("Could not find class declaration");
+                return RefactoringResult.Failed("Could not find type declaration");
             }
 
-            var classNode = await classDecl.GetSyntaxAsync(ct) as ClassDeclarationSyntax;
-            if (classNode is null)
+            var typeSyntax = await typeDecl.GetSyntaxAsync(ct);
+            TypeDeclarationSyntax? typeNode = typeSyntax switch
             {
-                return RefactoringResult.Failed("Could not parse class declaration");
+                ClassDeclarationSyntax classDecl => classDecl,
+                RecordDeclarationSyntax recordDecl => recordDecl,
+                StructDeclarationSyntax structDecl => structDecl,
+                _ => null
+            };
+
+            if (typeNode is null)
+            {
+                return RefactoringResult.Failed($"Unsupported type declaration: {typeSyntax?.GetType().Name ?? "null"}");
             }
 
-            var document = solution.GetDocument(classDecl.SyntaxTree);
+            var document = solution.GetDocument(typeDecl.SyntaxTree);
             if (document is null)
             {
                 return RefactoringResult.Failed("Could not find document");
@@ -1169,34 +1178,59 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
                 return RefactoringResult.Failed("Could not get syntax root");
             }
 
-            // Build property
-            var accessors = new List<AccessorDeclarationSyntax>();
-            if (request.HasGetter)
-            {
-                accessors.Add(SyntaxFactory.AccessorDeclaration(SyntaxKind.GetAccessorDeclaration)
-                    .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken)));
-            }
-            if (request.HasSetter)
-            {
-                accessors.Add(SyntaxFactory.AccessorDeclaration(SyntaxKind.SetAccessorDeclaration)
-                    .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken)));
-            }
+            // Build modifiers
+            var modifiers = BuildModifiers(request.AccessModifier, request.IsStatic, request.IsReadonly);
 
-            var property = SyntaxFactory.PropertyDeclaration(
-                    SyntaxFactory.ParseTypeName(request.PropertyType),
-                    SyntaxFactory.Identifier(request.PropertyName))
-                .WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword)))
-                .WithAccessorList(SyntaxFactory.AccessorList(SyntaxFactory.List(accessors)));
-
-            if (request.InitialValue != null)
+            MemberDeclarationSyntax member;
+            if (request.IsField)
             {
-                property = property.WithInitializer(
-                    SyntaxFactory.EqualsValueClause(SyntaxFactory.ParseExpression(request.InitialValue)))
+                // Generate field
+                var variable = SyntaxFactory.VariableDeclarator(SyntaxFactory.Identifier(request.PropertyName));
+                if (request.InitialValue != null)
+                {
+                    variable = variable.WithInitializer(
+                        SyntaxFactory.EqualsValueClause(SyntaxFactory.ParseExpression(request.InitialValue)));
+                }
+
+                member = SyntaxFactory.FieldDeclaration(
+                        SyntaxFactory.VariableDeclaration(SyntaxFactory.ParseTypeName(request.PropertyType))
+                            .WithVariables(SyntaxFactory.SingletonSeparatedList(variable)))
+                    .WithModifiers(modifiers)
                     .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken));
             }
+            else
+            {
+                // Generate property
+                var accessors = new List<AccessorDeclarationSyntax>();
+                if (request.HasGetter)
+                {
+                    accessors.Add(SyntaxFactory.AccessorDeclaration(SyntaxKind.GetAccessorDeclaration)
+                        .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken)));
+                }
+                if (request.HasSetter)
+                {
+                    accessors.Add(SyntaxFactory.AccessorDeclaration(SyntaxKind.SetAccessorDeclaration)
+                        .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken)));
+                }
 
-            var newClassNode = classNode.AddMembers(property);
-            var newRoot = root.ReplaceNode(classNode, newClassNode);
+                var property = SyntaxFactory.PropertyDeclaration(
+                        SyntaxFactory.ParseTypeName(request.PropertyType),
+                        SyntaxFactory.Identifier(request.PropertyName))
+                    .WithModifiers(modifiers)
+                    .WithAccessorList(SyntaxFactory.AccessorList(SyntaxFactory.List(accessors)));
+
+                if (request.InitialValue != null)
+                {
+                    property = property.WithInitializer(
+                            SyntaxFactory.EqualsValueClause(SyntaxFactory.ParseExpression(request.InitialValue)))
+                        .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken));
+                }
+
+                member = property;
+            }
+
+            var newTypeNode = typeNode.AddMembers(member);
+            var newRoot = root.ReplaceNode(typeNode, newTypeNode);
             var formattedRoot = Formatter.Format(newRoot, document.Project.Solution.Workspace);
 
             if (request.Preview)
@@ -1205,7 +1239,7 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
                 return new RefactoringResult
                 {
                     Success = true,
-                    Message = $"Preview: Would add property '{request.PropertyName}' to '{request.ClassName}'",
+                    Message = $"Preview: Would add {memberKind} '{request.PropertyName}' to '{request.ClassName}'",
                     Preview = [new FileChange(document.FilePath ?? "", originalText, formattedRoot.ToFullString())]
                 };
             }
@@ -1220,14 +1254,49 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
             }
 
             return RefactoringResult.Succeeded(
-                $"Added property '{request.PropertyName}' to '{request.ClassName}'",
+                $"Added {memberKind} '{request.PropertyName}' to '{request.ClassName}'",
                 document.FilePath != null ? [document.FilePath] : []);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to add property");
-            return RefactoringResult.Failed($"Failed to add property: {ex.Message}");
+            _logger.LogError(ex, "Failed to add {Kind}", memberKind);
+            return RefactoringResult.Failed($"Failed to add {memberKind}: {ex.Message}");
         }
+    }
+
+    private static SyntaxTokenList BuildModifiers(string accessModifier, bool isStatic, bool isReadonly)
+    {
+        var tokens = new List<SyntaxToken>();
+
+        // Parse access modifier (can be compound like "private protected")
+        var accessParts = accessModifier.ToLowerInvariant().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        foreach (var part in accessParts)
+        {
+            var kind = part switch
+            {
+                "public" => SyntaxKind.PublicKeyword,
+                "private" => SyntaxKind.PrivateKeyword,
+                "protected" => SyntaxKind.ProtectedKeyword,
+                "internal" => SyntaxKind.InternalKeyword,
+                _ => SyntaxKind.None
+            };
+            if (kind != SyntaxKind.None)
+            {
+                tokens.Add(SyntaxFactory.Token(kind));
+            }
+        }
+
+        if (isStatic)
+        {
+            tokens.Add(SyntaxFactory.Token(SyntaxKind.StaticKeyword));
+        }
+
+        if (isReadonly)
+        {
+            tokens.Add(SyntaxFactory.Token(SyntaxKind.ReadOnlyKeyword));
+        }
+
+        return SyntaxFactory.TokenList(tokens);
     }
 
     /// <inheritdoc/>

@@ -359,11 +359,13 @@ public sealed class McpHandler
                             items = new { type = "string" },
                             description = "Field/property names for constructor initialization"
                         },
-                        propertyName = new { type = "string", description = "Name for new property" },
-                        propertyType = new { type = "string", description = "Type for new property" },
-                        hasGetter = new { type = "boolean", description = "Include getter (default: true)" },
-                        hasSetter = new { type = "boolean", description = "Include setter (default: true)" },
-                        initialValue = new { type = "string", description = "Initial value for property" },
+                        propertyName = new { type = "string", description = "Name for new property or field" },
+                        propertyType = new { type = "string", description = "Type for new property or field" },
+                        hasGetter = new { type = "boolean", description = "Include getter (default: true, for properties only)" },
+                        hasSetter = new { type = "boolean", description = "Include setter (default: true, for properties only)" },
+                        initialValue = new { type = "string", description = "Initial value for property or field" },
+                        isField = new { type = "boolean", description = "If true, generate a field instead of a property (default: false)" },
+                        isReadonly = new { type = "boolean", description = "If true, add readonly modifier (for fields)" },
                         methodName = new { type = "string", description = "Name for new method" },
                         returnType = new { type = "string", description = "Return type for new method" },
                         parameters = new
@@ -381,7 +383,7 @@ public sealed class McpHandler
                             },
                             description = "Method parameters"
                         },
-                        accessModifier = new { type = "string", description = "Access modifier (default: 'public')" },
+                        accessModifier = new { type = "string", description = "Access modifier for properties, fields, and methods (e.g., 'public', 'private', 'private readonly'). Default: 'public'" },
                         isAsync = new { type = "boolean", description = "Whether method is async" },
                         body = new { type = "string", description = "Optional method body code" },
                         testAttribute = new { type = "string", description = "Test attribute to add: Fact (xunit), Test (nunit), TestMethod (mstest). Auto-detects if omitted for test classes." },
@@ -3471,19 +3473,31 @@ public sealed class McpHandler
         var propertyType = args?.GetProperty("propertyType").GetString() ?? "";
         var solutionPath = args?.GetProperty("solutionPath").GetString() ?? "";
 
+        var accessModifier = "public";
         var hasGetter = true;
         var hasSetter = true;
         string? initialValue = null;
+        var isField = false;
+        var isReadonly = false;
+        var isStatic = false;
         var preview = false;
 
         if (args.HasValue)
         {
+            if (args.Value.TryGetProperty("accessModifier", out var amEl))
+                accessModifier = amEl.GetString() ?? "public";
             if (args.Value.TryGetProperty("hasGetter", out var gEl))
                 hasGetter = gEl.GetBoolean();
             if (args.Value.TryGetProperty("hasSetter", out var sEl))
                 hasSetter = sEl.GetBoolean();
             if (args.Value.TryGetProperty("initialValue", out var ivEl))
                 initialValue = ivEl.GetString();
+            if (args.Value.TryGetProperty("isField", out var ifEl))
+                isField = ifEl.GetBoolean();
+            if (args.Value.TryGetProperty("isReadonly", out var irEl))
+                isReadonly = irEl.GetBoolean();
+            if (args.Value.TryGetProperty("isStatic", out var isEl))
+                isStatic = isEl.GetBoolean();
             if (args.Value.TryGetProperty("preview", out var prevEl))
                 preview = prevEl.GetBoolean();
         }
@@ -3494,12 +3508,17 @@ public sealed class McpHandler
             PropertyName = propertyName,
             PropertyType = propertyType,
             SolutionPath = solutionPath,
+            AccessModifier = accessModifier,
             HasGetter = hasGetter,
             HasSetter = hasSetter,
             InitialValue = initialValue,
+            IsField = isField,
+            IsReadonly = isReadonly,
+            IsStatic = isStatic,
             Preview = preview
         }, ct);
 
+        var memberKind = isField ? "field" : "property";
         return new
         {
             success = result.Success,

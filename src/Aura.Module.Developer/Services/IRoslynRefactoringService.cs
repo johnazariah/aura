@@ -398,6 +398,9 @@ public sealed record AddPropertyRequest
     /// <summary>Path to the solution file.</summary>
     public required string SolutionPath { get; init; }
 
+    /// <summary>Access modifier (e.g., "public", "private", "internal", "protected").</summary>
+    public string AccessModifier { get; init; } = "public";
+
     /// <summary>Whether to include a getter.</summary>
     public bool HasGetter { get; init; } = true;
 
@@ -409,6 +412,15 @@ public sealed record AddPropertyRequest
 
     /// <summary>If true, return preview without applying changes.</summary>
     public bool Preview { get; init; }
+
+    /// <summary>If true, generate a field instead of a property.</summary>
+    public bool IsField { get; init; }
+
+    /// <summary>If true, add readonly modifier (for fields).</summary>
+    public bool IsReadonly { get; init; }
+
+    /// <summary>If true, add static modifier.</summary>
+    public bool IsStatic { get; init; }
 }
 
 /// <summary>
