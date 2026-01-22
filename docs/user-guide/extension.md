@@ -53,12 +53,15 @@ Access via Command Palette (`Ctrl+Shift+P`):
 
 | Command | Description |
 |---------|-------------|
-
 | `Aura: New Workflow` | Create a new workflow |
+| `Aura: Start Story from Issue` | Create a workflow from a GitHub issue URL |
 | `Aura: Open Chat` | Open chat panel |
 | `Aura: Index Repository` | Start code indexing |
 | `Aura: Show System Status` | View service health |
 | `Aura: Clean Up Workflows` | Remove old workflow data |
+| `Aura: Show Aura Logs` | View Aura API logs in the output panel |
+| `Aura: Show Ollama Logs` | View Ollama service logs |
+| `Aura: Verify Workflow` | Run verification checks on current workflow |
 
 ## Workflow Panel
 
@@ -140,6 +143,80 @@ Configure the extension in VS Code settings:
 | `aura.apiUrl` | `http://localhost:5300` | Aura API endpoint |
 | `aura.autoConnect` | `true` | Connect on VS Code start |
 | `aura.showStatusBar` | `true` | Show status in status bar |
+
+## MCP Integration with GitHub Copilot
+
+Aura exposes your indexed codebase to GitHub Copilot via MCP (Model Context Protocol). This enables Copilot to use Aura's semantic code understanding.
+
+### Setup
+
+Add to your VS Code `settings.json`:
+
+```json
+{
+  "github.copilot.chat.codeGeneration.instructions": [
+    { "file": ".github/copilot-instructions.md" }
+  ],
+  "mcp": {
+    "servers": {
+      "aura": {
+        "url": "http://localhost:5300/mcp"
+      }
+    }
+  }
+}
+```
+
+### Available MCP Tools
+
+When configured, Copilot can use these Aura tools:
+
+| Tool | Description |
+|------|-------------|
+| `aura_search` | Semantic code search across your codebase |
+| `aura_navigate` | Find callers, implementations, usages |
+| `aura_inspect` | Explore type members and structure |
+| `aura_validate` | Check compilation or run tests |
+| `aura_refactor` | Rename, extract, change signatures |
+| `aura_generate` | Create types, generate tests |
+| `aura_workflow` | Manage development workflows |
+| `aura_pattern` | Load operational patterns |
+
+### Example Usage
+
+When chatting with Copilot, you can ask it to use Aura's tools:
+
+```
+"Search my codebase for authentication logic"
+→ Copilot uses aura_search to find relevant code
+
+"Generate tests for the UserService class"
+→ Copilot uses aura_generate to create comprehensive tests
+
+"Rename User to Customer across the codebase"
+→ Copilot loads a pattern and uses aura_refactor
+```
+
+## Viewing Logs
+
+### Aura API Logs
+
+View logs from the Aura API server:
+
+1. **Command Palette** → "Aura: Show Aura Logs"
+2. Logs appear in the **Output** panel under "Aura"
+
+### Ollama Logs
+
+View logs from the Ollama LLM service:
+
+1. **Command Palette** → "Aura: Show Ollama Logs"
+2. Logs appear in the **Output** panel under "Ollama"
+
+Useful for troubleshooting:
+- Model loading issues
+- Slow inference
+- Memory problems
 
 ## Keyboard Shortcuts
 

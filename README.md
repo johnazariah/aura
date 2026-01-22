@@ -253,6 +253,45 @@ $env:GITHUB_TOKEN = "ghp_..."
 
 ---
 
+## Key Features
+
+### Stories from GitHub Issues
+
+Start work directly from a GitHub issue:
+
+```
+Command: "Aura: Start Story from Issue"
+→ Paste: https://github.com/org/repo/issues/42
+→ Aura creates a git worktree and branch
+→ Opens VS Code in the isolated worktree
+```
+
+### Operational Patterns
+
+Step-by-step playbooks for complex operations:
+
+- **comprehensive-rename** - Rename domain concepts across the codebase
+- **generate-tests** - Comprehensive test generation with language-specific guidance
+
+### Workflow Verification
+
+Before completing a workflow, Aura runs verification checks:
+
+- Build verification (dotnet build, npm build, cargo build, etc.)
+- Test verification (runs your test suite)
+- Reports pass/fail before finalizing
+
+### Agent Reflection
+
+Agents can self-critique their responses for higher quality output:
+
+```markdown
+## Metadata
+- **Reflection**: true
+```
+
+---
+
 ## Project Structure
 
 ```
@@ -265,16 +304,29 @@ src/
 extension/                 # VS Code extension
 agents/                    # Agent definitions (Markdown)
 prompts/                   # Prompt templates (Handlebars)
+patterns/                  # Operational patterns for complex tasks
 ```
 
 ---
 
 ## Documentation
 
+**Getting Started:**
 - [Installation Guide](docs/getting-started/installation.md)
-- [User Guide](docs/user-guide/workflows.md)
-- [LLM Configuration](docs/configuration/llm-providers.md)
-- [Tool Prerequisites](docs/TOOL-PREREQUISITES.md) - External tools for language-specific agents
+- [First Run](docs/getting-started/first-run.md)
+- [Quick Start](docs/getting-started/quick-start.md)
+
+**User Guide:**
+- [Workflows](docs/user-guide/workflows.md)
+- [Operational Patterns](docs/user-guide/patterns.md)
+- [MCP Tools](docs/user-guide/mcp-tools.md)
+- [Code Indexing](docs/user-guide/indexing.md)
+- [Use Cases](docs/user-guide/use-cases.md)
+
+**Configuration:**
+- [LLM Providers](docs/configuration/llm-providers.md)
+- [Settings Reference](docs/configuration/settings.md)
+- [Creating Agents](docs/configuration/agents.md)
 
 ## License
 

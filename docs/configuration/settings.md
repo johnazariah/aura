@@ -130,9 +130,64 @@ Location: `C:\Program Files\Aura\api\`
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-
 | `BranchPrefix` | `workflow` | Prefix for workflow branches |
 | `WorktreeDirectory` | `.worktrees` | Where to create git worktrees |
+
+## Verification
+
+Aura automatically runs verification checks (build, tests) before completing workflows.
+
+```json
+{
+  "Aura": {
+    "Modules": {
+      "Developer": {
+        "Verification": {
+          "TimeoutSeconds": 300,
+          "RunTests": true
+        }
+      }
+    }
+  }
+}
+```
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `TimeoutSeconds` | `300` | Maximum time for verification steps |
+| `RunTests` | `true` | Whether to run tests as part of verification |
+
+### Project Detection
+
+Aura auto-detects project type by looking for:
+
+| File | Project Type | Verification Steps |
+|------|--------------|-------------------|
+| `*.sln` or `*.csproj` | .NET | `dotnet build`, `dotnet test` |
+| `package.json` | Node.js | `npm run build`, `npm test` |
+| `Cargo.toml` | Rust | `cargo build`, `cargo test` |
+| `go.mod` | Go | `go build`, `go test` |
+| `pyproject.toml` | Python | `pytest` (if available) |
+
+## Patterns
+
+Operational patterns are stored in the `patterns/` directory.
+
+```json
+{
+  "Aura": {
+    "Patterns": {
+      "Directory": "patterns"
+    }
+  }
+}
+```
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `Directory` | `patterns` | Path to pattern files |
+
+Patterns support language overlays in subdirectories (e.g., `patterns/csharp/`).
 
 ## Logging
 

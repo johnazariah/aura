@@ -17,9 +17,11 @@ Learn how to use Aura effectively:
 - **[Use Cases](user-guide/use-cases.md)** - Practical examples for common tasks
 - **[Cheat Sheet](user-guide/cheat-sheet.md)** - Quick reference for developers
 - **[Workflows](user-guide/workflows.md)** - Create, manage, and execute AI workflows
+- **[Operational Patterns](user-guide/patterns.md)** - Step-by-step playbooks for complex tasks
 - **[Chat](user-guide/chat.md)** - Code-aware conversations with your codebase
 - **[Code Indexing](user-guide/indexing.md)** - How Aura understands your code
 - **[VS Code Extension](user-guide/extension.md)** - Extension features and shortcuts
+- **[MCP Tools](user-guide/mcp-tools.md)** - MCP integration with GitHub Copilot
 
 ## Configuration
 
@@ -27,6 +29,7 @@ Customize Aura for your needs:
 
 - **[LLM Providers](configuration/llm-providers.md)** - Configure Ollama, Azure OpenAI, or OpenAI
 - **[Settings Reference](configuration/settings.md)** - All configuration options
+- **[Creating Agents](configuration/agents.md)** - Define custom AI agents
 
 ## Troubleshooting
 

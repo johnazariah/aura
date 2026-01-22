@@ -99,6 +99,37 @@ This powers:
 - Workflow planning
 - Code exploration
 
+## Worktree-Aware Indexing
+
+When working in a **git worktree** (created for a workflow/story), Aura automatically shares the index with the main repository:
+
+```text
+main repo:     ~/projects/myapp/              ← Index lives here
+worktree 1:    ~/projects/myapp-worktrees/feature-x/   ← Shares main index
+worktree 2:    ~/projects/myapp-worktrees/feature-y/   ← Shares main index
+```
+
+### How It Works
+
+1. **Index the main repository** once
+2. When opening a worktree, Aura detects it's linked to an indexed repo
+3. Search and navigation use the shared index
+4. You don't need to re-index each worktree
+
+### Benefits
+
+- **Faster workflow startup** - No waiting for index
+- **Less storage** - One index per repo, not per worktree
+- **Consistent results** - Same code understanding across all worktrees
+
+### Automatic Detection
+
+Aura uses `git worktree list` to detect worktree relationships. This happens automatically when:
+
+- Opening a worktree folder in VS Code
+- Starting a workflow that creates a worktree
+- Using MCP tools from a worktree path
+
 ## Configuration
 
 ### Excluded Paths

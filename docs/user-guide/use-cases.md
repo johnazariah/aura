@@ -4,6 +4,7 @@ This guide shows practical examples of how to use Aura for common development ta
 
 ## Table of Contents
 
+- [Starting from a GitHub Issue](#starting-from-a-github-issue)
 - [Understanding Your Codebase](#understanding-your-codebase)
 - [Writing New Features](#writing-new-features)
 - [Writing Tests](#writing-tests)
@@ -12,6 +13,69 @@ This guide shows practical examples of how to use Aura for common development ta
 - [Bug Investigation](#bug-investigation)
 - [Code Review Assistance](#code-review-assistance)
 - [Learning a New Codebase](#learning-a-new-codebase)
+
+---
+
+## Starting from a GitHub Issue
+
+### Use Case: "Implement a feature from a GitHub issue"
+
+The fastest way to start work is directly from a GitHub issue.
+
+**Steps:**
+1. Open VS Code Command Palette (`Ctrl+Shift+P`)
+2. Run **"Aura: Start Story from Issue"**
+3. Paste the GitHub issue URL (e.g., `https://github.com/org/repo/issues/42`)
+4. Aura creates:
+   - A git worktree with an isolated branch
+   - A new VS Code window in that worktree
+   - A workflow bound to the issue context
+
+**Example:**
+```
+Paste: https://github.com/myteam/backend/issues/123
+
+Aura: Creating story from issue #123...
+      ✅ Branch: feature/123-add-user-export
+      ✅ Worktree: ~/projects/backend-worktrees/123-add-user-export/
+      ✅ Opening VS Code in worktree...
+```
+
+**Benefits:**
+- **Isolated environment** - Your main branch stays clean
+- **Issue context** - The agent knows exactly what to build
+- **Easy PR creation** - When done, finalize to create a PR
+
+### Use Case: "Work on multiple issues in parallel"
+
+Each story runs in its own worktree, so you can work on multiple issues simultaneously.
+
+**Steps:**
+1. Start Story from Issue #123
+2. Work on it until you're blocked
+3. Start Story from Issue #456 in a new window
+4. Switch between windows as needed
+5. Finalize each when complete
+
+```
+Window 1: ~/projects/backend-worktrees/123-add-user-export/
+Window 2: ~/projects/backend-worktrees/456-fix-auth-bug/
+Main repo: ~/projects/backend/ (stays on main branch)
+```
+
+### Use Case: "Follow a pattern for complex changes"
+
+For complex tasks, attach an operational pattern to your story.
+
+**Steps:**
+1. Start Story from Issue
+2. In the workflow panel, click **"Attach Pattern"**
+3. Select a pattern (e.g., "comprehensive-rename")
+4. The agent follows the pattern's steps exactly
+
+**Example patterns:**
+- `comprehensive-rename` - Domain-level renames across the codebase
+- `generate-tests` - Comprehensive test coverage for a class
 
 ---
 
