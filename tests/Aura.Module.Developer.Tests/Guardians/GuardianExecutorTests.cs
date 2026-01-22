@@ -133,8 +133,8 @@ public class GuardianExecutorTests
     [Fact]
     public async Task ExecuteAsync_SetsCompletedAtFromTimeProvider()
     {
-        // Arrange
-        var expectedTime = new DateTimeOffset(2026, 1, 19, 12, 0, 0, TimeSpan.Zero);
+        // Arrange - use a date far in the future to avoid FakeTimeProvider "can't go back in time" error
+        var expectedTime = new DateTimeOffset(2099, 12, 31, 12, 0, 0, TimeSpan.Zero);
         _timeProvider.SetUtcNow(expectedTime);
 
         var guardian = new GuardianDefinition
