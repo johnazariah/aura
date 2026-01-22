@@ -1,0 +1,42 @@
+---
+description: Retry prompt template for failed ReAct executions
+---
+## Previous Attempt Failed
+
+I tried to complete this task but encountered an error:
+
+**Error:** {{error}}
+
+{{#if lastThought}}
+**Last thought:** {{lastThought}}
+{{/if}}
+
+{{#if lastAction}}
+**Last action:** {{lastAction}}
+{{/if}}
+
+{{#if observation}}
+**Observation:** {{observation}}
+{{/if}}
+
+## What Went Wrong
+
+Analyze the error above. Common issues include:
+- **Build errors**: Missing using statements, typos, wrong types
+- **Test failures**: Incorrect assertions, missing test data
+- **Tool errors**: Wrong file path, incorrect parameters
+- **Max steps**: Task too complex, need to break it down
+
+## Try Again
+
+Please try a **different approach** to complete the task. Learn from the failure above.
+
+Strategies to consider:
+1. Read more context before making changes
+2. Make smaller, incremental edits
+3. Validate after each change
+4. If a tool failed, check parameters and try alternatives
+
+## Original Task
+
+{{originalTask}}
