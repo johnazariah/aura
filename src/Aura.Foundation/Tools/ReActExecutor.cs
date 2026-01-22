@@ -274,12 +274,31 @@ public partial class ReActExecutor(IToolRegistry toolRegistry, ILogger<ReActExec
             var elapsedSinceStart = DateTime.UtcNow - loopStartTime;
             _logger.LogWarning("[REACT-DEBUG] Step {Step}/{MaxSteps} starting at {Elapsed:F1}s elapsed", step, options.MaxSteps, elapsedSinceStart.TotalSeconds);
 
+
+            // Build budget warning if above threshold
+            var budgetWarning = "";
+            if (tokenTracker.IsAboveThreshold(options.BudgetWarningThreshold))
+            {
+                var percentUsed = tokenTracker.UsagePercent;
+                budgetWarning = percentUsed >= 90
+                    ? $"\n\n⚠️ CRITICAL: Context {percentUsed:F0}% full. Wrap up immediately or spawn sub-agent for remaining work."
+                    : percentUsed >= 80
+                        ? $"\n\n⚠️ WARNING: Context {percentUsed:F0}% full. Consider spawning a sub-agent for complex remaining tasks."
+                        : $"\n\n⚠️ CAUTION: Context {percentUsed:F0}% full. Plan to spawn sub-agents for complex work.";
+            }
+
             // Call LLM for next action
             LlmResponse llmResponse;
             try
             {
                 if (options.UseStructuredOutput)
                 {
+                    // Inject budget warning as system message if needed
+                    if (!string.IsNullOrEmpty(budgetWarning))
+                    {
+                        chatMessages.Add(new ChatMessage(ChatRole.System, budgetWarning.Trim()));
+                    }
+
                     // Use ChatAsync with structured output schema
                     var chatOptions = new ChatOptions
                     {
@@ -288,11 +307,18 @@ public partial class ReActExecutor(IToolRegistry toolRegistry, ILogger<ReActExec
                     };
 
                     llmResponse = await llm.ChatAsync(options.Model, chatMessages, chatOptions, ct);
+
+                    // Remove budget warning after call to avoid duplication in history
+                    if (!string.IsNullOrEmpty(budgetWarning) && chatMessages.Count > 0 &&
+                        chatMessages[^1].Role == ChatRole.System)
+                    {
+                        chatMessages.RemoveAt(chatMessages.Count - 1);
+                    }
                 }
                 else
                 {
                     // Legacy: use GenerateAsync with text prompt
-                    var prompt = $"{systemPrompt}\n\n{conversationHistory}\nStep {step}:";
+                    var prompt = $"{systemPrompt}\n\n{conversationHistory}{budgetWarning}\nStep {step}:";
                     llmResponse = await llm.GenerateAsync(options.Model, prompt, options.Temperature, ct);
                 }
             }
