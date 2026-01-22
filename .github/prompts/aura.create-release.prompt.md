@@ -1,7 +1,6 @@
 ---
-mode: agent
-description: Analyze changes, prepare documentation, validate quality, and execute an Aura release
-tools: ['run_in_terminal', 'read_file', 'replace_string_in_file', 'create_file']
+agent: agent
+description: Analyze changes, prepare documentation, validate quality, and execute an Aura release ceremony.
 ---
 
 # Prepare and Execute an Aura Release
