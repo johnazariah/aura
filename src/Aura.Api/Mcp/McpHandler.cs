@@ -418,6 +418,8 @@ public sealed class McpHandler
                         accessModifier = new { type = "string", description = "Access modifier for properties, fields, and methods (e.g., 'public', 'private', 'private readonly'). Default: 'public'" },
                         methodModifier = new { type = "string", description = "Method modifier: virtual, override, abstract, sealed, or new", @enum = new[] { "virtual", "override", "abstract", "sealed", "new" } },
                         isAsync = new { type = "boolean", description = "Whether method is async" },
+                        isExtension = new { type = "boolean", description = "Generate as extension method (first parameter gets 'this' modifier). Requires isStatic: true and containing class to be static." },
+                        documentation = new { type = "string", description = "XML documentation summary for the member." },
                         body = new { type = "string", description = "Optional method body code" },
                         testAttribute = new { type = "string", description = "Test attribute to add: Fact (xunit), Test (nunit), TestMethod (mstest). Auto-detects if omitted for test classes." },
                         attributes = new
@@ -3859,6 +3861,13 @@ public sealed class McpHandler
             attributes = ParseAttributeInfoList(attrEl);
         }
 
+        // Parse documentation
+        string? documentation = null;
+        if (args?.TryGetProperty("documentation", out var docEl) == true)
+        {
+            documentation = docEl.GetString();
+        }
+
         var result = await _refactoringService.AddPropertyAsync(new AddPropertyRequest
         {
             ClassName = className,
@@ -3875,6 +3884,7 @@ public sealed class McpHandler
             IsReadonly = isReadonly,
             IsStatic = isStatic,
             Attributes = attributes,
+            Documentation = documentation,
             Preview = preview
         }, ct);
 
@@ -3899,9 +3909,11 @@ public sealed class McpHandler
         var accessModifier = "public";
         var isAsync = false;
         var isStatic = false;
+        var isExtension = false;
         string? methodModifier = null;
         string? body = null;
         string? testAttribute = null;
+        string? documentation = null;
         var preview = false;
 
         if (args.HasValue)
@@ -3921,12 +3933,16 @@ public sealed class McpHandler
                 isAsync = asyncEl.GetBoolean();
             if (args.Value.TryGetProperty("isStatic", out var staticEl))
                 isStatic = staticEl.GetBoolean();
+            if (args.Value.TryGetProperty("isExtension", out var extEl))
+                isExtension = extEl.GetBoolean();
             if (args.Value.TryGetProperty("methodModifier", out var mmEl))
                 methodModifier = mmEl.GetString();
             if (args.Value.TryGetProperty("body", out var bodyEl))
                 body = bodyEl.GetString();
             if (args.Value.TryGetProperty("testAttribute", out var taEl))
                 testAttribute = taEl.GetString();
+            if (args.Value.TryGetProperty("documentation", out var docEl))
+                documentation = docEl.GetString();
             if (args.Value.TryGetProperty("preview", out var prevEl))
                 preview = prevEl.GetBoolean();
         }
@@ -3970,11 +3986,13 @@ public sealed class McpHandler
             AccessModifier = accessModifier,
             IsAsync = isAsync,
             IsStatic = isStatic,
+            IsExtension = isExtension,
             MethodModifier = methodModifier,
             Body = body,
             TestAttribute = testAttribute,
             TypeParameters = typeParameters,
             Attributes = attributes,
+            Documentation = documentation,
             Preview = preview
         }, ct);
 

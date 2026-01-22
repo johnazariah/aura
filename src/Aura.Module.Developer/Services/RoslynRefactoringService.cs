@@ -1238,6 +1238,19 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
                     property = property.WithAttributeLists(BuildAttributeListSyntax(request.Attributes));
                 }
 
+                // Add XML documentation if provided
+                if (!string.IsNullOrWhiteSpace(request.Documentation))
+                {
+                    var docComment = $"""
+                        /// <summary>
+                        /// {request.Documentation}
+                        /// </summary>
+
+                        """;
+                    var leadingTrivia = SyntaxFactory.ParseLeadingTrivia(docComment);
+                    property = property.WithLeadingTrivia(leadingTrivia);
+                }
+
                 member = property;
             }
 
@@ -1615,10 +1628,18 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
             }
 
             // Build parameters
-            var parameters = request.Parameters?.Select(p =>
+            var parameters = request.Parameters?.Select((p, index) =>
             {
                 var param = SyntaxFactory.Parameter(SyntaxFactory.Identifier(p.Name))
                     .WithType(SyntaxFactory.ParseTypeName(p.Type));
+
+                // Add 'this' modifier to first parameter for extension methods
+                if (request.IsExtension && index == 0)
+                {
+                    param = param.WithModifiers(
+                        SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.ThisKeyword)));
+                }
+
                 if (p.DefaultValue != null)
                 {
                     param = param.WithDefault(
@@ -1722,6 +1743,19 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
             if (allAttributeLists.Count > 0)
             {
                 method = method.WithAttributeLists(SyntaxFactory.List(allAttributeLists));
+            }
+
+            // Add XML documentation if provided
+            if (!string.IsNullOrWhiteSpace(request.Documentation))
+            {
+                var docComment = $"""
+                    /// <summary>
+                    /// {request.Documentation}
+                    /// </summary>
+
+                    """;
+                var leadingTrivia = SyntaxFactory.ParseLeadingTrivia(docComment);
+                method = method.WithLeadingTrivia(leadingTrivia);
             }
 
             var newClassNode = classNode.AddMembers(method);

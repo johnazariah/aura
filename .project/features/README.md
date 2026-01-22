@@ -73,6 +73,7 @@ features/
 | [Agent Reflection](completed/agent-reflection.md) | Self-critique step for agent responses | 2026-01-19 |
 | [Workflow Verification](completed/workflow-verification-stage.md) | Run build/lint/format checks before workflow completion | 2026-01-19 |
 | [macOS Local Development](completed/macos-local-development.md) | TreeSitter 1.2.0, install script, local dev support | 2026-01-19 |
+| [Modern C# Support](completed/aura-generate-modern-csharp.md) | Modern C# features for aura_generate | 2026-01-23 |
 
 ## Upcoming Features
 

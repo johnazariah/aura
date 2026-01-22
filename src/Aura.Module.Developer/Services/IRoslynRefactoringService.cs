@@ -444,6 +444,9 @@ public sealed record AddPropertyRequest
 
     /// <summary>Attributes to apply to the property.</summary>
     public IReadOnlyList<AttributeInfo>? Attributes { get; init; }
+
+    /// <summary>XML documentation summary for the property or field.</summary>
+    public string? Documentation { get; init; }
 }
 
 /// <summary>
@@ -495,6 +498,12 @@ public sealed record AddMethodRequest
 
     /// <summary>Attributes to apply to the method.</summary>
     public IReadOnlyList<AttributeInfo>? Attributes { get; init; }
+
+    /// <summary>If true, generate as extension method (first parameter gets 'this' modifier).</summary>
+    public bool IsExtension { get; init; }
+
+    /// <summary>XML documentation summary for the method.</summary>
+    public string? Documentation { get; init; }
 }
 
 /// <summary>
