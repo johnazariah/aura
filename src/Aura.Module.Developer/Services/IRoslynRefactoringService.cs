@@ -544,4 +544,11 @@ public sealed record CreateTypeRequest
 
     /// <summary>If true, return preview without applying changes.</summary>
     public bool Preview { get; init; }
+
+    /// <summary>
+    /// Primary constructor parameters (C# 12 for classes, C# 9 for records).
+    /// For records, these become positional parameters: record Person(string Name, int Age).
+    /// For classes, these become primary constructor: class Service(ILogger logger).
+    /// </summary>
+    public IReadOnlyList<ParameterInfo>? PrimaryConstructorParameters { get; init; }
 }

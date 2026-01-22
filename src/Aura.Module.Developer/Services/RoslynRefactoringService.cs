@@ -1310,6 +1310,67 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
         return SyntaxFactory.TokenList(tokens);
     }
 
+    private static ClassDeclarationSyntax CreateClassDeclaration(
+        string typeName,
+        List<SyntaxToken> modifiers,
+        BaseListSyntax? baseList,
+        ParameterListSyntax? primaryConstructorParams)
+    {
+        var classDecl = SyntaxFactory.ClassDeclaration(typeName)
+            .WithModifiers(SyntaxFactory.TokenList(modifiers))
+            .WithBaseList(baseList)
+            .WithOpenBraceToken(SyntaxFactory.Token(SyntaxKind.OpenBraceToken))
+            .WithCloseBraceToken(SyntaxFactory.Token(SyntaxKind.CloseBraceToken));
+
+        // C# 12: Primary constructor syntax
+        if (primaryConstructorParams != null)
+        {
+            classDecl = classDecl.WithParameterList(primaryConstructorParams);
+        }
+
+        return classDecl;
+    }
+
+    private static RecordDeclarationSyntax CreateRecordDeclaration(
+        string typeName,
+        List<SyntaxToken> modifiers,
+        BaseListSyntax? baseList,
+        ParameterListSyntax? primaryConstructorParams,
+        bool isStruct)
+    {
+        var recordKind = isStruct ? SyntaxKind.RecordStructDeclaration : SyntaxKind.RecordDeclaration;
+
+        var recordDecl = SyntaxFactory.RecordDeclaration(
+                recordKind,
+                SyntaxFactory.Token(SyntaxKind.RecordKeyword),
+                SyntaxFactory.Identifier(typeName))
+            .WithModifiers(SyntaxFactory.TokenList(modifiers))
+            .WithBaseList(baseList);
+
+        if (isStruct)
+        {
+            recordDecl = recordDecl.WithClassOrStructKeyword(SyntaxFactory.Token(SyntaxKind.StructKeyword));
+        }
+
+        // C# 9: Positional record syntax - record Person(string Name, int Age);
+        if (primaryConstructorParams != null)
+        {
+            // Use semicolon terminator for positional records (no body needed unless members added)
+            recordDecl = recordDecl
+                .WithParameterList(primaryConstructorParams)
+                .WithOpenBraceToken(SyntaxFactory.Token(SyntaxKind.OpenBraceToken))
+                .WithCloseBraceToken(SyntaxFactory.Token(SyntaxKind.CloseBraceToken));
+        }
+        else
+        {
+            recordDecl = recordDecl
+                .WithOpenBraceToken(SyntaxFactory.Token(SyntaxKind.OpenBraceToken))
+                .WithCloseBraceToken(SyntaxFactory.Token(SyntaxKind.CloseBraceToken));
+        }
+
+        return recordDecl;
+    }
+
     /// <inheritdoc/>
     public async Task<RefactoringResult> AddMethodAsync(AddMethodRequest request, CancellationToken ct = default)
     {
@@ -2000,14 +2061,28 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
             leadingTrivia = SyntaxFactory.ParseLeadingTrivia(docComment);
         }
 
+        // Build primary constructor parameter list if provided
+        ParameterListSyntax? primaryConstructorParams = null;
+        if (request.PrimaryConstructorParameters?.Count > 0)
+        {
+            var parameters = request.PrimaryConstructorParameters.Select(p =>
+            {
+                var param = SyntaxFactory.Parameter(SyntaxFactory.Identifier(p.Name))
+                    .WithType(SyntaxFactory.ParseTypeName(p.Type));
+                if (p.DefaultValue != null)
+                {
+                    param = param.WithDefault(
+                        SyntaxFactory.EqualsValueClause(SyntaxFactory.ParseExpression(p.DefaultValue)));
+                }
+                return param;
+            });
+            primaryConstructorParams = SyntaxFactory.ParameterList(SyntaxFactory.SeparatedList(parameters));
+        }
+
         // Generate the type based on kind
         TypeDeclarationSyntax? typeDecl = request.TypeKind.ToLowerInvariant() switch
         {
-            "class" => SyntaxFactory.ClassDeclaration(request.TypeName)
-                .WithModifiers(SyntaxFactory.TokenList(modifiers))
-                .WithBaseList(baseList)
-                .WithOpenBraceToken(SyntaxFactory.Token(SyntaxKind.OpenBraceToken))
-                .WithCloseBraceToken(SyntaxFactory.Token(SyntaxKind.CloseBraceToken)),
+            "class" => CreateClassDeclaration(request.TypeName, modifiers, baseList, primaryConstructorParams),
 
             "interface" => SyntaxFactory.InterfaceDeclaration(request.TypeName)
                 .WithModifiers(SyntaxFactory.TokenList(modifiers))
@@ -2015,24 +2090,11 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
                 .WithOpenBraceToken(SyntaxFactory.Token(SyntaxKind.OpenBraceToken))
                 .WithCloseBraceToken(SyntaxFactory.Token(SyntaxKind.CloseBraceToken)),
 
-            "record" when request.IsRecordStruct => SyntaxFactory.RecordDeclaration(
-                    SyntaxKind.RecordStructDeclaration,
-                    SyntaxFactory.Token(SyntaxKind.RecordKeyword),
-                    SyntaxFactory.Identifier(request.TypeName))
-                .WithClassOrStructKeyword(SyntaxFactory.Token(SyntaxKind.StructKeyword))
-                .WithModifiers(SyntaxFactory.TokenList(modifiers))
-                .WithBaseList(baseList)
-                .WithOpenBraceToken(SyntaxFactory.Token(SyntaxKind.OpenBraceToken))
-                .WithCloseBraceToken(SyntaxFactory.Token(SyntaxKind.CloseBraceToken)),
+            "record" when request.IsRecordStruct => CreateRecordDeclaration(
+                request.TypeName, modifiers, baseList, primaryConstructorParams, isStruct: true),
 
-            "record" => SyntaxFactory.RecordDeclaration(
-                    SyntaxKind.RecordDeclaration,
-                    SyntaxFactory.Token(SyntaxKind.RecordKeyword),
-                    SyntaxFactory.Identifier(request.TypeName))
-                .WithModifiers(SyntaxFactory.TokenList(modifiers))
-                .WithBaseList(baseList)
-                .WithOpenBraceToken(SyntaxFactory.Token(SyntaxKind.OpenBraceToken))
-                .WithCloseBraceToken(SyntaxFactory.Token(SyntaxKind.CloseBraceToken)),
+            "record" => CreateRecordDeclaration(
+                request.TypeName, modifiers, baseList, primaryConstructorParams, isStruct: false),
 
             "struct" => SyntaxFactory.StructDeclaration(request.TypeName)
                 .WithModifiers(SyntaxFactory.TokenList(modifiers))

@@ -11,7 +11,7 @@
 |-------|----------|--------|
 | 1 | `required` properties, `init` setters | ✅ Complete |
 | 2 | `virtual`/`override`/`abstract` methods, static methods | ✅ Complete |
-| 3 | Primary constructors (C# 12), positional records | ⏳ Not started |
+| 3 | Primary constructors (C# 12), positional records | ✅ Complete |
 | 4 | Generic types and methods with constraints | ⏳ Not started |
 | 5 | Attributes on members | ⏳ Not started |
 | 6 | Extension methods, XML docs, record structs | ⏳ Not started |

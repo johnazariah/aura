@@ -352,6 +352,21 @@ public sealed class McpHandler
                         isAbstract = new { type = "boolean", description = "Whether class is abstract (for create_type)" },
                         isStatic = new { type = "boolean", description = "Whether type or method is static" },
                         documentationSummary = new { type = "string", description = "XML doc summary for the type (for create_type)" },
+                        primaryConstructorParameters = new
+                        {
+                            type = "array",
+                            items = new
+                            {
+                                type = "object",
+                                properties = new
+                                {
+                                    name = new { type = "string" },
+                                    type = new { type = "string" },
+                                    defaultValue = new { type = "string" }
+                                }
+                            },
+                            description = "Primary constructor parameters (C# 12 for classes, C# 9 for records). For records, these become positional parameters."
+                        },
                         interfaceName = new { type = "string", description = "Interface to implement (for implement_interface)" },
                         explicitImplementation = new { type = "boolean", description = "Use explicit interface implementation (default: false)" },
                         members = new
@@ -3966,6 +3981,18 @@ public sealed class McpHandler
                 preview = prevEl.GetBoolean();
         }
 
+        // Parse primary constructor parameters
+        List<RefactoringParameterInfo>? primaryConstructorParameters = null;
+        if (args?.TryGetProperty("primaryConstructorParameters", out var pcpEl) == true && pcpEl.ValueKind == JsonValueKind.Array)
+        {
+            primaryConstructorParameters = pcpEl.EnumerateArray()
+                .Select(p => new RefactoringParameterInfo(
+                    Name: p.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "",
+                    Type: p.TryGetProperty("type", out var t) ? t.GetString() ?? "object" : "object",
+                    DefaultValue: p.TryGetProperty("defaultValue", out var dv) ? dv.GetString() : null))
+                .ToList();
+        }
+
         var result = await _refactoringService.CreateTypeAsync(new CreateTypeRequest
         {
             TypeName = typeName,
@@ -3982,6 +4009,7 @@ public sealed class McpHandler
             IsRecordStruct = isRecordStruct,
             AdditionalUsings = additionalUsings,
             DocumentationSummary = documentationSummary,
+            PrimaryConstructorParameters = primaryConstructorParameters,
             Preview = preview
         }, ct);
 
