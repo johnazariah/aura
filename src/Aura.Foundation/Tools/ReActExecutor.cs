@@ -63,14 +63,58 @@ public record ReActOptions
     /// Default: 100,000 (typical context window).
     /// </summary>
     public int TokenBudget { get; init; } = 100_000;
-
     /// <summary>
     /// Threshold percentage at which to warn agent about budget.
     /// Default: 70%.
     /// </summary>
     public double BudgetWarningThreshold { get; init; } = 70.0;
+
+    /// <summary>
+    /// Whether to automatically retry on failure.
+    /// When enabled, failed executions will be retried with failure context injected.
+    /// Default: false.
+    /// </summary>
+    public bool RetryOnFailure { get; init; } = false;
+
+    /// <summary>
+    /// Maximum number of retry attempts when RetryOnFailure is enabled.
+    /// Default: 3.
+    /// </summary>
+    public int MaxRetries { get; init; } = 3;
+
+    /// <summary>
+    /// Condition that determines when to retry.
+    /// Default: AllFailures (retry on any failure).
+    /// </summary>
+    public RetryCondition RetryCondition { get; init; } = RetryCondition.AllFailures;
+
+    /// <summary>
+    /// Optional custom prompt template for retry attempts.
+    /// If null, uses default retry prompt with error context.
+    /// </summary>
+    public string? RetryPromptTemplate { get; init; }
 }
 
+/// <summary>
+/// Conditions under which ReAct execution will retry on failure.
+/// </summary>
+public enum RetryCondition
+{
+    /// <summary>Retry on any failure.</summary>
+    AllFailures,
+
+    /// <summary>Retry only on build/compilation errors.</summary>
+    BuildErrors,
+
+    /// <summary>Retry only on test failures.</summary>
+    TestFailures,
+
+    /// <summary>Retry on build errors or test failures.</summary>
+    BuildOrTestFailures,
+
+    /// <summary>Never retry automatically.</summary>
+    Never,
+}
 /// <summary>
 /// Result of ReAct execution.
 /// </summary>
