@@ -181,6 +181,67 @@ public partial class ReActExecutor(IToolRegistry toolRegistry, ILogger<ReActExec
         CancellationToken ct = default)
     {
         options ??= new ReActOptions();
+
+        // If retry is disabled, execute once
+        if (!options.RetryOnFailure)
+        {
+            return await ExecuteSingleAttemptAsync(task, availableTools, llm, options, ct);
+        }
+
+        // Retry loop
+        var allSteps = new List<ReActStep>();
+        ReActResult? lastResult = null;
+        var overallStartTime = DateTime.UtcNow;
+
+        for (int attempt = 0; attempt <= options.MaxRetries; attempt++)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            var currentTask = task;
+
+            // For retry attempts, inject failure context
+            if (attempt > 0 && lastResult != null)
+            {
+                if (!ShouldRetry(lastResult, options.RetryCondition))
+                {
+                    _logger.LogInformation("[REACT] Retry condition not met, not retrying");
+                    break;
+                }
+
+                _logger.LogWarning("[REACT] Retry attempt {Attempt}/{MaxRetries}", attempt, options.MaxRetries);
+                currentTask = BuildRetryTask(task, lastResult, options.RetryPromptTemplate);
+            }
+
+            lastResult = await ExecuteSingleAttemptAsync(currentTask, availableTools, llm, options, ct);
+            allSteps.AddRange(lastResult.Steps);
+
+            if (lastResult.Success)
+            {
+                return lastResult with
+                {
+                    Steps = allSteps,
+                    TotalDuration = DateTime.UtcNow - overallStartTime
+                };
+            }
+        }
+
+        // All retries exhausted
+        return lastResult! with
+        {
+            Steps = allSteps,
+            TotalDuration = DateTime.UtcNow - overallStartTime,
+            Error = $"Failed after {options.MaxRetries + 1} attempts. Last error: {lastResult!.Error}"
+        };
+    }
+
+    private async Task<ReActResult> ExecuteSingleAttemptAsync(
+        string task,
+        IReadOnlyList<ToolDefinition> availableTools,
+        ILlmProvider llm,
+        ReActOptions options,
+        CancellationToken ct)
+    {
+        options ??= new ReActOptions();
         var steps = new List<ReActStep>();
         var totalTokens = 0;
         var tokenTracker = new TokenTracker(options.TokenBudget);
@@ -435,6 +496,94 @@ public partial class ReActExecutor(IToolRegistry toolRegistry, ILogger<ReActExec
             _logger.LogError(ex, "Tool {ToolId} threw exception", tool.ToolId);
             return $"Error: {ex.Message}";
         }
+    }
+
+    private static bool ShouldRetry(ReActResult result, RetryCondition condition)
+    {
+        if (result.Success)
+        {
+            return false;
+        }
+
+        return condition switch
+        {
+            RetryCondition.Never => false,
+            RetryCondition.AllFailures => true,
+            RetryCondition.BuildErrors => ContainsBuildError(result),
+            RetryCondition.TestFailures => ContainsTestFailure(result),
+            RetryCondition.BuildOrTestFailures => ContainsBuildError(result) || ContainsTestFailure(result),
+            _ => true
+        };
+    }
+
+    private static bool ContainsBuildError(ReActResult result)
+    {
+        // Check for common build error patterns
+        var errorPatterns = new[] { "error CS", "error TS", "BUILD FAILED", "compilation failed" };
+        var allObservations = string.Join(" ", result.Steps.Select(s => s.Observation));
+
+        return errorPatterns.Any(pattern =>
+            allObservations.Contains(pattern, StringComparison.OrdinalIgnoreCase) ||
+            (result.Error?.Contains(pattern, StringComparison.OrdinalIgnoreCase) ?? false));
+    }
+
+    private static bool ContainsTestFailure(ReActResult result)
+    {
+        // Check for common test failure patterns
+        var errorPatterns = new[] { "test failed", "tests failed", "FAILED:", "Assert." };
+        var allObservations = string.Join(" ", result.Steps.Select(s => s.Observation));
+
+        return errorPatterns.Any(pattern =>
+            allObservations.Contains(pattern, StringComparison.OrdinalIgnoreCase) ||
+            (result.Error?.Contains(pattern, StringComparison.OrdinalIgnoreCase) ?? false));
+    }
+
+    private static string BuildRetryTask(string originalTask, ReActResult failedResult, string? customTemplate)
+    {
+        var lastStep = failedResult.Steps.LastOrDefault();
+        var sb = new StringBuilder();
+
+        if (!string.IsNullOrEmpty(customTemplate))
+        {
+            // Simple template substitution (could use Handlebars in future)
+            return customTemplate
+                .Replace("{{error}}", failedResult.Error ?? "Unknown error")
+                .Replace("{{lastThought}}", lastStep?.Thought ?? "N/A")
+                .Replace("{{lastAction}}", lastStep?.Action ?? "N/A")
+                .Replace("{{observation}}", lastStep?.Observation ?? "N/A")
+                .Replace("{{originalTask}}", originalTask);
+        }
+
+        // Default retry prompt
+        sb.AppendLine("## Previous Attempt Failed");
+        sb.AppendLine();
+        sb.AppendLine($"**Error:** {failedResult.Error ?? "Task did not complete successfully"}");
+
+        if (lastStep != null)
+        {
+            sb.AppendLine($"**Last thought:** {lastStep.Thought}");
+            sb.AppendLine($"**Last action:** {lastStep.Action}");
+            sb.AppendLine($"**Observation:** {TruncateForRetry(lastStep.Observation)}");
+        }
+
+        sb.AppendLine();
+        sb.AppendLine("Please try again with a different approach. Learn from the failure above.");
+        sb.AppendLine();
+        sb.AppendLine("## Original Task");
+        sb.AppendLine();
+        sb.AppendLine(originalTask);
+
+        return sb.ToString();
+    }
+
+    private static string TruncateForRetry(string text, int maxLength = 500)
+    {
+        if (string.IsNullOrEmpty(text) || text.Length <= maxLength)
+        {
+            return text;
+        }
+
+        return text.Substring(0, maxLength) + "... (truncated)";
     }
 
     private static string BuildSystemPrompt(IReadOnlyList<ToolDefinition> tools, string? additionalContext, bool useStructuredOutput = false)
