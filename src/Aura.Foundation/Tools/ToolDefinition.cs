@@ -42,6 +42,10 @@ public record ToolInput
     public IReadOnlyDictionary<string, object?> Parameters { get; init; } =
         new Dictionary<string, object?>();
 
+    /// <summary>Optional token tracker for budget-aware tools</summary>
+    public TokenTracker? TokenTracker { get; init; }
+
+
     /// <summary>Get a parameter value with type conversion</summary>
     public T? GetParameter<T>(string name, T? defaultValue = default)
     {
