@@ -50,6 +50,9 @@ public class ToolRegistryInitializer(
             _loggerFactory.CreateLogger<SpawnSubAgentTool>());
         _registry.RegisterTool(subAgentTool);
 
+        _logger.LogInformation("Registering token budget tool");
+        _registry.RegisterTool(CheckTokenBudgetTool.GetDefinition());
+
         return Task.CompletedTask;
     }
 

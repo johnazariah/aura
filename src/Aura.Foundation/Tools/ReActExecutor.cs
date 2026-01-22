@@ -411,7 +411,8 @@ public partial class ReActExecutor(IToolRegistry toolRegistry, ILogger<ReActExec
                 {
                     ToolId = tool.ToolId,
                     WorkingDirectory = options.WorkingDirectory,
-                    Parameters = parameters
+                    Parameters = parameters,
+                    TokenTracker = tokenTracker
                 };
 
                 // Check confirmation if required
