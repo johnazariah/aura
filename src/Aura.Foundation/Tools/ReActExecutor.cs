@@ -56,8 +56,65 @@ public record ReActOptions
     /// Default is false for backward compatibility.
     /// </summary>
     public bool UseStructuredOutput { get; init; } = false;
+
+    /// <summary>
+    /// Approximate token budget for this execution.
+    /// When usage exceeds BudgetWarningThreshold%, agent may consider spawning sub-agents.
+    /// Default: 100,000 (typical context window).
+    /// </summary>
+    public int TokenBudget { get; init; } = 100_000;
+    /// <summary>
+    /// Threshold percentage at which to warn agent about budget.
+    /// Default: 70%.
+    /// </summary>
+    public double BudgetWarningThreshold { get; init; } = 70.0;
+
+    /// <summary>
+    /// Whether to automatically retry on failure.
+    /// When enabled, failed executions will be retried with failure context injected.
+    /// Default: false.
+    /// </summary>
+    public bool RetryOnFailure { get; init; } = false;
+
+    /// <summary>
+    /// Maximum number of retry attempts when RetryOnFailure is enabled.
+    /// Default: 3.
+    /// </summary>
+    public int MaxRetries { get; init; } = 3;
+
+    /// <summary>
+    /// Condition that determines when to retry.
+    /// Default: AllFailures (retry on any failure).
+    /// </summary>
+    public RetryCondition RetryCondition { get; init; } = RetryCondition.AllFailures;
+
+    /// <summary>
+    /// Optional custom prompt template for retry attempts.
+    /// If null, uses default retry prompt with error context.
+    /// </summary>
+    public string? RetryPromptTemplate { get; init; }
 }
 
+/// <summary>
+/// Conditions under which ReAct execution will retry on failure.
+/// </summary>
+public enum RetryCondition
+{
+    /// <summary>Retry on any failure.</summary>
+    AllFailures,
+
+    /// <summary>Retry only on build/compilation errors.</summary>
+    BuildErrors,
+
+    /// <summary>Retry only on test failures.</summary>
+    TestFailures,
+
+    /// <summary>Retry on build errors or test failures.</summary>
+    BuildOrTestFailures,
+
+    /// <summary>Never retry automatically.</summary>
+    Never,
+}
 /// <summary>
 /// Result of ReAct execution.
 /// </summary>
@@ -104,6 +161,8 @@ public record ReActStep
 
     /// <summary>Duration of this step</summary>
     public TimeSpan Duration { get; init; }
+    /// <summary>Cumulative tokens used up to and including this step</summary>
+    public int CumulativeTokens { get; init; }
 }
 
 /// <summary>
@@ -122,8 +181,70 @@ public partial class ReActExecutor(IToolRegistry toolRegistry, ILogger<ReActExec
         CancellationToken ct = default)
     {
         options ??= new ReActOptions();
+
+        // If retry is disabled, execute once
+        if (!options.RetryOnFailure)
+        {
+            return await ExecuteSingleAttemptAsync(task, availableTools, llm, options, ct);
+        }
+
+        // Retry loop
+        var allSteps = new List<ReActStep>();
+        ReActResult? lastResult = null;
+        var overallStartTime = DateTime.UtcNow;
+
+        for (int attempt = 0; attempt <= options.MaxRetries; attempt++)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            var currentTask = task;
+
+            // For retry attempts, inject failure context
+            if (attempt > 0 && lastResult != null)
+            {
+                if (!ShouldRetry(lastResult, options.RetryCondition))
+                {
+                    _logger.LogInformation("[REACT] Retry condition not met, not retrying");
+                    break;
+                }
+
+                _logger.LogWarning("[REACT] Retry attempt {Attempt}/{MaxRetries}", attempt, options.MaxRetries);
+                currentTask = BuildRetryTask(task, lastResult, options.RetryPromptTemplate);
+            }
+
+            lastResult = await ExecuteSingleAttemptAsync(currentTask, availableTools, llm, options, ct);
+            allSteps.AddRange(lastResult.Steps);
+
+            if (lastResult.Success)
+            {
+                return lastResult with
+                {
+                    Steps = allSteps,
+                    TotalDuration = DateTime.UtcNow - overallStartTime
+                };
+            }
+        }
+
+        // All retries exhausted
+        return lastResult! with
+        {
+            Steps = allSteps,
+            TotalDuration = DateTime.UtcNow - overallStartTime,
+            Error = $"Failed after {options.MaxRetries + 1} attempts. Last error: {lastResult!.Error}"
+        };
+    }
+
+    private async Task<ReActResult> ExecuteSingleAttemptAsync(
+        string task,
+        IReadOnlyList<ToolDefinition> availableTools,
+        ILlmProvider llm,
+        ReActOptions options,
+        CancellationToken ct)
+    {
+        options ??= new ReActOptions();
         var steps = new List<ReActStep>();
         var totalTokens = 0;
+        var tokenTracker = new TokenTracker(options.TokenBudget);
         var startTime = DateTime.UtcNow;
 
         var systemPrompt = BuildSystemPrompt(availableTools, options.AdditionalContext, options.UseStructuredOutput);
@@ -153,12 +274,31 @@ public partial class ReActExecutor(IToolRegistry toolRegistry, ILogger<ReActExec
             var elapsedSinceStart = DateTime.UtcNow - loopStartTime;
             _logger.LogWarning("[REACT-DEBUG] Step {Step}/{MaxSteps} starting at {Elapsed:F1}s elapsed", step, options.MaxSteps, elapsedSinceStart.TotalSeconds);
 
+
+            // Build budget warning if above threshold
+            var budgetWarning = "";
+            if (tokenTracker.IsAboveThreshold(options.BudgetWarningThreshold))
+            {
+                var percentUsed = tokenTracker.UsagePercent;
+                budgetWarning = percentUsed >= 90
+                    ? $"\n\n⚠️ CRITICAL: Context {percentUsed:F0}% full. Wrap up immediately or spawn sub-agent for remaining work."
+                    : percentUsed >= 80
+                        ? $"\n\n⚠️ WARNING: Context {percentUsed:F0}% full. Consider spawning a sub-agent for complex remaining tasks."
+                        : $"\n\n⚠️ CAUTION: Context {percentUsed:F0}% full. Plan to spawn sub-agents for complex work.";
+            }
+
             // Call LLM for next action
             LlmResponse llmResponse;
             try
             {
                 if (options.UseStructuredOutput)
                 {
+                    // Inject budget warning as system message if needed
+                    if (!string.IsNullOrEmpty(budgetWarning))
+                    {
+                        chatMessages.Add(new ChatMessage(ChatRole.System, budgetWarning.Trim()));
+                    }
+
                     // Use ChatAsync with structured output schema
                     var chatOptions = new ChatOptions
                     {
@@ -167,11 +307,18 @@ public partial class ReActExecutor(IToolRegistry toolRegistry, ILogger<ReActExec
                     };
 
                     llmResponse = await llm.ChatAsync(options.Model, chatMessages, chatOptions, ct);
+
+                    // Remove budget warning after call to avoid duplication in history
+                    if (!string.IsNullOrEmpty(budgetWarning) && chatMessages.Count > 0 &&
+                        chatMessages[^1].Role == ChatRole.System)
+                    {
+                        chatMessages.RemoveAt(chatMessages.Count - 1);
+                    }
                 }
                 else
                 {
                     // Legacy: use GenerateAsync with text prompt
-                    var prompt = $"{systemPrompt}\n\n{conversationHistory}\nStep {step}:";
+                    var prompt = $"{systemPrompt}\n\n{conversationHistory}{budgetWarning}\nStep {step}:";
                     llmResponse = await llm.GenerateAsync(options.Model, prompt, options.Temperature, ct);
                 }
             }
@@ -190,6 +337,15 @@ public partial class ReActExecutor(IToolRegistry toolRegistry, ILogger<ReActExec
             }
 
             totalTokens += llmResponse.TokensUsed;
+            tokenTracker.Add(llmResponse.TokensUsed);
+
+            // Check token budget threshold
+            if (tokenTracker.IsAboveThreshold(options.BudgetWarningThreshold))
+            {
+                _logger.LogWarning(
+                    "[REACT] Token budget {Percent:F1}% used ({Used}/{Budget}). Recommendation: {Recommendation}",
+                    tokenTracker.UsagePercent, tokenTracker.Used, tokenTracker.Budget, tokenTracker.GetRecommendation());
+            }
             var llmDuration = DateTime.UtcNow - stepStart;
             _logger.LogWarning("[REACT-DEBUG] Step {Step}: LLM call completed in {Duration:F1}s, tokens={Tokens}", step, llmDuration.TotalSeconds, llmResponse.TokensUsed);
 
@@ -217,7 +373,8 @@ public partial class ReActExecutor(IToolRegistry toolRegistry, ILogger<ReActExec
                     Action = "finish",
                     ActionInput = parsed.ActionInput,
                     Observation = "Task completed",
-                    Duration = DateTime.UtcNow - stepStart
+                    Duration = DateTime.UtcNow - stepStart,
+                    CumulativeTokens = tokenTracker.Used
                 });
 
                 // Extract the final answer - unwrap JSON if the LLM wrapped it
@@ -254,7 +411,8 @@ public partial class ReActExecutor(IToolRegistry toolRegistry, ILogger<ReActExec
                 {
                     ToolId = tool.ToolId,
                     WorkingDirectory = options.WorkingDirectory,
-                    Parameters = parameters
+                    Parameters = parameters,
+                    TokenTracker = tokenTracker
                 };
 
                 // Check confirmation if required
@@ -293,7 +451,8 @@ public partial class ReActExecutor(IToolRegistry toolRegistry, ILogger<ReActExec
                 Action = parsed.Action,
                 ActionInput = parsed.ActionInput,
                 Observation = observation,
-                Duration = DateTime.UtcNow - stepStart
+                Duration = DateTime.UtcNow - stepStart,
+                CumulativeTokens = tokenTracker.Used
             };
 
             steps.Add(reactStep);
@@ -364,6 +523,94 @@ public partial class ReActExecutor(IToolRegistry toolRegistry, ILogger<ReActExec
             _logger.LogError(ex, "Tool {ToolId} threw exception", tool.ToolId);
             return $"Error: {ex.Message}";
         }
+    }
+
+    private static bool ShouldRetry(ReActResult result, RetryCondition condition)
+    {
+        if (result.Success)
+        {
+            return false;
+        }
+
+        return condition switch
+        {
+            RetryCondition.Never => false,
+            RetryCondition.AllFailures => true,
+            RetryCondition.BuildErrors => ContainsBuildError(result),
+            RetryCondition.TestFailures => ContainsTestFailure(result),
+            RetryCondition.BuildOrTestFailures => ContainsBuildError(result) || ContainsTestFailure(result),
+            _ => true
+        };
+    }
+
+    private static bool ContainsBuildError(ReActResult result)
+    {
+        // Check for common build error patterns
+        var errorPatterns = new[] { "error CS", "error TS", "BUILD FAILED", "compilation failed" };
+        var allObservations = string.Join(" ", result.Steps.Select(s => s.Observation));
+
+        return errorPatterns.Any(pattern =>
+            allObservations.Contains(pattern, StringComparison.OrdinalIgnoreCase) ||
+            (result.Error?.Contains(pattern, StringComparison.OrdinalIgnoreCase) ?? false));
+    }
+
+    private static bool ContainsTestFailure(ReActResult result)
+    {
+        // Check for common test failure patterns
+        var errorPatterns = new[] { "test failed", "tests failed", "FAILED:", "Assert." };
+        var allObservations = string.Join(" ", result.Steps.Select(s => s.Observation));
+
+        return errorPatterns.Any(pattern =>
+            allObservations.Contains(pattern, StringComparison.OrdinalIgnoreCase) ||
+            (result.Error?.Contains(pattern, StringComparison.OrdinalIgnoreCase) ?? false));
+    }
+
+    private static string BuildRetryTask(string originalTask, ReActResult failedResult, string? customTemplate)
+    {
+        var lastStep = failedResult.Steps.LastOrDefault();
+        var sb = new StringBuilder();
+
+        if (!string.IsNullOrEmpty(customTemplate))
+        {
+            // Simple template substitution (could use Handlebars in future)
+            return customTemplate
+                .Replace("{{error}}", failedResult.Error ?? "Unknown error")
+                .Replace("{{lastThought}}", lastStep?.Thought ?? "N/A")
+                .Replace("{{lastAction}}", lastStep?.Action ?? "N/A")
+                .Replace("{{observation}}", lastStep?.Observation ?? "N/A")
+                .Replace("{{originalTask}}", originalTask);
+        }
+
+        // Default retry prompt
+        sb.AppendLine("## Previous Attempt Failed");
+        sb.AppendLine();
+        sb.AppendLine($"**Error:** {failedResult.Error ?? "Task did not complete successfully"}");
+
+        if (lastStep != null)
+        {
+            sb.AppendLine($"**Last thought:** {lastStep.Thought}");
+            sb.AppendLine($"**Last action:** {lastStep.Action}");
+            sb.AppendLine($"**Observation:** {TruncateForRetry(lastStep.Observation)}");
+        }
+
+        sb.AppendLine();
+        sb.AppendLine("Please try again with a different approach. Learn from the failure above.");
+        sb.AppendLine();
+        sb.AppendLine("## Original Task");
+        sb.AppendLine();
+        sb.AppendLine(originalTask);
+
+        return sb.ToString();
+    }
+
+    private static string TruncateForRetry(string text, int maxLength = 500)
+    {
+        if (string.IsNullOrEmpty(text) || text.Length <= maxLength)
+        {
+            return text;
+        }
+
+        return text.Substring(0, maxLength) + "... (truncated)";
     }
 
     private static string BuildSystemPrompt(IReadOnlyList<ToolDefinition> tools, string? additionalContext, bool useStructuredOutput = false)

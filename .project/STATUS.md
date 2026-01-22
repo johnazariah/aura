@@ -179,6 +179,42 @@ Major release with 121 commits since v1.2.0.
 
 None - all changes are additive.
 
+## In Development: Agentic Execution v2
+
+Branch: `feature/agentic-execution-v2`
+
+Enhancing the ReAct execution system with multi-agent orchestration, intelligent retry loops, and token budget awareness.
+
+### New Features
+
+| Feature | Status | Description |
+|---------|--------|-------------|
+| Sub-Agent Spawning | ✅ Complete | `spawn_sub_agent` tool for hierarchical task delegation |
+| Token Budget Tracking | ✅ Complete | `TokenTracker` class with configurable budgets |
+| Context Budget Awareness | ✅ Complete | `check_token_budget` tool for agents to monitor capacity |
+| Budget Warnings | ✅ Complete | Automatic warnings injected at 70%/80%/90% thresholds |
+| Intelligent Retry | ✅ Complete | Automatic retry loops for tool failures and incomplete actions |
+| Retry Templates | ✅ Complete | `react-retry.prompt` Handlebars template |
+
+### New Tools
+
+- `spawn_sub_agent` - Delegate complex subtasks to a new agent with fresh context
+- `check_token_budget` - Check remaining context window capacity
+
+### Configuration
+
+```csharp
+var options = new ReActOptions
+{
+    TokenBudget = 100_000,           // Total tokens for this execution
+    BudgetWarningThreshold = 0.7,    // Warn when 70% consumed
+    EnableRetryLoop = true,          // Retry on tool failures
+    MaxRetries = 3,                  // Max retry attempts per step
+    RetryDelayMs = 500               // Delay between retries
+};
+```
+
+See spec: [features/upcoming/agentic-execution-v2.md](features/upcoming/agentic-execution-v2.md)
 ## Recent Changes (Jan 13, 2026)
 
 1. **Structured Output Mode (Complete)**

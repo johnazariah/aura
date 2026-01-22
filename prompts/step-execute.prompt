@@ -12,6 +12,7 @@ tools:
   - git.branch
   - roslyn.validate_compilation
   - shell.execute
+  - spawn_subagent
 ---
 Execute this development step:
 
@@ -123,6 +124,27 @@ If the step says **"Commit"** or **"Apply"**:
 **For test file creation (ANY step that creates a *Tests.cs file):**
 - **MANDATORY FIRST STEP: Read an existing test file in the same test project BEFORE writing any code**
   - First find the test project: Use `file.list` with path=".", recursive=true, pattern="*Tests.csproj" to locate test projects
+
+## Sub-Agent Spawning
+
+For complex subtasks, you can spawn isolated sub-agents using `spawn_subagent`:
+
+**Use when:**
+- A subtask is self-contained (code review, test generation, documentation)
+- Context is filling up (approaching token limits)
+- You need a "fresh perspective" on a problem
+
+**Example:**
+```json
+{
+  "agent": "code-review-agent",
+  "task": "Review the test file I just created for coverage gaps",
+  "maxSteps": 5
+}
+```
+
+Do NOT spawn sub-agents for simple operations or when you're close to finishing.
+
   - Then find existing tests: Use `file.list` in the test project directory with pattern="*Tests.cs"
   - Use `file.read` to read at least one existing test file AND the .csproj to see what packages are referenced
   - Learn: testing framework (xUnit uses [Fact]/[Theory], NUnit uses [Test]/[TestFixture]), assertion style, mocking library

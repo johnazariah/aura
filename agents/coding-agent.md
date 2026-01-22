@@ -42,8 +42,16 @@ When writing tests:
 1. Cover happy path and edge cases
 2. Use appropriate mocking strategies
 3. Follow the test framework conventions for the language
-4. Aim for clear, readable test names
 
-User's request: {{context.Prompt}}
+
+## Sub-Agent Spawning
+
+For complex subtasks, you can spawn isolated sub-agents using `spawn_subagent`:
+- Use for self-contained tasks like code review, test generation, or documentation
+- Sub-agents get their own context window and return a summary
+- Example: `spawn_subagent` with agent="code-review-agent", task="Review the changes for best practices"
+
+Generate the requested code with explanations.
+
 
 Generate the requested code with explanations.
