@@ -1310,11 +1310,49 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
         return SyntaxFactory.TokenList(tokens);
     }
 
+    private static (TypeParameterListSyntax, SyntaxList<TypeParameterConstraintClauseSyntax>) BuildTypeParameterSyntax(
+        IReadOnlyList<TypeParameterInfo> typeParameters)
+    {
+        var typeParams = typeParameters.Select(tp =>
+            SyntaxFactory.TypeParameter(SyntaxFactory.Identifier(tp.Name)));
+        var typeParamList = SyntaxFactory.TypeParameterList(SyntaxFactory.SeparatedList(typeParams));
+
+        var constraintClauses = new List<TypeParameterConstraintClauseSyntax>();
+        foreach (var tp in typeParameters)
+        {
+            if (tp.Constraints != null && tp.Constraints.Count > 0)
+            {
+                var constraints = tp.Constraints.Select<string, TypeParameterConstraintSyntax>(c =>
+                {
+                    return c.ToLowerInvariant() switch
+                    {
+                        "class" => SyntaxFactory.ClassOrStructConstraint(SyntaxKind.ClassConstraint),
+                        "struct" => SyntaxFactory.ClassOrStructConstraint(SyntaxKind.StructConstraint),
+                        "notnull" => SyntaxFactory.TypeConstraint(SyntaxFactory.ParseTypeName("notnull")),
+                        "unmanaged" => SyntaxFactory.TypeConstraint(SyntaxFactory.ParseTypeName("unmanaged")),
+                        "new()" => SyntaxFactory.ConstructorConstraint(),
+                        "default" => SyntaxFactory.DefaultConstraint(),
+                        _ => SyntaxFactory.TypeConstraint(SyntaxFactory.ParseTypeName(c))
+                    };
+                });
+
+                var clause = SyntaxFactory.TypeParameterConstraintClause(
+                    SyntaxFactory.IdentifierName(tp.Name),
+                    SyntaxFactory.SeparatedList(constraints));
+                constraintClauses.Add(clause);
+            }
+        }
+
+        return (typeParamList, SyntaxFactory.List(constraintClauses));
+    }
+
     private static ClassDeclarationSyntax CreateClassDeclaration(
         string typeName,
         List<SyntaxToken> modifiers,
         BaseListSyntax? baseList,
-        ParameterListSyntax? primaryConstructorParams)
+        ParameterListSyntax? primaryConstructorParams,
+        TypeParameterListSyntax? typeParameterList = null,
+        SyntaxList<TypeParameterConstraintClauseSyntax> constraintClauses = default)
     {
         var classDecl = SyntaxFactory.ClassDeclaration(typeName)
             .WithModifiers(SyntaxFactory.TokenList(modifiers))
@@ -1328,7 +1366,67 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
             classDecl = classDecl.WithParameterList(primaryConstructorParams);
         }
 
+        // Generic type parameters
+        if (typeParameterList != null)
+        {
+            classDecl = classDecl.WithTypeParameterList(typeParameterList);
+            if (constraintClauses.Count > 0)
+            {
+                classDecl = classDecl.WithConstraintClauses(constraintClauses);
+            }
+        }
+
         return classDecl;
+    }
+
+    private static InterfaceDeclarationSyntax CreateInterfaceDeclaration(
+        string typeName,
+        List<SyntaxToken> modifiers,
+        BaseListSyntax? baseList,
+        TypeParameterListSyntax? typeParameterList = null,
+        SyntaxList<TypeParameterConstraintClauseSyntax> constraintClauses = default)
+    {
+        var interfaceDecl = SyntaxFactory.InterfaceDeclaration(typeName)
+            .WithModifiers(SyntaxFactory.TokenList(modifiers))
+            .WithBaseList(baseList)
+            .WithOpenBraceToken(SyntaxFactory.Token(SyntaxKind.OpenBraceToken))
+            .WithCloseBraceToken(SyntaxFactory.Token(SyntaxKind.CloseBraceToken));
+
+        if (typeParameterList != null)
+        {
+            interfaceDecl = interfaceDecl.WithTypeParameterList(typeParameterList);
+            if (constraintClauses.Count > 0)
+            {
+                interfaceDecl = interfaceDecl.WithConstraintClauses(constraintClauses);
+            }
+        }
+
+        return interfaceDecl;
+    }
+
+    private static StructDeclarationSyntax CreateStructDeclaration(
+        string typeName,
+        List<SyntaxToken> modifiers,
+        BaseListSyntax? baseList,
+        TypeParameterListSyntax? typeParameterList = null,
+        SyntaxList<TypeParameterConstraintClauseSyntax> constraintClauses = default)
+    {
+        var structDecl = SyntaxFactory.StructDeclaration(typeName)
+            .WithModifiers(SyntaxFactory.TokenList(modifiers))
+            .WithBaseList(baseList)
+            .WithOpenBraceToken(SyntaxFactory.Token(SyntaxKind.OpenBraceToken))
+            .WithCloseBraceToken(SyntaxFactory.Token(SyntaxKind.CloseBraceToken));
+
+        if (typeParameterList != null)
+        {
+            structDecl = structDecl.WithTypeParameterList(typeParameterList);
+            if (constraintClauses.Count > 0)
+            {
+                structDecl = structDecl.WithConstraintClauses(constraintClauses);
+            }
+        }
+
+        return structDecl;
     }
 
     private static RecordDeclarationSyntax CreateRecordDeclaration(
@@ -1336,7 +1434,9 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
         List<SyntaxToken> modifiers,
         BaseListSyntax? baseList,
         ParameterListSyntax? primaryConstructorParams,
-        bool isStruct)
+        bool isStruct,
+        TypeParameterListSyntax? typeParameterList = null,
+        SyntaxList<TypeParameterConstraintClauseSyntax> constraintClauses = default)
     {
         var recordKind = isStruct ? SyntaxKind.RecordStructDeclaration : SyntaxKind.RecordDeclaration;
 
@@ -1350,6 +1450,16 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
         if (isStruct)
         {
             recordDecl = recordDecl.WithClassOrStructKeyword(SyntaxFactory.Token(SyntaxKind.StructKeyword));
+        }
+
+        // Generic type parameters
+        if (typeParameterList != null)
+        {
+            recordDecl = recordDecl.WithTypeParameterList(typeParameterList);
+            if (constraintClauses.Count > 0)
+            {
+                recordDecl = recordDecl.WithConstraintClauses(constraintClauses);
+            }
         }
 
         // C# 9: Positional record syntax - record Person(string Name, int Age);
@@ -1540,6 +1650,17 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
                     SyntaxFactory.Identifier(request.MethodName))
                 .WithModifiers(SyntaxFactory.TokenList(modifiers))
                 .WithParameterList(SyntaxFactory.ParameterList(SyntaxFactory.SeparatedList(parameters)));
+
+            // Add generic type parameters if provided
+            if (request.TypeParameters?.Count > 0)
+            {
+                var (typeParamList, constraintClauses) = BuildTypeParameterSyntax(request.TypeParameters);
+                method = method.WithTypeParameterList(typeParamList);
+                if (constraintClauses.Count > 0)
+                {
+                    method = method.WithConstraintClauses(constraintClauses);
+                }
+            }
 
             // Abstract methods have no body, just a semicolon
             if (isAbstract)
@@ -2079,28 +2200,28 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
             primaryConstructorParams = SyntaxFactory.ParameterList(SyntaxFactory.SeparatedList(parameters));
         }
 
+        // Build generic type parameter list if provided
+        TypeParameterListSyntax? typeParameterList = null;
+        SyntaxList<TypeParameterConstraintClauseSyntax> constraintClauses = default;
+        if (request.TypeParameters?.Count > 0)
+        {
+            (typeParameterList, constraintClauses) = BuildTypeParameterSyntax(request.TypeParameters);
+        }
+
         // Generate the type based on kind
         TypeDeclarationSyntax? typeDecl = request.TypeKind.ToLowerInvariant() switch
         {
-            "class" => CreateClassDeclaration(request.TypeName, modifiers, baseList, primaryConstructorParams),
+            "class" => CreateClassDeclaration(request.TypeName, modifiers, baseList, primaryConstructorParams, typeParameterList, constraintClauses),
 
-            "interface" => SyntaxFactory.InterfaceDeclaration(request.TypeName)
-                .WithModifiers(SyntaxFactory.TokenList(modifiers))
-                .WithBaseList(baseList)
-                .WithOpenBraceToken(SyntaxFactory.Token(SyntaxKind.OpenBraceToken))
-                .WithCloseBraceToken(SyntaxFactory.Token(SyntaxKind.CloseBraceToken)),
+            "interface" => CreateInterfaceDeclaration(request.TypeName, modifiers, baseList, typeParameterList, constraintClauses),
 
             "record" when request.IsRecordStruct => CreateRecordDeclaration(
-                request.TypeName, modifiers, baseList, primaryConstructorParams, isStruct: true),
+                request.TypeName, modifiers, baseList, primaryConstructorParams, isStruct: true, typeParameterList, constraintClauses),
 
             "record" => CreateRecordDeclaration(
-                request.TypeName, modifiers, baseList, primaryConstructorParams, isStruct: false),
+                request.TypeName, modifiers, baseList, primaryConstructorParams, isStruct: false, typeParameterList, constraintClauses),
 
-            "struct" => SyntaxFactory.StructDeclaration(request.TypeName)
-                .WithModifiers(SyntaxFactory.TokenList(modifiers))
-                .WithBaseList(baseList)
-                .WithOpenBraceToken(SyntaxFactory.Token(SyntaxKind.OpenBraceToken))
-                .WithCloseBraceToken(SyntaxFactory.Token(SyntaxKind.CloseBraceToken)),
+            "struct" => CreateStructDeclaration(request.TypeName, modifiers, baseList, typeParameterList, constraintClauses),
 
             "enum" => null, // Enums are handled separately below
 

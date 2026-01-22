@@ -304,6 +304,13 @@ public sealed record ChangeSignatureRequest
 public sealed record ParameterInfo(string Name, string Type, string? DefaultValue = null);
 
 /// <summary>
+/// Information about a generic type parameter.
+/// </summary>
+/// <param name="Name">The type parameter name (e.g., "T", "TEntity").</param>
+/// <param name="Constraints">Constraints for the type parameter (e.g., "class", "new()", "IEntity").</param>
+public sealed record TypeParameterInfo(string Name, IReadOnlyList<string>? Constraints = null);
+
+/// <summary>
 /// Request to implement an interface.
 /// </summary>
 public sealed record ImplementInterfaceRequest
@@ -469,6 +476,12 @@ public sealed record AddMethodRequest
 
     /// <summary>Method modifier: virtual, override, abstract, sealed, or new.</summary>
     public string? MethodModifier { get; init; }
+
+    /// <summary>
+    /// Generic type parameters with optional constraints.
+    /// Example: T Create&lt;T&gt;() where T : new()
+    /// </summary>
+    public IReadOnlyList<TypeParameterInfo>? TypeParameters { get; init; }
 }
 
 /// <summary>
@@ -551,4 +564,10 @@ public sealed record CreateTypeRequest
     /// For classes, these become primary constructor: class Service(ILogger logger).
     /// </summary>
     public IReadOnlyList<ParameterInfo>? PrimaryConstructorParameters { get; init; }
+
+    /// <summary>
+    /// Generic type parameters with optional constraints.
+    /// Example: Repository&lt;TEntity&gt; where TEntity : class, IEntity
+    /// </summary>
+    public IReadOnlyList<TypeParameterInfo>? TypeParameters { get; init; }
 }

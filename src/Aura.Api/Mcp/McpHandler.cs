@@ -367,6 +367,20 @@ public sealed class McpHandler
                             },
                             description = "Primary constructor parameters (C# 12 for classes, C# 9 for records). For records, these become positional parameters."
                         },
+                        typeParameters = new
+                        {
+                            type = "array",
+                            items = new
+                            {
+                                type = "object",
+                                properties = new
+                                {
+                                    name = new { type = "string", description = "Type parameter name (e.g., 'T', 'TEntity')" },
+                                    constraints = new { type = "array", items = new { type = "string" }, description = "Constraints (e.g., 'class', 'new()', 'IEntity')" }
+                                }
+                            },
+                            description = "Generic type parameters for types and methods (e.g., Repository<TEntity> where TEntity : class, IEntity)"
+                        },
                         interfaceName = new { type = "string", description = "Interface to implement (for implement_interface)" },
                         explicitImplementation = new { type = "boolean", description = "Use explicit interface implementation (default: false)" },
                         members = new
@@ -3895,6 +3909,28 @@ public sealed class McpHandler
                 preview = prevEl.GetBoolean();
         }
 
+        // Parse generic type parameters for method
+        List<TypeParameterInfo>? typeParameters = null;
+        if (args?.TryGetProperty("typeParameters", out var tpEl) == true && tpEl.ValueKind == JsonValueKind.Array)
+        {
+            typeParameters = tpEl.EnumerateArray()
+                .Select(tp =>
+                {
+                    var name = tp.TryGetProperty("name", out var n) ? n.GetString() ?? "T" : "T";
+                    List<string>? constraints = null;
+                    if (tp.TryGetProperty("constraints", out var cEl) && cEl.ValueKind == JsonValueKind.Array)
+                    {
+                        constraints = cEl.EnumerateArray()
+                            .Select(c => c.GetString())
+                            .Where(s => s != null)
+                            .Cast<string>()
+                            .ToList();
+                    }
+                    return new TypeParameterInfo(name, constraints);
+                })
+                .ToList();
+        }
+
         var result = await _refactoringService.AddMethodAsync(new AddMethodRequest
         {
             ClassName = className,
@@ -3908,6 +3944,7 @@ public sealed class McpHandler
             MethodModifier = methodModifier,
             Body = body,
             TestAttribute = testAttribute,
+            TypeParameters = typeParameters,
             Preview = preview
         }, ct);
 
@@ -3993,6 +4030,28 @@ public sealed class McpHandler
                 .ToList();
         }
 
+        // Parse generic type parameters
+        List<TypeParameterInfo>? typeParameters = null;
+        if (args?.TryGetProperty("typeParameters", out var tpEl) == true && tpEl.ValueKind == JsonValueKind.Array)
+        {
+            typeParameters = tpEl.EnumerateArray()
+                .Select(tp =>
+                {
+                    var name = tp.TryGetProperty("name", out var n) ? n.GetString() ?? "T" : "T";
+                    List<string>? constraints = null;
+                    if (tp.TryGetProperty("constraints", out var cEl) && cEl.ValueKind == JsonValueKind.Array)
+                    {
+                        constraints = cEl.EnumerateArray()
+                            .Select(c => c.GetString())
+                            .Where(s => s != null)
+                            .Cast<string>()
+                            .ToList();
+                    }
+                    return new TypeParameterInfo(name, constraints);
+                })
+                .ToList();
+        }
+
         var result = await _refactoringService.CreateTypeAsync(new CreateTypeRequest
         {
             TypeName = typeName,
@@ -4010,6 +4069,7 @@ public sealed class McpHandler
             AdditionalUsings = additionalUsings,
             DocumentationSummary = documentationSummary,
             PrimaryConstructorParameters = primaryConstructorParameters,
+            TypeParameters = typeParameters,
             Preview = preview
         }, ct);
 
