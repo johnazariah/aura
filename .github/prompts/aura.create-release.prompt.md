@@ -141,19 +141,36 @@ Analyze changes since the last release, prepare documentation, validate quality,
 
 ## Phase 4: Execute Release
 
+### Version Sources
+
+The release uses version numbers from these sources:
+
+| Artifact | Version Source |
+|----------|----------------|
+| **VS Code Extension (.vsix)** | `extension/package.json` → `version` field |
+| **Windows Installer (.exe)** | Git tag (passed via `/DMyAppVersion=X.Y.Z` to ISCC) |
+| **GitHub Release** | Git tag name |
+
+**Only `extension/package.json` needs manual update.** The installer derives its version from the git tag automatically.
+
 1. **Update version** in `extension/package.json`:
    ```powershell
    # Edit extension/package.json to update "version": "X.Y.Z"
    ```
 
-2. **Commit version bump** (if any changes):
+2. **Rebuild the extension** (to update dist files):
    ```powershell
-   git add extension/package.json CHANGELOG.md
-   git commit -m "chore: bump version to X.Y.Z"
+   .\scripts\Build-Extension.ps1
+   ```
+
+3. **Commit version bump** (if any changes):
+   ```powershell
+   git add extension/package.json extension/dist/
+   git commit -m "chore(extension): bump version to X.Y.Z"
    git push origin main
    ```
 
-3. **Create annotated tag**:
+4. **Create annotated tag** (version MUST match package.json):
    ```powershell
    git tag -a vX.Y.Z -m "Release vX.Y.Z
 
@@ -163,7 +180,7 @@ Analyze changes since the last release, prepare documentation, validate quality,
    - Bug fix 1"
    ```
 
-4. **Push tag to trigger release workflow**:
+5. **Push tag to trigger release workflow**:
    ```powershell
    git push origin vX.Y.Z
    ```

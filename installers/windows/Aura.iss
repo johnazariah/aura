@@ -3,7 +3,10 @@
 ; Download: https://jrsoftware.org/isdl.php
 
 #define MyAppName "Aura"
-#define MyAppVersion "1.3.0"
+; Version can be overridden via command line: ISCC /DMyAppVersion=X.Y.Z
+#ifndef MyAppVersion
+  #define MyAppVersion "0.0.0-dev"
+#endif
 #define MyAppPublisher "John Azariah"
 #define MyAppURL "https://github.com/johnazariah/aura"
 #define MyAppExeName "Aura.Api.exe"
