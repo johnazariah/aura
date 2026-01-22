@@ -350,7 +350,7 @@ public sealed class McpHandler
                         implements = new { type = "array", items = new { type = "string" }, description = "Interfaces to implement (for create_type)" },
                         isSealed = new { type = "boolean", description = "Whether class is sealed (for create_type)" },
                         isAbstract = new { type = "boolean", description = "Whether class is abstract (for create_type)" },
-                        isStatic = new { type = "boolean", description = "Whether class is static (for create_type)" },
+                        isStatic = new { type = "boolean", description = "Whether type or method is static" },
                         documentationSummary = new { type = "string", description = "XML doc summary for the type (for create_type)" },
                         interfaceName = new { type = "string", description = "Interface to implement (for implement_interface)" },
                         explicitImplementation = new { type = "boolean", description = "Use explicit interface implementation (default: false)" },
@@ -364,6 +364,8 @@ public sealed class McpHandler
                         propertyType = new { type = "string", description = "Type for new property or field" },
                         hasGetter = new { type = "boolean", description = "Include getter (default: true, for properties only)" },
                         hasSetter = new { type = "boolean", description = "Include setter (default: true, for properties only)" },
+                        hasInit = new { type = "boolean", description = "Use init accessor instead of set (C# 9+). Mutually exclusive with hasSetter." },
+                        isRequired = new { type = "boolean", description = "Add required modifier (C# 11+)" },
                         initialValue = new { type = "string", description = "Initial value for property or field" },
                         isField = new { type = "boolean", description = "If true, generate a field instead of a property (default: false)" },
                         isReadonly = new { type = "boolean", description = "If true, add readonly modifier (for fields)" },
@@ -385,6 +387,7 @@ public sealed class McpHandler
                             description = "Method parameters"
                         },
                         accessModifier = new { type = "string", description = "Access modifier for properties, fields, and methods (e.g., 'public', 'private', 'private readonly'). Default: 'public'" },
+                        methodModifier = new { type = "string", description = "Method modifier: virtual, override, abstract, sealed, or new", @enum = new[] { "virtual", "override", "abstract", "sealed", "new" } },
                         isAsync = new { type = "boolean", description = "Whether method is async" },
                         body = new { type = "string", description = "Optional method body code" },
                         testAttribute = new { type = "string", description = "Test attribute to add: Fact (xunit), Test (nunit), TestMethod (mstest). Auto-detects if omitted for test classes." },
@@ -3774,6 +3777,8 @@ public sealed class McpHandler
         var accessModifier = "public";
         var hasGetter = true;
         var hasSetter = true;
+        var hasInit = false;
+        var isRequired = false;
         string? initialValue = null;
         var isField = false;
         var isReadonly = false;
@@ -3788,6 +3793,10 @@ public sealed class McpHandler
                 hasGetter = gEl.GetBoolean();
             if (args.Value.TryGetProperty("hasSetter", out var sEl))
                 hasSetter = sEl.GetBoolean();
+            if (args.Value.TryGetProperty("hasInit", out var hiEl))
+                hasInit = hiEl.GetBoolean();
+            if (args.Value.TryGetProperty("isRequired", out var reqEl))
+                isRequired = reqEl.GetBoolean();
             if (args.Value.TryGetProperty("initialValue", out var ivEl))
                 initialValue = ivEl.GetString();
             if (args.Value.TryGetProperty("isField", out var ifEl))
@@ -3809,6 +3818,8 @@ public sealed class McpHandler
             AccessModifier = accessModifier,
             HasGetter = hasGetter,
             HasSetter = hasSetter,
+            HasInit = hasInit,
+            IsRequired = isRequired,
             InitialValue = initialValue,
             IsField = isField,
             IsReadonly = isReadonly,
@@ -3836,6 +3847,8 @@ public sealed class McpHandler
         List<RefactoringParameterInfo>? parameters = null;
         var accessModifier = "public";
         var isAsync = false;
+        var isStatic = false;
+        string? methodModifier = null;
         string? body = null;
         string? testAttribute = null;
         var preview = false;
@@ -3855,6 +3868,10 @@ public sealed class McpHandler
                 accessModifier = amEl.GetString() ?? "public";
             if (args.Value.TryGetProperty("isAsync", out var asyncEl))
                 isAsync = asyncEl.GetBoolean();
+            if (args.Value.TryGetProperty("isStatic", out var staticEl))
+                isStatic = staticEl.GetBoolean();
+            if (args.Value.TryGetProperty("methodModifier", out var mmEl))
+                methodModifier = mmEl.GetString();
             if (args.Value.TryGetProperty("body", out var bodyEl))
                 body = bodyEl.GetString();
             if (args.Value.TryGetProperty("testAttribute", out var taEl))
@@ -3872,6 +3889,8 @@ public sealed class McpHandler
             Parameters = parameters,
             AccessModifier = accessModifier,
             IsAsync = isAsync,
+            IsStatic = isStatic,
+            MethodModifier = methodModifier,
             Body = body,
             TestAttribute = testAttribute,
             Preview = preview

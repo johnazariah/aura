@@ -421,6 +421,12 @@ public sealed record AddPropertyRequest
 
     /// <summary>If true, add static modifier.</summary>
     public bool IsStatic { get; init; }
+
+    /// <summary>If true, add required modifier (C# 11+).</summary>
+    public bool IsRequired { get; init; }
+
+    /// <summary>If true, use init accessor instead of set (C# 9+).</summary>
+    public bool HasInit { get; init; }
 }
 
 /// <summary>
@@ -457,6 +463,12 @@ public sealed record AddMethodRequest
 
     /// <summary>If true, return preview without applying changes.</summary>
     public bool Preview { get; init; }
+
+    /// <summary>If true, add static modifier.</summary>
+    public bool IsStatic { get; init; }
+
+    /// <summary>Method modifier: virtual, override, abstract, sealed, or new.</summary>
+    public string? MethodModifier { get; init; }
 }
 
 /// <summary>

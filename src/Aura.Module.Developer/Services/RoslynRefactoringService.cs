@@ -1179,7 +1179,7 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
             }
 
             // Build modifiers
-            var modifiers = BuildModifiers(request.AccessModifier, request.IsStatic, request.IsReadonly);
+            var modifiers = BuildModifiers(request.AccessModifier, request.IsStatic, request.IsReadonly, request.IsRequired);
 
             MemberDeclarationSyntax member;
             if (request.IsField)
@@ -1207,7 +1207,13 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
                     accessors.Add(SyntaxFactory.AccessorDeclaration(SyntaxKind.GetAccessorDeclaration)
                         .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken)));
                 }
-                if (request.HasSetter)
+                if (request.HasInit)
+                {
+                    // Use init accessor (C# 9+)
+                    accessors.Add(SyntaxFactory.AccessorDeclaration(SyntaxKind.InitAccessorDeclaration)
+                        .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken)));
+                }
+                else if (request.HasSetter)
                 {
                     accessors.Add(SyntaxFactory.AccessorDeclaration(SyntaxKind.SetAccessorDeclaration)
                         .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken)));
@@ -1264,7 +1270,7 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
         }
     }
 
-    private static SyntaxTokenList BuildModifiers(string accessModifier, bool isStatic, bool isReadonly)
+    private static SyntaxTokenList BuildModifiers(string accessModifier, bool isStatic, bool isReadonly, bool isRequired = false)
     {
         var tokens = new List<SyntaxToken>();
 
@@ -1294,6 +1300,11 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
         if (isReadonly)
         {
             tokens.Add(SyntaxFactory.Token(SyntaxKind.ReadOnlyKeyword));
+        }
+
+        if (isRequired)
+        {
+            tokens.Add(SyntaxFactory.Token(SyntaxKind.RequiredKeyword));
         }
 
         return SyntaxFactory.TokenList(tokens);
@@ -1375,6 +1386,29 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
                 })
             };
 
+            if (request.IsStatic)
+            {
+                modifiers.Add(SyntaxFactory.Token(SyntaxKind.StaticKeyword));
+            }
+
+            // Add method modifiers (virtual, override, abstract, sealed, new)
+            if (!string.IsNullOrEmpty(request.MethodModifier))
+            {
+                var methodModKind = request.MethodModifier.ToLowerInvariant() switch
+                {
+                    "virtual" => SyntaxKind.VirtualKeyword,
+                    "override" => SyntaxKind.OverrideKeyword,
+                    "abstract" => SyntaxKind.AbstractKeyword,
+                    "sealed" => SyntaxKind.SealedKeyword,
+                    "new" => SyntaxKind.NewKeyword,
+                    _ => SyntaxKind.None
+                };
+                if (methodModKind != SyntaxKind.None)
+                {
+                    modifiers.Add(SyntaxFactory.Token(methodModKind));
+                }
+            }
+
             if (request.IsAsync)
             {
                 modifiers.Add(SyntaxFactory.Token(SyntaxKind.AsyncKeyword));
@@ -1393,53 +1427,68 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
                 return param;
             }).ToList() ?? [];
 
-            // Build body
-            BlockSyntax methodBody;
-            if (!string.IsNullOrWhiteSpace(request.Body))
-            {
-                // Try to parse as a block first (e.g., "{ statement1; statement2; }")
-                // If not wrapped in braces, parse as individual statements
-                var bodyText = request.Body.Trim();
-                if (bodyText.StartsWith('{') && bodyText.EndsWith('}'))
-                {
-                    // Parse entire block
-                    methodBody = (BlockSyntax)SyntaxFactory.ParseStatement(bodyText);
-                }
-                else
-                {
-                    // Parse as individual statements - split by semicolons and newlines
-                    var statements = new List<StatementSyntax>();
+            // Check if this is an abstract method (no body)
+            var isAbstract = request.MethodModifier?.Equals("abstract", StringComparison.OrdinalIgnoreCase) == true;
 
-                    // Try parsing the whole thing as multiple statements
-                    var parsed = SyntaxFactory.ParseStatement("{ " + bodyText + " }");
-                    if (parsed is BlockSyntax block && !block.ContainsDiagnostics)
+            // Build body (unless abstract)
+            BlockSyntax? methodBody = null;
+            if (!isAbstract)
+            {
+                if (!string.IsNullOrWhiteSpace(request.Body))
+                {
+                    // Try to parse as a block first (e.g., "{ statement1; statement2; }")
+                    // If not wrapped in braces, parse as individual statements
+                    var bodyText = request.Body.Trim();
+                    if (bodyText.StartsWith('{') && bodyText.EndsWith('}'))
                     {
-                        statements.AddRange(block.Statements);
+                        // Parse entire block
+                        methodBody = (BlockSyntax)SyntaxFactory.ParseStatement(bodyText);
                     }
                     else
                     {
-                        // Fallback: parse as single statement
-                        statements.Add(SyntaxFactory.ParseStatement(bodyText + (bodyText.EndsWith(';') ? "" : ";")));
-                    }
+                        // Parse as individual statements - split by semicolons and newlines
+                        var statements = new List<StatementSyntax>();
 
-                    methodBody = SyntaxFactory.Block(statements);
+                        // Try parsing the whole thing as multiple statements
+                        var parsed = SyntaxFactory.ParseStatement("{ " + bodyText + " }");
+                        if (parsed is BlockSyntax block && !block.ContainsDiagnostics)
+                        {
+                            statements.AddRange(block.Statements);
+                        }
+                        else
+                        {
+                            // Fallback: parse as single statement
+                            statements.Add(SyntaxFactory.ParseStatement(bodyText + (bodyText.EndsWith(';') ? "" : ";")));
+                        }
+
+                        methodBody = SyntaxFactory.Block(statements);
+                    }
                 }
-            }
-            else
-            {
-                methodBody = SyntaxFactory.Block(
-                    SyntaxFactory.ThrowStatement(
-                        SyntaxFactory.ObjectCreationExpression(
-                            SyntaxFactory.ParseTypeName("NotImplementedException"))
-                            .WithArgumentList(SyntaxFactory.ArgumentList())));
+                else
+                {
+                    methodBody = SyntaxFactory.Block(
+                        SyntaxFactory.ThrowStatement(
+                            SyntaxFactory.ObjectCreationExpression(
+                                SyntaxFactory.ParseTypeName("NotImplementedException"))
+                                .WithArgumentList(SyntaxFactory.ArgumentList())));
+                }
             }
 
             var method = SyntaxFactory.MethodDeclaration(
                     SyntaxFactory.ParseTypeName(request.ReturnType),
                     SyntaxFactory.Identifier(request.MethodName))
                 .WithModifiers(SyntaxFactory.TokenList(modifiers))
-                .WithParameterList(SyntaxFactory.ParameterList(SyntaxFactory.SeparatedList(parameters)))
-                .WithBody(methodBody);
+                .WithParameterList(SyntaxFactory.ParameterList(SyntaxFactory.SeparatedList(parameters)));
+
+            // Abstract methods have no body, just a semicolon
+            if (isAbstract)
+            {
+                method = method.WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken));
+            }
+            else
+            {
+                method = method.WithBody(methodBody);
+            }
 
             // Add test attribute if this is a test class
             if (testFramework != null)
