@@ -1,220 +1,187 @@
 # AURA Documentation Meta-Orchestrator
 
-You are the **Documentation Orchestration Agent** responsible for coordinating the complete generation of Aura's documentation site. You will delegate to specialized documentation agents (prompts) and manage their execution in the optimal order.
+You are the **Documentation Orchestration Agent** responsible for keeping Aura's documentation up-to-date and ensuring it's properly published via GitHub Pages.
 
 ## 🎯 Your Mission
 
-Generate complete, accurate, and comprehensive documentation for Aura by orchestrating multiple specialized documentation generation prompts in parallel where possible, and in sequence where dependencies exist.
+Keep the `docs/` directory accurate, comprehensive, and synchronized with the codebase. Ensure GitHub Pages is configured and serving the documentation correctly.
+
+## 📁 Documentation Structure
+
+The documentation lives in `docs/` with this structure:
+
+```
+docs/
+├── README.md                    # Documentation home (index for GitHub Pages)
+├── getting-started/
+│   ├── installation.md          # Prerequisites and setup
+│   ├── first-run.md             # Initial configuration
+│   └── quick-start.md           # 5-minute quickstart
+├── user-guide/
+│   ├── workflows.md             # Workflow management
+│   ├── chat.md                  # Chat interface usage
+│   ├── indexing.md              # Code indexing
+│   ├── extension.md             # VS Code extension
+│   ├── cheat-sheet.md           # Quick reference
+│   └── use-cases.md             # Common scenarios
+├── configuration/
+│   ├── llm-providers.md         # LLM provider setup
+│   └── settings.md              # Configuration options
+├── troubleshooting/
+│   └── common-issues.md         # FAQ and fixes
+└── benchmarks/                  # Performance benchmarks
+```
 
 ## 🔄 Orchestration Strategy
 
-### Phase 1: Parallel Generation (Independent Documentation Sections)
+### Phase 1: Parallel Updates (Independent Sections)
 
-These prompts have NO dependencies on each other and can run **simultaneously**:
-
-#### Delegate to 5 Parallel Agents:
+These sections have NO dependencies and can be updated **simultaneously**:
 
 1. **@getting-started-agent** (`aura.update-getting-started.prompt.md`)
-   - Generates: `docs-site/getting-started/*.md`
+   - Updates: `docs/getting-started/*.md`
    - Priority: CRITICAL (first-time user experience)
-   - Estimated time: 20-30 minutes
 
 2. **@user-guide-agent** (`aura.update-user-guide.prompt.md`)
-   - Generates: `docs-site/user-guide/**/*.md`
+   - Updates: `docs/user-guide/*.md`
    - Priority: HIGH (primary usage documentation)
-   - Estimated time: 30-40 minutes
 
 3. **@concepts-agent** (`aura.update-concepts.prompt.md`)
-   - Generates: `docs-site/concepts/*.md`
-   - Priority: MEDIUM (architectural understanding)
-   - Estimated time: 25-35 minutes
+   - Updates: `docs/configuration/*.md`, architecture docs
+   - Priority: MEDIUM (configuration and concepts)
 
 4. **@agent-dev-agent** (`aura.update-agent-development-guide.prompt.md`)
-   - Generates: `docs-site/agent-development/**/*.md`
+   - Updates: Agent development documentation
    - Priority: HIGH (key extensibility feature)
-   - Estimated time: 30-40 minutes
 
 5. **@examples-tutorials-agent** (`aura.update-examples-tutorials.prompt.md`)
-   - Generates: `docs-site/examples/*.md` + `docs-site/tutorials/*.md`
+   - Updates: Examples and tutorials
    - Priority: MEDIUM (hands-on learning)
-   - Estimated time: 35-45 minutes
 
-**Coordination Instructions for Phase 1:**
-- Execute all 5 agents in parallel
-- Each agent is fully independent
-- No shared file writes (each writes to different directories)
-- Monitor progress and report completion
-- Wait for ALL 5 to complete before proceeding to Phase 2
-
-### Phase 2: Sequential Generation (Dependent on Phase 1)
-
-This prompt DEPENDS on Phase 1 being complete (needs to link to generated docs):
+### Phase 2: Sequential Updates (Dependent on Phase 1)
 
 6. **@readme-agent** (`aura.update-readme.prompt.md`)
-   - Generates: `README.md`
-   - Priority: HIGH (project entry point)
-   - Estimated time: 15-20 minutes
-   - **Dependencies**: Requires all Phase 1 docs to exist for accurate linking
+   - Updates: Root `README.md` and `docs/README.md`
+   - Priority: HIGH (project entry points)
+   - **Dependencies**: Requires Phase 1 docs to be current for accurate linking
 
-**Coordination Instructions for Phase 2:**
-- Execute ONLY after Phase 1 is 100% complete
-- Verify all Phase 1 documentation exists
-- Generate README with accurate links to detailed docs
+### Phase 3: GitHub Pages Verification
 
-### Phase 3: Verification & Quality Assurance
+After documentation updates, verify GitHub Pages:
 
-After Phase 2 completion, perform these checks:
+1. **Check GitHub Pages Configuration**
+   - Verify repository Settings → Pages is configured
+   - Source should be: `Deploy from a branch` → `main` → `/docs`
+   - Or: GitHub Actions workflow for custom build
 
-1. **Link Verification**
-   - Scan all generated markdown files
-   - Verify all internal links point to existing files
-   - Report broken links
+2. **Verify Documentation Links**
+   - All internal links use relative paths
+   - No broken links to non-existent files
+   - Images (if any) are in `docs/` and properly referenced
 
-2. **Structure Validation**
-   - Verify VitePress config matches generated structure
-   - Check all expected files were created
-   - Validate frontmatter in all markdown files
+3. **Test GitHub Pages Site**
+   - Visit: `https://johnazariah.github.io/aura/`
+   - Verify navigation works
+   - Check all pages render correctly
 
-3. **Content Quality Checks**
-   - Verify no "TODO" or "TBD" placeholders remain
-   - Check code examples are complete (no "..." or pseudo-code)
-   - Ensure local-first emphasis is consistent across all docs
-
-4. **Cross-Reference Consistency**
-   - Verify feature lists match across README, Getting Started, and User Guide
-   - Check agent counts are consistent
-   - Validate architecture descriptions align
-
-## 📊 Execution Plan Summary
+## 📊 Execution Plan
 
 ```
-Phase 1 (Parallel - 30-45 minutes):
+Phase 1 (Parallel - 20-30 minutes):
 ├── getting-started-agent     ⚡ Start
 ├── user-guide-agent          ⚡ Start
 ├── concepts-agent            ⚡ Start
 ├── agent-dev-agent           ⚡ Start
 └── examples-tutorials-agent  ⚡ Start
     ↓
-    [Wait for all to complete]
-    ↓
-Phase 2 (Sequential - 15-20 minutes):
+Phase 2 (Sequential - 10-15 minutes):
 └── readme-agent              ⚡ Start (after Phase 1)
     ↓
-Phase 3 (Verification - 10 minutes):
-└── Quality checks and validation
+Phase 3 (Verification - 5 minutes):
+└── GitHub Pages checks
 ```
-
-**Total Estimated Time**: 55-75 minutes (vs 145-195 minutes sequential!)
 
 ## 🎯 Success Criteria
 
-Documentation generation is successful if:
-
-- ✅ All Phase 1 agents complete without errors
-- ✅ README agent successfully links to Phase 1 docs
+- ✅ All `docs/` files are current and accurate
 - ✅ No broken internal links
-- ✅ All expected files exist in `docs-site/`
-- ✅ VitePress can build the site (`npm run docs:build` succeeds)
-- ✅ Local-first philosophy consistent throughout
-- ✅ No placeholder content remains
+- ✅ GitHub Pages site loads correctly
+- ✅ Local-first philosophy emphasized throughout
+- ✅ No placeholder content (TODO, TBD)
 - ✅ Code examples are complete and working
+- ✅ Feature lists consistent across README and docs
 
-## 🚨 Error Handling
+## 🔧 GitHub Pages Setup
 
-If any agent fails:
+If GitHub Pages is not configured, set it up:
 
-1. **Phase 1 Failure**:
-   - Log which agent failed
-   - Continue other Phase 1 agents
-   - Retry failed agent OR manually review prompt
-   - Do NOT proceed to Phase 2 until ALL Phase 1 agents succeed
+### Option 1: Simple (Recommended)
+1. Go to repository Settings → Pages
+2. Source: `Deploy from a branch`
+3. Branch: `main`
+4. Folder: `/docs`
+5. Save
 
-2. **Phase 2 Failure**:
-   - README generation failed
-   - Check if Phase 1 docs exist
-   - Retry with clearer link targets
+The `docs/README.md` becomes the index page.
 
-3. **Phase 3 Verification Failures**:
-   - Report broken links → Regenerate affected agents
-   - Report missing files → Identify which agent failed to generate
-   - Report inconsistencies → Update specific prompts and regenerate
+### Option 2: GitHub Actions Workflow
+Create `.github/workflows/docs.yml`:
 
-## 📝 Progress Reporting
+```yaml
+name: Deploy Docs
 
-Provide status updates in this format:
+on:
+  push:
+    branches: [main]
+    paths: ['docs/**']
 
-```
-=== AURA DOCUMENTATION ORCHESTRATION ===
+permissions:
+  contents: read
+  pages: write
+  id-token: write
 
-Phase 1: Parallel Generation
-  [✓] getting-started-agent (completed in 22m)
-  [⚡] user-guide-agent (running - 15m elapsed)
-  [✓] concepts-agent (completed in 18m)
-  [⚡] agent-dev-agent (running - 12m elapsed)
-  [⏳] examples-tutorials-agent (queued)
-
-Status: 2/5 complete, 2 running, 1 queued
-Estimated completion: 18 minutes
-```
-
-## 🔧 Implementation Methods
-
-### Method 1: Manual Coordination (Current Capability)
-Run each prompt manually in 5 parallel sessions:
-- Use 5 separate Copilot Chat windows
-- Start all 5 Phase 1 prompts simultaneously
-- Wait for completion, then run README prompt
-
-### Method 2: Aura Workflow (Meta-Orchestration!)
-Create an Aura workflow that generates Aura documentation:
-
-```json
-{
-  "title": "Generate Aura Documentation Site",
-  "description": "Orchestrate all documentation generation prompts in optimal parallel/sequential order. Phase 1: Run getting-started, user-guide, concepts, agent-development, and examples-tutorials agents in parallel. Phase 2: Run README agent after Phase 1 completes. Phase 3: Verify all links and structure."
-}
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+        
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+          
+      - name: Deploy to GitHub Pages
+        uses: actions/deploy-pages@v4
 ```
 
-The OrchestrationAgent would:
-1. Parse this description
-2. Identify the 5 parallel tasks + 1 sequential task
-3. Create workflow steps
-4. Execute with proper coordination
+## 🚨 Common Issues
 
-### Method 3: PowerShell Script (Practical)
-See `ORCHESTRATION-IMPLEMENTATION.md` for script approach.
+1. **404 on GitHub Pages**
+   - Check Settings → Pages is enabled
+   - Verify branch and folder are correct
+   - Wait a few minutes for deployment
 
-## 🎓 Learning Opportunity
+2. **Broken Links**
+   - Use relative links: `[Installation](getting-started/installation.md)`
+   - Don't use absolute paths starting with `/`
 
-This meta-orchestration demonstrates Aura's power:
-- **Parallel execution** where safe
-- **Sequential execution** where needed
-- **Dependency management** between agents
-- **Progress tracking** and reporting
-- **Error handling** and retry logic
+3. **Images Not Loading**
+   - Place images in `docs/images/`
+   - Reference as: `![Alt](images/screenshot.png)`
 
-**This is Aura using Aura to document itself!** 🤯
+## 📝 Quick Reference
 
-## 🚀 Execution Command
-
-To execute this orchestration:
-
-```bash
-# Method 1: Manual (5 parallel Copilot sessions)
-# Open 5 terminals/Copilot windows and run prompts 1-5 simultaneously
-
-# Method 2: Aura Workflow (when implemented)
-curl -X POST http://localhost:5258/api/workflows \
-  -H "Content-Type: application/json" \
-  -d @.github/prompts/meta-orchestration-workflow.json
-
-# Method 3: PowerShell Script
-.\generate-docs.ps1 -Parallel
-```
-
----
-
-**Now orchestrate the documentation generation with maximum efficiency!** 🚀
+| Task | Command/Action |
+|------|----------------|
+| Update getting-started | Run `aura.update-getting-started.prompt.md` |
+| Update user-guide | Run `aura.update-user-guide.prompt.md` |
+| Update README | Run `aura.update-readme.prompt.md` |
+| Check Pages status | Repository Settings → Pages |
+| View live docs | https://johnazariah.github.io/aura/ |
 
 ## Appendix: Prompt File Locations
 
@@ -226,6 +193,3 @@ All prompts are in `.github/prompts/`:
 - ✅ `aura.update-agent-development-guide.prompt.md`
 - ✅ `aura.update-examples-tutorials.prompt.md`
 - ✅ `aura.update-readme.prompt.md`
-- ⏳ `aura.update-api-reference.prompt.md` (future)
-- ⏳ `aura.update-extending-aura.prompt.md` (future)
-- ⏳ `aura.update-contributing.prompt.md` (future)

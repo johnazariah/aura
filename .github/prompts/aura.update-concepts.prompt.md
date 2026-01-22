@@ -4,7 +4,7 @@ You are tasked with creating documentation that explains Aura's core concepts, a
 
 ## 🎯 Your Mission
 
-Create documentation in `docs-site/concepts/` that provides deep understanding of Aura's architecture, emphasizing the design decisions that enable extensibility, local-first operation, and multi-agent orchestration.
+Create documentation in `docs/concepts/` that provides deep understanding of Aura's architecture, emphasizing the design decisions that enable extensibility, local-first operation, and multi-agent orchestration.
 
 ## 📋 Required Files
 

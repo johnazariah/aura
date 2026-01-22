@@ -4,7 +4,7 @@ You are tasked with creating comprehensive "Getting Started" documentation that 
 
 ## 🎯 Your Mission
 
-Create documentation in `docs-site/getting-started/` that provides a smooth onboarding experience, emphasizing Aura's **local-first** design and making the first workflow execution feel like magic.
+Create documentation in `docs/getting-started/` that provides a smooth onboarding experience, emphasizing Aura's **local-first** design and making the first workflow execution feel like magic.
 
 ## 📋 Required Files
 

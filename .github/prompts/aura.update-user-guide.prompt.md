@@ -4,7 +4,7 @@ You are tasked with creating and maintaining comprehensive user-facing documenta
 
 ## 🎯 Your Mission
 
-Create detailed, practical documentation in the `docs-site/user-guide/` directory that teaches users how to use Aura effectively. The documentation must cover both **local-first workflows** (the primary use case) and **optional GitHub integration**.
+Create detailed, practical documentation in the `docs/user-guide/` directory that teaches users how to use Aura effectively. The documentation must cover both **local-first workflows** (the primary use case) and **optional GitHub integration**.
 
 ## 🔑 Critical Context: Local-First Design
 
@@ -19,7 +19,7 @@ Create detailed, practical documentation in the `docs-site/user-guide/` director
 
 ## 📋 Required Documentation Structure
 
-Create the following files in `docs-site/user-guide/`:
+Create the following files in `docs/user-guide/`:
 
 ### 1. Overview (`index.md`)
 - What is Aura and who is it for?
@@ -267,12 +267,12 @@ Your user guide is successful if:
 
 ## 🎯 Output Format
 
-Create markdown files in `docs-site/user-guide/` following the VitePress structure.
+Create markdown files in `docs/user-guide/` following standard GitHub markdown structure.
 
 Each file should:
-- Start with frontmatter (title, description)
+- Start with a clear title (# heading)
 - Have clear headings and subheadings
-- Include navigation hints (Previous/Next)
+- Include navigation hints (links to related docs)
 - Link to related documentation
 - Include at least one complete example
 

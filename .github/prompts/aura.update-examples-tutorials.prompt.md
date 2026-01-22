@@ -5,8 +5,8 @@ You are tasked with creating practical, hands-on examples and tutorials that sho
 ## 🎯 Your Mission
 
 Create two types of documentation:
-1. **Examples** (`docs-site/examples/`) - Complete, copy-paste-ready examples showing Aura capabilities
-2. **Tutorials** (`docs-site/tutorials/`) - Step-by-step guided learning experiences
+1. **Examples** (`docs/examples/`) - Complete, copy-paste-ready examples showing Aura capabilities
+2. **Tutorials** (`docs/tutorials/`) - Step-by-step guided learning experiences
 
 ## 📋 Examples (`examples/`)
 

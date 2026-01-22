@@ -4,7 +4,7 @@ You are tasked with creating comprehensive documentation for developers who want
 
 ## 🎯 Your Mission
 
-Create detailed, practical documentation in `docs-site/agent-development/` that teaches developers how to create custom agents using either **markdown prompts** (simple, no code) or **C# implementations** (full control).
+Create detailed, practical documentation in `docs/agent-development/` that teaches developers how to create custom agents using either **markdown prompts** (simple, no code) or **C# implementations** (full control).
 
 ## 🔑 Critical Context
 
