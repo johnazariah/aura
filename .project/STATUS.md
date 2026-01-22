@@ -1,7 +1,7 @@
 # Aura Project Status
 
-> **Last Updated**: 2026-01-19
-> **Current Release**: v1.3.0
+> **Last Updated**: 2026-01-23
+> **Current Release**: v1.3.1
 > **Branch**: main
 > **Overall Status**: ✅ Production Ready
 
@@ -179,42 +179,43 @@ Major release with 121 commits since v1.2.0.
 
 None - all changes are additive.
 
-## In Development: Agentic Execution v2
+## Release v1.3.1 (Jan 23, 2026)
 
-Branch: `feature/agentic-execution-v2`
+### Agentic Execution v2 (Shipped)
 
-Enhancing the ReAct execution system with multi-agent orchestration, intelligent retry loops, and token budget awareness.
+Enhanced ReAct execution system with multi-agent orchestration, intelligent retry loops, and token budget awareness.
 
-### New Features
-
-| Feature | Status | Description |
-|---------|--------|-------------|
-| Sub-Agent Spawning | ✅ Complete | `spawn_sub_agent` tool for hierarchical task delegation |
-| Token Budget Tracking | ✅ Complete | `TokenTracker` class with configurable budgets |
-| Context Budget Awareness | ✅ Complete | `check_token_budget` tool for agents to monitor capacity |
-| Budget Warnings | ✅ Complete | Automatic warnings injected at 70%/80%/90% thresholds |
-| Intelligent Retry | ✅ Complete | Automatic retry loops for tool failures and incomplete actions |
-| Retry Templates | ✅ Complete | `react-retry.prompt` Handlebars template |
+| Feature | Description |
+|---------|-------------|
+| Sub-Agent Spawning | `spawn_subagent` tool for hierarchical task delegation |
+| Token Budget Tracking | `TokenTracker` class with configurable budgets |
+| Context Budget Awareness | `check_token_budget` tool for agents to monitor capacity |
+| Budget Warnings | Automatic warnings injected at 70%/80%/90% thresholds |
+| Intelligent Retry | Retry loops for tool failures with error context injection |
+| Retry Templates | `react-retry.prompt` Handlebars template |
 
 ### New Tools
 
-- `spawn_sub_agent` - Delegate complex subtasks to a new agent with fresh context
+- `spawn_subagent` - Delegate complex subtasks to a new agent with fresh context
 - `check_token_budget` - Check remaining context window capacity
 
-### Configuration
+### Modern C# Support (Shipped)
 
-```csharp
-var options = new ReActOptions
-{
-    TokenBudget = 100_000,           // Total tokens for this execution
-    BudgetWarningThreshold = 0.7,    // Warn when 70% consumed
-    EnableRetryLoop = true,          // Retry on tool failures
-    MaxRetries = 3,                  // Max retry attempts per step
-    RetryDelayMs = 500               // Delay between retries
-};
-```
+Extended `aura_generate` MCP tool with modern C# 9-13 features:
+- `required` properties, `init` setters
+- Method modifiers (`virtual`/`override`/`abstract`/`sealed`/`new`)
+- Primary constructors and positional records
+- Generic type parameters with constraints
+- Attributes on properties and methods
+- Extension methods and XML documentation
 
-See spec: [features/upcoming/agentic-execution-v2.md](features/upcoming/agentic-execution-v2.md)
+### Other Improvements
+
+- Fixed `Run-UnitTests.ps1` to exclude integration tests
+- Added `aura_edit` tool for surgical text editing
+
+See spec: [features/completed/agentic-execution-v2.md](features/completed/agentic-execution-v2.md)
+
 ## Recent Changes (Jan 13, 2026)
 
 1. **Structured Output Mode (Complete)**

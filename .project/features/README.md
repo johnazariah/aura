@@ -74,6 +74,7 @@ features/
 | [Workflow Verification](completed/workflow-verification-stage.md) | Run build/lint/format checks before workflow completion | 2026-01-19 |
 | [macOS Local Development](completed/macos-local-development.md) | TreeSitter 1.2.0, install script, local dev support | 2026-01-19 |
 | [Modern C# Support](completed/aura-generate-modern-csharp.md) | Modern C# features for aura_generate | 2026-01-23 |
+| [Agentic Execution v2](completed/agentic-execution-v2.md) | Sub-agents, retry loops, token budget awareness | 2026-01-23 |
 
 ## Upcoming Features
 
