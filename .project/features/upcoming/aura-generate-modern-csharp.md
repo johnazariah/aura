@@ -1,9 +1,20 @@
 # aura_generate: Modern C# Support
 
-> **Status:** Draft
+> **Status:** In Progress
 > **Created:** 2026-01-23
 > **Priority:** Medium
 > **Estimated Effort:** 1-2 weeks
+
+## Progress
+
+| Phase | Features | Status |
+|-------|----------|--------|
+| 1 | `required` properties, `init` setters | ✅ Complete |
+| 2 | `virtual`/`override`/`abstract` methods, static methods | ✅ Complete |
+| 3 | Primary constructors (C# 12), positional records | ⏳ Not started |
+| 4 | Generic types and methods with constraints | ⏳ Not started |
+| 5 | Attributes on members | ⏳ Not started |
+| 6 | Extension methods, XML docs, record structs | ⏳ Not started |
 
 ## Overview
 
