@@ -95,8 +95,8 @@ Filename: "sc.exe"; Parameters: "description AuraService ""Aura local AI assista
 ; Set environment for service to use Production settings
 Filename: "reg.exe"; Parameters: "add ""HKLM\SYSTEM\CurrentControlSet\Services\AuraService"" /v Environment /t REG_MULTI_SZ /d ""ASPNETCORE_ENVIRONMENT=Production"" /f"; Flags: runhidden; Tasks: installservice
 Filename: "sc.exe"; Parameters: "start AuraService"; Flags: runhidden; Tasks: installservice
-; Install VS Code extension
-Filename: "{code:GetVSCodePath}"; Parameters: "--install-extension ""{app}\extension\aura-{#MyAppVersion}.vsix"" --force"; Flags: runhidden nowait; Tasks: installextension
+; Install VS Code extension using helper script (finds VSIX dynamically)
+Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -File ""{app}\scripts\install-extension.ps1"""; Flags: runhidden nowait; Tasks: installextension
 ; Start tray app
 Filename: "{app}\tray\{#MyTrayExeName}"; Parameters: "--minimized"; Flags: nowait postinstall; Tasks: starttray
 ; Offer to run diagnostics if user wants to verify installation
