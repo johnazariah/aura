@@ -3,7 +3,7 @@
         x:Class="Aura.Tray.StatusWindow"
         Title="Aura Status"
         Width="400"
-        Height="350"
+        Height="420"
         WindowStartupLocation="CenterScreen"
         CanResize="False"
         ShowInTaskbar="True"
@@ -108,6 +108,23 @@
                         <TextBlock x:Name="RagStatusDetails" Text="Checking..." Foreground="Gray" FontSize="12"/>
                     </StackPanel>
                     <TextBlock x:Name="RagStatusText" Grid.Column="2" Text="..." VerticalAlignment="Center"/>
+                </Grid>
+            </Border>
+            
+            <!-- MCP Server Status -->
+            <Border Classes="statusCard">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <Ellipse x:Name="McpStatusDot" Grid.Column="0" Classes="statusDot" Fill="Gray"/>
+                    <StackPanel Grid.Column="1">
+                        <TextBlock Text="MCP Server (Copilot)" FontWeight="SemiBold"/>
+                        <TextBlock x:Name="McpStatusDetails" Text="Checking..." Foreground="Gray" FontSize="12"/>
+                    </StackPanel>
+                    <TextBlock x:Name="McpStatusText" Grid.Column="2" Text="..." VerticalAlignment="Center"/>
                 </Grid>
             </Border>
         </StackPanel>

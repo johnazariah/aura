@@ -63,11 +63,17 @@ export interface RagStatus extends ServiceStatus {
     indexingProgress?: number;
 }
 
+export interface McpStatus extends ServiceStatus {
+    mcpTools?: string[];
+    agentToolCount?: number;
+}
+
 export interface HealthStatuses {
     api: ServiceStatus;
     ollama: OllamaStatus;
     database: ServiceStatus;
     rag: RagStatus;
+    mcp: McpStatus;
 }
 
 export class HealthCheckService {
@@ -75,7 +81,8 @@ export class HealthCheckService {
         api: { status: 'unknown' },
         ollama: { status: 'unknown' },
         database: { status: 'unknown' },
-        rag: { status: 'unknown' }
+        rag: { status: 'unknown' },
+        mcp: { status: 'unknown' }
     };
 
     private httpClient: AxiosInstance;
@@ -92,7 +99,8 @@ export class HealthCheckService {
             this.checkApi(),
             this.checkOllama(),
             this.checkDatabase(),
-            this.checkRag()
+            this.checkRag(),
+            this.checkMcp()
         ]);
     }
 
@@ -372,6 +380,45 @@ export class HealthCheckService {
                 };
             } else {
                 this.statuses.rag = {
+                    status: 'unhealthy',
+                    error: this.getErrorMessage(error),
+                    lastChecked: new Date()
+                };
+            }
+        }
+    }
+
+    private async checkMcp(): Promise<void> {
+        const url = this.apiService.getBaseUrl();
+        this.statuses.mcp = { status: 'checking', url };
+
+        try {
+            const start = Date.now();
+            const response = await this.httpClient.get(`${url}/health/mcp`);
+            const responseTime = Date.now() - start;
+
+            const mcpTools = response.data?.mcpTools || [];
+            const agentToolCount = response.data?.agentToolCount || 0;
+
+            this.statuses.mcp = {
+                status: response.data?.healthy ? 'healthy' : 'unhealthy',
+                url,
+                responseTime,
+                details: `${mcpTools.length} MCP tools, ${agentToolCount} agent tools`,
+                mcpTools,
+                agentToolCount,
+                lastChecked: new Date()
+            };
+        } catch (error) {
+            // If API is down, we can't check MCP
+            if (this.statuses.api.status === 'unhealthy') {
+                this.statuses.mcp = {
+                    status: 'unknown',
+                    error: 'API unavailable',
+                    lastChecked: new Date()
+                };
+            } else {
+                this.statuses.mcp = {
                     status: 'unhealthy',
                     error: this.getErrorMessage(error),
                     lastChecked: new Date()

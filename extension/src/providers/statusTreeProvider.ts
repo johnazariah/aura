@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { HealthCheckService, ServiceStatus, OllamaStatus, RagStatus, OllamaModelInfo } from '../services/healthCheckService';
+import { HealthCheckService, ServiceStatus, OllamaStatus, RagStatus, McpStatus, OllamaModelInfo } from '../services/healthCheckService';
 
 export class StatusTreeProvider implements vscode.TreeDataProvider<StatusItem> {
     private _onDidChangeTreeData = new vscode.EventEmitter<StatusItem | undefined | null | void>();
@@ -23,7 +23,8 @@ export class StatusTreeProvider implements vscode.TreeDataProvider<StatusItem> {
                 this.createStatusItem('Aura API', statuses.api),
                 this.createOllamaItem(statuses.ollama),
                 this.createStatusItem('Database', statuses.database),
-                this.createRagItem(statuses.rag)
+                this.createRagItem(statuses.rag),
+                this.createMcpItem(statuses.mcp)
             ]);
         }
 
@@ -38,6 +39,10 @@ export class StatusTreeProvider implements vscode.TreeDataProvider<StatusItem> {
 
         if (element.itemType === 'ollama-models' && element.ollamaStatus) {
             return Promise.resolve(this.getModelChildren(element.ollamaStatus));
+        }
+
+        if (element.itemType === 'mcp' && element.mcpStatus) {
+            return Promise.resolve(this.getMcpChildren(element.mcpStatus));
         }
 
         return Promise.resolve([]);
@@ -69,6 +74,21 @@ export class StatusTreeProvider implements vscode.TreeDataProvider<StatusItem> {
             status
         );
         item.contextValue = 'rag';
+        return item;
+    }
+
+    private createMcpItem(status: McpStatus): StatusItem {
+        const hasDetails = status.status === 'healthy' && (status.mcpTools?.length || 0) > 0;
+        const item = new StatusItem(
+            'MCP Server',
+            status,
+            'mcp',
+            hasDetails ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None,
+            undefined,
+            undefined,
+            status
+        );
+        item.contextValue = 'mcp';
         return item;
     }
 
@@ -279,9 +299,48 @@ export class StatusTreeProvider implements vscode.TreeDataProvider<StatusItem> {
         const i = Math.floor(Math.log(bytes) / Math.log(k));
         return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
     }
+
+    private getMcpChildren(status: McpStatus): StatusItem[] {
+        const children: StatusItem[] = [];
+
+        // Show tool count summary
+        if (status.mcpTools && status.mcpTools.length > 0) {
+            const toolsItem = new StatusItem(
+                'MCP Tools',
+                { status: 'healthy', details: `${status.mcpTools.length} available` },
+                'info'
+            );
+            toolsItem.iconPath = new vscode.ThemeIcon('tools', new vscode.ThemeColor('charts.blue'));
+            children.push(toolsItem);
+
+            // List each tool
+            for (const tool of status.mcpTools) {
+                const toolItem = new StatusItem(
+                    tool,
+                    { status: 'healthy' },
+                    'info'
+                );
+                toolItem.iconPath = new vscode.ThemeIcon('symbol-method');
+                children.push(toolItem);
+            }
+        }
+
+        // Agent tools count
+        if (status.agentToolCount !== undefined && status.agentToolCount > 0) {
+            const agentItem = new StatusItem(
+                'Agent Tools',
+                { status: 'healthy', details: `${status.agentToolCount} registered` },
+                'info'
+            );
+            agentItem.iconPath = new vscode.ThemeIcon('hubot', new vscode.ThemeColor('charts.green'));
+            children.push(agentItem);
+        }
+
+        return children;
+    }
 }
 
-export type StatusItemType = 'service' | 'ollama' | 'rag' | 'ollama-models' | 'model' | 'running-model' | 'info' | 'health';
+export type StatusItemType = 'service' | 'ollama' | 'rag' | 'mcp' | 'ollama-models' | 'model' | 'running-model' | 'info' | 'health';
 
 export class StatusItem extends vscode.TreeItem {
     constructor(
@@ -290,7 +349,8 @@ export class StatusItem extends vscode.TreeItem {
         public readonly itemType: StatusItemType = 'service',
         collapsibleState: vscode.TreeItemCollapsibleState = vscode.TreeItemCollapsibleState.None,
         public readonly ollamaStatus?: OllamaStatus,
-        public readonly ragStatus?: RagStatus
+        public readonly ragStatus?: RagStatus,
+        public readonly mcpStatus?: McpStatus
     ) {
         super(name, collapsibleState);
 

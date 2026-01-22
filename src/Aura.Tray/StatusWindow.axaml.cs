@@ -65,6 +65,9 @@ public partial class StatusWindow : Window
         // RAG Status
         UpdateComponentStatus("Rag", status.RagStatus);
 
+        // MCP Server Status
+        UpdateComponentStatus("Mcp", status.McpStatus);
+
         // Last checked
         var lastCheckedText = this.FindControl<TextBlock>("LastCheckedText");
         if (lastCheckedText != null)

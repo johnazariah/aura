@@ -31,6 +31,7 @@ public class ServiceStatusEventArgs : EventArgs
     public ComponentStatus OllamaStatus { get; init; } = new();
     public ComponentStatus PostgresStatus { get; init; } = new();
     public ComponentStatus RagStatus { get; init; } = new();
+    public ComponentStatus McpStatus { get; init; } = new();
     public DateTime LastChecked { get; init; } = DateTime.Now;
 }
 
@@ -50,7 +51,8 @@ public class ServiceMonitor : IDisposable
         ApiStatus = new ComponentStatus { Name = "API", StatusText = "Checking..." },
         OllamaStatus = new ComponentStatus { Name = "Ollama", StatusText = "Checking..." },
         PostgresStatus = new ComponentStatus { Name = "PostgreSQL", StatusText = "Checking..." },
-        RagStatus = new ComponentStatus { Name = "RAG Index", StatusText = "Checking..." }
+        RagStatus = new ComponentStatus { Name = "RAG Index", StatusText = "Checking..." },
+        McpStatus = new ComponentStatus { Name = "MCP Server", StatusText = "Checking..." }
     };
 
     public ServiceMonitor(string apiBaseUrl = "http://localhost:5300", string ollamaUrl = "http://localhost:11434")
@@ -82,8 +84,9 @@ public class ServiceMonitor : IDisposable
         var ollamaStatus = await CheckOllamaAsync();
         var postgresStatus = await CheckPostgresAsync();
         var ragStatus = await CheckRagAsync();
+        var mcpStatus = await CheckMcpAsync();
 
-        // Determine overall status
+        // Determine overall status (MCP is optional, doesn't affect overall health)
         var allHealthy = apiStatus.IsHealthy && ollamaStatus.IsHealthy && postgresStatus.IsHealthy;
         var anyHealthy = apiStatus.IsHealthy || ollamaStatus.IsHealthy || postgresStatus.IsHealthy;
 
@@ -98,6 +101,7 @@ public class ServiceMonitor : IDisposable
             OverallStatus = overallStatus,
             ApiStatus = apiStatus,
             OllamaStatus = ollamaStatus,
+            McpStatus = mcpStatus,
             PostgresStatus = postgresStatus,
             RagStatus = ragStatus,
             LastChecked = DateTime.Now
@@ -332,6 +336,54 @@ public class ServiceMonitor : IDisposable
                 IsHealthy = false,
                 StatusText = "Unknown",
                 Details = "Cannot check RAG status"
+            };
+        }
+    }
+
+    private async Task<ComponentStatus> CheckMcpAsync()
+    {
+        try
+        {
+            var response = await _httpClient.GetAsync($"{_apiBaseUrl}/health/mcp");
+
+            if (response.IsSuccessStatusCode)
+            {
+                var content = await response.Content.ReadAsStringAsync();
+                using var doc = JsonDocument.Parse(content);
+                var data = doc.RootElement;
+
+                var mcpTools = data.TryGetProperty("mcpTools", out var tools) && tools.ValueKind == JsonValueKind.Array
+                    ? tools.GetArrayLength()
+                    : 0;
+                var agentToolCount = data.TryGetProperty("agentToolCount", out var agentTools)
+                    ? agentTools.GetInt32()
+                    : 0;
+
+                return new ComponentStatus
+                {
+                    Name = "MCP Server",
+                    IsHealthy = true,
+                    StatusText = "Ready",
+                    Details = $"{mcpTools} MCP tools, {agentToolCount} agent tools"
+                };
+            }
+
+            return new ComponentStatus
+            {
+                Name = "MCP Server",
+                IsHealthy = false,
+                StatusText = "Unavailable",
+                Details = "MCP endpoint not responding"
+            };
+        }
+        catch
+        {
+            return new ComponentStatus
+            {
+                Name = "MCP Server",
+                IsHealthy = false,
+                StatusText = "Unknown",
+                Details = "Cannot check MCP status"
             };
         }
     }

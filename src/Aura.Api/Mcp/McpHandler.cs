@@ -90,6 +90,11 @@ public sealed class McpHandler
     }
 
     /// <summary>
+    /// Gets the list of registered MCP tool names.
+    /// </summary>
+    public IReadOnlyList<string> GetToolNames() => _tools.Keys.ToList();
+
+    /// <summary>
     /// Handles a JSON-RPC request and returns a JSON-RPC response.
     /// </summary>
     /// <param name="json">The JSON-RPC request.</param>

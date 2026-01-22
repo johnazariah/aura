@@ -8,6 +8,7 @@ using Aura.Foundation.Agents;
 using Aura.Foundation.Data;
 using Aura.Foundation.Llm;
 using Aura.Foundation.Rag;
+using Aura.Foundation.Tools;
 
 /// <summary>
 /// Health check endpoints for monitoring service status.
@@ -24,6 +25,7 @@ public static class HealthEndpoints
         app.MapGet("/health/rag", GetRagHealth);
         app.MapGet("/health/ollama", GetLlmHealth);
         app.MapGet("/health/agents", GetAgentHealth);
+        app.MapGet("/health/mcp", GetMcpHealth);
 
         return app;
     }
@@ -186,6 +188,22 @@ public static class HealthEndpoints
             developerHealthy,
             details,
             agents = allResults,
+            timestamp = DateTime.UtcNow
+        });
+    }
+
+    private static IResult GetMcpHealth(Aura.Api.Mcp.McpHandler mcpHandler, IToolRegistry toolRegistry)
+    {
+        var mcpTools = mcpHandler.GetToolNames();
+        var agentTools = toolRegistry.GetAllTools();
+
+        return Results.Ok(new
+        {
+            healthy = true,
+            details = $"MCP server ready with {mcpTools.Count} tools, {agentTools.Count} agent tools registered",
+            mcpTools = mcpTools,
+            agentToolCount = agentTools.Count,
+            agentTools = agentTools.Select(t => new { t.ToolId, t.Description }).ToList(),
             timestamp = DateTime.UtcNow
         });
     }
