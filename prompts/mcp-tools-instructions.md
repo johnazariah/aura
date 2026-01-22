@@ -78,6 +78,64 @@ Use `aura_search` first to understand the codebase, then `aura_navigate`/`aura_i
 
 ---
 
+## Context-Aware Agent Tools
+
+### Token Budget Management
+
+Agents have access to token budget awareness tools for managing long-running tasks:
+
+| Tool | Purpose |
+|------|---------|
+| `check_token_budget` | Query remaining context capacity and get recommendations |
+| `spawn_sub_agent` | Delegate subtasks to fresh context when approaching limits |
+
+### check_token_budget
+
+Call when uncertain about remaining capacity:
+
+```json
+{
+  "tool": "check_token_budget",
+  "input": {}
+}
+```
+
+Returns:
+```json
+{
+  "available": true,
+  "used": 75000,
+  "remaining": 25000,
+  "budget": 100000,
+  "percentage": 75.0,
+  "isAboveThreshold": true,
+  "recommendation": "CAUTION: Approaching context limit (>70%). Plan to spawn sub-agents for complex remaining work."
+}
+```
+
+### spawn_sub_agent
+
+Delegate complex subtasks to a child agent with fresh context:
+
+```json
+{
+  "tool": "spawn_sub_agent",
+  "input": {
+    "agentId": "coding-agent",
+    "task": "Implement email validation per RFC 5322",
+    "context": "Working in UserService.cs, method ValidateEmail"
+  }
+}
+```
+
+**Use when:**
+- Token budget exceeds 70% threshold
+- Task requires deep reasoning in a specific subdomain
+- Current task has clear subtasks that can be delegated
+
+**The parent receives:** Only the final answer (not the full reasoning chain)
+
+---
 ## Operational Patterns
 
 For complex multi-step operations, call `aura_pattern(operation: "list")` to discover available patterns, then load the relevant one:
