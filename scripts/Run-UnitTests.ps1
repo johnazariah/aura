@@ -42,29 +42,42 @@ try {
         throw "Build failed"
     }
 
-    # Run tests
+    # Run tests (exclude integration tests)
     Write-Host ""
     Write-Host "Running unit tests..." -ForegroundColor Yellow
     
-    $testArgs = @(
-        "test"
-        "--no-build"
-        "--verbosity", "normal"
-        "--logger", "console;verbosity=detailed"
+    $unitTestProjects = @(
+        "tests/Aura.Foundation.Tests"
+        "tests/Aura.Module.Developer.Tests"
     )
 
-    if ($Filter) {
-        $testArgs += "--filter"
-        $testArgs += $Filter
+    $allPassed = $true
+    foreach ($project in $unitTestProjects) {
+        $testArgs = @(
+            "test"
+            $project
+            "--no-build"
+            "--verbosity", "normal"
+            "--logger", "console;verbosity=detailed"
+        )
+
+        if ($Filter) {
+            $testArgs += "--filter"
+            $testArgs += $Filter
+        }
+
+        if ($Coverage) {
+            $testArgs += "--collect:XPlat Code Coverage"
+        }
+
+        & dotnet @testArgs
+
+        if ($LASTEXITCODE -ne 0) {
+            $allPassed = $false
+        }
     }
 
-    if ($Coverage) {
-        $testArgs += "--collect:XPlat Code Coverage"
-    }
-
-    & dotnet @testArgs
-
-    if ($LASTEXITCODE -ne 0) {
+    if (-not $allPassed) {
         Write-Host ""
         Write-Host "Some tests failed!" -ForegroundColor Red
         exit 1
