@@ -41,6 +41,12 @@ public class ToolRegistryInitializer(
         _logger.LogInformation("Registering git tools");
         GitTools.RegisterGitTools(_registry, _gitService, _logger);
 
+        _logger.LogInformation("Registering code validation tool");
+        var codeValidateTool = new CodeValidateTool(
+            _processRunner,
+            _loggerFactory.CreateLogger<CodeValidateTool>());
+        _registry.RegisterTool(codeValidateTool);
+
         _logger.LogInformation("Registering sub-agent tool");
         var subAgentTool = new SpawnSubAgentTool(
             _agentRegistry,

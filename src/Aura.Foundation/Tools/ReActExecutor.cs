@@ -93,6 +93,12 @@ public record ReActOptions
     /// If null, uses default retry prompt with error context.
     /// </summary>
     public string? RetryPromptTemplate { get; init; }
+
+    /// <summary>
+    /// Optional validation tracker for enforcing code validation before finish.
+    /// When provided, agents must validate modified code files before completing.
+    /// </summary>
+    public ValidationTracker? ValidationTracker { get; init; }
 }
 
 /// <summary>
@@ -364,6 +370,66 @@ public partial class ReActExecutor(IToolRegistry toolRegistry, ILogger<ReActExec
             if (parsed.Action.Equals("finish", StringComparison.OrdinalIgnoreCase) ||
                 parsed.Action.Equals("final_answer", StringComparison.OrdinalIgnoreCase))
             {
+                // Check if validation is required before finish
+                if (options.ValidationTracker?.HasUnvalidatedChanges == true)
+                {
+                    // Check if we've hit max failures
+                    if (options.ValidationTracker.ConsecutiveFailures >= options.ValidationTracker.MaxFailures)
+                    {
+                        _logger.LogError(
+                            "[REACT] Validation failed {Failures} consecutive times. Force-failing execution.",
+                            options.ValidationTracker.ConsecutiveFailures);
+
+                        return new ReActResult
+                        {
+                            Success = false,
+                            FinalAnswer = "",
+                            Steps = steps,
+                            Error = $"Code validation failed {options.ValidationTracker.ConsecutiveFailures} consecutive times. Modified files: {string.Join(", ", options.ValidationTracker.ModifiedFiles)}",
+                            TotalDuration = DateTime.UtcNow - startTime,
+                            TotalTokensUsed = totalTokens
+                        };
+                    }
+
+                    // Block finish and ask agent to validate
+                    var modifiedFiles = string.Join(", ", options.ValidationTracker.ModifiedFiles);
+                    observation = $"BLOCKED: You have modified code files that have not been validated: {modifiedFiles}. " +
+                                  "You MUST run code.validate before finishing to ensure your changes compile. " +
+                                  "Use Action: code.validate with workingDirectory set to the project root.";
+
+                    _logger.LogWarning(
+                        "[REACT] Blocked finish attempt - unvalidated files: {Files}",
+                        modifiedFiles);
+
+                    steps.Add(new ReActStep
+                    {
+                        StepNumber = step,
+                        Thought = parsed.Thought,
+                        Action = "finish",
+                        ActionInput = parsed.ActionInput,
+                        Observation = observation,
+                        Duration = DateTime.UtcNow - stepStart,
+                        CumulativeTokens = tokenTracker.Used
+                    });
+
+                    // Add to conversation history so agent sees the block
+                    if (options.UseStructuredOutput)
+                    {
+                        chatMessages.Add(new ChatMessage(ChatRole.Assistant, llmResponse.Content));
+                        chatMessages.Add(new ChatMessage(ChatRole.User, $"Observation: {observation}"));
+                    }
+                    else
+                    {
+                        conversationHistory.AppendLine($"Thought: {parsed.Thought}");
+                        conversationHistory.AppendLine($"Action: finish");
+                        conversationHistory.AppendLine($"Action Input: {parsed.ActionInput}");
+                        conversationHistory.AppendLine($"Observation: {observation}");
+                        conversationHistory.AppendLine();
+                    }
+
+                    continue; // Continue the loop, don't finish
+                }
+
                 var totalElapsed = DateTime.UtcNow - loopStartTime;
                 _logger.LogWarning("[REACT-DEBUG] Agent finished at step {Step} after {Elapsed:F1}s total", step, totalElapsed.TotalSeconds);
                 steps.Add(new ReActStep
@@ -442,6 +508,9 @@ public partial class ReActExecutor(IToolRegistry toolRegistry, ILogger<ReActExec
                 {
                     observation = await ExecuteToolAsync(tool, toolInput, ct);
                 }
+
+                // Track file changes for validation enforcement
+                TrackFileChangeIfApplicable(tool.ToolId, toolInput, options.ValidationTracker, observation);
             }
 
             var reactStep = new ReActStep
@@ -522,6 +591,53 @@ public partial class ReActExecutor(IToolRegistry toolRegistry, ILogger<ReActExec
         {
             _logger.LogError(ex, "Tool {ToolId} threw exception", tool.ToolId);
             return $"Error: {ex.Message}";
+        }
+    }
+
+    /// <summary>
+    /// Tracks file changes for validation enforcement.
+    /// Called after file.write, file.modify, and code.validate tool executions.
+    /// </summary>
+    private static void TrackFileChangeIfApplicable(
+        string toolId,
+        ToolInput input,
+        ValidationTracker? tracker,
+        string observation)
+    {
+        if (tracker is null)
+        {
+            return;
+        }
+
+        // Handle file modification tools
+        if (toolId is "file.write" or "file.modify")
+        {
+            // Only track if the operation succeeded
+            if (observation.StartsWith("Error:", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            var path = input.GetParameter<string>("path");
+            if (!string.IsNullOrEmpty(path))
+            {
+                // Resolve relative path if working directory is provided
+                var resolvedPath = !Path.IsPathRooted(path) && !string.IsNullOrEmpty(input.WorkingDirectory)
+                    ? Path.Combine(input.WorkingDirectory, path)
+                    : path;
+
+                tracker.TrackFileChange(resolvedPath);
+            }
+        }
+        // Handle validation tool - record success/failure
+        else if (toolId == "code.validate")
+        {
+            // Check if validation succeeded by looking for error indicators
+            var success = !observation.Contains("error", StringComparison.OrdinalIgnoreCase) &&
+                          !observation.Contains("failed", StringComparison.OrdinalIgnoreCase) &&
+                          !observation.Contains("Error:", StringComparison.OrdinalIgnoreCase);
+
+            tracker.RecordValidationResult(success);
         }
     }
 
