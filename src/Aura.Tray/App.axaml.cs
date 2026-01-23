@@ -148,6 +148,7 @@ public partial class App : Application
         var ollama = e.OllamaStatus.IsHealthy ? "✓" : "✗";
         var db = e.PostgresStatus.IsHealthy ? "✓" : "✗";
         var rag = e.RagStatus.IsHealthy ? "✓" : "○";  // ○ for "empty but ok"
+        var mcp = e.McpStatus.IsHealthy ? "✓" : "✗";
 
         var statusLine = e.OverallStatus switch
         {
@@ -157,7 +158,7 @@ public partial class App : Application
             _ => "Checking..."
         };
 
-        _trayIcon.ToolTipText = $"Aura - {statusLine}\n{api} API  {ollama} Ollama  {db} DB  {rag} RAG";
+        _trayIcon.ToolTipText = $"Aura - {statusLine}\n{api} API  {ollama} Ollama  {db} DB  {rag} RAG  {mcp} MCP";
 
         // Update icon based on status
         var iconName = e.OverallStatus switch
