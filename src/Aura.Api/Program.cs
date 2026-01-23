@@ -109,6 +109,10 @@ if (!app.Environment.IsEnvironment("Testing"))
     var toolRegistry = scope.ServiceProvider.GetRequiredService<Aura.Foundation.Tools.IToolRegistry>();
     developerModule.RegisterTools(toolRegistry, scope.ServiceProvider);
     logger.LogInformation("Registered {Count} Developer Module tools", toolRegistry.GetAllTools().Count);
+
+    // Run startup tasks (registers ingestors, agents, etc.)
+    var startupRunner = scope.ServiceProvider.GetRequiredService<Aura.Foundation.Startup.StartupTaskRunner>();
+    await startupRunner.RunAsync();
 }
 
 // Map Aspire default endpoints (health, alive)
