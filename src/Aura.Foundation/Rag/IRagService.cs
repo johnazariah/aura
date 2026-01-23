@@ -93,6 +93,19 @@ public interface IRagService
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>Statistics for the directory, or null if not indexed.</returns>
     Task<RagDirectoryStats?> GetDirectoryStatsAsync(string directoryPath, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets all code chunks for a workspace, suitable for building a hierarchical tree view.
+    /// Returns chunks with metadata including symbolName, chunkType, signature, and parentSymbol.
+    /// </summary>
+    /// <param name="workspacePath">The workspace path to query.</param>
+    /// <param name="pattern">Optional filter pattern for file paths or symbol names.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>All code chunks with their metadata for tree building.</returns>
+    Task<IReadOnlyList<TreeChunk>> GetChunksForTreeAsync(
+        string workspacePath,
+        string? pattern = null,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -110,4 +123,40 @@ public sealed record RagDirectoryStats(
 {
     /// <summary>Gets whether the directory has been indexed.</summary>
     public bool IsIndexed => ChunkCount > 0;
+}
+
+/// <summary>
+/// A code chunk with metadata for building hierarchical tree views.
+/// </summary>
+/// <param name="SourcePath">The source file path (relative to workspace).</param>
+/// <param name="ChunkType">The type of chunk (e.g., "type", "method", "function", "header").</param>
+/// <param name="Content">The chunk content.</param>
+public sealed record TreeChunk(
+    string SourcePath,
+    string ChunkType,
+    string Content)
+{
+    /// <summary>Gets or sets the symbol name (e.g., class name, method name).</summary>
+    public string? SymbolName { get; init; }
+
+    /// <summary>Gets or sets the fully qualified name.</summary>
+    public string? FullyQualifiedName { get; init; }
+
+    /// <summary>Gets or sets the signature (e.g., "public async Task ProcessAsync(string input)").</summary>
+    public string? Signature { get; init; }
+
+    /// <summary>Gets or sets the parent symbol name (e.g., class name for a method).</summary>
+    public string? ParentSymbol { get; init; }
+
+    /// <summary>Gets or sets the language.</summary>
+    public string? Language { get; init; }
+
+    /// <summary>Gets or sets the start line number.</summary>
+    public int? StartLine { get; init; }
+
+    /// <summary>Gets or sets the end line number.</summary>
+    public int? EndLine { get; init; }
+
+    /// <summary>Gets or sets the title.</summary>
+    public string? Title { get; init; }
 }

@@ -100,6 +100,16 @@ public record IngestedChunk(string Text, string ChunkType)
     public string? FullyQualifiedName { get; init; }
 
     /// <summary>
+    /// Gets or sets the signature for code symbols (e.g., "public async Task ProcessAsync(string input)").
+    /// </summary>
+    public string? Signature { get; init; }
+
+    /// <summary>
+    /// Gets or sets the parent symbol name (e.g., class name for a method).
+    /// </summary>
+    public string? ParentSymbol { get; init; }
+
+    /// <summary>
     /// Gets or sets the language (for code chunks).
     /// </summary>
     public string? Language { get; init; }

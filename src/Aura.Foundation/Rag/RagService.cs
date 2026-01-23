@@ -513,6 +513,26 @@ public sealed class RagService : IRagService
                 metadata["endLine"] = chunk.EndLine.Value.ToString();
             }
 
+            if (chunk.SymbolName is not null)
+            {
+                metadata["symbolName"] = chunk.SymbolName;
+            }
+
+            if (chunk.FullyQualifiedName is not null)
+            {
+                metadata["fullyQualifiedName"] = chunk.FullyQualifiedName;
+            }
+
+            if (chunk.Signature is not null)
+            {
+                metadata["signature"] = chunk.Signature;
+            }
+
+            if (chunk.ParentSymbol is not null)
+            {
+                metadata["parentSymbol"] = chunk.ParentSymbol;
+            }
+
             // Merge any additional metadata from the chunk
             if (chunk.Metadata is not null)
             {
@@ -593,5 +613,84 @@ public sealed class RagService : IRagService
             chunks.Count,
             fileCount,
             lastIndexed);
+    }
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<TreeChunk>> GetChunksForTreeAsync(
+        string workspacePath,
+        string? pattern = null,
+        CancellationToken cancellationToken = default)
+    {
+        // Normalize path for case-insensitive comparison
+        var normalizedPath = PathNormalizer.Normalize(workspacePath.TrimEnd('\\', '/'));
+
+        // Query only code chunks
+        var query = _dbContext.RagChunks
+            .Where(c => c.ContentType == RagContentType.Code)
+            .Where(c => c.SourcePath != null &&
+                EF.Functions.ILike(c.SourcePath, normalizedPath + "/%"));
+
+        // Apply pattern filter if specified
+        if (!string.IsNullOrEmpty(pattern) && pattern != ".")
+        {
+            // Pattern can match file paths or metadata (handled after retrieval)
+            query = query.Where(c =>
+                EF.Functions.ILike(c.SourcePath!, "%" + pattern + "%") ||
+                (c.MetadataJson != null && EF.Functions.ILike(c.MetadataJson, "%" + pattern + "%")));
+        }
+
+        var chunks = await query
+            .Select(c => new { c.SourcePath, c.Content, c.MetadataJson })
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        var results = new List<TreeChunk>();
+
+        foreach (var chunk in chunks)
+        {
+            var metadata = ParseMetadata(chunk.MetadataJson);
+
+            // Make path relative to workspace
+            var relativePath = chunk.SourcePath!;
+            if (relativePath.StartsWith(normalizedPath, StringComparison.OrdinalIgnoreCase))
+            {
+                relativePath = relativePath[(normalizedPath.Length + 1)..];
+            }
+
+            var chunkType = metadata?.GetValueOrDefault("chunkType") ?? "unknown";
+
+            // Filter by pattern in symbol name if pattern is specified
+            if (!string.IsNullOrEmpty(pattern) && pattern != ".")
+            {
+                var symbolName = metadata?.GetValueOrDefault("symbolName");
+                var title = metadata?.GetValueOrDefault("title");
+                var pathMatches = relativePath.Contains(pattern, StringComparison.OrdinalIgnoreCase);
+                var symbolMatches = symbolName?.Contains(pattern, StringComparison.OrdinalIgnoreCase) == true;
+                var titleMatches = title?.Contains(pattern, StringComparison.OrdinalIgnoreCase) == true;
+
+                if (!pathMatches && !symbolMatches && !titleMatches)
+                {
+                    continue;
+                }
+            }
+
+            var treeChunk = new TreeChunk(relativePath, chunkType, chunk.Content)
+            {
+                SymbolName = metadata?.GetValueOrDefault("symbolName"),
+                FullyQualifiedName = metadata?.GetValueOrDefault("fullyQualifiedName"),
+                Signature = metadata?.GetValueOrDefault("signature"),
+                ParentSymbol = metadata?.GetValueOrDefault("parentSymbol"),
+                Language = metadata?.GetValueOrDefault("language"),
+                StartLine = metadata?.TryGetValue("startLine", out var sl) == true && int.TryParse(sl, out var startLine) ? startLine : null,
+                EndLine = metadata?.TryGetValue("endLine", out var el) == true && int.TryParse(el, out var endLine) ? endLine : null,
+                Title = metadata?.GetValueOrDefault("title"),
+            };
+
+            results.Add(treeChunk);
+        }
+
+        _logger.LogDebug("GetChunksForTreeAsync returned {Count} chunks for {Path}", results.Count, workspacePath);
+
+        return results;
     }
 }
