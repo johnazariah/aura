@@ -146,49 +146,65 @@ public class AuraApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
             return;
         }
 
-        // On Windows, check for Podman socket if Docker pipe doesn't exist
+        // On Windows, check for Podman pipe if Docker pipe doesn't exist
         if (OperatingSystem.IsWindows())
         {
-            var dockerPipe = @"\\.\pipe\docker_engine";
-            if (!File.Exists(dockerPipe))
+            // Check if Docker pipe exists
+            if (IsPipeAvailable("docker_engine"))
             {
-                // Try to find Podman socket
-                var podmanSocket = GetPodmanSocketPath();
-                if (!string.IsNullOrEmpty(podmanSocket) && File.Exists(podmanSocket))
-                {
-                    // Configure Testcontainers to use Podman
-                    Environment.SetEnvironmentVariable("DOCKER_HOST", $"npipe://{podmanSocket.Replace("\\", "/")}");
-                    Environment.SetEnvironmentVariable("TESTCONTAINERS_RYUK_DISABLED", "true");
-                }
+                return; // Docker is available, use it
+            }
+
+            // Try Podman pipe (standard machine name)
+            if (IsPipeAvailable("podman-machine-default"))
+            {
+                // Configure Testcontainers to use Podman via named pipe
+                Environment.SetEnvironmentVariable("DOCKER_HOST", "npipe:////./pipe/podman-machine-default");
+                Environment.SetEnvironmentVariable("TESTCONTAINERS_RYUK_DISABLED", "true");
+                return;
+            }
+
+            // Last resort: check for any podman pipe
+            var podmanPipe = FindPodmanPipe();
+            if (podmanPipe is not null)
+            {
+                Environment.SetEnvironmentVariable("DOCKER_HOST", $"npipe:////./pipe/{podmanPipe}");
+                Environment.SetEnvironmentVariable("TESTCONTAINERS_RYUK_DISABLED", "true");
             }
         }
     }
 
     /// <summary>
-    /// Gets the Podman machine socket path on Windows.
+    /// Checks if a Windows named pipe is available.
     /// </summary>
-    private static string? GetPodmanSocketPath()
+    private static bool IsPipeAvailable(string pipeName)
     {
-        // Default Podman machine socket location on Windows
-        var tempPath = Path.GetTempPath();
-        var defaultSocket = Path.Combine(tempPath, "podman", "podman-machine-default-api.sock");
-
-        if (File.Exists(defaultSocket))
+        try
         {
-            return defaultSocket;
+            var pipePath = $@"\\.\pipe\{pipeName}";
+            using var fs = new FileStream(pipePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            return true;
         }
-
-        // Try the podman directory without machine name
-        var podmanDir = Path.Combine(tempPath, "podman");
-        if (Directory.Exists(podmanDir))
+        catch
         {
-            var sockets = Directory.GetFiles(podmanDir, "*.sock");
-            if (sockets.Length > 0)
-            {
-                return sockets[0];
-            }
+            return false;
         }
+    }
 
-        return null;
+    /// <summary>
+    /// Finds any available Podman pipe on Windows.
+    /// </summary>
+    private static string? FindPodmanPipe()
+    {
+        try
+        {
+            // List all pipes and find podman ones
+            var pipes = Directory.GetFiles(@"\\.\pipe\", "podman*");
+            return pipes.Length > 0 ? Path.GetFileName(pipes[0]) : null;
+        }
+        catch
+        {
+            return null;
+        }
     }
 }
