@@ -14,13 +14,13 @@ namespace Aura.Module.Developer.Tests.Guardians;
 
 public class GuardianExecutorTests
 {
-    private readonly IWorkflowService _workflowService;
+    private readonly IStoryService _workflowService;
     private readonly FakeTimeProvider _timeProvider;
     private readonly GuardianExecutor _sut;
 
     public GuardianExecutorTests()
     {
-        _workflowService = Substitute.For<IWorkflowService>();
+        _workflowService = Substitute.For<IStoryService>();
         _timeProvider = new FakeTimeProvider(DateTimeOffset.UtcNow);
         _sut = new GuardianExecutor(
             _workflowService,
@@ -183,7 +183,7 @@ public class GuardianExecutorTests
     {
         // Arrange
         var guardian = new GuardianDefinition { Id = "test-id", Name = "test-name" };
-        var _workflowService = Substitute.For<IWorkflowService>();
+        var _workflowService = Substitute.For<IStoryService>();
         var _logger = Substitute.For<ILogger<GuardianExecutor>>();
         var _timeProvider = Substitute.For<TimeProvider?>();
         var sut = new GuardianExecutor(_workflowService, _logger, _timeProvider);
@@ -200,7 +200,7 @@ public class GuardianExecutorTests
     {
         // Arrange
         var guardian = new GuardianDefinition { Id = "test-id", Name = "test-name" };
-        var _workflowService = Substitute.For<IWorkflowService>();
+        var _workflowService = Substitute.For<IStoryService>();
         var _logger = Substitute.For<ILogger<GuardianExecutor>>();
         var _timeProvider = Substitute.For<TimeProvider?>();
         var sut = new GuardianExecutor(_workflowService, _logger, _timeProvider);

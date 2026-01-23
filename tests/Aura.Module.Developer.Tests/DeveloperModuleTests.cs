@@ -31,9 +31,9 @@ public class DeveloperModuleTests
     }
 
     [Fact]
-    public void Name_ShouldReturnDeveloperWorkflow()
+    public void Name_ShouldReturnDeveloperStories()
     {
-        _sut.Name.Should().Be("Developer Workflow");
+        _sut.Name.Should().Be("Developer Stories");
     }
 
     [Fact]
@@ -83,7 +83,7 @@ public class DeveloperModuleTests
         _sut.ConfigureServices(services, config);
 
         // Assert
-        services.Should().Contain(sd => sd.ServiceType.Name == "IWorkflowService");
+        services.Should().Contain(sd => sd.ServiceType.Name == "IStoryService");
         services.Should().Contain(sd => sd.ServiceType.Name == "IRoslynWorkspaceService");
         services.Should().Contain(sd => sd.ServiceType.Name == "IRoslynRefactoringService");
     }

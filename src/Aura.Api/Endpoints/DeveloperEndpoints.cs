@@ -12,7 +12,7 @@ using Aura.Module.Developer.GitHub;
 using Aura.Module.Developer.Services;
 
 /// <summary>
-/// Developer module endpoints for workflow management.
+/// Developer module endpoints for story management.
 /// </summary>
 public static class DeveloperEndpoints
 {
@@ -21,48 +21,48 @@ public static class DeveloperEndpoints
     /// </summary>
     public static WebApplication MapDeveloperEndpoints(this WebApplication app)
     {
-        // Workflow CRUD
-        app.MapPost("/api/developer/workflows", CreateWorkflow);
-        app.MapGet("/api/developer/workflows", ListWorkflows);
-        app.MapGet("/api/developer/workflows/by-path", GetWorkflowByPath);
-        app.MapGet("/api/developer/workflows/{id:guid}", GetWorkflow);
-        app.MapDelete("/api/developer/workflows/{id:guid}", DeleteWorkflow);
+        // story CRUD
+        app.MapPost("/api/developer/stories", CreateStory);
+        app.MapGet("/api/developer/stories", ListStories);
+        app.MapGet("/api/developer/stories/by-path", GetStoryByPath);
+        app.MapGet("/api/developer/stories/{id:guid}", GetStory);
+        app.MapDelete("/api/developer/stories/{id:guid}", DeleteStory);
 
-        // Workflow lifecycle
-        app.MapPost("/api/developer/workflows/{id:guid}/analyze", AnalyzeWorkflow);
-        app.MapPost("/api/developer/workflows/{id:guid}/plan", PlanWorkflow);
-        app.MapPost("/api/developer/workflows/{id:guid}/execute-all", ExecuteAllSteps);
-        app.MapPost("/api/developer/workflows/{id:guid}/complete", CompleteWorkflow);
-        app.MapPost("/api/developer/workflows/{id:guid}/cancel", CancelWorkflow);
-        app.MapPost("/api/developer/workflows/{id:guid}/finalize", FinalizeWorkflow);
-        app.MapPost("/api/developer/workflows/{id:guid}/chat", ChatWithWorkflow);
+        // story lifecycle
+        app.MapPost("/api/developer/stories/{id:guid}/analyze", AnalyzeStory);
+        app.MapPost("/api/developer/stories/{id:guid}/plan", PlanStory);
+        app.MapPost("/api/developer/stories/{id:guid}/execute-all", ExecuteAllSteps);
+        app.MapPost("/api/developer/stories/{id:guid}/complete", CompleteStory);
+        app.MapPost("/api/developer/stories/{id:guid}/cancel", CancelStory);
+        app.MapPost("/api/developer/stories/{id:guid}/finalize", FinalizeStory);
+        app.MapPost("/api/developer/stories/{id:guid}/chat", ChatWithStory);
 
         // Step management
-        app.MapPost("/api/developer/workflows/{id:guid}/steps", AddStep);
-        app.MapDelete("/api/developer/workflows/{workflowId:guid}/steps/{stepId:guid}", DeleteStep);
+        app.MapPost("/api/developer/stories/{id:guid}/steps", AddStep);
+        app.MapDelete("/api/developer/stories/{storyId:guid}/steps/{stepId:guid}", DeleteStep);
 
         // Step operations
-        app.MapPost("/api/developer/workflows/{workflowId:guid}/steps/{stepId:guid}/execute", ExecuteStep);
-        app.MapPost("/api/developer/workflows/{workflowId:guid}/steps/{stepId:guid}/approve", ApproveStep);
-        app.MapPost("/api/developer/workflows/{workflowId:guid}/steps/{stepId:guid}/reject", RejectStep);
-        app.MapPost("/api/developer/workflows/{workflowId:guid}/steps/{stepId:guid}/skip", SkipStep);
-        app.MapPost("/api/developer/workflows/{workflowId:guid}/steps/{stepId:guid}/reset", ResetStep);
-        app.MapPost("/api/developer/workflows/{workflowId:guid}/steps/{stepId:guid}/chat", ChatWithStep);
-        app.MapPost("/api/developer/workflows/{workflowId:guid}/steps/{stepId:guid}/reassign", ReassignStep);
-        app.MapPut("/api/developer/workflows/{workflowId:guid}/steps/{stepId:guid}/description", UpdateStepDescription);
+        app.MapPost("/api/developer/stories/{storyId:guid}/steps/{stepId:guid}/execute", ExecuteStep);
+        app.MapPost("/api/developer/stories/{storyId:guid}/steps/{stepId:guid}/approve", ApproveStep);
+        app.MapPost("/api/developer/stories/{storyId:guid}/steps/{stepId:guid}/reject", RejectStep);
+        app.MapPost("/api/developer/stories/{storyId:guid}/steps/{stepId:guid}/skip", SkipStep);
+        app.MapPost("/api/developer/stories/{storyId:guid}/steps/{stepId:guid}/reset", ResetStep);
+        app.MapPost("/api/developer/stories/{storyId:guid}/steps/{stepId:guid}/chat", ChatWithStep);
+        app.MapPost("/api/developer/stories/{storyId:guid}/steps/{stepId:guid}/reassign", ReassignStep);
+        app.MapPut("/api/developer/stories/{storyId:guid}/steps/{stepId:guid}/description", UpdateStepDescription);
 
         // Story/Issue integration endpoints
         app.MapPost("/api/developer/stories/from-issue", CreateStoryFromIssue);
-        app.MapPost("/api/developer/workflows/{id:guid}/refresh-from-issue", RefreshFromIssue);
-        app.MapPost("/api/developer/workflows/{id:guid}/post-update", PostUpdateToIssue);
-        app.MapPost("/api/developer/workflows/{id:guid}/close-issue", CloseLinkedIssue);
+        app.MapPost("/api/developer/stories/{id:guid}/refresh-from-issue", RefreshFromIssue);
+        app.MapPost("/api/developer/stories/{id:guid}/post-update", PostUpdateToIssue);
+        app.MapPost("/api/developer/stories/{id:guid}/close-issue", CloseLinkedIssue);
 
         return app;
     }
 
-    private static async Task<IResult> CreateWorkflow(
-        CreateWorkflowRequest request,
-        IWorkflowService workflowService,
+    private static async Task<IResult> CreateStory(
+        CreateStoryRequest request,
+        IStoryService storyService,
         CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(request.Title))
@@ -79,7 +79,7 @@ public static class DeveloperEndpoints
                 automationMode = am;
             }
 
-            var workflow = await workflowService.CreateAsync(
+            var story = await storyService.CreateAsync(
                 request.Title,
                 request.Description,
                 request.RepositoryPath,
@@ -87,22 +87,22 @@ public static class DeveloperEndpoints
                 request.IssueUrl,
                 ct);
 
-            return Results.Created($"/api/developer/workflows/{workflow.Id}", new
+            return Results.Created($"/api/developer/stories/{story.Id}", new
             {
-                id = workflow.Id,
-                title = workflow.Title,
-                description = workflow.Description,
-                status = workflow.Status.ToString(),
-                automationMode = workflow.AutomationMode.ToString(),
-                gitBranch = workflow.GitBranch,
-                worktreePath = workflow.WorktreePath,
-                repositoryPath = workflow.RepositoryPath,
-                issueUrl = workflow.IssueUrl,
-                issueProvider = workflow.IssueProvider?.ToString(),
-                issueNumber = workflow.IssueNumber,
-                issueOwner = workflow.IssueOwner,
-                issueRepo = workflow.IssueRepo,
-                createdAt = workflow.CreatedAt
+                id = story.Id,
+                title = story.Title,
+                description = story.Description,
+                status = story.Status.ToString(),
+                automationMode = story.AutomationMode.ToString(),
+                gitBranch = story.GitBranch,
+                worktreePath = story.WorktreePath,
+                repositoryPath = story.RepositoryPath,
+                issueUrl = story.IssueUrl,
+                issueProvider = story.IssueProvider?.ToString(),
+                issueNumber = story.IssueNumber,
+                issueOwner = story.IssueOwner,
+                issueRepo = story.IssueRepo,
+                createdAt = story.CreatedAt
             });
         }
         catch (InvalidOperationException ex)
@@ -111,24 +111,24 @@ public static class DeveloperEndpoints
         }
     }
 
-    private static async Task<IResult> ListWorkflows(
-        IWorkflowService workflowService,
+    private static async Task<IResult> ListStories(
+        IStoryService storyService,
         string? status,
         string? repositoryPath,
         CancellationToken ct)
     {
-        WorkflowStatus? statusFilter = null;
-        if (!string.IsNullOrEmpty(status) && Enum.TryParse<WorkflowStatus>(status, true, out var s))
+        StoryStatus? statusFilter = null;
+        if (!string.IsNullOrEmpty(status) && Enum.TryParse<StoryStatus>(status, true, out var s))
         {
             statusFilter = s;
         }
 
-        var workflows = await workflowService.ListAsync(statusFilter, repositoryPath, ct);
+        var stories = await storyService.ListAsync(statusFilter, repositoryPath, ct);
 
         return Results.Ok(new
         {
-            count = workflows.Count,
-            workflows = workflows.Select(w => new
+            count = stories.Count,
+            stories = stories.Select(w => new
             {
                 id = w.Id,
                 title = w.Title,
@@ -147,34 +147,34 @@ public static class DeveloperEndpoints
         });
     }
 
-    private static async Task<IResult> GetWorkflow(
+    private static async Task<IResult> GetStory(
         Guid id,
-        IWorkflowService workflowService,
+        IStoryService storyService,
         CancellationToken ct)
     {
-        var workflow = await workflowService.GetByIdWithStepsAsync(id, ct);
-        if (workflow is null)
+        var story = await storyService.GetByIdWithStepsAsync(id, ct);
+        if (story is null)
         {
-            return Results.NotFound(new { error = $"Workflow {id} not found" });
+            return Results.NotFound(new { error = $"story {id} not found" });
         }
 
         return Results.Ok(new
         {
-            id = workflow.Id,
-            title = workflow.Title,
-            description = workflow.Description,
-            status = workflow.Status.ToString(),
-            gitBranch = workflow.GitBranch,
-            worktreePath = workflow.WorktreePath,
-            repositoryPath = workflow.RepositoryPath,
-            issueUrl = workflow.IssueUrl,
-            issueProvider = workflow.IssueProvider?.ToString(),
-            issueNumber = workflow.IssueNumber,
-            issueOwner = workflow.IssueOwner,
-            issueRepo = workflow.IssueRepo,
-            analyzedContext = workflow.AnalyzedContext,
-            executionPlan = workflow.ExecutionPlan,
-            steps = workflow.Steps.OrderBy(s => s.Order).Select(s => new
+            id = story.Id,
+            title = story.Title,
+            description = story.Description,
+            status = story.Status.ToString(),
+            gitBranch = story.GitBranch,
+            worktreePath = story.WorktreePath,
+            repositoryPath = story.RepositoryPath,
+            issueUrl = story.IssueUrl,
+            issueProvider = story.IssueProvider?.ToString(),
+            issueNumber = story.IssueNumber,
+            issueOwner = story.IssueOwner,
+            issueRepo = story.IssueRepo,
+            analyzedContext = story.AnalyzedContext,
+            executionPlan = story.ExecutionPlan,
+            steps = story.Steps.OrderBy(s => s.Order).Select(s => new
             {
                 id = s.Id,
                 order = s.Order,
@@ -194,17 +194,17 @@ public static class DeveloperEndpoints
                 approval = s.Approval?.ToString(),
                 chatHistory = s.ChatHistory
             }),
-            chatHistory = workflow.ChatHistory,
-            createdAt = workflow.CreatedAt,
-            updatedAt = workflow.UpdatedAt,
-            completedAt = workflow.CompletedAt,
-            pullRequestUrl = workflow.PullRequestUrl
+            chatHistory = story.ChatHistory,
+            createdAt = story.CreatedAt,
+            updatedAt = story.UpdatedAt,
+            completedAt = story.CompletedAt,
+            pullRequestUrl = story.PullRequestUrl
         });
     }
 
-    private static async Task<IResult> GetWorkflowByPath(
+    private static async Task<IResult> GetStoryByPath(
         string path,
-        IWorkflowService workflowService,
+        IStoryService storyService,
         CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(path))
@@ -212,56 +212,56 @@ public static class DeveloperEndpoints
             return Results.BadRequest(new { error = "Path query parameter is required" });
         }
 
-        var workflow = await workflowService.GetByWorktreePathAsync(path, ct);
-        if (workflow is null)
+        var story = await storyService.GetByWorktreePathAsync(path, ct);
+        if (story is null)
         {
-            return Results.NotFound(new { error = $"No workflow found for path: {path}" });
+            return Results.NotFound(new { error = $"No story found for path: {path}" });
         }
 
         return Results.Ok(new
         {
-            id = workflow.Id,
-            title = workflow.Title,
-            description = workflow.Description,
-            status = workflow.Status.ToString(),
-            gitBranch = workflow.GitBranch,
-            worktreePath = workflow.WorktreePath,
-            repositoryPath = workflow.RepositoryPath,
-            issueUrl = workflow.IssueUrl,
-            issueProvider = workflow.IssueProvider?.ToString(),
-            issueNumber = workflow.IssueNumber,
-            issueOwner = workflow.IssueOwner,
-            issueRepo = workflow.IssueRepo,
-            chatHistory = workflow.ChatHistory,
-            createdAt = workflow.CreatedAt,
-            updatedAt = workflow.UpdatedAt,
-            completedAt = workflow.CompletedAt
+            id = story.Id,
+            title = story.Title,
+            description = story.Description,
+            status = story.Status.ToString(),
+            gitBranch = story.GitBranch,
+            worktreePath = story.WorktreePath,
+            repositoryPath = story.RepositoryPath,
+            issueUrl = story.IssueUrl,
+            issueProvider = story.IssueProvider?.ToString(),
+            issueNumber = story.IssueNumber,
+            issueOwner = story.IssueOwner,
+            issueRepo = story.IssueRepo,
+            chatHistory = story.ChatHistory,
+            createdAt = story.CreatedAt,
+            updatedAt = story.UpdatedAt,
+            completedAt = story.CompletedAt
         });
     }
 
-    private static async Task<IResult> DeleteWorkflow(
+    private static async Task<IResult> DeleteStory(
         Guid id,
-        IWorkflowService workflowService,
+        IStoryService storyService,
         CancellationToken ct)
     {
-        await workflowService.DeleteAsync(id, ct);
+        await storyService.DeleteAsync(id, ct);
         return Results.NoContent();
     }
 
-    private static async Task<IResult> AnalyzeWorkflow(
+    private static async Task<IResult> AnalyzeStory(
         Guid id,
-        IWorkflowService workflowService,
+        IStoryService storyService,
         CancellationToken ct)
     {
         try
         {
-            var workflow = await workflowService.AnalyzeAsync(id, ct);
+            var story = await storyService.AnalyzeAsync(id, ct);
             return Results.Ok(new
             {
-                id = workflow.Id,
-                status = workflow.Status.ToString(),
-                analyzedContext = workflow.AnalyzedContext,
-                message = "Workflow analyzed successfully"
+                id = story.Id,
+                status = story.Status.ToString(),
+                analyzedContext = story.AnalyzedContext,
+                message = "story analyzed successfully"
             });
         }
         catch (InvalidOperationException ex)
@@ -270,20 +270,20 @@ public static class DeveloperEndpoints
         }
     }
 
-    private static async Task<IResult> PlanWorkflow(
+    private static async Task<IResult> PlanStory(
         Guid id,
-        IWorkflowService workflowService,
+        IStoryService storyService,
         CancellationToken ct)
     {
         try
         {
-            var workflow = await workflowService.PlanAsync(id, ct);
+            var story = await storyService.PlanAsync(id, ct);
             return Results.Ok(new
             {
-                id = workflow.Id,
-                status = workflow.Status.ToString(),
-                stepCount = workflow.Steps.Count,
-                steps = workflow.Steps.OrderBy(s => s.Order).Select(s => new
+                id = story.Id,
+                status = story.Status.ToString(),
+                stepCount = story.Steps.Count,
+                steps = story.Steps.OrderBy(s => s.Order).Select(s => new
                 {
                     id = s.Id,
                     order = s.Order,
@@ -292,7 +292,7 @@ public static class DeveloperEndpoints
                     language = s.Language,
                     description = s.Description
                 }),
-                message = "Workflow planned successfully"
+                message = "story planned successfully"
             });
         }
         catch (InvalidOperationException ex)
@@ -301,21 +301,21 @@ public static class DeveloperEndpoints
         }
     }
 
-    private static async Task<IResult> CompleteWorkflow(
+    private static async Task<IResult> CompleteStory(
         Guid id,
-        IWorkflowService workflowService,
+        IStoryService storyService,
         CancellationToken ct)
     {
         try
         {
-            var workflow = await workflowService.CompleteAsync(id, ct);
+            var story = await storyService.CompleteAsync(id, ct);
             return Results.Ok(new
             {
-                id = workflow.Id,
-                status = workflow.Status.ToString(),
-                completedAt = workflow.CompletedAt,
-                pullRequestUrl = workflow.PullRequestUrl,
-                message = "Workflow completed successfully"
+                id = story.Id,
+                status = story.Status.ToString(),
+                completedAt = story.CompletedAt,
+                pullRequestUrl = story.PullRequestUrl,
+                message = "story completed successfully"
             });
         }
         catch (InvalidOperationException ex)
@@ -324,19 +324,19 @@ public static class DeveloperEndpoints
         }
     }
 
-    private static async Task<IResult> CancelWorkflow(
+    private static async Task<IResult> CancelStory(
         Guid id,
-        IWorkflowService workflowService,
+        IStoryService storyService,
         CancellationToken ct)
     {
         try
         {
-            var workflow = await workflowService.CancelAsync(id, ct);
+            var story = await storyService.CancelAsync(id, ct);
             return Results.Ok(new
             {
-                id = workflow.Id,
-                status = workflow.Status.ToString(),
-                message = "Workflow cancelled"
+                id = story.Id,
+                status = story.Status.ToString(),
+                message = "story cancelled"
             });
         }
         catch (InvalidOperationException ex)
@@ -345,48 +345,48 @@ public static class DeveloperEndpoints
         }
     }
 
-    private static async Task<IResult> FinalizeWorkflow(
+    private static async Task<IResult> FinalizeStory(
         Guid id,
-        FinalizeWorkflowRequest request,
-        IWorkflowService workflowService,
+        FinalizeStoryRequest request,
+        IStoryService storyService,
         IGitService gitService,
         CancellationToken ct)
     {
         try
         {
-            var workflow = await workflowService.GetByIdWithStepsAsync(id, ct);
-            if (workflow is null)
-                return Results.NotFound(new { error = "Workflow not found" });
+            var story = await storyService.GetByIdWithStepsAsync(id, ct);
+            if (story is null)
+                return Results.NotFound(new { error = "story not found" });
 
-            if (string.IsNullOrEmpty(workflow.WorktreePath))
-                return Results.BadRequest(new { error = "Workflow has no worktree path" });
+            if (string.IsNullOrEmpty(story.WorktreePath))
+                return Results.BadRequest(new { error = "story has no worktree path" });
 
             string? commitSha = null;
             string? prUrl = null;
             int? prNumber = null;
 
-            var statusResult = await gitService.GetStatusAsync(workflow.WorktreePath, ct);
+            var statusResult = await gitService.GetStatusAsync(story.WorktreePath, ct);
             if (statusResult.Success && statusResult.Value?.IsDirty == true)
             {
-                var commitMessage = request.CommitMessage ?? $"feat: {workflow.Title}";
-                var commitResult = await gitService.CommitAsync(workflow.WorktreePath, commitMessage, skipHooks: true, ct);
+                var commitMessage = request.CommitMessage ?? $"feat: {story.Title}";
+                var commitResult = await gitService.CommitAsync(story.WorktreePath, commitMessage, skipHooks: true, ct);
                 if (!commitResult.Success)
                     return Results.BadRequest(new { error = $"Commit failed: {commitResult.Error}" });
 
                 commitSha = commitResult.Value;
             }
 
-            var pushResult = await gitService.PushAsync(workflow.WorktreePath, setUpstream: true, ct);
+            var pushResult = await gitService.PushAsync(story.WorktreePath, setUpstream: true, ct);
             if (!pushResult.Success)
                 return Results.BadRequest(new { error = $"Push failed: {pushResult.Error}" });
 
             if (request.CreatePullRequest)
             {
-                var prTitle = request.PrTitle ?? workflow.Title;
-                var prBody = request.PrBody ?? BuildPrBody(workflow);
+                var prTitle = request.PrTitle ?? story.Title;
+                var prBody = request.PrBody ?? BuildPrBody(story);
 
                 var prResult = await gitService.CreatePullRequestAsync(
-                    workflow.WorktreePath,
+                    story.WorktreePath,
                     prTitle,
                     prBody,
                     request.BaseBranch,
@@ -401,21 +401,21 @@ public static class DeveloperEndpoints
                 prNumber = prResult.Value?.Number;
             }
 
-            if (workflow.Status != WorkflowStatus.Completed)
+            if (story.Status != StoryStatus.Completed)
             {
-                await workflowService.CompleteAsync(id, ct);
+                await storyService.CompleteAsync(id, ct);
             }
 
             return Results.Ok(new
             {
-                workflowId = workflow.Id,
+                storyId = story.Id,
                 commitSha,
                 pushed = true,
                 prNumber,
                 prUrl,
                 message = prUrl is not null
-                    ? $"Workflow finalized. PR created: {prUrl}"
-                    : "Workflow finalized and pushed."
+                    ? $"story finalized. PR created: {prUrl}"
+                    : "story finalized and pushed."
             });
         }
         catch (Exception ex)
@@ -424,15 +424,15 @@ public static class DeveloperEndpoints
         }
     }
 
-    private static async Task<IResult> ChatWithWorkflow(
+    private static async Task<IResult> ChatWithStory(
         Guid id,
-        WorkflowChatRequest request,
-        IWorkflowService workflowService,
+        StoryChatRequest request,
+        IStoryService storyService,
         CancellationToken ct)
     {
         try
         {
-            var response = await workflowService.ChatAsync(id, request.Message, ct);
+            var response = await storyService.ChatAsync(id, request.Message, ct);
             return Results.Ok(new
             {
                 response = response.Response,
@@ -457,12 +457,12 @@ public static class DeveloperEndpoints
     private static async Task<IResult> AddStep(
         Guid id,
         AddStepRequest request,
-        IWorkflowService workflowService,
+        IStoryService storyService,
         CancellationToken ct)
     {
         try
         {
-            var step = await workflowService.AddStepAsync(
+            var step = await storyService.AddStepAsync(
                 id,
                 request.Name,
                 request.Capability,
@@ -471,7 +471,7 @@ public static class DeveloperEndpoints
                 request.AfterOrder,
                 ct);
 
-            return Results.Created($"/api/developer/workflows/{id}/steps/{step.Id}", new
+            return Results.Created($"/api/developer/stories/{id}/steps/{step.Id}", new
             {
                 id = step.Id,
                 order = step.Order,
@@ -488,25 +488,25 @@ public static class DeveloperEndpoints
     }
 
     private static async Task<IResult> DeleteStep(
-        Guid workflowId,
+        Guid storyId,
         Guid stepId,
-        IWorkflowService workflowService,
+        IStoryService storyService,
         CancellationToken ct)
     {
-        await workflowService.RemoveStepAsync(workflowId, stepId, ct);
+        await storyService.RemoveStepAsync(storyId, stepId, ct);
         return Results.NoContent();
     }
 
     private static async Task<IResult> ExecuteStep(
-        Guid workflowId,
+        Guid storyId,
         Guid stepId,
         ExecuteStepRequest? request,
-        IWorkflowService workflowService,
+        IStoryService storyService,
         CancellationToken ct)
     {
         try
         {
-            var step = await workflowService.ExecuteStepAsync(workflowId, stepId, request?.AgentId, ct);
+            var step = await storyService.ExecuteStepAsync(storyId, stepId, request?.AgentId, ct);
             return Results.Ok(new
             {
                 id = step.Id,
@@ -528,12 +528,12 @@ public static class DeveloperEndpoints
     private static async Task<IResult> ExecuteAllSteps(
         Guid id,
         ExecuteAllStepsRequest? request,
-        IWorkflowService workflowService,
+        IStoryService storyService,
         CancellationToken ct)
     {
         try
         {
-            var result = await workflowService.ExecuteAllStepsAsync(
+            var result = await storyService.ExecuteAllStepsAsync(
                 id,
                 request?.StopOnError ?? true,
                 ct);
@@ -572,14 +572,14 @@ public static class DeveloperEndpoints
     }
 
     private static async Task<IResult> ApproveStep(
-        Guid workflowId,
+        Guid storyId,
         Guid stepId,
-        IWorkflowService workflowService,
+        IStoryService storyService,
         CancellationToken ct)
     {
         try
         {
-            var step = await workflowService.ApproveStepAsync(workflowId, stepId, ct);
+            var step = await storyService.ApproveStepAsync(storyId, stepId, ct);
             return Results.Ok(new
             {
                 id = step.Id,
@@ -594,15 +594,15 @@ public static class DeveloperEndpoints
     }
 
     private static async Task<IResult> RejectStep(
-        Guid workflowId,
+        Guid storyId,
         Guid stepId,
         RejectStepRequest? request,
-        IWorkflowService workflowService,
+        IStoryService storyService,
         CancellationToken ct)
     {
         try
         {
-            var step = await workflowService.RejectStepAsync(workflowId, stepId, request?.Feedback, ct);
+            var step = await storyService.RejectStepAsync(storyId, stepId, request?.Feedback, ct);
             return Results.Ok(new
             {
                 id = step.Id,
@@ -618,15 +618,15 @@ public static class DeveloperEndpoints
     }
 
     private static async Task<IResult> SkipStep(
-        Guid workflowId,
+        Guid storyId,
         Guid stepId,
         SkipStepRequest? request,
-        IWorkflowService workflowService,
+        IStoryService storyService,
         CancellationToken ct)
     {
         try
         {
-            var step = await workflowService.SkipStepAsync(workflowId, stepId, request?.Reason, ct);
+            var step = await storyService.SkipStepAsync(storyId, stepId, request?.Reason, ct);
             return Results.Ok(new
             {
                 id = step.Id,
@@ -642,14 +642,14 @@ public static class DeveloperEndpoints
     }
 
     private static async Task<IResult> ResetStep(
-        Guid workflowId,
+        Guid storyId,
         Guid stepId,
-        IWorkflowService workflowService,
+        IStoryService storyService,
         CancellationToken ct)
     {
         try
         {
-            var step = await workflowService.ResetStepAsync(workflowId, stepId, ct);
+            var step = await storyService.ResetStepAsync(storyId, stepId, ct);
             return Results.Ok(new
             {
                 id = step.Id,
@@ -664,15 +664,15 @@ public static class DeveloperEndpoints
     }
 
     private static async Task<IResult> ChatWithStep(
-        Guid workflowId,
+        Guid storyId,
         Guid stepId,
         StepChatRequest request,
-        IWorkflowService workflowService,
+        IStoryService storyService,
         CancellationToken ct)
     {
         try
         {
-            var (step, response) = await workflowService.ChatWithStepAsync(workflowId, stepId, request.Message, ct);
+            var (step, response) = await storyService.ChatWithStepAsync(storyId, stepId, request.Message, ct);
             return Results.Ok(new
             {
                 stepId = step.Id,
@@ -687,15 +687,15 @@ public static class DeveloperEndpoints
     }
 
     private static async Task<IResult> ReassignStep(
-        Guid workflowId,
+        Guid storyId,
         Guid stepId,
         ReassignStepRequest request,
-        IWorkflowService workflowService,
+        IStoryService storyService,
         CancellationToken ct)
     {
         try
         {
-            var step = await workflowService.ReassignStepAsync(workflowId, stepId, request.AgentId, ct);
+            var step = await storyService.ReassignStepAsync(storyId, stepId, request.AgentId, ct);
             return Results.Ok(new
             {
                 id = step.Id,
@@ -715,15 +715,15 @@ public static class DeveloperEndpoints
     }
 
     private static async Task<IResult> UpdateStepDescription(
-        Guid workflowId,
+        Guid storyId,
         Guid stepId,
         UpdateStepDescriptionRequest request,
-        IWorkflowService workflowService,
+        IStoryService storyService,
         CancellationToken ct)
     {
         try
         {
-            var step = await workflowService.UpdateStepDescriptionAsync(workflowId, stepId, request.Description, ct);
+            var step = await storyService.UpdateStepDescriptionAsync(storyId, stepId, request.Description, ct);
             return Results.Ok(new
             {
                 id = step.Id,
@@ -738,19 +738,19 @@ public static class DeveloperEndpoints
         }
     }
 
-    private static string BuildPrBody(Workflow workflow)
+    private static string BuildPrBody(Story story)
     {
         var sb = new StringBuilder();
-        sb.AppendLine($"## {workflow.Title}");
+        sb.AppendLine($"## {story.Title}");
         sb.AppendLine();
-        if (!string.IsNullOrEmpty(workflow.Description))
+        if (!string.IsNullOrEmpty(story.Description))
         {
-            sb.AppendLine(workflow.Description);
+            sb.AppendLine(story.Description);
             sb.AppendLine();
         }
-        sb.AppendLine("### Workflow Steps");
+        sb.AppendLine("### story Steps");
         sb.AppendLine();
-        foreach (var step in workflow.Steps.OrderBy(s => s.Order))
+        foreach (var step in story.Steps.OrderBy(s => s.Order))
         {
             var status = step.Status switch
             {
@@ -774,7 +774,7 @@ public static class DeveloperEndpoints
     private static async Task<IResult> CreateStoryFromIssue(
         CreateStoryFromIssueRequest request,
         IGitHubService gitHub,
-        IWorkflowService workflowService,
+        IStoryService storyService,
         CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(request.IssueUrl))
@@ -799,8 +799,8 @@ public static class DeveloperEndpoints
             // Fetch issue from GitHub
             var issue = await gitHub.GetIssueAsync(parsed.Value.Owner, parsed.Value.Repo, parsed.Value.Number, ct);
 
-            // Create workflow/story
-            var workflow = await workflowService.CreateAsync(
+            // Create story/story
+            var story = await storyService.CreateAsync(
                 issue.Title,
                 issue.Body,
                 request.RepositoryPath,
@@ -809,7 +809,7 @@ public static class DeveloperEndpoints
                 ct);
 
             // Post a comment to the issue that work has started
-            var branch = workflow.GitBranch ?? "unknown";
+            var branch = story.GitBranch ?? "unknown";
             await gitHub.PostCommentAsync(
                 parsed.Value.Owner,
                 parsed.Value.Repo,
@@ -817,21 +817,21 @@ public static class DeveloperEndpoints
                 $"Started work in branch `{branch}`",
                 ct);
 
-            return Results.Created($"/api/developer/workflows/{workflow.Id}", new
+            return Results.Created($"/api/developer/stories/{story.Id}", new
             {
-                id = workflow.Id,
-                title = workflow.Title,
-                description = workflow.Description,
-                status = workflow.Status.ToString(),
-                gitBranch = workflow.GitBranch,
-                worktreePath = workflow.WorktreePath,
-                repositoryPath = workflow.RepositoryPath,
-                issueUrl = workflow.IssueUrl,
-                issueProvider = workflow.IssueProvider?.ToString(),
-                issueNumber = workflow.IssueNumber,
-                issueOwner = workflow.IssueOwner,
-                issueRepo = workflow.IssueRepo,
-                createdAt = workflow.CreatedAt
+                id = story.Id,
+                title = story.Title,
+                description = story.Description,
+                status = story.Status.ToString(),
+                gitBranch = story.GitBranch,
+                worktreePath = story.WorktreePath,
+                repositoryPath = story.RepositoryPath,
+                issueUrl = story.IssueUrl,
+                issueProvider = story.IssueProvider?.ToString(),
+                issueNumber = story.IssueNumber,
+                issueOwner = story.IssueOwner,
+                issueRepo = story.IssueRepo,
+                createdAt = story.CreatedAt
             });
         }
         catch (HttpRequestException ex)
@@ -843,21 +843,21 @@ public static class DeveloperEndpoints
     private static async Task<IResult> RefreshFromIssue(
         Guid id,
         IGitHubService gitHub,
-        IWorkflowService workflowService,
+        IStoryService storyService,
         CancellationToken ct)
     {
-        var workflow = await workflowService.GetByIdAsync(id, ct);
-        if (workflow is null)
+        var story = await storyService.GetByIdAsync(id, ct);
+        if (story is null)
         {
-            return Results.NotFound(new { error = $"Workflow {id} not found" });
+            return Results.NotFound(new { error = $"story {id} not found" });
         }
 
-        if (string.IsNullOrEmpty(workflow.IssueUrl) ||
-            workflow.IssueOwner is null ||
-            workflow.IssueRepo is null ||
-            workflow.IssueNumber is null)
+        if (string.IsNullOrEmpty(story.IssueUrl) ||
+            story.IssueOwner is null ||
+            story.IssueRepo is null ||
+            story.IssueNumber is null)
         {
-            return Results.BadRequest(new { error = "Workflow is not linked to a GitHub issue" });
+            return Results.BadRequest(new { error = "story is not linked to a GitHub issue" });
         }
 
         if (!gitHub.IsConfigured)
@@ -868,31 +868,31 @@ public static class DeveloperEndpoints
         try
         {
             var issue = await gitHub.GetIssueAsync(
-                workflow.IssueOwner,
-                workflow.IssueRepo,
-                workflow.IssueNumber.Value,
+                story.IssueOwner,
+                story.IssueRepo,
+                story.IssueNumber.Value,
                 ct);
 
             var changes = new List<string>();
 
             // Update title if changed
-            if (workflow.Title != issue.Title)
+            if (story.Title != issue.Title)
             {
-                workflow.Title = issue.Title;
+                story.Title = issue.Title;
                 changes.Add("title");
             }
 
             // Update description if changed
-            if (workflow.Description != issue.Body)
+            if (story.Description != issue.Body)
             {
-                workflow.Description = issue.Body;
+                story.Description = issue.Body;
                 changes.Add("description");
             }
 
             if (changes.Count > 0)
             {
-                workflow.UpdatedAt = DateTimeOffset.UtcNow;
-                await workflowService.UpdateAsync(workflow, ct);
+                story.UpdatedAt = DateTimeOffset.UtcNow;
+                await storyService.UpdateAsync(story, ct);
             }
 
             return Results.Ok(new
@@ -911,7 +911,7 @@ public static class DeveloperEndpoints
         Guid id,
         PostUpdateRequest request,
         IGitHubService gitHub,
-        IWorkflowService workflowService,
+        IStoryService storyService,
         CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(request.Message))
@@ -919,17 +919,17 @@ public static class DeveloperEndpoints
             return Results.BadRequest(new { error = "Message is required" });
         }
 
-        var workflow = await workflowService.GetByIdAsync(id, ct);
-        if (workflow is null)
+        var story = await storyService.GetByIdAsync(id, ct);
+        if (story is null)
         {
-            return Results.NotFound(new { error = $"Workflow {id} not found" });
+            return Results.NotFound(new { error = $"story {id} not found" });
         }
 
-        if (workflow.IssueOwner is null ||
-            workflow.IssueRepo is null ||
-            workflow.IssueNumber is null)
+        if (story.IssueOwner is null ||
+            story.IssueRepo is null ||
+            story.IssueNumber is null)
         {
-            return Results.BadRequest(new { error = "Workflow is not linked to a GitHub issue" });
+            return Results.BadRequest(new { error = "story is not linked to a GitHub issue" });
         }
 
         if (!gitHub.IsConfigured)
@@ -940,9 +940,9 @@ public static class DeveloperEndpoints
         try
         {
             await gitHub.PostCommentAsync(
-                workflow.IssueOwner,
-                workflow.IssueRepo,
-                workflow.IssueNumber.Value,
+                story.IssueOwner,
+                story.IssueRepo,
+                story.IssueNumber.Value,
                 request.Message,
                 ct);
 
@@ -958,20 +958,20 @@ public static class DeveloperEndpoints
         Guid id,
         CloseIssueRequest? request,
         IGitHubService gitHub,
-        IWorkflowService workflowService,
+        IStoryService storyService,
         CancellationToken ct)
     {
-        var workflow = await workflowService.GetByIdAsync(id, ct);
-        if (workflow is null)
+        var story = await storyService.GetByIdAsync(id, ct);
+        if (story is null)
         {
-            return Results.NotFound(new { error = $"Workflow {id} not found" });
+            return Results.NotFound(new { error = $"story {id} not found" });
         }
 
-        if (workflow.IssueOwner is null ||
-            workflow.IssueRepo is null ||
-            workflow.IssueNumber is null)
+        if (story.IssueOwner is null ||
+            story.IssueRepo is null ||
+            story.IssueNumber is null)
         {
-            return Results.BadRequest(new { error = "Workflow is not linked to a GitHub issue" });
+            return Results.BadRequest(new { error = "story is not linked to a GitHub issue" });
         }
 
         if (!gitHub.IsConfigured)
@@ -985,18 +985,18 @@ public static class DeveloperEndpoints
             if (!string.IsNullOrEmpty(request?.Comment))
             {
                 await gitHub.PostCommentAsync(
-                    workflow.IssueOwner,
-                    workflow.IssueRepo,
-                    workflow.IssueNumber.Value,
+                    story.IssueOwner,
+                    story.IssueRepo,
+                    story.IssueNumber.Value,
                     request.Comment,
                     ct);
             }
 
             // Close the issue
             await gitHub.CloseIssueAsync(
-                workflow.IssueOwner,
-                workflow.IssueRepo,
-                workflow.IssueNumber.Value,
+                story.IssueOwner,
+                story.IssueRepo,
+                story.IssueNumber.Value,
                 ct);
 
             return Results.Ok(new { closed = true });

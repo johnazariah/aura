@@ -10,17 +10,17 @@ namespace Aura.Module.Developer.Services.Verification;
 /// <summary>
 /// Service for running verification checks on workflow changes.
 /// </summary>
-public sealed class WorkflowVerificationService : IWorkflowVerificationService
+public sealed class StoryVerificationService : IStoryVerificationService
 {
     private readonly IProjectVerificationDetector _detector;
-    private readonly ILogger<WorkflowVerificationService> _logger;
+    private readonly ILogger<StoryVerificationService> _logger;
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="WorkflowVerificationService"/> class.
+    /// Initializes a new instance of the <see cref="StoryVerificationService"/> class.
     /// </summary>
-    public WorkflowVerificationService(
+    public StoryVerificationService(
         IProjectVerificationDetector detector,
-        ILogger<WorkflowVerificationService> logger)
+        ILogger<StoryVerificationService> logger)
     {
         _detector = detector;
         _logger = logger;

@@ -36,7 +36,7 @@ public sealed class McpHandler
 
     private readonly IRagService _ragService;
     private readonly ICodeGraphService _graphService;
-    private readonly IWorkflowService _workflowService;
+    private readonly IStoryService _workflowService;
     private readonly IGitHubService _gitHubService;
     private readonly IRoslynWorkspaceService _roslynService;
     private readonly IRoslynRefactoringService _refactoringService;
@@ -53,7 +53,7 @@ public sealed class McpHandler
     public McpHandler(
         IRagService ragService,
         ICodeGraphService graphService,
-        IWorkflowService workflowService,
+        IStoryService workflowService,
         IGitHubService gitHubService,
         IRoslynWorkspaceService roslynService,
         IRoslynRefactoringService refactoringService,
@@ -2674,7 +2674,7 @@ public sealed class McpHandler
         var workflows = await _workflowService.ListAsync(ct: ct);
 
         return workflows
-            .Where(w => w.Status != WorkflowStatus.Completed && w.Status != WorkflowStatus.Cancelled)
+            .Where(w => w.Status != StoryStatus.Completed && w.Status != StoryStatus.Cancelled)
             .Select(w => new
             {
                 id = w.Id,
@@ -3064,7 +3064,7 @@ public sealed class McpHandler
                 skipReason = skipEl.GetString();
         }
 
-        WorkflowStep updatedStep;
+        StoryStep updatedStep;
         switch (statusStr)
         {
             case "completed":

@@ -7,7 +7,7 @@ namespace Aura.Module.Developer.Services.Verification;
 /// <summary>
 /// Service for running verification checks on workflow changes.
 /// </summary>
-public interface IWorkflowVerificationService
+public interface IStoryVerificationService
 {
     /// <summary>
     /// Runs verification checks for a workflow's working directory.

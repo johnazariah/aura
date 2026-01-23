@@ -16,7 +16,7 @@ using Microsoft.Extensions.Logging;
 /// </summary>
 public sealed class GuardianExecutor : IGuardianExecutor
 {
-    private readonly IWorkflowService _workflowService;
+    private readonly IStoryService _workflowService;
     private readonly ILogger<GuardianExecutor> _logger;
     private readonly TimeProvider _timeProvider;
 
@@ -27,7 +27,7 @@ public sealed class GuardianExecutor : IGuardianExecutor
     /// <param name="logger">Logger instance.</param>
     /// <param name="timeProvider">Time provider for testability.</param>
     public GuardianExecutor(
-        IWorkflowService workflowService,
+        IStoryService workflowService,
         ILogger<GuardianExecutor> logger,
         TimeProvider? timeProvider = null)
     {
@@ -186,11 +186,11 @@ public sealed class GuardianExecutor : IGuardianExecutor
             // Determine priority from template or severity
             var priority = ParsePriority(template?.Priority) ?? violation.Severity switch
             {
-                ViolationSeverity.Critical => WorkflowPriority.Critical,
-                ViolationSeverity.Error => WorkflowPriority.High,
-                ViolationSeverity.Warning => WorkflowPriority.Medium,
-                ViolationSeverity.Info => WorkflowPriority.Low,
-                _ => WorkflowPriority.Medium,
+                ViolationSeverity.Critical => StoryPriority.Critical,
+                ViolationSeverity.Error => StoryPriority.High,
+                ViolationSeverity.Warning => StoryPriority.Medium,
+                ViolationSeverity.Info => StoryPriority.Low,
+                _ => StoryPriority.Medium,
             };
 
             // Create workflow context with violation details
@@ -234,12 +234,12 @@ public sealed class GuardianExecutor : IGuardianExecutor
         }
     }
 
-    private static WorkflowPriority? ParsePriority(string? priority) => priority?.ToLowerInvariant() switch
+    private static StoryPriority? ParsePriority(string? priority) => priority?.ToLowerInvariant() switch
     {
-        "critical" => WorkflowPriority.Critical,
-        "high" => WorkflowPriority.High,
-        "medium" => WorkflowPriority.Medium,
-        "low" => WorkflowPriority.Low,
+        "critical" => StoryPriority.Critical,
+        "high" => StoryPriority.High,
+        "medium" => StoryPriority.Medium,
+        "low" => StoryPriority.Low,
         _ => null,
     };
 

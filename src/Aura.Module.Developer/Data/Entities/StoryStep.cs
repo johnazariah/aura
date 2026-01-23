@@ -8,16 +8,16 @@ namespace Aura.Module.Developer.Data.Entities;
 /// A single step in the workflow execution plan.
 /// This is a Developer module entity for workflow automation.
 /// </summary>
-public sealed class WorkflowStep
+public sealed class StoryStep
 {
     /// <summary>Gets or sets the unique identifier.</summary>
     public Guid Id { get; set; }
 
-    /// <summary>Gets or sets the parent workflow ID.</summary>
-    public Guid WorkflowId { get; set; }
+    /// <summary>Gets or sets the parent story ID.</summary>
+    public Guid StoryId { get; set; }
 
-    /// <summary>Gets or sets the parent workflow.</summary>
-    public Workflow Workflow { get; set; } = null!;
+    /// <summary>Gets or sets the parent story.</summary>
+    public Story Story { get; set; } = null!;
 
     /// <summary>Gets or sets the execution order (1-based).</summary>
     public int Order { get; set; }

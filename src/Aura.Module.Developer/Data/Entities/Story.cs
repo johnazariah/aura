@@ -8,7 +8,7 @@ namespace Aura.Module.Developer.Data.Entities;
 /// The root entity representing a unit of work.
 /// This is the single entity for the Developer module's workflow automation.
 /// </summary>
-public sealed class Workflow
+public sealed class Story
 {
     /// <summary>Gets or sets the unique identifier.</summary>
     public Guid Id { get; set; }
@@ -23,7 +23,7 @@ public sealed class Workflow
     public string? RepositoryPath { get; set; }
 
     /// <summary>Gets or sets the workflow status.</summary>
-    public WorkflowStatus Status { get; set; } = WorkflowStatus.Created;
+    public StoryStatus Status { get; set; } = StoryStatus.Created;
 
     /// <summary>Gets or sets the worktree path (isolated git worktree for this workflow).</summary>
     public string? WorktreePath { get; set; }
@@ -50,7 +50,7 @@ public sealed class Workflow
     public string? PullRequestUrl { get; set; }
 
     /// <summary>Gets or sets the workflow steps.</summary>
-    public ICollection<WorkflowStep> Steps { get; set; } = [];
+    public ICollection<StoryStep> Steps { get; set; } = [];
 
     // === Issue Integration (Story Model) ===
 
@@ -77,7 +77,7 @@ public sealed class Workflow
     // === Source ===
 
     /// <summary>Gets or sets how this workflow was created.</summary>
-    public WorkflowSource Source { get; set; } = WorkflowSource.User;
+    public StorySource Source { get; set; } = StorySource.User;
 
     /// <summary>Gets or sets the guardian ID if created by a guardian.</summary>
     public string? SourceGuardianId { get; set; }
@@ -89,7 +89,7 @@ public sealed class Workflow
     public string? PatternLanguage { get; set; }
 
     /// <summary>Gets or sets the priority for UI sorting.</summary>
-    public WorkflowPriority Priority { get; set; } = WorkflowPriority.Medium;
+    public StoryPriority Priority { get; set; } = StoryPriority.Medium;
 
     /// <summary>Gets or sets the suggested specialist/agent capability for this workflow.</summary>
     public string? SuggestedCapability { get; set; }
@@ -147,7 +147,7 @@ public enum AutomationMode
 /// <summary>
 /// How a workflow was created.
 /// </summary>
-public enum WorkflowSource
+public enum StorySource
 {
     /// <summary>Created by user via UI or API.</summary>
     User,
@@ -162,7 +162,7 @@ public enum WorkflowSource
 /// <summary>
 /// Priority level for workflow sorting and attention.
 /// </summary>
-public enum WorkflowPriority
+public enum StoryPriority
 {
     /// <summary>Low priority - can wait.</summary>
     Low,
@@ -180,7 +180,7 @@ public enum WorkflowPriority
 /// <summary>
 /// The status of a workflow.
 /// </summary>
-public enum WorkflowStatus
+public enum StoryStatus
 {
     /// <summary>Just created, not yet analyzed.</summary>
     Created,

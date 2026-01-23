@@ -22,7 +22,7 @@ namespace Aura.Module.Developer.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("Aura.Module.Developer.Data.Entities.Workflow", b =>
+            modelBuilder.Entity("Aura.Module.Developer.Data.Entities.Story", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -158,7 +158,7 @@ namespace Aura.Module.Developer.Migrations
                     b.ToTable("workflows", (string)null);
                 });
 
-            modelBuilder.Entity("Aura.Module.Developer.Data.Entities.WorkflowStep", b =>
+            modelBuilder.Entity("Aura.Module.Developer.Data.Entities.StoryStep", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -249,7 +249,7 @@ namespace Aura.Module.Developer.Migrations
                         .HasColumnType("character varying(20)")
                         .HasColumnName("status");
 
-                    b.Property<Guid>("WorkflowId")
+                    b.Property<Guid>("StoryId")
                         .HasColumnType("uuid")
                         .HasColumnName("workflow_id");
 
@@ -257,23 +257,23 @@ namespace Aura.Module.Developer.Migrations
 
                     b.HasIndex("Status");
 
-                    b.HasIndex("WorkflowId", "Order");
+                    b.HasIndex("StoryId", "Order");
 
                     b.ToTable("workflow_steps", (string)null);
                 });
 
-            modelBuilder.Entity("Aura.Module.Developer.Data.Entities.WorkflowStep", b =>
+            modelBuilder.Entity("Aura.Module.Developer.Data.Entities.StoryStep", b =>
                 {
-                    b.HasOne("Aura.Module.Developer.Data.Entities.Workflow", "Workflow")
+                    b.HasOne("Aura.Module.Developer.Data.Entities.Story", "Story")
                         .WithMany("Steps")
-                        .HasForeignKey("WorkflowId")
+                        .HasForeignKey("StoryId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("Workflow");
+                    b.Navigation("Story");
                 });
 
-            modelBuilder.Entity("Aura.Module.Developer.Data.Entities.Workflow", b =>
+            modelBuilder.Entity("Aura.Module.Developer.Data.Entities.Story", b =>
                 {
                     b.Navigation("Steps");
                 });

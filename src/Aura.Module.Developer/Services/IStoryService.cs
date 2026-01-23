@@ -9,7 +9,7 @@ using Aura.Module.Developer.Data.Entities;
 /// <summary>
 /// Service for managing development workflows.
 /// </summary>
-public interface IWorkflowService
+public interface IStoryService
 {
     /// <summary>
     /// Creates a new workflow.
@@ -21,7 +21,7 @@ public interface IWorkflowService
     /// <param name="issueUrl">Optional external issue URL to link.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>The created workflow.</returns>
-    Task<Workflow> CreateAsync(
+    Task<Story> CreateAsync(
         string title,
         string? description = null,
         string? repositoryPath = null,
@@ -35,7 +35,7 @@ public interface IWorkflowService
     /// <param name="request">The guardian workflow creation request.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>The created workflow.</returns>
-    Task<Workflow> CreateFromGuardianAsync(
+    Task<Story> CreateFromGuardianAsync(
         GuardianWorkflowRequest request,
         CancellationToken ct = default);
 
@@ -45,7 +45,7 @@ public interface IWorkflowService
     /// <param name="id">The workflow ID.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>The workflow if found, null otherwise.</returns>
-    Task<Workflow?> GetByIdAsync(Guid id, CancellationToken ct = default);
+    Task<Story?> GetByIdAsync(Guid id, CancellationToken ct = default);
 
     /// <summary>
     /// Gets a workflow by ID with all steps.
@@ -53,7 +53,7 @@ public interface IWorkflowService
     /// <param name="id">The workflow ID.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>The workflow with steps if found, null otherwise.</returns>
-    Task<Workflow?> GetByIdWithStepsAsync(Guid id, CancellationToken ct = default);
+    Task<Story?> GetByIdWithStepsAsync(Guid id, CancellationToken ct = default);
 
     /// <summary>
     /// Gets a workflow by its worktree path.
@@ -61,7 +61,7 @@ public interface IWorkflowService
     /// <param name="worktreePath">The absolute path to the worktree.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>The workflow if found, null otherwise.</returns>
-    Task<Workflow?> GetByWorktreePathAsync(string worktreePath, CancellationToken ct = default);
+    Task<Story?> GetByWorktreePathAsync(string worktreePath, CancellationToken ct = default);
 
     /// <summary>
     /// Lists all workflows, optionally filtered by status and/or repository path.
@@ -70,7 +70,7 @@ public interface IWorkflowService
     /// <param name="repositoryPath">Filter by repository path (optional).</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>List of workflows.</returns>
-    Task<IReadOnlyList<Workflow>> ListAsync(WorkflowStatus? status = null, string? repositoryPath = null, CancellationToken ct = default);
+    Task<IReadOnlyList<Story>> ListAsync(StoryStatus? status = null, string? repositoryPath = null, CancellationToken ct = default);
 
     /// <summary>
     /// Deletes a workflow and all its steps.
@@ -84,14 +84,14 @@ public interface IWorkflowService
     /// </summary>
     /// <param name="workflow">The workflow to update.</param>
     /// <param name="ct">Cancellation token.</param>
-    Task UpdateAsync(Workflow workflow, CancellationToken ct = default);
+    Task UpdateAsync(Story workflow, CancellationToken ct = default);
 
     /// <summary>
     /// Updates a workflow step.
     /// </summary>
     /// <param name="step">The step to update.</param>
     /// <param name="ct">Cancellation token.</param>
-    Task UpdateStepAsync(WorkflowStep step, CancellationToken ct = default);
+    Task UpdateStepAsync(StoryStep step, CancellationToken ct = default);
 
     /// <summary>
     /// Enriches the workflow requirements using the issue-enrichment agent.
@@ -99,7 +99,7 @@ public interface IWorkflowService
     /// <param name="workflowId">The workflow ID.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>The updated workflow with analyzed context.</returns>
-    Task<Workflow> AnalyzeAsync(Guid workflowId, CancellationToken ct = default);
+    Task<Story> AnalyzeAsync(Guid workflowId, CancellationToken ct = default);
 
     /// <summary>
     /// Creates an execution plan using the business-analyst agent.
@@ -107,7 +107,7 @@ public interface IWorkflowService
     /// <param name="workflowId">The workflow ID.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>The updated workflow with steps.</returns>
-    Task<Workflow> PlanAsync(Guid workflowId, CancellationToken ct = default);
+    Task<Story> PlanAsync(Guid workflowId, CancellationToken ct = default);
 
     /// <summary>
     /// Executes a specific step in the workflow.
@@ -117,7 +117,7 @@ public interface IWorkflowService
     /// <param name="agentIdOverride">Override the agent (optional).</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>The executed step.</returns>
-    Task<WorkflowStep> ExecuteStepAsync(
+    Task<StoryStep> ExecuteStepAsync(
         Guid workflowId,
         Guid stepId,
         string? agentIdOverride = null,
@@ -149,7 +149,7 @@ public interface IWorkflowService
     /// <param name="afterOrder">Insert after this order (null = end).</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>The created step.</returns>
-    Task<WorkflowStep> AddStepAsync(
+    Task<StoryStep> AddStepAsync(
         Guid workflowId,
         string name,
         string capability,
@@ -172,7 +172,7 @@ public interface IWorkflowService
     /// <param name="workflowId">The workflow ID.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>The completed workflow.</returns>
-    Task<Workflow> CompleteAsync(Guid workflowId, CancellationToken ct = default);
+    Task<Story> CompleteAsync(Guid workflowId, CancellationToken ct = default);
 
     /// <summary>
     /// Cancels the workflow.
@@ -180,7 +180,7 @@ public interface IWorkflowService
     /// <param name="workflowId">The workflow ID.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>The cancelled workflow.</returns>
-    Task<Workflow> CancelAsync(Guid workflowId, CancellationToken ct = default);
+    Task<Story> CancelAsync(Guid workflowId, CancellationToken ct = default);
 
     /// <summary>
     /// Sends a chat message within the workflow context to modify the plan.
@@ -189,7 +189,7 @@ public interface IWorkflowService
     /// <param name="message">The user message.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>The chat response with any plan modifications.</returns>
-    Task<WorkflowChatResponse> ChatAsync(Guid workflowId, string message, CancellationToken ct = default);
+    Task<StoryChatResponse> ChatAsync(Guid workflowId, string message, CancellationToken ct = default);
 
     /// <summary>
     /// Approves a step's output.
@@ -198,7 +198,7 @@ public interface IWorkflowService
     /// <param name="stepId">The step ID.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>The updated step.</returns>
-    Task<WorkflowStep> ApproveStepAsync(Guid workflowId, Guid stepId, CancellationToken ct = default);
+    Task<StoryStep> ApproveStepAsync(Guid workflowId, Guid stepId, CancellationToken ct = default);
 
     /// <summary>
     /// Rejects a step's output with optional feedback.
@@ -208,7 +208,7 @@ public interface IWorkflowService
     /// <param name="feedback">Feedback about why it was rejected.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>The updated step.</returns>
-    Task<WorkflowStep> RejectStepAsync(Guid workflowId, Guid stepId, string? feedback = null, CancellationToken ct = default);
+    Task<StoryStep> RejectStepAsync(Guid workflowId, Guid stepId, string? feedback = null, CancellationToken ct = default);
 
     /// <summary>
     /// Skips a step with optional reason.
@@ -218,7 +218,7 @@ public interface IWorkflowService
     /// <param name="reason">Reason for skipping.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>The updated step.</returns>
-    Task<WorkflowStep> SkipStepAsync(Guid workflowId, Guid stepId, string? reason = null, CancellationToken ct = default);
+    Task<StoryStep> SkipStepAsync(Guid workflowId, Guid stepId, string? reason = null, CancellationToken ct = default);
 
     /// <summary>
     /// Resets a step to pending status so it can be re-executed.
@@ -228,7 +228,7 @@ public interface IWorkflowService
     /// <param name="stepId">The step ID.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>The reset step.</returns>
-    Task<WorkflowStep> ResetStepAsync(Guid workflowId, Guid stepId, CancellationToken ct = default);
+    Task<StoryStep> ResetStepAsync(Guid workflowId, Guid stepId, CancellationToken ct = default);
 
     /// <summary>
     /// Chats with an agent in the context of a specific step.
@@ -238,7 +238,7 @@ public interface IWorkflowService
     /// <param name="message">The user message.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>The updated step and agent response.</returns>
-    Task<(WorkflowStep Step, string Response)> ChatWithStepAsync(Guid workflowId, Guid stepId, string message, CancellationToken ct = default);
+    Task<(StoryStep Step, string Response)> ChatWithStepAsync(Guid workflowId, Guid stepId, string message, CancellationToken ct = default);
 
     /// <summary>
     /// Reassigns a step to a different agent.
@@ -248,7 +248,7 @@ public interface IWorkflowService
     /// <param name="agentId">The new agent ID.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>The updated step.</returns>
-    Task<WorkflowStep> ReassignStepAsync(Guid workflowId, Guid stepId, string agentId, CancellationToken ct = default);
+    Task<StoryStep> ReassignStepAsync(Guid workflowId, Guid stepId, string agentId, CancellationToken ct = default);
 
     /// <summary>
     /// Updates a step's description.
@@ -258,13 +258,13 @@ public interface IWorkflowService
     /// <param name="description">The new description.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>The updated step.</returns>
-    Task<WorkflowStep> UpdateStepDescriptionAsync(Guid workflowId, Guid stepId, string description, CancellationToken ct = default);
+    Task<StoryStep> UpdateStepDescriptionAsync(Guid workflowId, Guid stepId, string description, CancellationToken ct = default);
 }
 
 /// <summary>
 /// Response from a workflow chat interaction.
 /// </summary>
-public record WorkflowChatResponse
+public record StoryChatResponse
 {
     /// <summary>Gets the assistant's response.</summary>
     public required string Response { get; init; }
@@ -273,7 +273,7 @@ public record WorkflowChatResponse
     public bool PlanModified { get; init; }
 
     /// <summary>Gets any steps that were added.</summary>
-    public IReadOnlyList<WorkflowStep> StepsAdded { get; init; } = [];
+    public IReadOnlyList<StoryStep> StepsAdded { get; init; } = [];
 
     /// <summary>Gets any steps that were removed.</summary>
     public IReadOnlyList<Guid> StepsRemoved { get; init; } = [];
@@ -291,13 +291,13 @@ public record ExecuteAllResult
     public required bool Success { get; init; }
 
     /// <summary>Gets the steps that were executed.</summary>
-    public required IReadOnlyList<WorkflowStep> ExecutedSteps { get; init; }
+    public required IReadOnlyList<StoryStep> ExecutedSteps { get; init; }
 
     /// <summary>Gets the steps that were skipped (require user confirmation in current automation mode).</summary>
-    public required IReadOnlyList<WorkflowStep> SkippedSteps { get; init; }
+    public required IReadOnlyList<StoryStep> SkippedSteps { get; init; }
 
     /// <summary>Gets the step that failed, if any.</summary>
-    public WorkflowStep? FailedStep { get; init; }
+    public StoryStep? FailedStep { get; init; }
 
     /// <summary>Gets the error message if a step failed.</summary>
     public string? Error { get; init; }
@@ -327,7 +327,7 @@ public record GuardianWorkflowRequest
     public required string GuardianId { get; init; }
 
     /// <summary>Gets the workflow priority.</summary>
-    public WorkflowPriority Priority { get; init; } = WorkflowPriority.Medium;
+    public StoryPriority Priority { get; init; } = StoryPriority.Medium;
 
     /// <summary>Gets the suggested capability/agent for this workflow.</summary>
     public string? SuggestedCapability { get; init; }

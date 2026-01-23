@@ -10,18 +10,18 @@ using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using Xunit;
 
-public sealed class WorkflowVerificationServiceTests
+public sealed class StoryVerificationServiceTests
 {
     private readonly IProjectVerificationDetector _detector = Substitute.For<IProjectVerificationDetector>();
-    private readonly WorkflowVerificationService _service;
+    private readonly StoryVerificationService _service;
     private readonly string _testDir;
     private readonly string _shell;
 
-    public WorkflowVerificationServiceTests()
+    public StoryVerificationServiceTests()
     {
-        _service = new WorkflowVerificationService(
+        _service = new StoryVerificationService(
             _detector,
-            NullLogger<WorkflowVerificationService>.Instance);
+            NullLogger<StoryVerificationService>.Instance);
 
         // Platform-specific settings
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))

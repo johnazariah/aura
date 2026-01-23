@@ -127,7 +127,7 @@ public record WorkspaceIndexingOptions(
 // =============================================================================
 
 /// <summary>Request to create a workflow.</summary>
-public record CreateWorkflowRequest(
+public record CreateStoryRequest(
     string? Title = null,
     string? Description = null,
     string? RepositoryPath = null,
@@ -165,10 +165,10 @@ public record ReassignStepRequest(string AgentId);
 public record UpdateStepDescriptionRequest(string Description);
 
 /// <summary>Request to chat within a workflow.</summary>
-public record WorkflowChatRequest(string Message);
+public record StoryChatRequest(string Message);
 
 /// <summary>Request to finalize a workflow.</summary>
-public record FinalizeWorkflowRequest(
+public record FinalizeStoryRequest(
     string? CommitMessage = null,
     bool CreatePullRequest = true,
     string? PrTitle = null,

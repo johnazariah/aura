@@ -26,9 +26,9 @@ using Microsoft.Extensions.Options;
 /// Service for managing development workflows.
 /// </summary>
 /// <remarks>
-/// Initializes a new instance of the <see cref="WorkflowService"/> class.
+/// Initializes a new instance of the <see cref="StoryService"/> class.
 /// </remarks>
-public sealed class WorkflowService(
+public sealed class StoryService(
     DeveloperDbContext db,
     IAgentRegistry agentRegistry,
     IPromptRegistry promptRegistry,
@@ -40,9 +40,9 @@ public sealed class WorkflowService(
     IToolRegistry toolRegistry,
     IReActExecutor reactExecutor,
     ILlmProviderRegistry llmProviderRegistry,
-    IWorkflowVerificationService verificationService,
+    IStoryVerificationService verificationService,
     IOptions<DeveloperModuleOptions> options,
-    ILogger<WorkflowService> logger) : IWorkflowService
+    ILogger<StoryService> logger) : IStoryService
 {
     private readonly DeveloperDbContext _db = db;
     private readonly IAgentRegistry _agentRegistry = agentRegistry;
@@ -55,12 +55,12 @@ public sealed class WorkflowService(
     private readonly IToolRegistry _toolRegistry = toolRegistry;
     private readonly IReActExecutor _reactExecutor = reactExecutor;
     private readonly ILlmProviderRegistry _llmProviderRegistry = llmProviderRegistry;
-    private readonly IWorkflowVerificationService _verificationService = verificationService;
+    private readonly IStoryVerificationService _verificationService = verificationService;
     private readonly DeveloperModuleOptions _options = options.Value;
-    private readonly ILogger<WorkflowService> _logger = logger;
+    private readonly ILogger<StoryService> _logger = logger;
 
     /// <inheritdoc/>
-    public async Task<Workflow> CreateAsync(
+    public async Task<Story> CreateAsync(
         string title,
         string? description = null,
         string? repositoryPath = null,
@@ -78,14 +78,14 @@ public sealed class WorkflowService(
         var branchName = $"{prefix}/{sanitizedTitle}-{Guid.NewGuid():N}"[..Math.Min(63, prefix.Length + 1 + sanitizedTitle.Length + 33)];
 
         // Create the workflow
-        var workflow = new Workflow
+        var workflow = new Story
         {
             Id = Guid.NewGuid(),
             RepositoryPath = repositoryPath,
             Title = title,
             Description = description,
             GitBranch = branchName,
-            Status = WorkflowStatus.Created,
+            Status = StoryStatus.Created,
             AutomationMode = automationMode,
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow,
@@ -168,7 +168,7 @@ public sealed class WorkflowService(
     }
 
     /// <inheritdoc/>
-    public async Task<Workflow> CreateFromGuardianAsync(
+    public async Task<Story> CreateFromGuardianAsync(
         GuardianWorkflowRequest request,
         CancellationToken ct = default)
     {
@@ -182,7 +182,7 @@ public sealed class WorkflowService(
             ct);
 
         // Set guardian-specific fields
-        workflow.Source = WorkflowSource.Guardian;
+        workflow.Source = StorySource.Guardian;
         workflow.SourceGuardianId = request.GuardianId;
         workflow.Priority = request.Priority;
         workflow.SuggestedCapability = request.SuggestedCapability;
@@ -206,13 +206,13 @@ public sealed class WorkflowService(
     }
 
     /// <inheritdoc/>
-    public async Task<Workflow?> GetByIdAsync(Guid id, CancellationToken ct = default)
+    public async Task<Story?> GetByIdAsync(Guid id, CancellationToken ct = default)
     {
         return await _db.Workflows.FindAsync([id], ct);
     }
 
     /// <inheritdoc/>
-    public async Task<Workflow?> GetByIdWithStepsAsync(Guid id, CancellationToken ct = default)
+    public async Task<Story?> GetByIdWithStepsAsync(Guid id, CancellationToken ct = default)
     {
         return await _db.Workflows
             .Include(w => w.Steps.OrderBy(s => s.Order))
@@ -220,7 +220,7 @@ public sealed class WorkflowService(
     }
 
     /// <inheritdoc/>
-    public async Task<Workflow?> GetByWorktreePathAsync(string worktreePath, CancellationToken ct = default)
+    public async Task<Story?> GetByWorktreePathAsync(string worktreePath, CancellationToken ct = default)
     {
         // Normalize path for cross-platform comparison
         var normalizedPath = Aura.Foundation.Rag.PathNormalizer.Normalize(worktreePath);
@@ -233,7 +233,7 @@ public sealed class WorkflowService(
     }
 
     /// <inheritdoc/>
-    public async Task<IReadOnlyList<Workflow>> ListAsync(WorkflowStatus? status = null, string? repositoryPath = null, CancellationToken ct = default)
+    public async Task<IReadOnlyList<Story>> ListAsync(StoryStatus? status = null, string? repositoryPath = null, CancellationToken ct = default)
     {
         var query = _db.Workflows.AsQueryable();
 
@@ -311,7 +311,7 @@ public sealed class WorkflowService(
     }
 
     /// <inheritdoc/>
-    public async Task UpdateAsync(Workflow workflow, CancellationToken ct = default)
+    public async Task UpdateAsync(Story workflow, CancellationToken ct = default)
     {
         _db.Workflows.Update(workflow);
         await _db.SaveChangesAsync(ct);
@@ -319,7 +319,7 @@ public sealed class WorkflowService(
     }
 
     /// <inheritdoc/>
-    public async Task UpdateStepAsync(WorkflowStep step, CancellationToken ct = default)
+    public async Task UpdateStepAsync(StoryStep step, CancellationToken ct = default)
     {
         _db.Entry(step).State = Microsoft.EntityFrameworkCore.EntityState.Modified;
         await _db.SaveChangesAsync(ct);
@@ -327,13 +327,13 @@ public sealed class WorkflowService(
     }
 
     /// <inheritdoc/>
-    public async Task<Workflow> AnalyzeAsync(Guid workflowId, CancellationToken ct = default)
+    public async Task<Story> AnalyzeAsync(Guid workflowId, CancellationToken ct = default)
     {
         var workflow = await _db.Workflows
             .FirstOrDefaultAsync(w => w.Id == workflowId, ct)
             ?? throw new InvalidOperationException($"Workflow {workflowId} not found");
 
-        workflow.Status = WorkflowStatus.Analyzing;
+        workflow.Status = StoryStatus.Analyzing;
         workflow.UpdatedAt = DateTimeOffset.UtcNow;
         await _db.SaveChangesAsync(ct);
 
@@ -454,7 +454,7 @@ public sealed class WorkflowService(
                 timestamp = DateTimeOffset.UtcNow,
             });
 
-            workflow.Status = WorkflowStatus.Analyzed;
+            workflow.Status = StoryStatus.Analyzed;
             workflow.UpdatedAt = DateTimeOffset.UtcNow;
             await _db.SaveChangesAsync(ct);
 
@@ -463,7 +463,7 @@ public sealed class WorkflowService(
         }
         catch (Exception ex)
         {
-            workflow.Status = WorkflowStatus.Failed;
+            workflow.Status = StoryStatus.Failed;
             workflow.UpdatedAt = DateTimeOffset.UtcNow;
             await _db.SaveChangesAsync(ct);
             _logger.LogError(ex, "Failed to analyze workflow {WorkflowId}", workflowId);
@@ -472,18 +472,18 @@ public sealed class WorkflowService(
     }
 
     /// <inheritdoc/>
-    public async Task<Workflow> PlanAsync(Guid workflowId, CancellationToken ct = default)
+    public async Task<Story> PlanAsync(Guid workflowId, CancellationToken ct = default)
     {
         var workflow = await _db.Workflows
             .FirstOrDefaultAsync(w => w.Id == workflowId, ct)
             ?? throw new InvalidOperationException($"Workflow {workflowId} not found");
 
-        if (workflow.Status != WorkflowStatus.Analyzed)
+        if (workflow.Status != StoryStatus.Analyzed)
         {
             throw new InvalidOperationException($"Workflow must be analyzed before planning. Current status: {workflow.Status}");
         }
 
-        workflow.Status = WorkflowStatus.Planning;
+        workflow.Status = StoryStatus.Planning;
         workflow.UpdatedAt = DateTimeOffset.UtcNow;
         await _db.SaveChangesAsync(ct);
 
@@ -554,17 +554,17 @@ public sealed class WorkflowService(
 
             // Clear existing steps and add new ones
             var existingSteps = await _db.WorkflowSteps
-                .Where(s => s.WorkflowId == workflowId)
+                .Where(s => s.StoryId == workflowId)
                 .ToListAsync(ct);
             _db.WorkflowSteps.RemoveRange(existingSteps);
 
             var order = 1;
             foreach (var step in steps)
             {
-                var workflowStep = new WorkflowStep
+                var workflowStep = new StoryStep
                 {
                     Id = Guid.NewGuid(),
-                    WorkflowId = workflowId,
+                    StoryId = workflowId,
                     Order = order++,
                     Name = step.Name,
                     Capability = step.Capability,
@@ -584,7 +584,7 @@ public sealed class WorkflowService(
                 timestamp = DateTimeOffset.UtcNow,
             });
 
-            workflow.Status = WorkflowStatus.Planned;
+            workflow.Status = StoryStatus.Planned;
             workflow.UpdatedAt = DateTimeOffset.UtcNow;
             await _db.SaveChangesAsync(ct);
 
@@ -596,7 +596,7 @@ public sealed class WorkflowService(
         }
         catch (Exception ex)
         {
-            workflow.Status = WorkflowStatus.Failed;
+            workflow.Status = StoryStatus.Failed;
             workflow.UpdatedAt = DateTimeOffset.UtcNow;
             await _db.SaveChangesAsync(ct);
             _logger.LogError(ex, "Failed to plan workflow {WorkflowId}", workflowId);
@@ -605,7 +605,7 @@ public sealed class WorkflowService(
     }
 
     /// <inheritdoc/>
-    public async Task<WorkflowStep> ExecuteStepAsync(
+    public async Task<StoryStep> ExecuteStepAsync(
         Guid workflowId,
         Guid stepId,
         string? agentIdOverride = null,
@@ -676,7 +676,7 @@ public sealed class WorkflowService(
         step.AssignedAgentId = agent.AgentId;
         step.StartedAt = DateTimeOffset.UtcNow;
         step.Attempts++;
-        workflow.Status = WorkflowStatus.Executing;
+        workflow.Status = StoryStatus.Executing;
         workflow.UpdatedAt = DateTimeOffset.UtcNow;
         await _db.SaveChangesAsync(ct);
 
@@ -949,13 +949,13 @@ public sealed class WorkflowService(
 
             if (allComplete)
             {
-                workflow.Status = WorkflowStatus.Completed;
+                workflow.Status = StoryStatus.Completed;
                 workflow.CompletedAt = DateTimeOffset.UtcNow;
             }
             else
             {
                 // If there are steps needing rework, keep executing status
-                workflow.Status = WorkflowStatus.Executing;
+                workflow.Status = StoryStatus.Executing;
             }
 
             // Use CancellationToken.None to ensure completion is saved even if HTTP request is cancelled
@@ -1003,15 +1003,15 @@ public sealed class WorkflowService(
             .FirstOrDefaultAsync(w => w.Id == workflowId, ct)
             ?? throw new InvalidOperationException($"Workflow {workflowId} not found");
 
-        if (workflow.Status is not WorkflowStatus.Planned and not WorkflowStatus.Executing)
+        if (workflow.Status is not StoryStatus.Planned and not StoryStatus.Executing)
         {
             throw new InvalidOperationException(
                 $"Workflow must be in 'Planned' or 'Executing' status to execute all steps. Current status: {workflow.Status}");
         }
 
-        var executedSteps = new List<WorkflowStep>();
-        var skippedSteps = new List<WorkflowStep>();
-        WorkflowStep? failedStep = null;
+        var executedSteps = new List<StoryStep>();
+        var skippedSteps = new List<StoryStep>();
+        StoryStep? failedStep = null;
         string? error = null;
         var stoppedOnError = false;
 
@@ -1088,7 +1088,7 @@ public sealed class WorkflowService(
     /// <summary>
     /// Determines if a step can be auto-executed based on the workflow's automation mode.
     /// </summary>
-    private static bool CanAutoExecuteStep(AutomationMode automationMode, WorkflowStep step)
+    private static bool CanAutoExecuteStep(AutomationMode automationMode, StoryStep step)
     {
         return automationMode switch
         {
@@ -1121,7 +1121,7 @@ public sealed class WorkflowService(
     }
 
     /// <inheritdoc/>
-    public async Task<WorkflowStep> AddStepAsync(
+    public async Task<StoryStep> AddStepAsync(
         Guid workflowId,
         string name,
         string capability,
@@ -1153,10 +1153,10 @@ public sealed class WorkflowService(
             newOrder = workflow.Steps.Any() ? workflow.Steps.Max(s => s.Order) + 1 : 1;
         }
 
-        var step = new WorkflowStep
+        var step = new StoryStep
         {
             Id = Guid.NewGuid(),
-            WorkflowId = workflowId,
+            StoryId = workflowId,
             Order = newOrder,
             Name = name,
             Capability = capability,
@@ -1205,7 +1205,7 @@ public sealed class WorkflowService(
     }
 
     /// <inheritdoc/>
-    public async Task<Workflow> CompleteAsync(Guid workflowId, CancellationToken ct = default)
+    public async Task<Story> CompleteAsync(Guid workflowId, CancellationToken ct = default)
     {
         var workflow = await _db.Workflows
             .Include(w => w.Steps)
@@ -1335,7 +1335,7 @@ public sealed class WorkflowService(
             }
         }
 
-        workflow.Status = WorkflowStatus.Completed;
+        workflow.Status = StoryStatus.Completed;
         workflow.CompletedAt = DateTimeOffset.UtcNow;
         workflow.UpdatedAt = DateTimeOffset.UtcNow;
 
@@ -1345,7 +1345,7 @@ public sealed class WorkflowService(
         return workflow;
     }
 
-    private static string BuildPullRequestBody(Workflow workflow)
+    private static string BuildPullRequestBody(Story workflow)
     {
         var sb = new StringBuilder();
         sb.AppendLine("## Summary");
@@ -1370,7 +1370,7 @@ public sealed class WorkflowService(
         return sb.ToString();
     }
 
-    private static string BuildSquashCommitMessage(Workflow workflow)
+    private static string BuildSquashCommitMessage(Story workflow)
     {
         var sb = new StringBuilder();
 
@@ -1403,12 +1403,12 @@ public sealed class WorkflowService(
     }
 
     /// <inheritdoc/>
-    public async Task<Workflow> CancelAsync(Guid workflowId, CancellationToken ct = default)
+    public async Task<Story> CancelAsync(Guid workflowId, CancellationToken ct = default)
     {
         var workflow = await _db.Workflows.FindAsync([workflowId], ct)
             ?? throw new InvalidOperationException($"Workflow {workflowId} not found");
 
-        workflow.Status = WorkflowStatus.Cancelled;
+        workflow.Status = StoryStatus.Cancelled;
         workflow.UpdatedAt = DateTimeOffset.UtcNow;
         await _db.SaveChangesAsync(ct);
 
@@ -1417,7 +1417,7 @@ public sealed class WorkflowService(
     }
 
     /// <inheritdoc/>
-    public async Task<WorkflowChatResponse> ChatAsync(Guid workflowId, string message, CancellationToken ct = default)
+    public async Task<StoryChatResponse> ChatAsync(Guid workflowId, string message, CancellationToken ct = default)
     {
         var workflow = await _db.Workflows
             .Include(w => w.Steps.OrderBy(s => s.Order))
@@ -1429,7 +1429,7 @@ public sealed class WorkflowService(
             ?? throw new InvalidOperationException("No chat agent available");
 
         // Different prompts based on workflow status
-        var prompt = workflow.Status == WorkflowStatus.Analyzed
+        var prompt = workflow.Status == StoryStatus.Analyzed
             ? _promptRegistry.Render("workflow-chat-analyzed", new
             {
                 workflow = new { title = workflow.Title, description = workflow.Description, status = workflow.Status.ToString() },
@@ -1446,8 +1446,8 @@ public sealed class WorkflowService(
         var context = new AgentContext(prompt, WorkspacePath: workflow.WorktreePath);
         var output = await chatAgent.ExecuteAsync(context, ct);
 
-        var response = new WorkflowChatResponse { Response = output.Content };
-        var stepsAdded = new List<WorkflowStep>();
+        var response = new StoryChatResponse { Response = output.Content };
+        var stepsAdded = new List<StoryStep>();
         var stepsRemoved = new List<Guid>();
         var analysisUpdated = false;
 
@@ -1550,7 +1550,7 @@ public sealed class WorkflowService(
     /// <summary>
     /// Appends a message exchange to the workflow's chat history.
     /// </summary>
-    private async Task AppendWorkflowChatHistoryAsync(Workflow workflow, string userMessage, string assistantResponse, CancellationToken ct)
+    private async Task AppendWorkflowChatHistoryAsync(Story workflow, string userMessage, string assistantResponse, CancellationToken ct)
     {
         var history = new List<ChatMessage>();
         if (!string.IsNullOrEmpty(workflow.ChatHistory))
@@ -1570,7 +1570,7 @@ public sealed class WorkflowService(
     }
 
     /// <inheritdoc/>
-    public async Task<WorkflowStep> ApproveStepAsync(Guid workflowId, Guid stepId, CancellationToken ct = default)
+    public async Task<StoryStep> ApproveStepAsync(Guid workflowId, Guid stepId, CancellationToken ct = default)
     {
         var workflow = await _db.Workflows
             .Include(w => w.Steps)
@@ -1594,7 +1594,7 @@ public sealed class WorkflowService(
     }
 
     /// <inheritdoc/>
-    public async Task<WorkflowStep> RejectStepAsync(Guid workflowId, Guid stepId, string? feedback = null, CancellationToken ct = default)
+    public async Task<StoryStep> RejectStepAsync(Guid workflowId, Guid stepId, string? feedback = null, CancellationToken ct = default)
     {
         var workflow = await _db.Workflows
             .Include(w => w.Steps)
@@ -1622,7 +1622,7 @@ public sealed class WorkflowService(
     }
 
     /// <inheritdoc/>
-    public async Task<WorkflowStep> SkipStepAsync(Guid workflowId, Guid stepId, string? reason = null, CancellationToken ct = default)
+    public async Task<StoryStep> SkipStepAsync(Guid workflowId, Guid stepId, string? reason = null, CancellationToken ct = default)
     {
         var workflow = await _db.Workflows
             .Include(w => w.Steps)
@@ -1647,7 +1647,7 @@ public sealed class WorkflowService(
     }
 
     /// <inheritdoc/>
-    public async Task<WorkflowStep> ResetStepAsync(Guid workflowId, Guid stepId, CancellationToken ct = default)
+    public async Task<StoryStep> ResetStepAsync(Guid workflowId, Guid stepId, CancellationToken ct = default)
     {
         var workflow = await _db.Workflows
             .Include(w => w.Steps)
@@ -1673,9 +1673,9 @@ public sealed class WorkflowService(
         step.NeedsRework = false;
 
         // If workflow was completed or failed, set it back to executing
-        if (workflow.Status is WorkflowStatus.Completed or WorkflowStatus.Failed)
+        if (workflow.Status is StoryStatus.Completed or StoryStatus.Failed)
         {
-            workflow.Status = WorkflowStatus.Executing;
+            workflow.Status = StoryStatus.Executing;
         }
 
         workflow.UpdatedAt = DateTimeOffset.UtcNow;
@@ -1688,7 +1688,7 @@ public sealed class WorkflowService(
     }
 
     /// <inheritdoc/>
-    public async Task<(WorkflowStep Step, string Response)> ChatWithStepAsync(Guid workflowId, Guid stepId, string message, CancellationToken ct = default)
+    public async Task<(StoryStep Step, string Response)> ChatWithStepAsync(Guid workflowId, Guid stepId, string message, CancellationToken ct = default)
     {
         var workflow = await _db.Workflows
             .Include(w => w.Steps)
@@ -2211,7 +2211,7 @@ public sealed class WorkflowService(
     /// Builds capability-specific RAG queries for a step.
     /// Different capabilities need different types of context.
     /// </summary>
-    private static (List<string> Queries, List<string> FileReferences) BuildRagQueriesForStep(WorkflowStep step, Workflow workflow)
+    private static (List<string> Queries, List<string> FileReferences) BuildRagQueriesForStep(StoryStep step, Story workflow)
     {
         var queries = new List<string>();
         var fileReferences = new List<string>();
@@ -2326,7 +2326,7 @@ public sealed class WorkflowService(
     /// <summary>
     /// Builds RAG queries for workflow analysis to understand the codebase.
     /// </summary>
-    private static List<string> BuildRagQueriesForAnalysis(Workflow workflow)
+    private static List<string> BuildRagQueriesForAnalysis(Story workflow)
     {
         var queries = new List<string>
         {
@@ -2431,7 +2431,7 @@ public sealed class WorkflowService(
     }
 
     /// <inheritdoc />
-    public async Task<WorkflowStep> ReassignStepAsync(
+    public async Task<StoryStep> ReassignStepAsync(
         Guid workflowId,
         Guid stepId,
         string agentId,
@@ -2467,7 +2467,7 @@ public sealed class WorkflowService(
     }
 
     /// <inheritdoc />
-    public async Task<WorkflowStep> UpdateStepDescriptionAsync(
+    public async Task<StoryStep> UpdateStepDescriptionAsync(
         Guid workflowId,
         Guid stepId,
         string description,

@@ -19,10 +19,10 @@ public sealed class DeveloperDbContext(DbContextOptions<DeveloperDbContext> opti
 {
 
     /// <summary>Gets the workflows.</summary>
-    public DbSet<Workflow> Workflows => Set<Workflow>();
+    public DbSet<Story> Workflows => Set<Story>();
 
     /// <summary>Gets the workflow steps.</summary>
-    public DbSet<WorkflowStep> WorkflowSteps => Set<WorkflowStep>();
+    public DbSet<StoryStep> WorkflowSteps => Set<StoryStep>();
 
     /// <inheritdoc/>
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -36,7 +36,7 @@ public sealed class DeveloperDbContext(DbContextOptions<DeveloperDbContext> opti
     private static void ConfigureDeveloperEntities(ModelBuilder modelBuilder)
     {
         // Workflow configuration
-        modelBuilder.Entity<Workflow>(entity =>
+        modelBuilder.Entity<Story>(entity =>
         {
             entity.ToTable("workflows");
             entity.HasKey(e => e.Id);
@@ -75,12 +75,12 @@ public sealed class DeveloperDbContext(DbContextOptions<DeveloperDbContext> opti
         });
 
         // WorkflowStep configuration
-        modelBuilder.Entity<WorkflowStep>(entity =>
+        modelBuilder.Entity<StoryStep>(entity =>
         {
             entity.ToTable("workflow_steps");
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Id).HasColumnName("id");
-            entity.Property(e => e.WorkflowId).HasColumnName("workflow_id");
+            entity.Property(e => e.StoryId).HasColumnName("workflow_id");
             entity.Property(e => e.Order).HasColumnName("order");
             entity.Property(e => e.Name).HasColumnName("name").HasMaxLength(500);
             entity.Property(e => e.Capability).HasColumnName("capability").HasMaxLength(100);
@@ -103,12 +103,12 @@ public sealed class DeveloperDbContext(DbContextOptions<DeveloperDbContext> opti
             entity.Property(e => e.NeedsRework).HasColumnName("needs_rework");
             entity.Property(e => e.PreviousOutput).HasColumnName("previous_output").HasColumnType("jsonb");
 
-            entity.HasOne(e => e.Workflow)
+            entity.HasOne(e => e.Story)
                 .WithMany(w => w.Steps)
-                .HasForeignKey(e => e.WorkflowId)
+                .HasForeignKey(e => e.StoryId)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            entity.HasIndex(e => new { e.WorkflowId, e.Order });
+            entity.HasIndex(e => new { e.StoryId, e.Order });
             entity.HasIndex(e => e.Status);
         });
     }

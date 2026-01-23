@@ -28,7 +28,7 @@ using System.Threading.Tasks;
 
 namespace Aura.Module.Developer.Tests.Services;
 
-public class WorkflowServiceTests : IDisposable
+public class StoryServiceTests : IDisposable
 {
     private readonly DeveloperDbContext _db;
     private readonly IAgentRegistry _agentRegistry;
@@ -41,11 +41,11 @@ public class WorkflowServiceTests : IDisposable
     private readonly IToolRegistry _toolRegistry;
     private readonly IReActExecutor _reactExecutor;
     private readonly ILlmProviderRegistry _llmProviderRegistry;
-    private readonly IWorkflowVerificationService _verificationService;
+    private readonly IStoryVerificationService _verificationService;
     private readonly IOptions<DeveloperModuleOptions> _options;
-    private readonly WorkflowService _sut;
+    private readonly StoryService _sut;
 
-    public WorkflowServiceTests()
+    public StoryServiceTests()
     {
         // Use EF Core InMemory database for testing
         var dbOptions = new DbContextOptionsBuilder<DeveloperDbContext>()
@@ -67,10 +67,10 @@ public class WorkflowServiceTests : IDisposable
         _toolRegistry = Substitute.For<IToolRegistry>();
         _reactExecutor = Substitute.For<IReActExecutor>();
         _llmProviderRegistry = Substitute.For<ILlmProviderRegistry>();
-        _verificationService = Substitute.For<IWorkflowVerificationService>();
+        _verificationService = Substitute.For<IStoryVerificationService>();
         _options = Options.Create(new DeveloperModuleOptions { BranchPrefix = "workflow/" });
 
-        _sut = new WorkflowService(
+        _sut = new StoryService(
             _db,
             _agentRegistry,
             _promptRegistry,
@@ -84,7 +84,7 @@ public class WorkflowServiceTests : IDisposable
             _llmProviderRegistry,
             _verificationService,
             _options,
-            NullLogger<WorkflowService>.Instance);
+            NullLogger<StoryService>.Instance);
     }
 
     public void Dispose()
@@ -103,7 +103,7 @@ public class WorkflowServiceTests : IDisposable
         // Assert
         result.Should().NotBeNull();
         result.Title.Should().Be("Test Workflow");
-        result.Status.Should().Be(WorkflowStatus.Created);
+        result.Status.Should().Be(StoryStatus.Created);
         result.Id.Should().NotBeEmpty();
     }
 
@@ -212,11 +212,11 @@ public class WorkflowServiceTests : IDisposable
         // Arrange
         var w1 = await _sut.CreateAsync("Created Workflow");
         var w2 = await _sut.CreateAsync("Completed Workflow");
-        w2.Status = WorkflowStatus.Completed;
+        w2.Status = StoryStatus.Completed;
         await _sut.UpdateAsync(w2);
 
         // Act
-        var result = await _sut.ListAsync(status: WorkflowStatus.Created);
+        var result = await _sut.ListAsync(status: StoryStatus.Created);
 
         // Assert
         result.Should().HaveCount(1);
@@ -295,7 +295,7 @@ public class WorkflowServiceTests : IDisposable
         var result = await _sut.CompleteAsync(workflow.Id);
 
         // Assert
-        result.Status.Should().Be(WorkflowStatus.Completed);
+        result.Status.Should().Be(StoryStatus.Completed);
     }
 
     #endregion
@@ -312,7 +312,7 @@ public class WorkflowServiceTests : IDisposable
         var result = await _sut.CancelAsync(workflow.Id);
 
         // Assert
-        result.Status.Should().Be(WorkflowStatus.Cancelled);
+        result.Status.Should().Be(StoryStatus.Cancelled);
     }
 
     #endregion

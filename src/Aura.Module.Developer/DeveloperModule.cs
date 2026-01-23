@@ -30,10 +30,10 @@ public sealed class DeveloperModule : IAuraModule
     public string ModuleId => "developer";
 
     /// <inheritdoc/>
-    public string Name => "Developer Workflow";
+    public string Name => "Developer Stories";
 
     /// <inheritdoc/>
-    public string Description => "Code automation, testing, git worktrees, and workflow management";
+    public string Description => "Code automation, testing, git worktrees, and story management";
 
     /// <inheritdoc/>
     public IReadOnlyList<string> Dependencies => []; // Only depends on Foundation
@@ -53,7 +53,7 @@ public sealed class DeveloperModule : IAuraModule
             options.UseNpgsql(connectionString, o => o.UseVector()));
 
         // Register Developer Module services
-        services.AddScoped<IWorkflowService, WorkflowService>();
+        services.AddScoped<IStoryService, StoryService>();
 
         // Register GitHub service with typed HttpClient
         services.Configure<GitHubOptions>(config.GetSection(GitHubOptions.SectionName));
@@ -85,7 +85,7 @@ public sealed class DeveloperModule : IAuraModule
 
         // Register verification services
         services.AddSingleton<IProjectVerificationDetector, ProjectVerificationDetector>();
-        services.AddSingleton<IWorkflowVerificationService, WorkflowVerificationService>();
+        services.AddSingleton<IStoryVerificationService, StoryVerificationService>();
 
         // Register Code Graph indexer (for Graph RAG)
         services.AddScoped<ICodeGraphIndexer, CodeGraphIndexer>();
