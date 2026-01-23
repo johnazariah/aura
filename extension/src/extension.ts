@@ -405,18 +405,30 @@ async function indexWorkspace(): Promise<void> {
 
     const workspacePath = workspaceFolders[0].uri.fsPath;
 
+    // Check if this is a worktree and get the canonical repository path
+    const repoInfo = await gitService.getRepositoryInfo(workspacePath);
+    const canonicalPath = repoInfo?.canonicalPath ?? workspacePath;
+    const isWorktree = repoInfo?.isWorktree ?? false;
+
+    if (isWorktree) {
+        console.log('[Aura] indexWorkspace: Using parent path for worktree:', canonicalPath);
+    }
+
     try {
-        // Check if workspace is already onboarded
-        const status = await auraApiService.getWorkspaceStatus(workspacePath);
+        // Check if workspace is already onboarded (use canonical path for worktrees)
+        const status = await auraApiService.getWorkspaceStatus(canonicalPath);
         
         if (!status.isOnboarded) {
             // Not onboarded - use onboardWorkspace to create workspace record and start indexing
-            const result = await auraApiService.onboardWorkspace(workspacePath, {
+            const result = await auraApiService.onboardWorkspace(canonicalPath, {
                 excludePatterns: ['**/node_modules/**', '**/bin/**', '**/obj/**', '**/.git/**']
             });
             
             if (result.success && result.jobId) {
-                vscode.window.showInformationMessage(`Indexing started (Job: ${result.jobId.slice(0, 8)}...)`);
+                const msg = isWorktree 
+                    ? `Indexing parent repository started (Job: ${result.jobId.slice(0, 8)}...)`
+                    : `Indexing started (Job: ${result.jobId.slice(0, 8)}...)`;
+                vscode.window.showInformationMessage(msg);
                 updateIndexingStatusBar(result.jobId);
                 
                 // Update context
@@ -425,8 +437,11 @@ async function indexWorkspace(): Promise<void> {
             }
         } else {
             // Already onboarded - trigger a re-index through workspace API
-            const result = await auraApiService.reindexWorkspace(workspacePath);
-            vscode.window.showInformationMessage(`Re-indexing started (Job: ${result.jobId.slice(0, 8)}...)`);
+            const result = await auraApiService.reindexWorkspace(canonicalPath);
+            const msg = isWorktree
+                ? `Re-indexing parent repository started (Job: ${result.jobId.slice(0, 8)}...)`
+                : `Re-indexing started (Job: ${result.jobId.slice(0, 8)}...)`;
+            vscode.window.showInformationMessage(msg);
             updateIndexingStatusBar(result.jobId);
         }
     } catch (error) {

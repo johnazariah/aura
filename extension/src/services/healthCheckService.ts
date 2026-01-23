@@ -345,6 +345,10 @@ export class HealthCheckService {
                 } else {
                     details = `${repoDocuments} files, ${repoChunks} chunks, ${graphNodes} graph nodes`;
                 }
+                // Update onboarding context - workspace is indexed (directly or via parent)
+                // This fixes timing issues where checkOnboardingStatus runs before API is ready
+                await vscode.commands.executeCommand('setContext', 'aura.workspaceOnboarded', true);
+                await vscode.commands.executeCommand('setContext', 'aura.workspaceNotOnboarded', false);
             } else if (canonicalPath) {
                 details = 'Not indexed';
             } else {
