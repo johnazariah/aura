@@ -80,6 +80,15 @@ public interface IStoryService
     Task DeleteAsync(Guid workflowId, CancellationToken ct = default);
 
     /// <summary>
+    /// Resets a workflow's status (for recovery from failed states).
+    /// </summary>
+    /// <param name="workflowId">The workflow ID.</param>
+    /// <param name="newStatus">The new status to set.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>The updated workflow.</returns>
+    Task<Story> ResetStatusAsync(Guid workflowId, StoryStatus newStatus, CancellationToken ct = default);
+
+    /// <summary>
     /// Updates a workflow.
     /// </summary>
     /// <param name="workflow">The workflow to update.</param>

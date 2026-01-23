@@ -311,6 +311,24 @@ public sealed class StoryService(
     }
 
     /// <inheritdoc/>
+    public async Task<Story> ResetStatusAsync(Guid workflowId, StoryStatus newStatus, CancellationToken ct = default)
+    {
+        var workflow = await _db.Workflows
+            .FirstOrDefaultAsync(w => w.Id == workflowId, ct)
+            ?? throw new InvalidOperationException($"Workflow {workflowId} not found");
+
+        var oldStatus = workflow.Status;
+        workflow.Status = newStatus;
+        workflow.UpdatedAt = DateTimeOffset.UtcNow;
+        await _db.SaveChangesAsync(ct);
+
+        _logger.LogInformation("Reset workflow {WorkflowId} status from {OldStatus} to {NewStatus}",
+            workflowId, oldStatus, newStatus);
+
+        return workflow;
+    }
+
+    /// <inheritdoc/>
     public async Task UpdateAsync(Story workflow, CancellationToken ct = default)
     {
         _db.Workflows.Update(workflow);
@@ -864,12 +882,16 @@ public sealed class StoryService(
                     ? $"{prompt}\n\n## Relevant Context from Knowledge Base\n{ragContext}"
                     : prompt;
 
+                // Create validation tracker to enforce code.validate before finish
+                var validationTracker = new ValidationTracker();
+
                 var reactOptions = new ReActOptions
                 {
                     WorkingDirectory = workflow.WorktreePath,
                     MaxSteps = 15,
                     Temperature = 0.2,
                     RequireConfirmation = false, // Auto-approve for now (human reviews step output)
+                    ValidationTracker = validationTracker,
                 };
 
                 // Add overall timeout for step execution (10 minutes max)
