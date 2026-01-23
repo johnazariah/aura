@@ -106,6 +106,20 @@ public sealed class Story
 
     /// <summary>Gets or sets the verification result as JSON.</summary>
     public string? VerificationResult { get; set; }
+
+    // === Orchestration (Parallel Dispatch) ===
+
+    /// <summary>Gets or sets the decomposed tasks as JSON array of StoryTask.</summary>
+    public string? TasksJson { get; set; }
+
+    /// <summary>Gets or sets the orchestrator execution status.</summary>
+    public OrchestratorStatus OrchestratorStatus { get; set; } = OrchestratorStatus.NotDecomposed;
+
+    /// <summary>Gets or sets the current execution wave (0 = not started, 1+ = running wave N).</summary>
+    public int CurrentWave { get; set; }
+
+    /// <summary>Gets or sets the maximum number of parallel agents to use.</summary>
+    public int MaxParallelism { get; set; } = 4;
 }
 
 /// <summary>
@@ -208,4 +222,28 @@ public enum StoryStatus
 
     /// <summary>User cancelled.</summary>
     Cancelled,
+}
+
+/// <summary>
+/// The orchestrator status for parallel task dispatch.
+/// </summary>
+public enum OrchestratorStatus
+{
+    /// <summary>Story created but not decomposed into tasks.</summary>
+    NotDecomposed,
+
+    /// <summary>Story decomposed into tasks, ready to run.</summary>
+    Decomposed,
+
+    /// <summary>Currently executing tasks in parallel.</summary>
+    Running,
+
+    /// <summary>Waiting for quality gate (build/test) between waves.</summary>
+    WaitingForGate,
+
+    /// <summary>All tasks completed successfully.</summary>
+    Completed,
+
+    /// <summary>Unrecoverable failure occurred.</summary>
+    Failed,
 }

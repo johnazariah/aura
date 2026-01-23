@@ -119,6 +119,38 @@ public interface IStoryService
     Task<Story> PlanAsync(Guid workflowId, CancellationToken ct = default);
 
     /// <summary>
+    /// Decomposes the story into parallelizable tasks using an LLM.
+    /// Tasks are organized into waves where all tasks in a wave can run in parallel.
+    /// </summary>
+    /// <param name="storyId">The story ID.</param>
+    /// <param name="maxParallelism">Maximum number of parallel agents per wave.</param>
+    /// <param name="includeTests">Whether to include test generation tasks.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>The decomposition result with tasks and wave count.</returns>
+    Task<StoryDecomposeResult> DecomposeAsync(
+        Guid storyId,
+        int maxParallelism = 4,
+        bool includeTests = true,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Starts parallel execution of decomposed tasks using GH Copilot CLI agents.
+    /// Executes one wave at a time, with quality gates between waves.
+    /// </summary>
+    /// <param name="storyId">The story ID. Story must be decomposed.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>The orchestrator run result with progress info.</returns>
+    Task<StoryRunResult> RunAsync(Guid storyId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Gets the current orchestrator status and task progress.
+    /// </summary>
+    /// <param name="storyId">The story ID.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>The orchestrator status with task details.</returns>
+    Task<StoryOrchestratorStatus> GetOrchestratorStatusAsync(Guid storyId, CancellationToken ct = default);
+
+    /// <summary>
     /// Executes a specific step in the workflow.
     /// </summary>
     /// <param name="workflowId">The workflow ID.</param>
@@ -343,4 +375,115 @@ public record GuardianWorkflowRequest
 
     /// <summary>Gets additional context from the guardian check.</summary>
     public string? Context { get; init; }
+}
+
+/// <summary>
+/// Result from decomposing a story into parallelizable tasks.
+/// </summary>
+public record StoryDecomposeResult
+{
+    /// <summary>Gets the story ID.</summary>
+    public required Guid StoryId { get; init; }
+
+    /// <summary>Gets the decomposed tasks.</summary>
+    public required IReadOnlyList<StoryTask> Tasks { get; init; }
+
+    /// <summary>Gets the total number of execution waves.</summary>
+    public required int WaveCount { get; init; }
+
+    /// <summary>Gets the updated story.</summary>
+    public required Story Story { get; init; }
+}
+
+/// <summary>
+/// Result from running the orchestrator on a story.
+/// </summary>
+public record StoryRunResult
+{
+    /// <summary>Gets the story ID.</summary>
+    public required Guid StoryId { get; init; }
+
+    /// <summary>Gets the orchestrator status.</summary>
+    public required OrchestratorStatus Status { get; init; }
+
+    /// <summary>Gets the current wave being executed.</summary>
+    public required int CurrentWave { get; init; }
+
+    /// <summary>Gets the total number of waves.</summary>
+    public required int TotalWaves { get; init; }
+
+    /// <summary>Gets the tasks that were started in this run.</summary>
+    public required IReadOnlyList<StoryTask> StartedTasks { get; init; }
+
+    /// <summary>Gets the tasks that completed.</summary>
+    public required IReadOnlyList<StoryTask> CompletedTasks { get; init; }
+
+    /// <summary>Gets the tasks that failed.</summary>
+    public required IReadOnlyList<StoryTask> FailedTasks { get; init; }
+
+    /// <summary>Gets whether the run completed all waves.</summary>
+    public bool IsComplete => Status == OrchestratorStatus.Completed;
+
+    /// <summary>Gets whether quality gate is pending.</summary>
+    public bool WaitingForGate => Status == OrchestratorStatus.WaitingForGate;
+
+    /// <summary>Gets the quality gate result if waiting.</summary>
+    public QualityGateResult? GateResult { get; init; }
+
+    /// <summary>Gets any error message.</summary>
+    public string? Error { get; init; }
+}
+
+/// <summary>
+/// Current orchestrator status for a story.
+/// </summary>
+public record StoryOrchestratorStatus
+{
+    /// <summary>Gets the story ID.</summary>
+    public required Guid StoryId { get; init; }
+
+    /// <summary>Gets the orchestrator status.</summary>
+    public required OrchestratorStatus Status { get; init; }
+
+    /// <summary>Gets the current wave.</summary>
+    public required int CurrentWave { get; init; }
+
+    /// <summary>Gets the total wave count.</summary>
+    public required int TotalWaves { get; init; }
+
+    /// <summary>Gets all tasks with their current status.</summary>
+    public required IReadOnlyList<StoryTask> Tasks { get; init; }
+
+    /// <summary>Gets the max parallelism setting.</summary>
+    public required int MaxParallelism { get; init; }
+}
+
+/// <summary>
+/// Result from a quality gate check (build/test).
+/// </summary>
+public record QualityGateResult
+{
+    /// <summary>Gets whether the gate passed.</summary>
+    public required bool Passed { get; init; }
+
+    /// <summary>Gets the gate type (build, test).</summary>
+    public required string GateType { get; init; }
+
+    /// <summary>Gets the wave number this gate follows.</summary>
+    public required int AfterWave { get; init; }
+
+    /// <summary>Gets the build output if applicable.</summary>
+    public string? BuildOutput { get; init; }
+
+    /// <summary>Gets the test results if applicable.</summary>
+    public string? TestOutput { get; init; }
+
+    /// <summary>Gets the number of tests passed.</summary>
+    public int? TestsPassed { get; init; }
+
+    /// <summary>Gets the number of tests failed.</summary>
+    public int? TestsFailed { get; init; }
+
+    /// <summary>Gets any error message.</summary>
+    public string? Error { get; init; }
 }

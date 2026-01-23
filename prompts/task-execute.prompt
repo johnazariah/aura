@@ -1,0 +1,93 @@
+---
+description: Prompt template for dispatching a task to GitHub Copilot CLI agent
+---
+# Task: {{title}}
+
+## Objective
+{{description}}
+
+## Context
+{{#if dependencyOutputs}}
+### Previous Task Outputs
+The following tasks have already been completed. Use their outputs as context:
+
+{{#each dependencyOutputs}}
+**{{this.title}}**:
+{{this.output}}
+
+{{/each}}
+{{/if}}
+
+## MCP Tools Available
+
+You have access to Aura MCP tools for semantic code operations. **Always prefer these over text manipulation.**
+
+### Tool Selection Priority
+
+| Task | ✅ Use Aura Tool | ❌ Avoid |
+|------|------------------|----------|
+| Add method to class | `aura_generate(operation: "method")` | `replace_string_in_file` |
+| Add property | `aura_generate(operation: "property")` | `replace_string_in_file` |
+| Rename symbol | `aura_refactor(operation: "rename")` | Find/replace across files |
+| Create C# class/interface | `aura_generate(operation: "create_type")` | `create_file` |
+| Implement interface | `aura_generate(operation: "implement_interface")` | Manual stub writing |
+| Generate unit tests | `aura_generate(operation: "tests")` | Manual test writing |
+| Find usages/callers | `aura_navigate` | `grep_search` |
+| Explore type structure | `aura_inspect` | Multiple `read_file` calls |
+| Extract method/variable | `aura_refactor(operation: "extract_*")` | Cut/paste with text tools |
+
+### Available Aura Tools
+
+| Tool | Operations | Use For |
+|------|------------|---------|
+| `aura_search` | Semantic search | Finding relevant code before making changes |
+| `aura_navigate` | `callers`, `implementations`, `usages`, `references`, `definition` | Understanding code relationships |
+| `aura_inspect` | `type_members`, `list_types` | Exploring class structure |
+| `aura_refactor` | `rename`, `extract_method`, `extract_variable`, `change_signature` | Semantic code transformations |
+| `aura_generate` | `create_type`, `method`, `property`, `tests`, `implement_interface` | Adding new code elements |
+| `aura_validate` | `compilation`, `tests` | Verifying changes work |
+
+### Text Manipulation Fallback
+
+Use `replace_string_in_file` or `create_file` ONLY for:
+- Non-C# files (JSON, YAML, Markdown, TypeScript, etc.)
+- Simple one-line fixes where Aura overhead isn't justified
+- When Aura tools fail and you need a fallback
+
+## Execution Guidelines
+
+1. **Start with `aura_search`** - Understand the codebase context before making changes
+2. **Use semantic tools** - Prefer `aura_generate`, `aura_refactor` for C# code changes
+3. **Validate after changes** - Run `aura_validate(operation: "compilation")` to verify
+4. **Follow project conventions** - Match existing code style, naming patterns, and architecture
+5. **Be thorough** - Don't leave TODOs or placeholders, implement completely
+6. **Commit your changes** - Use a descriptive commit message with conventional format
+
+## Tool Improvement Proposals
+
+If you encounter a situation where:
+- Aura tools cannot handle your use case
+- You had to fall back to text manipulation for C# code
+- The tool produced incorrect or suboptimal results
+
+**Document it in your final output:**
+
+```
+### Tool Improvement Proposal
+
+**Scenario:** [What you were trying to do]
+**Tool Used:** [Which Aura tool, or "N/A - had to use fallback"]
+**Issue:** [What went wrong or was missing]
+**Proposed Enhancement:** [What capability would help]
+```
+
+This feedback helps improve the Aura toolchain for future tasks.
+
+## Expected Deliverables
+
+- All files created/modified as specified
+- Code compiles without errors (verified via `aura_validate`)
+- Changes committed to the worktree branch
+- Any tool improvement proposals documented if applicable
+
+Execute this task now. Start by using `aura_search` to understand the relevant code, then make changes using semantic tools.

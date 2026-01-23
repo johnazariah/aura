@@ -33,6 +33,9 @@ public static class DeveloperEndpoints
         // story lifecycle
         app.MapPost("/api/developer/stories/{id:guid}/analyze", AnalyzeStory);
         app.MapPost("/api/developer/stories/{id:guid}/plan", PlanStory);
+        app.MapPost("/api/developer/stories/{id:guid}/decompose", DecomposeStory);
+        app.MapPost("/api/developer/stories/{id:guid}/run", RunStory);
+        app.MapGet("/api/developer/stories/{id:guid}/orchestrator-status", GetOrchestratorStatus);
         app.MapPost("/api/developer/stories/{id:guid}/execute-all", ExecuteAllSteps);
         app.MapPost("/api/developer/stories/{id:guid}/complete", CompleteStory);
         app.MapPost("/api/developer/stories/{id:guid}/cancel", CancelStory);
@@ -345,6 +348,125 @@ public static class DeveloperEndpoints
         catch (Exception ex)
         {
             return Problem.InternalError($"Plan failed: {ex.Message}", context);
+        }
+    }
+
+    private static async Task<IResult> DecomposeStory(
+        Guid id,
+        DecomposeStoryRequest? request,
+        IStoryService storyService,
+        CancellationToken ct)
+    {
+        try
+        {
+            var maxParallelism = request?.MaxParallelism ?? 4;
+            var includeTests = request?.IncludeTests ?? true;
+
+            var result = await storyService.DecomposeAsync(id, maxParallelism, includeTests, ct);
+
+            return Results.Ok(new DecomposeStoryResponse(
+                result.StoryId,
+                result.Tasks.Select(t => new StoryTaskDto(
+                    t.Id,
+                    t.Title,
+                    t.Description,
+                    t.Wave,
+                    t.DependsOn,
+                    t.Status.ToString(),
+                    t.ToolImprovementProposal)).ToList(),
+                result.WaveCount));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Results.BadRequest(new { error = ex.Message });
+        }
+    }
+
+    private static async Task<IResult> RunStory(
+        Guid id,
+        IStoryService storyService,
+        CancellationToken ct)
+    {
+        try
+        {
+            var result = await storyService.RunAsync(id, ct);
+
+            return Results.Ok(new
+            {
+                storyId = result.StoryId,
+                status = result.Status.ToString(),
+                currentWave = result.CurrentWave,
+                totalWaves = result.TotalWaves,
+                isComplete = result.IsComplete,
+                waitingForGate = result.WaitingForGate,
+                startedTasks = result.StartedTasks.Select(t => new
+                {
+                    id = t.Id,
+                    title = t.Title,
+                    status = t.Status.ToString(),
+                }),
+                completedTasks = result.CompletedTasks.Select(t => new
+                {
+                    id = t.Id,
+                    title = t.Title,
+                }),
+                failedTasks = result.FailedTasks.Select(t => new
+                {
+                    id = t.Id,
+                    title = t.Title,
+                    error = t.Error,
+                }),
+                gateResult = result.GateResult != null ? new
+                {
+                    passed = result.GateResult.Passed,
+                    gateType = result.GateResult.GateType,
+                    afterWave = result.GateResult.AfterWave,
+                    testsPassed = result.GateResult.TestsPassed,
+                    testsFailed = result.GateResult.TestsFailed,
+                    error = result.GateResult.Error,
+                } : null,
+                error = result.Error,
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Results.BadRequest(new { error = ex.Message });
+        }
+    }
+
+    private static async Task<IResult> GetOrchestratorStatus(
+        Guid id,
+        IStoryService storyService,
+        CancellationToken ct)
+    {
+        try
+        {
+            var result = await storyService.GetOrchestratorStatusAsync(id, ct);
+
+            return Results.Ok(new
+            {
+                storyId = result.StoryId,
+                status = result.Status.ToString(),
+                currentWave = result.CurrentWave,
+                totalWaves = result.TotalWaves,
+                maxParallelism = result.MaxParallelism,
+                tasks = result.Tasks.Select(t => new
+                {
+                    id = t.Id,
+                    title = t.Title,
+                    description = t.Description,
+                    wave = t.Wave,
+                    dependsOn = t.DependsOn,
+                    status = t.Status.ToString(),
+                    startedAt = t.StartedAt,
+                    completedAt = t.CompletedAt,
+                    error = t.Error,
+                }),
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Results.BadRequest(new { error = ex.Message });
         }
     }
 

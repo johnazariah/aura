@@ -193,6 +193,27 @@ public record PostUpdateRequest(string Message);
 /// <summary>Request to close the linked issue.</summary>
 public record CloseIssueRequest(string? Comment = null);
 
+/// <summary>Request to decompose a story into parallelizable tasks.</summary>
+public record DecomposeStoryRequest(
+    int MaxParallelism = 4,
+    bool IncludeTests = true);
+
+/// <summary>Response from decomposing a story into tasks.</summary>
+public record DecomposeStoryResponse(
+    Guid StoryId,
+    IReadOnlyList<StoryTaskDto> Tasks,
+    int WaveCount);
+
+/// <summary>DTO for a story task.</summary>
+public record StoryTaskDto(
+    string Id,
+    string Title,
+    string Description,
+    int Wave,
+    string[] DependsOn,
+    string Status,
+    string? ToolImprovementProposal = null);
+
 // =============================================================================
 // Response Models
 // =============================================================================

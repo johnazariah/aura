@@ -41,6 +41,8 @@ public sealed class StoryService(
     IReActExecutor reactExecutor,
     ILlmProviderRegistry llmProviderRegistry,
     IStoryVerificationService verificationService,
+    IGitHubCopilotDispatcher copilotDispatcher,
+    IQualityGateService qualityGateService,
     IOptions<DeveloperModuleOptions> options,
     ILogger<StoryService> logger) : IStoryService
 {
@@ -56,6 +58,8 @@ public sealed class StoryService(
     private readonly IReActExecutor _reactExecutor = reactExecutor;
     private readonly ILlmProviderRegistry _llmProviderRegistry = llmProviderRegistry;
     private readonly IStoryVerificationService _verificationService = verificationService;
+    private readonly IGitHubCopilotDispatcher _copilotDispatcher = copilotDispatcher;
+    private readonly IQualityGateService _qualityGateService = qualityGateService;
     private readonly DeveloperModuleOptions _options = options.Value;
     private readonly ILogger<StoryService> _logger = logger;
 
@@ -620,6 +624,390 @@ public sealed class StoryService(
             _logger.LogError(ex, "Failed to plan workflow {WorkflowId}", workflowId);
             throw;
         }
+    }
+
+    /// <inheritdoc/>
+    public async Task<StoryDecomposeResult> DecomposeAsync(
+        Guid storyId,
+        int maxParallelism = 4,
+        bool includeTests = true,
+        CancellationToken ct = default)
+    {
+        var story = await _db.Workflows
+            .FirstOrDefaultAsync(w => w.Id == storyId, ct)
+            ?? throw new InvalidOperationException($"Story {storyId} not found");
+
+        // Story must be analyzed or planned before decomposition
+        if (story.Status != StoryStatus.Analyzed && story.Status != StoryStatus.Planned)
+        {
+            throw new InvalidOperationException(
+                $"Story must be analyzed or planned before decomposition. Current status: {story.Status}");
+        }
+
+        // Get an analysis agent for decomposition
+        var agent = _agentRegistry.GetBestForCapability(Capabilities.Analysis);
+        if (agent is null)
+        {
+            throw new InvalidOperationException($"No agent with '{Capabilities.Analysis}' capability found");
+        }
+
+        // Build the decomposition prompt using the template
+        var prompt = _promptRegistry.Render("story-decompose", new
+        {
+            title = story.Title,
+            description = story.Description ?? "No description provided.",
+            analyzedContext = story.AnalyzedContext,
+            maxParallelism,
+            includeTests,
+        });
+
+        // Execute with LLM
+        var provider = agent.Metadata.Provider is not null
+            ? _llmProviderRegistry.GetProvider(agent.Metadata.Provider)
+            : _llmProviderRegistry.GetDefaultProvider();
+
+        if (provider is null)
+        {
+            throw new InvalidOperationException(
+                $"No LLM provider available. Agent provider: {agent.Metadata.Provider ?? "(not set)"}");
+        }
+
+        var messages = new List<Aura.Foundation.Agents.ChatMessage>
+        {
+            new(Aura.Foundation.Agents.ChatRole.System, "You are a task decomposition expert. Return only valid JSON."),
+            new(Aura.Foundation.Agents.ChatRole.User, prompt),
+        };
+
+        var chatOptions = new ChatOptions
+        {
+            Temperature = 0.2, // Low temperature for consistent structure
+        };
+
+        var response = await provider.ChatAsync(agent.Metadata.Model, messages, chatOptions, ct);
+        var rawResponse = response.Content;
+
+        // Parse the JSON response
+        var tasks = ParseTasksFromResponse(rawResponse);
+
+        if (tasks.Count == 0)
+        {
+            throw new InvalidOperationException("Decomposition produced no tasks. Raw response: " + rawResponse);
+        }
+
+        // Calculate wave count
+        var waveCount = tasks.Max(t => t.Wave);
+
+        // Serialize tasks to JSON and store on story
+        story.TasksJson = JsonSerializer.Serialize(tasks);
+        story.OrchestratorStatus = OrchestratorStatus.Decomposed;
+        story.MaxParallelism = maxParallelism;
+        story.CurrentWave = 0;
+        story.UpdatedAt = DateTimeOffset.UtcNow;
+
+        await _db.SaveChangesAsync(ct);
+
+        _logger.LogInformation(
+            "Decomposed story {StoryId} into {TaskCount} tasks across {WaveCount} waves",
+            storyId, tasks.Count, waveCount);
+
+        return new StoryDecomposeResult
+        {
+            StoryId = storyId,
+            Tasks = tasks,
+            WaveCount = waveCount,
+            Story = story,
+        };
+    }
+
+    private static List<StoryTask> ParseTasksFromResponse(string response)
+    {
+        // Extract JSON array from response (handle markdown code blocks)
+        var json = response.Trim();
+        if (json.StartsWith("```", StringComparison.Ordinal))
+        {
+            var startIndex = json.IndexOf('[');
+            var endIndex = json.LastIndexOf(']');
+            if (startIndex >= 0 && endIndex > startIndex)
+            {
+                json = json[startIndex..(endIndex + 1)];
+            }
+        }
+
+        try
+        {
+            var taskDtos = JsonSerializer.Deserialize<List<TaskDecompositionDto>>(json, new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true,
+            });
+
+            if (taskDtos is null)
+            {
+                return [];
+            }
+
+            return taskDtos.Select(dto => new StoryTask(
+                Id: dto.Id ?? $"task-{Guid.NewGuid():N}"[..12],
+                Title: dto.Title ?? "Untitled task",
+                Description: dto.Description ?? string.Empty,
+                Wave: dto.Wave,
+                DependsOn: dto.DependsOn ?? [],
+                Status: StoryTaskStatus.Pending)).ToList();
+        }
+        catch (JsonException ex)
+        {
+            throw new InvalidOperationException($"Failed to parse decomposition response as JSON: {ex.Message}", ex);
+        }
+    }
+
+    private record TaskDecompositionDto(
+        string? Id,
+        string? Title,
+        string? Description,
+        int Wave,
+        string[]? DependsOn);
+
+    /// <inheritdoc/>
+    public async Task<StoryRunResult> RunAsync(Guid storyId, CancellationToken ct = default)
+    {
+        var story = await _db.Workflows
+            .FirstOrDefaultAsync(w => w.Id == storyId, ct)
+            ?? throw new InvalidOperationException($"Story {storyId} not found");
+
+        if (story.OrchestratorStatus == OrchestratorStatus.NotDecomposed)
+        {
+            throw new InvalidOperationException("Story must be decomposed before running. Call DecomposeAsync first.");
+        }
+
+        if (string.IsNullOrEmpty(story.TasksJson))
+        {
+            throw new InvalidOperationException("Story has no tasks. Call DecomposeAsync first.");
+        }
+
+        if (string.IsNullOrEmpty(story.WorktreePath))
+        {
+            throw new InvalidOperationException("Story has no worktree. Create a worktree first.");
+        }
+
+        // Parse tasks from JSON
+        var tasks = JsonSerializer.Deserialize<List<StoryTask>>(story.TasksJson, new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true,
+        }) ?? [];
+
+        var waveCount = tasks.Count > 0 ? tasks.Max(t => t.Wave) : 0;
+
+        // Determine current wave to execute
+        var currentWave = story.CurrentWave == 0 ? 1 : story.CurrentWave;
+
+        // Check if we're waiting for a quality gate
+        if (story.OrchestratorStatus == OrchestratorStatus.WaitingForGate)
+        {
+            // Run quality gate
+            var gateResult = await _qualityGateService.RunFullGateAsync(story.WorktreePath, currentWave - 1, ct);
+
+            if (!gateResult.Passed)
+            {
+                _logger.LogWarning("Quality gate failed after wave {Wave}: {Error}", currentWave - 1, gateResult.Error);
+
+                story.OrchestratorStatus = OrchestratorStatus.Failed;
+                story.UpdatedAt = DateTimeOffset.UtcNow;
+                await _db.SaveChangesAsync(ct);
+
+                return new StoryRunResult
+                {
+                    StoryId = storyId,
+                    Status = OrchestratorStatus.Failed,
+                    CurrentWave = currentWave - 1,
+                    TotalWaves = waveCount,
+                    StartedTasks = [],
+                    CompletedTasks = [],
+                    FailedTasks = [],
+                    GateResult = gateResult,
+                    Error = $"Quality gate failed: {gateResult.Error}",
+                };
+            }
+
+            _logger.LogInformation("Quality gate passed after wave {Wave}", currentWave - 1);
+        }
+
+        // Get tasks for current wave that are pending
+        var waveTasks = tasks
+            .Where(t => t.Wave == currentWave && t.Status == StoryTaskStatus.Pending)
+            .ToList();
+
+        if (waveTasks.Count == 0)
+        {
+            // Check if all tasks are complete
+            if (tasks.All(t => t.Status == StoryTaskStatus.Completed || t.Status == StoryTaskStatus.Skipped))
+            {
+                story.OrchestratorStatus = OrchestratorStatus.Completed;
+                story.UpdatedAt = DateTimeOffset.UtcNow;
+                await _db.SaveChangesAsync(ct);
+
+                return new StoryRunResult
+                {
+                    StoryId = storyId,
+                    Status = OrchestratorStatus.Completed,
+                    CurrentWave = waveCount,
+                    TotalWaves = waveCount,
+                    StartedTasks = [],
+                    CompletedTasks = tasks.Where(t => t.Status == StoryTaskStatus.Completed).ToList(),
+                    FailedTasks = [],
+                };
+            }
+
+            // Move to next wave
+            currentWave++;
+            if (currentWave > waveCount)
+            {
+                story.OrchestratorStatus = OrchestratorStatus.Completed;
+                story.UpdatedAt = DateTimeOffset.UtcNow;
+                await _db.SaveChangesAsync(ct);
+
+                return new StoryRunResult
+                {
+                    StoryId = storyId,
+                    Status = OrchestratorStatus.Completed,
+                    CurrentWave = waveCount,
+                    TotalWaves = waveCount,
+                    StartedTasks = [],
+                    CompletedTasks = tasks.Where(t => t.Status == StoryTaskStatus.Completed).ToList(),
+                    FailedTasks = [],
+                };
+            }
+
+            waveTasks = tasks
+                .Where(t => t.Wave == currentWave && t.Status == StoryTaskStatus.Pending)
+                .ToList();
+        }
+
+        // Update story status
+        story.OrchestratorStatus = OrchestratorStatus.Running;
+        story.CurrentWave = currentWave;
+        story.UpdatedAt = DateTimeOffset.UtcNow;
+        await _db.SaveChangesAsync(ct);
+
+        _logger.LogInformation(
+            "Running wave {Wave}/{TotalWaves} with {TaskCount} tasks (max parallelism: {MaxParallelism})",
+            currentWave, waveCount, waveTasks.Count, story.MaxParallelism);
+
+        // Get completed tasks from prior waves to provide context
+        var priorCompletedTasks = tasks
+            .Where(t => t.Wave < currentWave && t.Status == StoryTaskStatus.Completed)
+            .ToList();
+
+        // Dispatch tasks to GH Copilot CLI
+        var executedTasks = await _copilotDispatcher.DispatchTasksAsync(
+            waveTasks,
+            story.WorktreePath,
+            story.MaxParallelism,
+            priorCompletedTasks,
+            ct);
+
+        // Update tasks in the full list
+        var taskDict = tasks.ToDictionary(t => t.Id);
+        foreach (var executed in executedTasks)
+        {
+            taskDict[executed.Id] = executed;
+        }
+
+        tasks = taskDict.Values.ToList();
+
+        // Save updated tasks
+        story.TasksJson = JsonSerializer.Serialize(tasks);
+
+        var completedTasks = executedTasks.Where(t => t.Status == StoryTaskStatus.Completed).ToList();
+        var failedTasks = executedTasks.Where(t => t.Status == StoryTaskStatus.Failed).ToList();
+
+        // Determine next status
+        if (failedTasks.Count > 0)
+        {
+            // Some tasks failed - mark story as failed
+            story.OrchestratorStatus = OrchestratorStatus.Failed;
+            story.UpdatedAt = DateTimeOffset.UtcNow;
+            await _db.SaveChangesAsync(ct);
+
+            return new StoryRunResult
+            {
+                StoryId = storyId,
+                Status = OrchestratorStatus.Failed,
+                CurrentWave = currentWave,
+                TotalWaves = waveCount,
+                StartedTasks = executedTasks,
+                CompletedTasks = completedTasks,
+                FailedTasks = failedTasks,
+                Error = $"{failedTasks.Count} task(s) failed in wave {currentWave}",
+            };
+        }
+
+        // Wave completed successfully
+        if (currentWave < waveCount)
+        {
+            // More waves to go - wait for quality gate
+            story.OrchestratorStatus = OrchestratorStatus.WaitingForGate;
+            story.CurrentWave = currentWave + 1;
+            story.UpdatedAt = DateTimeOffset.UtcNow;
+            await _db.SaveChangesAsync(ct);
+
+            return new StoryRunResult
+            {
+                StoryId = storyId,
+                Status = OrchestratorStatus.WaitingForGate,
+                CurrentWave = currentWave,
+                TotalWaves = waveCount,
+                StartedTasks = executedTasks,
+                CompletedTasks = completedTasks,
+                FailedTasks = [],
+            };
+        }
+
+        // All waves complete
+        story.OrchestratorStatus = OrchestratorStatus.Completed;
+        story.UpdatedAt = DateTimeOffset.UtcNow;
+        await _db.SaveChangesAsync(ct);
+
+        _logger.LogInformation("Story {StoryId} orchestration completed successfully", storyId);
+
+        return new StoryRunResult
+        {
+            StoryId = storyId,
+            Status = OrchestratorStatus.Completed,
+            CurrentWave = waveCount,
+            TotalWaves = waveCount,
+            StartedTasks = executedTasks,
+            CompletedTasks = tasks.Where(t => t.Status == StoryTaskStatus.Completed).ToList(),
+            FailedTasks = [],
+        };
+    }
+
+    /// <inheritdoc/>
+    public async Task<StoryOrchestratorStatus> GetOrchestratorStatusAsync(Guid storyId, CancellationToken ct = default)
+    {
+        var story = await _db.Workflows
+            .FirstOrDefaultAsync(w => w.Id == storyId, ct)
+            ?? throw new InvalidOperationException($"Story {storyId} not found");
+
+        var tasks = new List<StoryTask>();
+        var waveCount = 0;
+
+        if (!string.IsNullOrEmpty(story.TasksJson))
+        {
+            tasks = JsonSerializer.Deserialize<List<StoryTask>>(story.TasksJson, new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true,
+            }) ?? [];
+            waveCount = tasks.Count > 0 ? tasks.Max(t => t.Wave) : 0;
+        }
+
+        return new StoryOrchestratorStatus
+        {
+            StoryId = storyId,
+            Status = story.OrchestratorStatus,
+            CurrentWave = story.CurrentWave,
+            TotalWaves = waveCount,
+            Tasks = tasks,
+            MaxParallelism = story.MaxParallelism,
+        };
     }
 
     /// <inheritdoc/>
