@@ -73,7 +73,7 @@ public static class WellKnownSchemas
                                 "description": "Detailed description of what this step should accomplish"
                             }
                         },
-                        "required": ["name", "capability", "description"],
+                        "required": ["name", "capability", "language", "description"],
                         "additionalProperties": false
                     }
                 }
