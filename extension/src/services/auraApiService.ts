@@ -540,7 +540,7 @@ export class AuraApiService {
 
     async createWorkflow(title: string, description?: string, repositoryPath?: string): Promise<Workflow> {
         const response = await this.httpClient.post(
-            `${this.getBaseUrl()}/api/developer/workflows`,
+            `${this.getBaseUrl()}/api/developer/stories`,
             { title, description, repositoryPath },
             { timeout: this.getWorkflowTimeout() }
         );
@@ -556,13 +556,13 @@ export class AuraApiService {
             params.append('repositoryPath', repositoryPath);
         }
         const queryString = params.toString();
-        const url = `${this.getBaseUrl()}/api/developer/workflows${queryString ? '?' + queryString : ''}`;
+        const url = `${this.getBaseUrl()}/api/developer/stories${queryString ? '?' + queryString : ''}`;
         const response = await this.httpClient.get(url);
-        return response.data.workflows;
+        return response.data.stories;
     }
 
     async getWorkflow(id: string): Promise<Workflow> {
-        const response = await this.httpClient.get(`${this.getBaseUrl()}/api/developer/workflows/${id}`);
+        const response = await this.httpClient.get(`${this.getBaseUrl()}/api/developer/stories/${id}`);
         return response.data;
     }
 
@@ -571,7 +571,7 @@ export class AuraApiService {
             const params = new URLSearchParams();
             params.append('path', worktreePath);
             const response = await this.httpClient.get(
-                `${this.getBaseUrl()}/api/developer/workflows/by-path?${params.toString()}`
+                `${this.getBaseUrl()}/api/developer/stories/by-path?${params.toString()}`
             );
             return response.data;
         } catch (error: unknown) {
@@ -583,12 +583,12 @@ export class AuraApiService {
     }
 
     async deleteWorkflow(id: string): Promise<void> {
-        await this.httpClient.delete(`${this.getBaseUrl()}/api/developer/workflows/${id}`);
+        await this.httpClient.delete(`${this.getBaseUrl()}/api/developer/stories/${id}`);
     }
 
     async analyzeWorkflow(workflowId: string): Promise<Workflow> {
         const response = await this.httpClient.post(
-            `${this.getBaseUrl()}/api/developer/workflows/${workflowId}/analyze`,
+            `${this.getBaseUrl()}/api/developer/stories/${workflowId}/analyze`,
             {},
             { timeout: this.getExecutionTimeout() }
         );
@@ -597,7 +597,7 @@ export class AuraApiService {
 
     async planWorkflow(workflowId: string): Promise<Workflow> {
         const response = await this.httpClient.post(
-            `${this.getBaseUrl()}/api/developer/workflows/${workflowId}/plan`,
+            `${this.getBaseUrl()}/api/developer/stories/${workflowId}/plan`,
             {},
             { timeout: this.getExecutionTimeout() }
         );
@@ -606,7 +606,7 @@ export class AuraApiService {
 
     async executeWorkflowStep(workflowId: string, stepId: string, agentId?: string): Promise<WorkflowStep> {
         const response = await this.httpClient.post(
-            `${this.getBaseUrl()}/api/developer/workflows/${workflowId}/steps/${stepId}/execute`,
+            `${this.getBaseUrl()}/api/developer/stories/${workflowId}/steps/${stepId}/execute`,
             agentId ? { agentId } : {},
             { timeout: this.getExecutionTimeout() }
         );
@@ -615,7 +615,7 @@ export class AuraApiService {
 
     async addWorkflowStep(workflowId: string, name: string, capability: string, description?: string): Promise<WorkflowStep> {
         const response = await this.httpClient.post(
-            `${this.getBaseUrl()}/api/developer/workflows/${workflowId}/steps`,
+            `${this.getBaseUrl()}/api/developer/stories/${workflowId}/steps`,
             { name, capability, description }
         );
         return response.data;
@@ -623,27 +623,27 @@ export class AuraApiService {
 
     async removeWorkflowStep(workflowId: string, stepId: string): Promise<void> {
         await this.httpClient.delete(
-            `${this.getBaseUrl()}/api/developer/workflows/${workflowId}/steps/${stepId}`
+            `${this.getBaseUrl()}/api/developer/stories/${workflowId}/steps/${stepId}`
         );
     }
 
     async completeWorkflow(workflowId: string): Promise<Workflow> {
         const response = await this.httpClient.post(
-            `${this.getBaseUrl()}/api/developer/workflows/${workflowId}/complete`
+            `${this.getBaseUrl()}/api/developer/stories/${workflowId}/complete`
         );
         return response.data;
     }
 
     async cancelWorkflow(workflowId: string): Promise<Workflow> {
         const response = await this.httpClient.post(
-            `${this.getBaseUrl()}/api/developer/workflows/${workflowId}/cancel`
+            `${this.getBaseUrl()}/api/developer/stories/${workflowId}/cancel`
         );
         return response.data;
     }
 
     async sendWorkflowChat(workflowId: string, message: string): Promise<WorkflowChatResponse> {
         const response = await this.httpClient.post(
-            `${this.getBaseUrl()}/api/developer/workflows/${workflowId}/chat`,
+            `${this.getBaseUrl()}/api/developer/stories/${workflowId}/chat`,
             { message },
             { timeout: this.getExecutionTimeout() }
         );
@@ -654,14 +654,14 @@ export class AuraApiService {
 
     async approveStepOutput(workflowId: string, stepId: string): Promise<WorkflowStep> {
         const response = await this.httpClient.post(
-            `${this.getBaseUrl()}/api/developer/workflows/${workflowId}/steps/${stepId}/approve`
+            `${this.getBaseUrl()}/api/developer/stories/${workflowId}/steps/${stepId}/approve`
         );
         return response.data;
     }
 
     async rejectStepOutput(workflowId: string, stepId: string, feedback?: string): Promise<WorkflowStep> {
         const response = await this.httpClient.post(
-            `${this.getBaseUrl()}/api/developer/workflows/${workflowId}/steps/${stepId}/reject`,
+            `${this.getBaseUrl()}/api/developer/stories/${workflowId}/steps/${stepId}/reject`,
             feedback ? { feedback } : {}
         );
         return response.data;
@@ -669,7 +669,7 @@ export class AuraApiService {
 
     async skipStep(workflowId: string, stepId: string, reason?: string): Promise<WorkflowStep> {
         const response = await this.httpClient.post(
-            `${this.getBaseUrl()}/api/developer/workflows/${workflowId}/steps/${stepId}/skip`,
+            `${this.getBaseUrl()}/api/developer/stories/${workflowId}/steps/${stepId}/skip`,
             reason ? { reason } : {}
         );
         return response.data;
@@ -677,7 +677,7 @@ export class AuraApiService {
 
     async resetStep(workflowId: string, stepId: string): Promise<WorkflowStep> {
         const response = await this.httpClient.post(
-            `${this.getBaseUrl()}/api/developer/workflows/${workflowId}/steps/${stepId}/reset`,
+            `${this.getBaseUrl()}/api/developer/stories/${workflowId}/steps/${stepId}/reset`,
             {}
         );
         return response.data;
@@ -685,7 +685,7 @@ export class AuraApiService {
 
     async chatWithStep(workflowId: string, stepId: string, message: string): Promise<StepChatResponse> {
         const response = await this.httpClient.post(
-            `${this.getBaseUrl()}/api/developer/workflows/${workflowId}/steps/${stepId}/chat`,
+            `${this.getBaseUrl()}/api/developer/stories/${workflowId}/steps/${stepId}/chat`,
             { message },
             { timeout: this.getExecutionTimeout() }
         );
@@ -694,7 +694,7 @@ export class AuraApiService {
 
     async reassignStep(workflowId: string, stepId: string, agentId: string): Promise<WorkflowStep> {
         const response = await this.httpClient.post(
-            `${this.getBaseUrl()}/api/developer/workflows/${workflowId}/steps/${stepId}/reassign`,
+            `${this.getBaseUrl()}/api/developer/stories/${workflowId}/steps/${stepId}/reassign`,
             { agentId }
         );
         return response.data;
@@ -702,7 +702,7 @@ export class AuraApiService {
 
     async updateStepDescription(workflowId: string, stepId: string, description: string): Promise<WorkflowStep> {
         const response = await this.httpClient.put(
-            `${this.getBaseUrl()}/api/developer/workflows/${workflowId}/steps/${stepId}/description`,
+            `${this.getBaseUrl()}/api/developer/stories/${workflowId}/steps/${stepId}/description`,
             { description }
         );
         return response.data;
@@ -717,7 +717,7 @@ export class AuraApiService {
         draft?: boolean;
     } = {}): Promise<FinalizeResult> {
         const response = await this.httpClient.post(
-            `${this.getBaseUrl()}/api/developer/workflows/${workflowId}/finalize`,
+            `${this.getBaseUrl()}/api/developer/stories/${workflowId}/finalize`,
             {
                 commitMessage: options.commitMessage,
                 createPullRequest: options.createPullRequest ?? true,
@@ -899,7 +899,7 @@ export class AuraApiService {
      */
     async refreshFromIssue(workflowId: string): Promise<{ updated: boolean; changes: string[] }> {
         const response = await this.httpClient.post(
-            `${this.getBaseUrl()}/api/developer/workflows/${workflowId}/refresh-from-issue`,
+            `${this.getBaseUrl()}/api/developer/stories/${workflowId}/refresh-from-issue`,
             {},
             { timeout: 10000 }
         );
@@ -911,7 +911,7 @@ export class AuraApiService {
      */
     async postUpdateToIssue(workflowId: string, message: string): Promise<{ posted: boolean }> {
         const response = await this.httpClient.post(
-            `${this.getBaseUrl()}/api/developer/workflows/${workflowId}/post-update`,
+            `${this.getBaseUrl()}/api/developer/stories/${workflowId}/post-update`,
             { message },
             { timeout: 10000 }
         );
@@ -923,7 +923,7 @@ export class AuraApiService {
      */
     async closeLinkedIssue(workflowId: string, comment?: string): Promise<{ closed: boolean }> {
         const response = await this.httpClient.post(
-            `${this.getBaseUrl()}/api/developer/workflows/${workflowId}/close-issue`,
+            `${this.getBaseUrl()}/api/developer/stories/${workflowId}/close-issue`,
             { comment },
             { timeout: 10000 }
         );
