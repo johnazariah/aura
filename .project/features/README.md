@@ -75,6 +75,8 @@ features/
 | [macOS Local Development](completed/macos-local-development.md) | TreeSitter 1.2.0, install script, local dev support | 2026-01-19 |
 | [Modern C# Support](completed/aura-generate-modern-csharp.md) | Modern C# features for aura_generate | 2026-01-23 |
 | [Agentic Execution v2](completed/agentic-execution-v2.md) | Sub-agents, retry loops, token budget awareness | 2026-01-23 |
+| [RFC 7807 Problem Details](completed/rfc7807-problem-details.md) | Standardized HTTP error responses | 2026-01-24 |
+| [Hierarchical Code Exploration](completed/aura-tree-hierarchical-exploration.md) | aura_tree and aura_get_node MCP tools | 2026-01-24 |
 
 ## Upcoming Features
 

@@ -10,7 +10,7 @@ tools:
   - git.status
   - git.commit
   - git.branch
-  - roslyn.validate_compilation
+  - code.validate
   - shell.execute
   - spawn_subagent
 ---
@@ -106,10 +106,13 @@ If the step says **"Commit"** or **"Apply"**:
 - **CRITICAL: Preserve EXACT indentation** - when adding code (like XML doc comments), match the indentation of surrounding code
   - If a method starts with 4 spaces, your `/// <summary>` must also start with 4 spaces
   - Every line of the XML doc block must have the same leading whitespace
-- **CRITICAL: After writing C# code, you MUST call roslyn.validate_compilation with the project name (e.g., "Aura.Foundation.Tests") to verify it compiles**
-- If roslyn.validate_compilation returns ANY errors, you MUST fix the code with file.modify and validate again
-- Do NOT call git.commit or finish until roslyn.validate_compilation returns success with ZERO errors
-- If roslyn.validate_compilation fails with "No solution file found", provide the full project path
+- **CRITICAL: After writing code, you MUST call code.validate to verify it compiles**
+  - This tool auto-detects language (C#, TypeScript, Python, Go, Rust) from project files
+  - For C# projects, specify projectPath with the .csproj file for faster validation
+  - Example: `code.validate` with projectPath="tests/Aura.Foundation.Tests/Aura.Foundation.Tests.csproj"
+- If code.validate returns ANY errors, you MUST fix the code with file.modify and validate again
+- **CRITICAL: The system will BLOCK you from finishing if you have unvalidated code changes**
+- Do NOT call git.commit or finish until code.validate returns success with ZERO errors
 - **CRITICAL: After compilation succeeds, you MUST call git.commit to commit your changes before finishing**
   - **FIRST**: Run `shell.execute` with command `dotnet format` to fix any formatting issues
   - Then use git.commit with a descriptive commit message that summarizes what was created/changed
@@ -157,7 +160,7 @@ Do NOT spawn sub-agents for simple operations or when you're close to finishing.
 **INCREMENTAL TEST WRITING (MANDATORY for testing steps):**
 - Write tests ONE AT A TIME following this cycle:
   1. Write ONE test method
-  2. Call `roslyn.validate_compilation` to verify it compiles
+  2. Call `code.validate` to verify it compiles
   3. If compilation fails, fix the error with `file.modify` and validate again
   4. Once it compiles, write the NEXT test method
   5. Repeat until all tests are written
