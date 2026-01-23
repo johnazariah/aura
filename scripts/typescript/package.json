@@ -1,0 +1,17 @@
+{
+  "name": "aura-typescript-refactor",
+  "version": "1.0.0",
+  "description": "TypeScript/JavaScript refactoring tool for Aura using ts-morph",
+  "main": "refactor.js",
+  "scripts": {
+    "build": "tsc",
+    "refactor": "node refactor.js"
+  },
+  "dependencies": {
+    "ts-morph": "^24.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0"
+  }
+}
