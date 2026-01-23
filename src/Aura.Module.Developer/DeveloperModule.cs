@@ -54,6 +54,7 @@ public sealed class DeveloperModule : IAuraModule
 
         // Register Developer Module services
         services.AddScoped<IStoryService, StoryService>();
+        services.AddSingleton<ITreeBuilderService, TreeBuilderService>();
 
         // Register GitHub service with typed HttpClient
         services.Configure<GitHubOptions>(config.GetSection(GitHubOptions.SectionName));
@@ -79,6 +80,9 @@ public sealed class DeveloperModule : IAuraModule
 
         // Register Python refactoring service
         services.AddSingleton<IPythonRefactoringService, PythonRefactoringService>();
+
+        // Register TypeScript/JavaScript refactoring service
+        services.AddSingleton<ITypeScriptRefactoringService, TypeScriptRefactoringService>();
 
         // Register test generation service
         services.AddSingleton<ITestGenerationService, RoslynTestGenerator>();

@@ -41,8 +41,10 @@ public sealed class McpHandler
     private readonly IRoslynWorkspaceService _roslynService;
     private readonly IRoslynRefactoringService _refactoringService;
     private readonly IPythonRefactoringService _pythonRefactoringService;
+    private readonly ITypeScriptRefactoringService _typeScriptRefactoringService;
     private readonly ITestGenerationService _testGenerationService;
     private readonly IGitWorktreeService _worktreeService;
+    private readonly ITreeBuilderService _treeBuilderService;
     private readonly ILogger<McpHandler> _logger;
 
     private readonly Dictionary<string, Func<JsonElement?, CancellationToken, Task<object>>> _tools;
@@ -58,8 +60,10 @@ public sealed class McpHandler
         IRoslynWorkspaceService roslynService,
         IRoslynRefactoringService refactoringService,
         IPythonRefactoringService pythonRefactoringService,
+        ITypeScriptRefactoringService typeScriptRefactoringService,
         ITestGenerationService testGenerationService,
         IGitWorktreeService worktreeService,
+        ITreeBuilderService treeBuilderService,
         ILogger<McpHandler> logger)
     {
         _ragService = ragService;
@@ -69,8 +73,10 @@ public sealed class McpHandler
         _roslynService = roslynService;
         _refactoringService = refactoringService;
         _pythonRefactoringService = pythonRefactoringService;
+        _typeScriptRefactoringService = typeScriptRefactoringService;
         _testGenerationService = testGenerationService;
         _worktreeService = worktreeService;
+        _treeBuilderService = treeBuilderService;
         _logger = logger;
 
         // Phase 7: Consolidated meta-tools (28 tools → 11 tools)
@@ -87,6 +93,8 @@ public sealed class McpHandler
             ["aura_workspace"] = WorkspaceAsync,
             ["aura_pattern"] = PatternAsync,
             ["aura_edit"] = EditAsync,
+            ["aura_tree"] = TreeAsync,
+            ["aura_get_node"] = GetNodeAsync,
         };
     }
 
@@ -629,6 +637,51 @@ public sealed class McpHandler
                     required = new[] { "operation", "filePath" }
                 }
             },
+
+            // =================================================================
+            // aura_tree - Hierarchical code exploration
+            // =================================================================
+            new McpToolDefinition
+            {
+                Name = "aura_tree",
+                Description = "Get a hierarchical tree view of the codebase structure. Returns files, types, and members organized in a navigable tree. Use maxDepth to control detail level. (Read)",
+                InputSchema = new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        workspacePath = new { type = "string", description = "Path to the workspace root" },
+                        pattern = new { type = "string", description = "Filter pattern for file paths or symbol names (default: '.' for all)" },
+                        maxDepth = new { type = "integer", description = "Maximum tree depth: 1=files, 2=files+types, 3=files+types+members (default: 2)" },
+                        detail = new
+                        {
+                            type = "string",
+                            description = "Level of detail in output",
+                            @enum = new[] { "min", "max" }
+                        }
+                    },
+                    required = new[] { "workspacePath" }
+                }
+            },
+
+            // =================================================================
+            // aura_get_node - Retrieve full content for a tree node
+            // =================================================================
+            new McpToolDefinition
+            {
+                Name = "aura_get_node",
+                Description = "Retrieve complete source code for a node found via aura_tree. Use the node_id from aura_tree results. (Read)",
+                InputSchema = new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        workspacePath = new { type = "string", description = "Path to the workspace root" },
+                        nodeId = new { type = "string", description = "Node ID from aura_tree (e.g., 'class:src/Services/OrderService.cs:OrderService')" }
+                    },
+                    required = new[] { "workspacePath", "nodeId" }
+                }
+            },
         };
 
         return new JsonRpcResponse
@@ -1011,25 +1064,38 @@ public sealed class McpHandler
             ?? throw new ArgumentException("operation is required");
 
         // Detect language from filePath if provided
-        var isPython = false;
+        var language = "csharp"; // default
         if (args.HasValue && args.Value.TryGetProperty("filePath", out var filePathEl))
         {
             var filePath = filePathEl.GetString() ?? "";
-            isPython = filePath.EndsWith(".py", StringComparison.OrdinalIgnoreCase);
+            if (filePath.EndsWith(".py", StringComparison.OrdinalIgnoreCase))
+            {
+                language = "python";
+            }
+            else if (filePath.EndsWith(".ts", StringComparison.OrdinalIgnoreCase) ||
+                     filePath.EndsWith(".tsx", StringComparison.OrdinalIgnoreCase) ||
+                     filePath.EndsWith(".js", StringComparison.OrdinalIgnoreCase) ||
+                     filePath.EndsWith(".jsx", StringComparison.OrdinalIgnoreCase))
+            {
+                language = "typescript";
+            }
         }
 
         return operation switch
         {
-            "rename" when isPython => await PythonRenameAsync(args, ct),
+            "rename" when language == "python" => await PythonRenameAsync(args, ct),
+            "rename" when language == "typescript" => await TypeScriptRenameAsync(args, ct),
             "rename" => await RenameSymbolAsync(args, ct),
             "change_signature" => await ChangeSignatureAsync(args, ct),
             "extract_interface" => await ExtractInterfaceFromRefactor(args, ct),
-            "extract_method" when isPython => await PythonExtractMethodAsync(args, ct),
-            "extract_variable" when isPython => await PythonExtractVariableAsync(args, ct),
+            "extract_method" when language == "python" => await PythonExtractMethodAsync(args, ct),
+            "extract_method" when language == "typescript" => await TypeScriptExtractFunctionAsync(args, ct),
+            "extract_variable" when language == "python" => await PythonExtractVariableAsync(args, ct),
+            "extract_variable" when language == "typescript" => await TypeScriptExtractVariableAsync(args, ct),
             "safe_delete" => await SafeDeleteAsync(args, ct),
             "move_type_to_file" => await MoveTypeToFileAsync(args, ct),
-            "extract_method" => throw new NotSupportedException("C# extract_method not yet implemented. Use Python files or manual extraction."),
-            "extract_variable" => throw new NotSupportedException("C# extract_variable not yet implemented. Use Python files or manual extraction."),
+            "extract_method" => throw new NotSupportedException("C# extract_method not yet implemented. Use Python or TypeScript files, or manual extraction."),
+            "extract_variable" => throw new NotSupportedException("C# extract_variable not yet implemented. Use Python or TypeScript files, or manual extraction."),
             _ => throw new ArgumentException($"Unknown refactor operation: {operation}")
         };
     }
@@ -4385,6 +4451,177 @@ public sealed class McpHandler
             offset = result.Offset,
             line = result.Line,
             message = result.Message
+        };
+    }
+
+    // =========================================================================
+    // TypeScript/JavaScript Refactoring Tool Handlers
+    // =========================================================================
+
+    private async Task<object> TypeScriptRenameAsync(JsonElement? args, CancellationToken ct)
+    {
+        var projectPath = args?.GetProperty("projectPath").GetString() ?? "";
+        var filePath = args?.GetProperty("filePath").GetString() ?? "";
+        var offset = args?.GetProperty("offset").GetInt32() ?? 0;
+        var newName = args?.GetProperty("newName").GetString() ?? "";
+        var preview = args.HasValue && args.Value.TryGetProperty("preview", out var prevEl) && prevEl.GetBoolean();
+
+        var result = await _typeScriptRefactoringService.RenameSymbolAsync(new TypeScriptRenameRequest
+        {
+            ProjectPath = projectPath,
+            FilePath = filePath,
+            Offset = offset,
+            NewName = newName,
+            Preview = preview
+        }, ct);
+
+        return new
+        {
+            success = result.Success,
+            error = result.Error,
+            preview = result.Preview,
+            changedFiles = result.ChangedFiles,
+            description = result.Description
+        };
+    }
+
+    private async Task<object> TypeScriptExtractFunctionAsync(JsonElement? args, CancellationToken ct)
+    {
+        var projectPath = args?.GetProperty("projectPath").GetString() ?? "";
+        var filePath = args?.GetProperty("filePath").GetString() ?? "";
+        var startOffset = args?.GetProperty("startOffset").GetInt32() ?? 0;
+        var endOffset = args?.GetProperty("endOffset").GetInt32() ?? 0;
+        var newName = args?.GetProperty("newName").GetString() ?? "";
+        var preview = args.HasValue && args.Value.TryGetProperty("preview", out var prevEl) && prevEl.GetBoolean();
+
+        var result = await _typeScriptRefactoringService.ExtractFunctionAsync(new TypeScriptExtractFunctionRequest
+        {
+            ProjectPath = projectPath,
+            FilePath = filePath,
+            StartOffset = startOffset,
+            EndOffset = endOffset,
+            NewName = newName,
+            Preview = preview
+        }, ct);
+
+        return new
+        {
+            success = result.Success,
+            error = result.Error,
+            preview = result.Preview,
+            changedFiles = result.ChangedFiles,
+            description = result.Description
+        };
+    }
+
+    private async Task<object> TypeScriptExtractVariableAsync(JsonElement? args, CancellationToken ct)
+    {
+        var projectPath = args?.GetProperty("projectPath").GetString() ?? "";
+        var filePath = args?.GetProperty("filePath").GetString() ?? "";
+        var startOffset = args?.GetProperty("startOffset").GetInt32() ?? 0;
+        var endOffset = args?.GetProperty("endOffset").GetInt32() ?? 0;
+        var newName = args?.GetProperty("newName").GetString() ?? "";
+        var preview = args.HasValue && args.Value.TryGetProperty("preview", out var prevEl) && prevEl.GetBoolean();
+
+        var result = await _typeScriptRefactoringService.ExtractVariableAsync(new TypeScriptExtractVariableRequest
+        {
+            ProjectPath = projectPath,
+            FilePath = filePath,
+            StartOffset = startOffset,
+            EndOffset = endOffset,
+            NewName = newName,
+            Preview = preview
+        }, ct);
+
+        return new
+        {
+            success = result.Success,
+            error = result.Error,
+            preview = result.Preview,
+            changedFiles = result.ChangedFiles,
+            description = result.Description
+        };
+    }
+
+    // =========================================================================
+    // aura_tree - Hierarchical code exploration
+    // =========================================================================
+
+    private async Task<object> TreeAsync(JsonElement? args, CancellationToken ct)
+    {
+        var workspacePath = args?.GetProperty("workspacePath").GetString()
+            ?? throw new ArgumentException("workspacePath is required");
+
+        var pattern = args?.TryGetProperty("pattern", out var p) == true ? p.GetString() : ".";
+        var maxDepth = args?.TryGetProperty("maxDepth", out var d) == true ? d.GetInt32() : 2;
+        var detailStr = args?.TryGetProperty("detail", out var det) == true ? det.GetString() : "min";
+        var detail = detailStr == "max" ? TreeDetail.Max : TreeDetail.Min;
+
+        _logger.LogDebug("aura_tree: workspacePath={Path}, pattern={Pattern}, maxDepth={MaxDepth}, detail={Detail}",
+            workspacePath, pattern, maxDepth, detailStr);
+
+        var chunks = await _ragService.GetChunksForTreeAsync(workspacePath, pattern, ct);
+
+        var tree = _treeBuilderService.BuildTree(chunks, pattern, maxDepth, detail);
+
+        return new
+        {
+            root_path = tree.RootPath,
+            total_nodes = tree.TotalNodes,
+            truncated = tree.Truncated,
+            nodes = tree.Nodes.Select(n => SerializeTreeNode(n)).ToList()
+        };
+    }
+
+    private async Task<object> GetNodeAsync(JsonElement? args, CancellationToken ct)
+    {
+        var workspacePath = args?.GetProperty("workspacePath").GetString()
+            ?? throw new ArgumentException("workspacePath is required");
+
+        var nodeId = args?.GetProperty("nodeId").GetString()
+            ?? throw new ArgumentException("nodeId is required");
+
+        _logger.LogDebug("aura_get_node: workspacePath={Path}, nodeId={NodeId}", workspacePath, nodeId);
+
+        var chunks = await _ragService.GetChunksForTreeAsync(workspacePath, null, ct);
+
+        var node = _treeBuilderService.GetNode(chunks, nodeId);
+
+        if (node is null)
+        {
+            return new { error = $"Node not found: {nodeId}" };
+        }
+
+        return new
+        {
+            node_id = node.NodeId,
+            name = node.Name,
+            type = node.Type,
+            path = node.Path,
+            line_start = node.LineStart,
+            line_end = node.LineEnd,
+            content = node.Content,
+            metadata = node.Metadata is null ? null : new
+            {
+                signature = node.Metadata.Signature,
+                docstring = node.Metadata.Docstring,
+                language = node.Metadata.Language
+            }
+        };
+    }
+
+    private static object SerializeTreeNode(TreeNode node)
+    {
+        return new
+        {
+            node_id = node.NodeId,
+            name = node.Name,
+            type = node.Type,
+            path = node.Path,
+            signature = node.Signature,
+            line_start = node.LineStart,
+            line_end = node.LineEnd,
+            children = node.Children?.Select(c => SerializeTreeNode(c)).ToList()
         };
     }
 
