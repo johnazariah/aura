@@ -19,7 +19,7 @@ public sealed class DeveloperDbContextFactory : IDesignTimeDbContextFactory<Deve
         var optionsBuilder = new DbContextOptionsBuilder<DeveloperDbContext>();
 
         // Use a placeholder connection string for design-time operations
-        optionsBuilder.UseNpgsql("Host=localhost;Database=aura_dev;Username=postgres;Password=postgres");
+        optionsBuilder.UseNpgsql("Host=localhost;Port=5433;Database=aura_dev;Username=postgres;Password=postgres");
 
         return new DeveloperDbContext(optionsBuilder.Options);
     }

@@ -48,7 +48,7 @@ code c:\work\aura
 
 **Demo command:**
 ```powershell
-curl -s -X POST "http://localhost:5300/api/rag/search" `
+curl -s -X POST "http://localhost:5300/api/rag/query" `
   -H "Content-Type: application/json" `
   -d '{"query": "how do we switch between different LLM providers", "limit": 5}'
 ```
