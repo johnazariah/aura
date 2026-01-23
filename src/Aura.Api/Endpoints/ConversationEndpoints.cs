@@ -5,6 +5,7 @@
 namespace Aura.Api.Endpoints;
 
 using Aura.Api.Contracts;
+using Aura.Api.Problems;
 using Aura.Foundation.Agents;
 using Aura.Foundation.Data;
 using Aura.Foundation.Data.Entities;
@@ -48,7 +49,7 @@ public static class ConversationEndpoints
         return Results.Ok(conversations);
     }
 
-    private static async Task<IResult> GetConversation(Guid id, AuraDbContext db)
+    private static async Task<IResult> GetConversation(Guid id, HttpContext context, AuraDbContext db)
     {
         var conversation = await db.Conversations
             .Include(c => c.Messages.OrderBy(m => m.CreatedAt))
@@ -56,7 +57,7 @@ public static class ConversationEndpoints
 
         if (conversation is null)
         {
-            return Results.NotFound(new { error = "Conversation not found" });
+            return Problem.ConversationNotFound(id, context);
         }
 
         return Results.Ok(new
@@ -105,6 +106,7 @@ public static class ConversationEndpoints
     private static async Task<IResult> AddMessage(
         Guid id,
         AddMessageRequest request,
+        HttpContext httpContext,
         AuraDbContext db,
         IAgentRegistry registry,
         CancellationToken cancellationToken)
@@ -112,7 +114,7 @@ public static class ConversationEndpoints
         var conversation = await db.Conversations.FindAsync([id], cancellationToken);
         if (conversation is null)
         {
-            return Results.NotFound(new { error = "Conversation not found" });
+            return Problem.ConversationNotFound(id, httpContext);
         }
 
         var userMessage = new Message
@@ -128,16 +130,16 @@ public static class ConversationEndpoints
         var agent = registry.GetAgent(conversation.AgentId);
         if (agent is null)
         {
-            return Results.BadRequest(new { error = "Agent '" + conversation.AgentId + "' not found" });
+            return Problem.AgentNotFound(conversation.AgentId, httpContext);
         }
 
-        var context = new AgentContext(
+        var agentContext = new AgentContext(
             Prompt: request.Content,
             WorkspacePath: conversation.RepositoryPath);
 
         try
         {
-            var output = await agent.ExecuteAsync(context, cancellationToken);
+            var output = await agent.ExecuteAsync(agentContext, cancellationToken);
 
             var assistantMessage = new Message
             {
@@ -169,7 +171,7 @@ public static class ConversationEndpoints
         }
         catch (AgentException ex)
         {
-            return Results.BadRequest(new { error = ex.Message, code = ex.Code.ToString() });
+            return Problem.LlmProviderError($"{ex.Message} ({ex.Code})", httpContext);
         }
         catch (OperationCanceledException)
         {

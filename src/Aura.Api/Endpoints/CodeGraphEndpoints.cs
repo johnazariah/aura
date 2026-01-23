@@ -4,6 +4,7 @@
 
 namespace Aura.Api.Endpoints;
 
+using Aura.Api.Problems;
 using Aura.Foundation.Rag;
 
 /// <summary>
@@ -28,6 +29,7 @@ public static class CodeGraphEndpoints
 
     private static async Task<IResult> GetStats(
         string? repositoryPath,
+        HttpContext context,
         ICodeGraphService graphService,
         CancellationToken ct)
     {
@@ -46,13 +48,14 @@ public static class CodeGraphEndpoints
         }
         catch (Exception ex)
         {
-            return Results.BadRequest(new { error = ex.Message });
+            return Problem.InternalError(ex.Message, context);
         }
     }
 
     private static async Task<IResult> FindImplementations(
         string interfaceName,
         string? repositoryPath,
+        HttpContext context,
         ICodeGraphService graphService,
         CancellationToken ct)
     {
@@ -78,7 +81,7 @@ public static class CodeGraphEndpoints
         }
         catch (Exception ex)
         {
-            return Results.BadRequest(new { error = ex.Message });
+            return Problem.InternalError(ex.Message, context);
         }
     }
 
@@ -86,6 +89,7 @@ public static class CodeGraphEndpoints
         string methodName,
         string? containingType,
         string? repositoryPath,
+        HttpContext context,
         ICodeGraphService graphService,
         CancellationToken ct)
     {
@@ -114,13 +118,14 @@ public static class CodeGraphEndpoints
         }
         catch (Exception ex)
         {
-            return Results.BadRequest(new { error = ex.Message });
+            return Problem.InternalError(ex.Message, context);
         }
     }
 
     private static async Task<IResult> GetMembers(
         string typeName,
         string? repositoryPath,
+        HttpContext context,
         ICodeGraphService graphService,
         CancellationToken ct)
     {
@@ -147,13 +152,14 @@ public static class CodeGraphEndpoints
         }
         catch (Exception ex)
         {
-            return Results.BadRequest(new { error = ex.Message });
+            return Problem.InternalError(ex.Message, context);
         }
     }
 
     private static async Task<IResult> GetTypesInNamespace(
         string namespaceName,
         string? repositoryPath,
+        HttpContext context,
         ICodeGraphService graphService,
         CancellationToken ct)
     {
@@ -180,7 +186,7 @@ public static class CodeGraphEndpoints
         }
         catch (Exception ex)
         {
-            return Results.BadRequest(new { error = ex.Message });
+            return Problem.InternalError(ex.Message, context);
         }
     }
 
@@ -188,6 +194,7 @@ public static class CodeGraphEndpoints
         string name,
         string? nodeType,
         string? repositoryPath,
+        HttpContext context,
         ICodeGraphService graphService,
         CancellationToken ct)
     {
@@ -226,7 +233,7 @@ public static class CodeGraphEndpoints
         }
         catch (Exception ex)
         {
-            return Results.BadRequest(new { error = ex.Message });
+            return Problem.InternalError(ex.Message, context);
         }
     }
 }

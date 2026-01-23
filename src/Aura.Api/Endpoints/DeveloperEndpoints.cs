@@ -6,6 +6,7 @@ namespace Aura.Api.Endpoints;
 
 using System.Text;
 using Aura.Api.Contracts;
+using Aura.Api.Problems;
 using Aura.Foundation.Git;
 using Aura.Module.Developer.Data.Entities;
 using Aura.Module.Developer.GitHub;
@@ -27,6 +28,7 @@ public static class DeveloperEndpoints
         app.MapGet("/api/developer/stories/by-path", GetStoryByPath);
         app.MapGet("/api/developer/stories/{id:guid}", GetStory);
         app.MapDelete("/api/developer/stories/{id:guid}", DeleteStory);
+        app.MapPatch("/api/developer/stories/{id:guid}/status", ResetStoryStatus);
 
         // story lifecycle
         app.MapPost("/api/developer/stories/{id:guid}/analyze", AnalyzeStory);
@@ -62,12 +64,13 @@ public static class DeveloperEndpoints
 
     private static async Task<IResult> CreateStory(
         CreateStoryRequest request,
+        HttpContext context,
         IStoryService storyService,
         CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(request.Title))
         {
-            return Results.BadRequest(new { error = "Title is required. Expected: { title: string, description?: string, repositoryPath?: string }" });
+            return Problem.MissingRequiredField("Title", "Expected: { title: string, description?: string, repositoryPath?: string }", context);
         }
 
         try
@@ -107,7 +110,7 @@ public static class DeveloperEndpoints
         }
         catch (InvalidOperationException ex)
         {
-            return Results.BadRequest(new { error = ex.Message });
+            return Problem.InvalidState(ex.Message, context);
         }
     }
 
@@ -149,13 +152,14 @@ public static class DeveloperEndpoints
 
     private static async Task<IResult> GetStory(
         Guid id,
+        HttpContext context,
         IStoryService storyService,
         CancellationToken ct)
     {
         var story = await storyService.GetByIdWithStepsAsync(id, ct);
         if (story is null)
         {
-            return Results.NotFound(new { error = $"story {id} not found" });
+            return Problem.StoryNotFound(id, context);
         }
 
         return Results.Ok(new
@@ -204,18 +208,19 @@ public static class DeveloperEndpoints
 
     private static async Task<IResult> GetStoryByPath(
         string path,
+        HttpContext context,
         IStoryService storyService,
         CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(path))
         {
-            return Results.BadRequest(new { error = "Path query parameter is required" });
+            return Problem.MissingRequiredField("Path", "Query parameter is required.", context);
         }
 
         var story = await storyService.GetByWorktreePathAsync(path, ct);
         if (story is null)
         {
-            return Results.NotFound(new { error = $"No story found for path: {path}" });
+            return Problem.StoryNotFoundByPath(path, context);
         }
 
         return Results.Ok(new
@@ -248,8 +253,45 @@ public static class DeveloperEndpoints
         return Results.NoContent();
     }
 
+    private static async Task<IResult> ResetStoryStatus(
+        Guid id,
+        HttpContext context,
+        IStoryService storyService,
+        HttpRequest request,
+        CancellationToken ct)
+    {
+        try
+        {
+            var body = await request.ReadFromJsonAsync<ResetStatusRequest>(ct);
+            if (body is null || string.IsNullOrEmpty(body.Status))
+            {
+                return Problem.MissingRequiredField("Status", null, context);
+            }
+
+            if (!Enum.TryParse<StoryStatus>(body.Status, ignoreCase: true, out var newStatus))
+            {
+                return Problem.InvalidStatus(body.Status, context);
+            }
+
+            var story = await storyService.ResetStatusAsync(id, newStatus, ct);
+            return Results.Ok(new
+            {
+                id = story.Id,
+                status = story.Status.ToString(),
+                message = $"Status reset to {story.Status}"
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Problem.InvalidState(ex.Message, context);
+        }
+    }
+
+    private record ResetStatusRequest(string Status);
+
     private static async Task<IResult> AnalyzeStory(
         Guid id,
+        HttpContext context,
         IStoryService storyService,
         CancellationToken ct)
     {
@@ -266,12 +308,13 @@ public static class DeveloperEndpoints
         }
         catch (InvalidOperationException ex)
         {
-            return Results.BadRequest(new { error = ex.Message });
+            return Problem.InvalidState(ex.Message, context);
         }
     }
 
     private static async Task<IResult> PlanStory(
         Guid id,
+        HttpContext context,
         IStoryService storyService,
         CancellationToken ct)
     {
@@ -297,12 +340,17 @@ public static class DeveloperEndpoints
         }
         catch (InvalidOperationException ex)
         {
-            return Results.BadRequest(new { error = ex.Message });
+            return Problem.InvalidState(ex.Message, context);
+        }
+        catch (Exception ex)
+        {
+            return Problem.InternalError($"Plan failed: {ex.Message}", context);
         }
     }
 
     private static async Task<IResult> CompleteStory(
         Guid id,
+        HttpContext context,
         IStoryService storyService,
         CancellationToken ct)
     {
@@ -320,12 +368,13 @@ public static class DeveloperEndpoints
         }
         catch (InvalidOperationException ex)
         {
-            return Results.BadRequest(new { error = ex.Message });
+            return Problem.InvalidState(ex.Message, context);
         }
     }
 
     private static async Task<IResult> CancelStory(
         Guid id,
+        HttpContext context,
         IStoryService storyService,
         CancellationToken ct)
     {
@@ -341,13 +390,14 @@ public static class DeveloperEndpoints
         }
         catch (InvalidOperationException ex)
         {
-            return Results.BadRequest(new { error = ex.Message });
+            return Problem.InvalidState(ex.Message, context);
         }
     }
 
     private static async Task<IResult> FinalizeStory(
         Guid id,
         FinalizeStoryRequest request,
+        HttpContext context,
         IStoryService storyService,
         IGitService gitService,
         CancellationToken ct)
@@ -356,10 +406,10 @@ public static class DeveloperEndpoints
         {
             var story = await storyService.GetByIdWithStepsAsync(id, ct);
             if (story is null)
-                return Results.NotFound(new { error = "story not found" });
+                return Problem.StoryNotFound(id, context);
 
             if (string.IsNullOrEmpty(story.WorktreePath))
-                return Results.BadRequest(new { error = "story has no worktree path" });
+                return Problem.InvalidState("Story has no worktree path.", context);
 
             string? commitSha = null;
             string? prUrl = null;
@@ -371,14 +421,14 @@ public static class DeveloperEndpoints
                 var commitMessage = request.CommitMessage ?? $"feat: {story.Title}";
                 var commitResult = await gitService.CommitAsync(story.WorktreePath, commitMessage, skipHooks: true, ct);
                 if (!commitResult.Success)
-                    return Results.BadRequest(new { error = $"Commit failed: {commitResult.Error}" });
+                    return Problem.GitOperationFailed("Commit", commitResult.Error ?? "Unknown error", context);
 
                 commitSha = commitResult.Value;
             }
 
             var pushResult = await gitService.PushAsync(story.WorktreePath, setUpstream: true, ct);
             if (!pushResult.Success)
-                return Results.BadRequest(new { error = $"Push failed: {pushResult.Error}" });
+                return Problem.GitOperationFailed("Push", pushResult.Error ?? "Unknown error", context);
 
             if (request.CreatePullRequest)
             {
@@ -395,7 +445,7 @@ public static class DeveloperEndpoints
                     ct);
 
                 if (!prResult.Success)
-                    return Results.BadRequest(new { error = $"PR creation failed: {prResult.Error}" });
+                    return Problem.GitOperationFailed("PR Creation", prResult.Error ?? "Unknown error", context);
 
                 prUrl = prResult.Value?.Url;
                 prNumber = prResult.Value?.Number;
@@ -420,13 +470,14 @@ public static class DeveloperEndpoints
         }
         catch (Exception ex)
         {
-            return Results.BadRequest(new { error = ex.Message });
+            return Problem.InternalError(ex.Message, context);
         }
     }
 
     private static async Task<IResult> ChatWithStory(
         Guid id,
         StoryChatRequest request,
+        HttpContext context,
         IStoryService storyService,
         CancellationToken ct)
     {
@@ -450,13 +501,14 @@ public static class DeveloperEndpoints
         }
         catch (InvalidOperationException ex)
         {
-            return Results.BadRequest(new { error = ex.Message });
+            return Problem.InvalidState(ex.Message, context);
         }
     }
 
     private static async Task<IResult> AddStep(
         Guid id,
         AddStepRequest request,
+        HttpContext context,
         IStoryService storyService,
         CancellationToken ct)
     {
@@ -483,7 +535,7 @@ public static class DeveloperEndpoints
         }
         catch (InvalidOperationException ex)
         {
-            return Results.BadRequest(new { error = ex.Message });
+            return Problem.InvalidState(ex.Message, context);
         }
     }
 
@@ -501,6 +553,7 @@ public static class DeveloperEndpoints
         Guid storyId,
         Guid stepId,
         ExecuteStepRequest? request,
+        HttpContext context,
         IStoryService storyService,
         CancellationToken ct)
     {
@@ -521,13 +574,14 @@ public static class DeveloperEndpoints
         }
         catch (InvalidOperationException ex)
         {
-            return Results.BadRequest(new { error = ex.Message });
+            return Problem.InvalidState(ex.Message, context);
         }
     }
 
     private static async Task<IResult> ExecuteAllSteps(
         Guid id,
         ExecuteAllStepsRequest? request,
+        HttpContext context,
         IStoryService storyService,
         CancellationToken ct)
     {
@@ -567,13 +621,14 @@ public static class DeveloperEndpoints
         }
         catch (InvalidOperationException ex)
         {
-            return Results.BadRequest(new { error = ex.Message });
+            return Problem.InvalidState(ex.Message, context);
         }
     }
 
     private static async Task<IResult> ApproveStep(
         Guid storyId,
         Guid stepId,
+        HttpContext context,
         IStoryService storyService,
         CancellationToken ct)
     {
@@ -589,7 +644,7 @@ public static class DeveloperEndpoints
         }
         catch (InvalidOperationException ex)
         {
-            return Results.BadRequest(new { error = ex.Message });
+            return Problem.InvalidState(ex.Message, context);
         }
     }
 
@@ -597,6 +652,7 @@ public static class DeveloperEndpoints
         Guid storyId,
         Guid stepId,
         RejectStepRequest? request,
+        HttpContext context,
         IStoryService storyService,
         CancellationToken ct)
     {
@@ -613,7 +669,7 @@ public static class DeveloperEndpoints
         }
         catch (InvalidOperationException ex)
         {
-            return Results.BadRequest(new { error = ex.Message });
+            return Problem.InvalidState(ex.Message, context);
         }
     }
 
@@ -621,6 +677,7 @@ public static class DeveloperEndpoints
         Guid storyId,
         Guid stepId,
         SkipStepRequest? request,
+        HttpContext context,
         IStoryService storyService,
         CancellationToken ct)
     {
@@ -637,13 +694,14 @@ public static class DeveloperEndpoints
         }
         catch (InvalidOperationException ex)
         {
-            return Results.BadRequest(new { error = ex.Message });
+            return Problem.InvalidState(ex.Message, context);
         }
     }
 
     private static async Task<IResult> ResetStep(
         Guid storyId,
         Guid stepId,
+        HttpContext context,
         IStoryService storyService,
         CancellationToken ct)
     {
@@ -659,7 +717,7 @@ public static class DeveloperEndpoints
         }
         catch (InvalidOperationException ex)
         {
-            return Results.BadRequest(new { error = ex.Message });
+            return Problem.InvalidState(ex.Message, context);
         }
     }
 
@@ -667,6 +725,7 @@ public static class DeveloperEndpoints
         Guid storyId,
         Guid stepId,
         StepChatRequest request,
+        HttpContext context,
         IStoryService storyService,
         CancellationToken ct)
     {
@@ -682,7 +741,7 @@ public static class DeveloperEndpoints
         }
         catch (InvalidOperationException ex)
         {
-            return Results.BadRequest(new { error = ex.Message });
+            return Problem.InvalidState(ex.Message, context);
         }
     }
 
@@ -690,6 +749,7 @@ public static class DeveloperEndpoints
         Guid storyId,
         Guid stepId,
         ReassignStepRequest request,
+        HttpContext context,
         IStoryService storyService,
         CancellationToken ct)
     {
@@ -704,13 +764,13 @@ public static class DeveloperEndpoints
                 needsRework = step.NeedsRework
             });
         }
-        catch (KeyNotFoundException ex)
+        catch (KeyNotFoundException)
         {
-            return Results.NotFound(new { error = ex.Message });
+            return Problem.NotFound("Step", stepId, context);
         }
         catch (ArgumentException ex)
         {
-            return Results.BadRequest(new { error = ex.Message });
+            return Problem.BadRequest(ex.Message, context);
         }
     }
 
@@ -718,6 +778,7 @@ public static class DeveloperEndpoints
         Guid storyId,
         Guid stepId,
         UpdateStepDescriptionRequest request,
+        HttpContext context,
         IStoryService storyService,
         CancellationToken ct)
     {
@@ -732,9 +793,9 @@ public static class DeveloperEndpoints
                 needsRework = step.NeedsRework
             });
         }
-        catch (KeyNotFoundException ex)
+        catch (KeyNotFoundException)
         {
-            return Results.NotFound(new { error = ex.Message });
+            return Problem.NotFound("Step", stepId, context);
         }
     }
 
@@ -773,25 +834,26 @@ public static class DeveloperEndpoints
 
     private static async Task<IResult> CreateStoryFromIssue(
         CreateStoryFromIssueRequest request,
+        HttpContext context,
         IGitHubService gitHub,
         IStoryService storyService,
         CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(request.IssueUrl))
         {
-            return Results.BadRequest(new { error = "IssueUrl is required" });
+            return Problem.MissingRequiredField("IssueUrl", null, context);
         }
 
         // Parse issue URL
         var parsed = gitHub.ParseIssueUrl(request.IssueUrl);
         if (parsed is null)
         {
-            return Results.BadRequest(new { error = "Invalid GitHub issue URL. Expected format: https://github.com/owner/repo/issues/123" });
+            return Problem.BadRequest("Invalid GitHub issue URL. Expected format: https://github.com/owner/repo/issues/123", context);
         }
 
         if (!gitHub.IsConfigured)
         {
-            return Results.BadRequest(new { error = "GitHub integration not configured. Set GitHub:Token in appsettings.json" });
+            return Problem.GitHubNotConfigured(context);
         }
 
         try
@@ -836,12 +898,13 @@ public static class DeveloperEndpoints
         }
         catch (HttpRequestException ex)
         {
-            return Results.BadRequest(new { error = $"Failed to fetch issue from GitHub: {ex.Message}" });
+            return Problem.GitHubError($"Failed to fetch issue from GitHub: {ex.Message}", context);
         }
     }
 
     private static async Task<IResult> RefreshFromIssue(
         Guid id,
+        HttpContext context,
         IGitHubService gitHub,
         IStoryService storyService,
         CancellationToken ct)
@@ -849,7 +912,7 @@ public static class DeveloperEndpoints
         var story = await storyService.GetByIdAsync(id, ct);
         if (story is null)
         {
-            return Results.NotFound(new { error = $"story {id} not found" });
+            return Problem.StoryNotFound(id, context);
         }
 
         if (string.IsNullOrEmpty(story.IssueUrl) ||
@@ -857,12 +920,12 @@ public static class DeveloperEndpoints
             story.IssueRepo is null ||
             story.IssueNumber is null)
         {
-            return Results.BadRequest(new { error = "story is not linked to a GitHub issue" });
+            return Problem.NotLinkedToIssue(context);
         }
 
         if (!gitHub.IsConfigured)
         {
-            return Results.BadRequest(new { error = "GitHub integration not configured" });
+            return Problem.GitHubNotConfigured(context);
         }
 
         try
@@ -903,38 +966,39 @@ public static class DeveloperEndpoints
         }
         catch (HttpRequestException ex)
         {
-            return Results.BadRequest(new { error = $"Failed to fetch issue: {ex.Message}" });
+            return Problem.GitHubError($"Failed to fetch issue: {ex.Message}", context);
         }
     }
 
     private static async Task<IResult> PostUpdateToIssue(
         Guid id,
         PostUpdateRequest request,
+        HttpContext context,
         IGitHubService gitHub,
         IStoryService storyService,
         CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(request.Message))
         {
-            return Results.BadRequest(new { error = "Message is required" });
+            return Problem.MissingRequiredField("Message", null, context);
         }
 
         var story = await storyService.GetByIdAsync(id, ct);
         if (story is null)
         {
-            return Results.NotFound(new { error = $"story {id} not found" });
+            return Problem.StoryNotFound(id, context);
         }
 
         if (story.IssueOwner is null ||
             story.IssueRepo is null ||
             story.IssueNumber is null)
         {
-            return Results.BadRequest(new { error = "story is not linked to a GitHub issue" });
+            return Problem.NotLinkedToIssue(context);
         }
 
         if (!gitHub.IsConfigured)
         {
-            return Results.BadRequest(new { error = "GitHub integration not configured" });
+            return Problem.GitHubNotConfigured(context);
         }
 
         try
@@ -950,13 +1014,14 @@ public static class DeveloperEndpoints
         }
         catch (HttpRequestException ex)
         {
-            return Results.BadRequest(new { error = $"Failed to post comment: {ex.Message}" });
+            return Problem.GitHubError($"Failed to post comment: {ex.Message}", context);
         }
     }
 
     private static async Task<IResult> CloseLinkedIssue(
         Guid id,
         CloseIssueRequest? request,
+        HttpContext context,
         IGitHubService gitHub,
         IStoryService storyService,
         CancellationToken ct)
@@ -964,19 +1029,19 @@ public static class DeveloperEndpoints
         var story = await storyService.GetByIdAsync(id, ct);
         if (story is null)
         {
-            return Results.NotFound(new { error = $"story {id} not found" });
+            return Problem.StoryNotFound(id, context);
         }
 
         if (story.IssueOwner is null ||
             story.IssueRepo is null ||
             story.IssueNumber is null)
         {
-            return Results.BadRequest(new { error = "story is not linked to a GitHub issue" });
+            return Problem.NotLinkedToIssue(context);
         }
 
         if (!gitHub.IsConfigured)
         {
-            return Results.BadRequest(new { error = "GitHub integration not configured" });
+            return Problem.GitHubNotConfigured(context);
         }
 
         try
@@ -1003,7 +1068,7 @@ public static class DeveloperEndpoints
         }
         catch (HttpRequestException ex)
         {
-            return Results.BadRequest(new { error = $"Failed to close issue: {ex.Message}" });
+            return Problem.GitHubError($"Failed to close issue: {ex.Message}", context);
         }
     }
 }

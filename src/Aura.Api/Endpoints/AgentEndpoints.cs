@@ -7,6 +7,7 @@ namespace Aura.Api.Endpoints;
 using System.Diagnostics;
 using System.Text.Json;
 using Aura.Api.Contracts;
+using Aura.Api.Problems;
 using Aura.Foundation.Agents;
 using Aura.Foundation.Data;
 using Aura.Foundation.Data.Entities;
@@ -55,12 +56,12 @@ public static class AgentEndpoints
         });
     }
 
-    private static IResult GetBestAgent(IAgentRegistry registry, string capability, string? language)
+    private static IResult GetBestAgent(HttpContext context, IAgentRegistry registry, string capability, string? language)
     {
         var agent = registry.GetBestForCapability(capability, language);
         if (agent is null)
         {
-            return Results.NotFound(new { error = "No agent found for capability '" + capability + "'" + (language is not null ? " with language '" + language + "'" : "") });
+            return Problem.AgentNotFoundForCapability(capability, language, context);
         }
 
         return Results.Ok(new
@@ -77,12 +78,12 @@ public static class AgentEndpoints
         });
     }
 
-    private static IResult GetAgent(string agentId, IAgentRegistry registry)
+    private static IResult GetAgent(string agentId, HttpContext context, IAgentRegistry registry)
     {
         var agent = registry.GetAgent(agentId);
         if (agent is null)
         {
-            return Results.NotFound(new { error = "Agent '" + agentId + "' not found" });
+            return Problem.AgentNotFound(agentId, context);
         }
 
         return Results.Ok(new
@@ -104,6 +105,7 @@ public static class AgentEndpoints
     private static async Task<IResult> ExecuteAgent(
         string agentId,
         ExecuteAgentRequest request,
+        HttpContext httpContext,
         IAgentRegistry registry,
         AuraDbContext db,
         ILogger<Program> logger,
@@ -112,7 +114,7 @@ public static class AgentEndpoints
         var agent = registry.GetAgent(agentId);
         if (agent is null)
         {
-            return Results.NotFound(new { error = "Agent '" + agentId + "' not found" });
+            return Problem.AgentNotFound(agentId, httpContext);
         }
 
         var stopwatch = Stopwatch.StartNew();
@@ -215,7 +217,7 @@ public static class AgentEndpoints
         var agent = registry.GetAgent(agentId);
         if (agent is null)
         {
-            return Results.NotFound(new { error = "Agent '" + agentId + "' not found" });
+            return Problem.AgentNotFound(agentId, httpContext);
         }
 
         // Use agent's provider, or fall back to configured default
@@ -225,12 +227,12 @@ public static class AgentEndpoints
 
         if (provider is null)
         {
-            return Results.BadRequest(new { error = $"No LLM provider available. Agent provider: {agent.Metadata.Provider ?? "(not set)"}" });
+            return Problem.LlmProviderError($"No LLM provider available. Agent provider: {agent.Metadata.Provider ?? "(not set)"}", httpContext);
         }
 
         if (!provider.SupportsStreaming)
         {
-            return Results.BadRequest(new { error = $"Provider '{provider.ProviderId}' does not support streaming" });
+            return Problem.BadRequest($"Provider '{provider.ProviderId}' does not support streaming.", httpContext);
         }
 
         httpContext.Response.Headers.ContentType = "text/event-stream";
