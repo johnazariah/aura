@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
+using Aura.Foundation.Tools;
 using Microsoft.Extensions.Logging;
 
 namespace Aura.Foundation.Shell;
@@ -172,7 +173,7 @@ public class ProcessRunner(ILogger<ProcessRunner> logger) : IProcessRunner
             RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
         {
             // Check SHELL env var first
-            var shell = Environment.GetEnvironmentVariable("SHELL");
+            var shell = EnvHelper.GetOrDefault("SHELL", string.Empty);
             if (!string.IsNullOrEmpty(shell) && File.Exists(shell))
             {
                 var name = Path.GetFileName(shell);
@@ -192,7 +193,7 @@ public class ProcessRunner(ILogger<ProcessRunner> logger) : IProcessRunner
 
     private static string? FindExecutable(string name)
     {
-        var pathVar = Environment.GetEnvironmentVariable("PATH") ?? "";
+        var pathVar = EnvHelper.GetOrDefault("PATH", string.Empty);
         var separator = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? ';' : ':';
         var extension = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? ".exe" : "";
 
