@@ -32,10 +32,15 @@ public sealed partial class QualityGateService : IQualityGateService
         // Detect project type and run appropriate build command
         var (command, args) = DetectBuildCommand(worktreePath);
 
+        _logger.LogInformation("Running build command: {Command} {Args}", command, args);
         var (exitCode, output) = await RunCommandAsync(command, args, worktreePath, ct);
 
         var passed = exitCode == 0;
         _logger.LogInformation("Build gate {Result} after wave {Wave}", passed ? "passed" : "failed", afterWave);
+        if (!passed)
+        {
+            _logger.LogWarning("Build output:\n{Output}", output);
+        }
 
         return new QualityGateResult
         {
@@ -111,8 +116,10 @@ public sealed partial class QualityGateService : IQualityGateService
         if (Directory.GetFiles(worktreePath, "*.sln", SearchOption.TopDirectoryOnly).Length > 0 ||
             Directory.GetFiles(worktreePath, "*.csproj", SearchOption.TopDirectoryOnly).Length > 0)
         {
+            // Use full path to dotnet since service may run as LocalSystem without PATH
+            var dotnetPath = FindDotnetPath() ?? "dotnet";
             // Include restore since worktree may not have packages restored
-            return ("dotnet", "build -v q");
+            return (dotnetPath, "build -v q");
         }
 
         // Check for Node.js project
@@ -150,7 +157,8 @@ public sealed partial class QualityGateService : IQualityGateService
         if (Directory.GetFiles(worktreePath, "*.sln", SearchOption.TopDirectoryOnly).Length > 0 ||
             Directory.GetFiles(worktreePath, "*.csproj", SearchOption.TopDirectoryOnly).Length > 0)
         {
-            return ("dotnet", "test --no-build -v q");
+            var dotnetPath = FindDotnetPath() ?? "dotnet";
+            return (dotnetPath, "test --no-build -v q");
         }
 
         // Check for Node.js project
@@ -262,5 +270,28 @@ public sealed partial class QualityGateService : IQualityGateService
             _logger.LogError(ex, "Failed to run {Command} {Args}", command, arguments);
             return (-1, ex.Message);
         }
+    }
+
+    private static string? FindDotnetPath()
+    {
+        // Common .NET SDK installation paths
+        string[] candidatePaths =
+        [
+            @"C:\Program Files\dotnet\dotnet.exe",
+            @"C:\Program Files (x86)\dotnet\dotnet.exe",
+            "/usr/local/share/dotnet/dotnet",
+            "/usr/share/dotnet/dotnet",
+            "/opt/dotnet/dotnet",
+        ];
+
+        foreach (var path in candidatePaths)
+        {
+            if (File.Exists(path))
+            {
+                return path;
+            }
+        }
+
+        return null;
     }
 }
