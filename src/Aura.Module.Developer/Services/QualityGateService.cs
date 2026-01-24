@@ -29,6 +29,9 @@ public sealed partial class QualityGateService : IQualityGateService
     {
         _logger.LogInformation("Running build gate after wave {Wave} in {Path}", afterWave, worktreePath);
 
+        // Normalize line endings (Copilot CLI creates CRLF, project requires LF)
+        NormalizeLineEndings(worktreePath);
+
         // Detect project type and run appropriate build command
         var (command, args) = DetectBuildCommand(worktreePath);
 
@@ -36,7 +39,12 @@ public sealed partial class QualityGateService : IQualityGateService
         if (command.Contains("dotnet", StringComparison.OrdinalIgnoreCase))
         {
             _logger.LogInformation("Running restore before build...");
-            var (restoreCode, restoreOutput) = await RunCommandAsync(command, "restore", worktreePath, ct);
+            // Use explicit NuGet source for LocalSystem which may not have nuget.config access
+            var (restoreCode, restoreOutput) = await RunCommandAsync(
+                command,
+                "restore --source https://api.nuget.org/v3/index.json",
+                worktreePath,
+                ct);
             if (restoreCode != 0)
             {
                 _logger.LogWarning("Restore failed:\n{Output}", restoreOutput);
@@ -312,5 +320,50 @@ public sealed partial class QualityGateService : IQualityGateService
         }
 
         return null;
+    }
+
+    private void NormalizeLineEndings(string worktreePath)
+    {
+        // Normalize CRLF to LF for source files (Copilot CLI creates CRLF, project requires LF)
+        var extensions = new[] { "*.cs", "*.json", "*.yaml", "*.yml", "*.md", "*.ts", "*.tsx", "*.js", "*.jsx" };
+        var filesToNormalize = new List<string>();
+
+        foreach (var ext in extensions)
+        {
+            filesToNormalize.AddRange(Directory.GetFiles(worktreePath, ext, SearchOption.AllDirectories));
+        }
+
+        var normalizedCount = 0;
+        foreach (var file in filesToNormalize)
+        {
+            // Skip files in bin, obj, node_modules, .git
+            if (file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}") ||
+                file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}") ||
+                file.Contains($"{Path.DirectorySeparatorChar}node_modules{Path.DirectorySeparatorChar}") ||
+                file.Contains($"{Path.DirectorySeparatorChar}.git{Path.DirectorySeparatorChar}"))
+            {
+                continue;
+            }
+
+            try
+            {
+                var content = File.ReadAllText(file);
+                if (content.Contains("\r\n"))
+                {
+                    var normalized = content.Replace("\r\n", "\n");
+                    File.WriteAllText(file, normalized);
+                    normalizedCount++;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to normalize line endings in {File}", file);
+            }
+        }
+
+        if (normalizedCount > 0)
+        {
+            _logger.LogInformation("Normalized line endings in {Count} files", normalizedCount);
+        }
     }
 }
