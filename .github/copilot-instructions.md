@@ -62,7 +62,22 @@ dotnet build
 # NEVER run these - user controls the server
 .\scripts\Start-Api.ps1
 dotnet run --project src/Aura.AppHost
+.\scripts\Update-LocalInstall.ps1  # Requires elevation - ask user to run
 ```
+
+### Production Environment
+
+When user runs the **production install** (not dev mode), they use:
+
+```powershell
+# User runs this ELEVATED (Run as Administrator) - NEVER run this yourself
+.\scripts\Update-LocalInstall.ps1
+```
+
+This rebuilds and deploys to `C:\Program Files\Aura`. After changes:
+1. Ask user to run `Update-LocalInstall.ps1` **as Administrator**
+2. Wait for them to confirm the update completed
+3. Then test via `curl http://localhost:5300/health`
 
 ### Workflow
 

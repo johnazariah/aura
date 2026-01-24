@@ -62,6 +62,7 @@ if (-not (Test-Path $InstallPath)) {
 $apiPath = Join-Path $InstallPath "api"
 $agentsPath = Join-Path $InstallPath "agents"
 $patternsPath = Join-Path $InstallPath "patterns"
+$promptsPath = Join-Path $InstallPath "prompts"
 $extensionPath = Join-Path $InstallPath "extension"
 
 if (-not (Test-Path $apiPath)) {
@@ -188,6 +189,23 @@ try {
         Write-Step "Patterns updated"
     } else {
         Write-Skip "Patterns"
+    }
+
+    # =============================================================================
+    # Deploy Prompts (LLM prompt templates)
+    # =============================================================================
+    if (-not $SkipAgents) {
+        Write-Header "Deploying Prompts"
+        
+        # Copy prompts directory
+        if (Test-Path $promptsPath) {
+            Remove-Item $promptsPath -Recurse -Force
+        }
+        Copy-Item -Path "prompts" -Destination $promptsPath -Recurse
+        
+        Write-Step "Prompts updated"
+    } else {
+        Write-Skip "Prompts"
     }
 
     # =============================================================================
