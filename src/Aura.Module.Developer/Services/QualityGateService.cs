@@ -32,6 +32,25 @@ public sealed partial class QualityGateService : IQualityGateService
         // Detect project type and run appropriate build command
         var (command, args) = DetectBuildCommand(worktreePath);
 
+        // For .NET projects, run restore first (LocalSystem may not have package cache access)
+        if (command.Contains("dotnet", StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogInformation("Running restore before build...");
+            var (restoreCode, restoreOutput) = await RunCommandAsync(command, "restore", worktreePath, ct);
+            if (restoreCode != 0)
+            {
+                _logger.LogWarning("Restore failed:\n{Output}", restoreOutput);
+                return new QualityGateResult
+                {
+                    Passed = false,
+                    GateType = "build",
+                    AfterWave = afterWave,
+                    BuildOutput = restoreOutput,
+                    Error = $"Restore failed with exit code {restoreCode}",
+                };
+            }
+        }
+
         _logger.LogInformation("Running build command: {Command} {Args}", command, args);
         var (exitCode, output) = await RunCommandAsync(command, args, worktreePath, ct);
 
