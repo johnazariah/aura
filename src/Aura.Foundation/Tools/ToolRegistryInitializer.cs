@@ -59,6 +59,12 @@ public class ToolRegistryInitializer(
         _logger.LogInformation("Registering token budget tool");
         _registry.RegisterTool(CheckTokenBudgetTool.GetDefinition());
 
+        _logger.LogInformation("Registering pattern tools");
+        var patternLoadTool = new PatternLoadTool(_loggerFactory.CreateLogger<PatternLoadTool>());
+        _registry.RegisterTool(patternLoadTool);
+        var patternListTool = new PatternListTool(_loggerFactory.CreateLogger<PatternListTool>());
+        _registry.RegisterTool(patternListTool);
+
         return Task.CompletedTask;
     }
 

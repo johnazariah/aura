@@ -30,6 +30,9 @@ tools:
   # Language-specific tools (auto-selected based on project)
   - dotnet.build_until_success
   - dotnet.run_tests
+  # Patterns (recipes for complex multi-step tasks)
+  - pattern.list
+  - pattern.load
 ---
 Execute this development step:
 
@@ -83,6 +86,22 @@ For **C# projects**, prefer Roslyn semantic tools over basic file manipulation:
 2. Include ALL required `using` statements (check existing test files for patterns)
 3. Use `file.write` to create the test file
 4. Run `dotnet.run_tests` or `code.validate` to verify tests compile
+5. **For complex test scenarios, load the pattern:** `pattern.load(name: "generate-tests", language: "csharp")`
+
+### Using Patterns for Complex Tasks
+
+Patterns are recipes for multi-step operations. Before starting a complex task, check if a pattern exists:
+
+```
+pattern.list()  // See available patterns
+pattern.load(name: "generate-tests", language: "csharp")  // Load specific pattern
+```
+
+**Available patterns include:**
+- `generate-tests` - Comprehensive test generation with proper imports and mocking
+- `comprehensive-rename` - Rename a concept across the entire codebase
+
+When a pattern is loaded, follow its step-by-step instructions.
 
 ### Step Type Guidelines
 
