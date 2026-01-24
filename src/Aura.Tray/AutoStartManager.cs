@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using Aura.Foundation.Tools;
 using Microsoft.Win32;
 
 namespace Aura.Tray;
@@ -221,8 +222,8 @@ public static class AutoStartManager
 
     private static string GetLinuxAutoStartPath()
     {
-        var configHome = Environment.GetEnvironmentVariable("XDG_CONFIG_HOME")
-            ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config");
+        var configHome = EnvHelper.GetOrDefault("XDG_CONFIG_HOME",
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config"));
         return Path.Combine(configHome, "autostart", "Aura-tray.desktop");
     }
 

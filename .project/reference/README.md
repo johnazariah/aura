@@ -10,6 +10,7 @@ Essential documentation for day-to-day development.
 | [architecture-quick-reference.md](architecture-quick-reference.md) | File locations, debugging tips |
 | [coding-standards.md](coding-standards.md) | Code style and patterns |
 | [functional-patterns.md](functional-patterns.md) | Functional programming patterns |
+| [utilities.md](utilities.md) | Common utility classes (EnvHelper, etc.) |
 
 ## Most Used
 

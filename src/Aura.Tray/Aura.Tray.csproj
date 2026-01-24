@@ -34,4 +34,8 @@
     <None Include="Assets\*.*" CopyToOutputDirectory="PreserveNewest" LinkBase="Assets" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\Aura.Foundation\Aura.Foundation.csproj" />
+  </ItemGroup>
+
 </Project>
