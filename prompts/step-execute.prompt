@@ -3,16 +3,33 @@ description: Executes a single workflow step
 ragQueries:
   - "project structure build setup dotnet csproj solution"
 tools:
+  # File operations (basic)
   - file.read
   - file.write
   - file.modify
   - file.list
+  - file.exists
+  # Roslyn semantic tools (C# - prefer these over file.modify for C# code)
+  - roslyn.list_projects
+  - roslyn.list_classes
+  - roslyn.get_class_info
+  - roslyn.find_usages
+  - roslyn.validate_compilation
+  # Code graph tools (navigation)
+  - graph.find_callers
+  - graph.find_implementations
+  - graph.get_type_members
+  # Git operations
   - git.status
   - git.commit
   - git.branch
+  # Validation and execution
   - code.validate
   - shell.execute
   - spawn_subagent
+  # Language-specific tools (auto-selected based on project)
+  - dotnet.build_until_success
+  - dotnet.run_tests
 ---
 Execute this development step:
 
@@ -42,6 +59,30 @@ Issue: {{issueTitle}}
 - Do NOT include worktree folder names, branch names, or absolute paths
 - Do NOT use paths like `workflow-add-xml.../src/...` - just use `src/...`
 - Forward slashes work on all platforms
+
+### Tool Selection: Use Semantic Tools for C#
+
+For **C# projects**, prefer Roslyn semantic tools over basic file manipulation:
+
+| Task | Use This | NOT This |
+|------|----------|----------|
+| Understand a class | `roslyn.get_class_info` | `file.read` + manual parsing |
+| Find all usages | `roslyn.find_usages` | `grep` patterns |
+| List classes in project | `roslyn.list_classes` | `file.list` + guessing |
+| Find implementations | `graph.find_implementations` | searching files |
+| Validate code compiles | `code.validate` | `shell.execute dotnet build` |
+
+**When creating new C# files:**
+1. Use `roslyn.list_classes` to see existing patterns in the namespace
+2. Look at similar files with `roslyn.get_class_info` to match conventions
+3. Create the file with `file.write` using proper namespace and XML docs
+4. Validate with `code.validate` before finishing
+
+**When writing tests:**
+1. Use `roslyn.get_class_info` to understand the class under test
+2. Include ALL required `using` statements (check existing test files for patterns)
+3. Use `file.write` to create the test file
+4. Run `dotnet.run_tests` or `code.validate` to verify tests compile
 
 ### Step Type Guidelines
 
