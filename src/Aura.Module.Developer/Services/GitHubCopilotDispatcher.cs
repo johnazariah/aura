@@ -20,6 +20,16 @@ public sealed class GitHubCopilotDispatcher : IGitHubCopilotDispatcher
     private readonly ILogger<GitHubCopilotDispatcher> _logger;
     private readonly SemaphoreSlim _availabilityCheck = new(1, 1);
     private bool? _isAvailable;
+    private string? _copilotPath;
+
+    // Common installation paths for copilot CLI
+    private static readonly string[] CopilotSearchPaths =
+    [
+        "copilot", // In PATH
+        @"C:\nvm4w\nodejs\copilot.cmd",
+        @"C:\Program Files\nodejs\copilot.cmd",
+        @"C:\Program Files (x86)\nodejs\copilot.cmd",
+    ];
 
     /// <summary>
     /// Initializes a new instance of the <see cref="GitHubCopilotDispatcher"/> class.
@@ -46,27 +56,22 @@ public sealed class GitHubCopilotDispatcher : IGitHubCopilotDispatcher
                 return _isAvailable.Value;
             }
 
-            // Check if gh CLI is installed
-            var (exitCode, output) = await RunCommandAsync("gh", "--version", null, ct);
-            if (exitCode != 0)
+            // Search for copilot CLI in common installation paths
+            foreach (var path in CopilotSearchPaths)
             {
-                _logger.LogWarning("GitHub CLI (gh) not found. Install from https://cli.github.com/");
-                _isAvailable = false;
-                return false;
+                var (exitCode, output) = await RunCommandAsync(path, "--version", null, ct);
+                if (exitCode == 0)
+                {
+                    _copilotPath = path;
+                    _logger.LogInformation("GitHub Copilot CLI found at {Path}: {Version}", path, output.Trim());
+                    _isAvailable = true;
+                    return true;
+                }
             }
 
-            // Check if gh copilot extension is installed
-            (exitCode, output) = await RunCommandAsync("gh", "copilot --help", null, ct);
-            if (exitCode != 0)
-            {
-                _logger.LogWarning("GitHub Copilot CLI extension not found. Install with: gh extension install github/gh-copilot");
-                _isAvailable = false;
-                return false;
-            }
-
-            _logger.LogInformation("GitHub Copilot CLI is available");
-            _isAvailable = true;
-            return true;
+            _logger.LogWarning("GitHub Copilot CLI not found. Install with: winget install GitHub.Copilot");
+            _isAvailable = false;
+            return false;
         }
         finally
         {
@@ -106,14 +111,18 @@ public sealed class GitHubCopilotDispatcher : IGitHubCopilotDispatcher
                 .Where(t => task.DependsOn.Contains(t.Id))
                 .ToList();
 
-            // Build the prompt for gh copilot
+            // Build the prompt for copilot
             var prompt = BuildPrompt(task, dependencies);
 
-            // Run gh copilot suggest in YOLO mode (auto-accept suggestions)
-            // Using 'gh copilot suggest' with shell type for code changes
-            var args = $"copilot suggest -t shell \"{EscapeArgument(prompt)}\"";
+            // Run copilot CLI in YOLO mode (auto-accept all tool calls)
+            // --yolo: Allow all tools, paths, and URLs without confirmation
+            // --no-ask-user: Work autonomously without asking questions
+            // --add-dir: Grant access to the worktree directory
+            // -s: Silent mode - output only the agent response
+            // -p: Non-interactive mode with prompt
+            var args = $"-p \"{EscapeArgument(prompt)}\" --yolo --no-ask-user --add-dir \"{worktreePath}\" -s";
 
-            var (exitCode, output) = await RunCommandAsync("gh", args, worktreePath, ct);
+            var (exitCode, output) = await RunCommandAsync(_copilotPath!, args, worktreePath, ct);
 
             // Extract tool improvement proposal if present
             var (cleanOutput, toolProposal) = ExtractToolImprovementProposal(output);

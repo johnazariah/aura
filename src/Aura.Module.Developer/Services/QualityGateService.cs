@@ -111,7 +111,8 @@ public sealed partial class QualityGateService : IQualityGateService
         if (Directory.GetFiles(worktreePath, "*.sln", SearchOption.TopDirectoryOnly).Length > 0 ||
             Directory.GetFiles(worktreePath, "*.csproj", SearchOption.TopDirectoryOnly).Length > 0)
         {
-            return ("dotnet", "build --no-restore -v q");
+            // Include restore since worktree may not have packages restored
+            return ("dotnet", "build -v q");
         }
 
         // Check for Node.js project
