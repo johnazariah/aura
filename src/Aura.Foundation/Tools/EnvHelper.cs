@@ -14,7 +14,8 @@ public static class EnvHelper
     /// <returns>The value of the environment variable, or the default value if not set.</returns>
     public static string GetOrDefault(string key, string defaultValue)
     {
-        return Environment.GetEnvironmentVariable(key) ?? defaultValue;
+        var value = Environment.GetEnvironmentVariable(key);
+        return string.IsNullOrEmpty(value) ? defaultValue : value;
     }
 
     /// <summary>

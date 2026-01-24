@@ -108,14 +108,16 @@ public class EnvHelperTests : IDisposable
     }
 
     [Fact]
-    public void RequireEnv_ThrowsInvalidOperationException_WhenEnvironmentVariableIsWhitespace()
+    public void RequireEnv_ReturnsValue_WhenEnvironmentVariableIsWhitespace()
     {
-        // Arrange
-        Environment.SetEnvironmentVariable(TestKey, "   ");
+        // Arrange - whitespace is considered a valid value (IsNullOrEmpty, not IsNullOrWhiteSpace)
+        const string whitespaceValue = "   ";
+        Environment.SetEnvironmentVariable(TestKey, whitespaceValue);
 
-        // Act & Assert
-        var exception = Assert.Throws<InvalidOperationException>(() => EnvHelper.RequireEnv(TestKey));
-        Assert.Contains(TestKey, exception.Message);
-        Assert.Contains("Required environment variable", exception.Message);
+        // Act
+        var result = EnvHelper.RequireEnv(TestKey);
+
+        // Assert
+        Assert.Equal(whitespaceValue, result);
     }
 }
