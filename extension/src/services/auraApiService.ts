@@ -136,6 +136,48 @@ export interface StreamChatCallbacks {
     onError: (message: string, code?: string) => void;
 }
 
+// Story execution progress events (SSE streaming)
+export type StoryProgressEventType =
+    | 'Started'
+    | 'WaveStarted'
+    | 'StepStarted'
+    | 'StepOutput'
+    | 'StepCompleted'
+    | 'StepFailed'
+    | 'WaveCompleted'
+    | 'GateStarted'
+    | 'GatePassed'
+    | 'GateFailed'
+    | 'Completed'
+    | 'Failed'
+    | 'Cancelled';
+
+export interface StoryProgressEvent {
+    type: StoryProgressEventType;
+    storyId: string;
+    timestamp: string;
+    wave?: number;
+    totalWaves?: number;
+    stepId?: string;
+    stepName?: string;
+    output?: string;
+    error?: string;
+    gateResult?: {
+        passed: boolean;
+        gateType: string;
+        afterWave: number;
+        buildOutput?: string;
+        testOutput?: string;
+        error?: string;
+    };
+}
+
+export interface StoryStreamCallbacks {
+    onEvent: (event: StoryProgressEvent) => void;
+    onDone: () => void;
+    onError: (message: string) => void;
+}
+
 // =====================
 // Developer Module Types
 // =====================
@@ -611,6 +653,110 @@ export class AuraApiService {
             { timeout: this.getExecutionTimeout() }
         );
         return response.data;
+    }
+
+    /**
+     * Stream story execution progress via SSE.
+     * Delivers real-time progress events as waves and steps execute.
+     * @param storyId The story to execute
+     * @param callbacks Callbacks for progress events
+     * @param abortController Optional AbortController to cancel the stream
+     */
+    async streamStoryExecution(
+        storyId: string,
+        callbacks: StoryStreamCallbacks,
+        abortController?: AbortController
+    ): Promise<void> {
+        const url = `${this.getBaseUrl()}/api/developer/stories/${storyId}/stream`;
+
+        try {
+            const response = await fetch(url, {
+                method: 'GET',
+                headers: {
+                    'Accept': 'text/event-stream'
+                },
+                signal: abortController?.signal
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                try {
+                    const errorJson = JSON.parse(errorText);
+                    callbacks.onError(errorJson.message || errorJson.error || 'Request failed');
+                } catch {
+                    callbacks.onError(`Request failed: ${response.statusText}`);
+                }
+                return;
+            }
+
+            const reader = response.body?.getReader();
+            if (!reader) {
+                callbacks.onError('No response body');
+                return;
+            }
+
+            const decoder = new TextDecoder();
+            let buffer = '';
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+
+                // Process complete SSE events (lines ending with \n\n)
+                const events = buffer.split('\n\n');
+                buffer = events.pop() || ''; // Keep incomplete event in buffer
+
+                for (const event of events) {
+                    if (!event.trim()) continue;
+
+                    const lines = event.split('\n');
+                    let eventType = '';
+                    let eventData = '';
+
+                    for (const line of lines) {
+                        if (line.startsWith('event: ')) {
+                            eventType = line.slice(7);
+                        } else if (line.startsWith('data: ')) {
+                            eventData = line.slice(6);
+                        }
+                    }
+
+                    if (!eventData) continue;
+
+                    try {
+                        if (eventType === 'done') {
+                            callbacks.onDone();
+                            return;
+                        }
+
+                        if (eventType === 'error') {
+                            const data = JSON.parse(eventData);
+                            callbacks.onError(data.message || 'Unknown error');
+                            return;
+                        }
+
+                        const data = JSON.parse(eventData) as StoryProgressEvent;
+                        callbacks.onEvent(data);
+                    } catch (parseError) {
+                        console.error('Failed to parse SSE event:', eventData, parseError);
+                    }
+                }
+            }
+
+            callbacks.onDone();
+        } catch (error) {
+            if (error instanceof Error) {
+                if (error.name === 'AbortError') {
+                    // Request was cancelled - this is normal
+                    return;
+                }
+                callbacks.onError(error.message);
+            } else {
+                callbacks.onError('Unknown error during streaming');
+            }
+        }
     }
 
     async addWorkflowStep(workflowId: string, name: string, capability: string, description?: string): Promise<WorkflowStep> {

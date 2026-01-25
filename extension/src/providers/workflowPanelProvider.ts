@@ -514,6 +514,9 @@ export class WorkflowPanelProvider {
             case 'executeAllPending':
                 await this.handleExecuteAllPending(workflowId, panel);
                 break;
+            case 'runWithStreaming':
+                await this.handleRunWithStreaming(workflowId, panel);
+                break;
             case 'chat':
                 await this.handleChat(workflowId, message.text, panel);
                 break;
@@ -956,6 +959,48 @@ export class WorkflowPanelProvider {
             vscode.window.showInformationMessage(`All ${pendingSteps.length} workflow steps completed!`);
         } catch (error) {
             panel.webview.postMessage({ type: 'error', message: 'Failed to execute steps' });
+        }
+    }
+
+    private streamAbortController: AbortController | null = null;
+
+    private async handleRunWithStreaming(workflowId: string, panel: vscode.WebviewPanel): Promise<void> {
+        // Cancel any existing stream
+        if (this.streamAbortController) {
+            this.streamAbortController.abort();
+        }
+        this.streamAbortController = new AbortController();
+
+        panel.webview.postMessage({ type: 'streamStart' });
+
+        try {
+            await this.apiService.streamStoryExecution(
+                workflowId,
+                {
+                    onEvent: (event) => {
+                        panel.webview.postMessage({
+                            type: 'streamProgress',
+                            event
+                        });
+                    },
+                    onDone: () => {
+                        panel.webview.postMessage({ type: 'streamEnd' });
+                        this.refreshPanel(workflowId);
+                    },
+                    onError: (message) => {
+                        panel.webview.postMessage({
+                            type: 'streamError',
+                            message
+                        });
+                        this.refreshPanel(workflowId);
+                    }
+                },
+                this.streamAbortController
+            );
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Streaming execution failed';
+            panel.webview.postMessage({ type: 'streamError', message });
+            await this.refreshPanel(workflowId);
         }
     }
 
@@ -1496,6 +1541,42 @@ export class WorkflowPanelProvider {
         .chat-input-row input:focus {
             outline: 1px solid var(--vscode-focusBorder);
         }
+
+        /* Progress log for streaming execution */
+        .progress-log {
+            background: var(--vscode-terminal-background, var(--vscode-editor-background));
+            border: 1px solid var(--vscode-panel-border);
+            border-radius: 6px;
+            margin-bottom: 16px;
+            overflow: hidden;
+        }
+        .progress-log-header {
+            background: var(--vscode-sideBarSectionHeader-background);
+            padding: 8px 12px;
+            font-weight: 600;
+            font-size: 0.9em;
+            border-bottom: 1px solid var(--vscode-panel-border);
+        }
+        .progress-log-content {
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: var(--vscode-editor-font-family, 'Consolas', 'Monaco', monospace);
+            font-size: 12px;
+            padding: 8px 12px;
+        }
+        .log-entry {
+            padding: 2px 0;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        .log-entry.info { color: var(--vscode-terminal-foreground); }
+        .log-entry.wave { color: var(--vscode-terminal-ansiBrightCyan, #4ec9b0); font-weight: bold; }
+        .log-entry.step-start { color: var(--vscode-terminal-ansiBrightBlue, #569cd6); }
+        .log-entry.step-complete { color: var(--vscode-terminal-ansiBrightGreen, #4ec9b0); }
+        .log-entry.step-fail { color: var(--vscode-terminal-ansiBrightRed, #f14c4c); }
+        .log-entry.gate { color: var(--vscode-terminal-ansiBrightYellow, #dcdcaa); }
+        .log-entry.error { color: var(--vscode-terminal-ansiBrightRed, #f14c4c); }
+        .log-entry.done { color: var(--vscode-terminal-ansiBrightGreen, #4ec9b0); font-weight: bold; }
 
         /* Approve/reject buttons */
         .output-actions {
@@ -2639,6 +2720,41 @@ export class WorkflowPanelProvider {
             vscode.postMessage({ type: 'executeAllPending' });
         }
 
+        function runWithStreaming() {
+            showProgressLog();
+            vscode.postMessage({ type: 'runWithStreaming' });
+        }
+
+        function showProgressLog() {
+            let logContainer = document.getElementById('progressLog');
+            if (!logContainer) {
+                logContainer = document.createElement('div');
+                logContainer.id = 'progressLog';
+                logContainer.className = 'progress-log';
+                logContainer.innerHTML = '<div class="progress-log-header">📡 Execution Progress</div><div class="progress-log-content" id="progressLogContent"></div>';
+                // Insert after header
+                const header = document.querySelector('.header');
+                if (header && header.nextSibling) {
+                    header.parentNode.insertBefore(logContainer, header.nextSibling);
+                } else {
+                    document.body.insertBefore(logContainer, document.body.firstChild);
+                }
+            }
+            logContainer.style.display = 'block';
+            document.getElementById('progressLogContent').innerHTML = '<div class="log-entry info">🚀 Starting execution...</div>';
+        }
+
+        function appendProgressLog(text, type = 'info') {
+            const logContent = document.getElementById('progressLogContent');
+            if (logContent) {
+                const entry = document.createElement('div');
+                entry.className = 'log-entry ' + type;
+                entry.textContent = text;
+                logContent.appendChild(entry);
+                logContent.scrollTop = logContent.scrollHeight;
+            }
+        }
+
         function refresh() {
             vscode.postMessage({ type: 'refresh' });
         }
@@ -3218,8 +3334,72 @@ export class WorkflowPanelProvider {
                 case 'worktreeChanges':
                     renderWorktreeChanges(message.status);
                     break;
+                case 'streamStart':
+                    showProgressLog();
+                    break;
+                case 'streamProgress':
+                    handleStreamProgress(message.event);
+                    break;
+                case 'streamEnd':
+                    appendProgressLog('✅ Execution completed!', 'done');
+                    break;
+                case 'streamError':
+                    appendProgressLog('❌ Error: ' + message.message, 'error');
+                    break;
             }
         });
+
+        function handleStreamProgress(event) {
+            const type = event.type;
+            const ts = new Date().toLocaleTimeString();
+            
+            switch (type) {
+                case 'Started':
+                    appendProgressLog('[' + ts + '] 🚀 Starting execution (' + event.totalWaves + ' waves)', 'info');
+                    break;
+                case 'WaveStarted':
+                    appendProgressLog('[' + ts + '] ━━━ Wave ' + event.wave + '/' + event.totalWaves + ' ━━━', 'wave');
+                    break;
+                case 'StepStarted':
+                    appendProgressLog('[' + ts + '] ▶ Starting: ' + event.stepName, 'step-start');
+                    break;
+                case 'StepOutput':
+                    if (event.output) {
+                        appendProgressLog('   ' + event.output, 'info');
+                    }
+                    break;
+                case 'StepCompleted':
+                    appendProgressLog('[' + ts + '] ✓ Completed: ' + event.stepName, 'step-complete');
+                    break;
+                case 'StepFailed':
+                    appendProgressLog('[' + ts + '] ✗ Failed: ' + event.stepName + (event.error ? ' - ' + event.error : ''), 'step-fail');
+                    break;
+                case 'WaveCompleted':
+                    appendProgressLog('[' + ts + '] ━━━ Wave ' + event.wave + ' done (' + event.output + ') ━━━', 'wave');
+                    break;
+                case 'GateStarted':
+                    appendProgressLog('[' + ts + '] 🔨 Running quality gate...', 'gate');
+                    break;
+                case 'GatePassed':
+                    appendProgressLog('[' + ts + '] ✓ Quality gate passed', 'step-complete');
+                    break;
+                case 'GateFailed':
+                    appendProgressLog('[' + ts + '] ✗ Quality gate failed: ' + (event.error || 'See errors below'), 'step-fail');
+                    if (event.gateResult && event.gateResult.buildOutput) {
+                        appendProgressLog('   Build output: ' + event.gateResult.buildOutput, 'error');
+                    }
+                    break;
+                case 'Completed':
+                    appendProgressLog('[' + ts + '] 🎉 All waves completed successfully!', 'done');
+                    break;
+                case 'Failed':
+                    appendProgressLog('[' + ts + '] ❌ Execution failed: ' + event.error, 'error');
+                    break;
+                case 'Cancelled':
+                    appendProgressLog('[' + ts + '] ⏹ Execution cancelled', 'info');
+                    break;
+            }
+        }
     </script>
 </body>
 </html>`;
@@ -3699,7 +3879,7 @@ export class WorkflowPanelProvider {
             case 'Planned':
             case 'Executing':
                 if (hasPendingSteps) {
-                    leftButtons.push(`<button class="btn btn-primary" onclick="executeAllPending()">▶ Execute All (${pendingSteps.length})</button>`);
+                    leftButtons.push(`<button class="btn btn-primary" onclick="runWithStreaming()">▶ Run (${pendingSteps.length} steps)</button>`);
                 }
                 leftButtons.push('<button class="btn btn-primary" onclick="complete()">✓ Mark Complete</button>');
                 rightButtons.push('<button class="btn btn-danger" onclick="cancel()">Cancel Workflow</button>');
