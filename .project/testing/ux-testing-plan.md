@@ -430,6 +430,196 @@ User creates a story, Aura generates implementation steps, user executes steps o
 
 ---
 
+## Internal Agent Tools (New)
+
+### Overview
+Internal agents (coding-agent, build-fixer-agent) now have access to Aura tools that wrap Roslyn functionality. These are distinct from MCP tools - they're available via the tool registry during step execution.
+
+### Tools Added
+- `aura.refactor` - Roslyn-powered refactoring (rename, change_signature, extract_interface, safe_delete, move_type_to_file)
+- `aura.generate` - Code generation (tests, create_type, implement_interface, constructor, property, method)
+- `aura.validate` - Returns compilation/test validation commands
+
+### Prerequisites
+- [ ] Aura API running
+- [ ] Solution path available to tools
+- [ ] Roslyn workspace loaded
+
+### Test Scenarios
+
+#### 4.1 Rename with Blast Radius Analysis
+**Steps:**
+1. Execute a step that triggers `aura.refactor` with `operation: rename`
+2. Verify blast radius is returned in analyze mode (default)
+
+**Expected:**
+- Tool returns reference count, files affected, related symbols
+- Suggested execution plan provided
+- No changes made until `analyze: false`
+
+**Tool Call Example:**
+```json
+{
+  "operation": "rename",
+  "solutionPath": "c:\\work\\aura\\Aura.sln",
+  "symbolName": "GetHealthStatus",
+  "newName": "GetServiceHealth"
+}
+```
+
+#### 4.2 Execute Rename Refactoring
+**Steps:**
+1. Call `aura.refactor` with `analyze: false`
+2. Verify symbol is renamed across solution
+
+**Expected:**
+- All references updated
+- Modified files list returned
+- Build passes after rename
+
+#### 4.3 Generate Tests
+**Steps:**
+1. Call `aura.generate` with `operation: tests`
+2. Verify test file is created
+
+**Expected:**
+- Test class created in appropriate test project
+- Framework auto-detected (xUnit)
+- Mock library detected (NSubstitute)
+- Tests compile (if `validateCompilation: true`)
+
+**Tool Call Example:**
+```json
+{
+  "operation": "tests",
+  "solutionPath": "c:\\work\\aura\\Aura.sln",
+  "target": "StoryService",
+  "analyzeOnly": false
+}
+```
+
+#### 4.4 Analyze Test Targets
+**Steps:**
+1. Call `aura.generate` with `operation: tests` and `analyzeOnly: true`
+2. Review testable members
+
+**Expected:**
+- Returns list of testable methods
+- Detected framework and mock library
+- Suggested test count
+
+#### 4.5 Create New Type
+**Steps:**
+1. Call `aura.generate` with `operation: create_type`
+2. Verify file is created with correct structure
+
+**Expected:**
+- File created at target directory
+- Namespace matches project conventions
+- XML documentation included
+- Interfaces implemented if specified
+
+**Tool Call Example:**
+```json
+{
+  "operation": "create_type",
+  "solutionPath": "c:\\work\\aura\\Aura.sln",
+  "typeName": "NotificationService",
+  "typeKind": "class",
+  "targetDirectory": "src/Aura.Foundation/Notifications",
+  "implements": ["INotificationService"],
+  "documentation": "Handles notification delivery."
+}
+```
+
+#### 4.6 Add Property to Existing Class
+**Steps:**
+1. Call `aura.generate` with `operation: property`
+2. Verify property added to class
+
+**Expected:**
+- Property added with correct type
+- Access modifier applied
+- XML documentation included if provided
+
+#### 4.7 Add Method to Existing Class
+**Steps:**
+1. Call `aura.generate` with `operation: method`
+2. Verify method added with parameters
+
+**Expected:**
+- Method signature correct
+- Parameters included
+- Body inserted if provided
+
+#### 4.8 Implement Interface
+**Steps:**
+1. Call `aura.generate` with `operation: implement_interface`
+2. Verify all interface members stubbed
+
+**Expected:**
+- All methods implemented (throw NotImplementedException)
+- All properties implemented
+- File modified in place
+
+#### 4.9 Validate Compilation
+**Steps:**
+1. Call `aura.validate` with `operation: compilation`
+2. Verify command is returned
+
+**Expected:**
+- Returns `dotnet build` command
+- Agent can execute command with `shell.execute`
+- Error handling guidance provided
+
+#### 4.10 Change Method Signature
+**Steps:**
+1. Call `aura.refactor` with `operation: change_signature`
+2. Add a parameter to a method
+
+**Expected:**
+- Method signature updated
+- All call sites updated with default value
+- Build passes after change
+
+**Tool Call Example:**
+```json
+{
+  "operation": "change_signature",
+  "solutionPath": "c:\\work\\aura\\Aura.sln",
+  "symbolName": "ProcessOrderAsync",
+  "containingType": "OrderService",
+  "addParameters": [{"name": "priority", "type": "int", "defaultValue": "0"}]
+}
+```
+
+#### 4.11 Extract Interface
+**Steps:**
+1. Call `aura.refactor` with `operation: extract_interface`
+2. Verify interface created and class updated
+
+**Expected:**
+- New interface file created
+- Original class implements interface
+- Selected members in interface
+
+#### 4.12 Safe Delete
+**Steps:**
+1. Call `aura.refactor` with `operation: safe_delete` on unused symbol
+2. Verify deletion occurs
+
+**Expected:**
+- Symbol removed if no usages
+- Error if symbol has usages
+- Files updated/deleted as appropriate
+
+### Known Limitations
+- Roslyn workspace must be loaded (may require solution open)
+- Large solutions may have slower response times
+- Some complex refactorings may require manual follow-up
+
+---
+
 ## Cross-Cutting Concerns
 
 ### Performance
@@ -498,6 +688,20 @@ User creates a story, Aura generates implementation steps, user executes steps o
 - [ ] 2.9 Story Completion
 - [ ] 2.10 Error Recovery
 
+### Internal Agent Tools Tests
+- [ ] 4.1 Rename with Blast Radius Analysis
+- [ ] 4.2 Execute Rename Refactoring
+- [ ] 4.3 Generate Tests
+- [ ] 4.4 Analyze Test Targets
+- [ ] 4.5 Create New Type
+- [ ] 4.6 Add Property to Existing Class
+- [ ] 4.7 Add Method to Existing Class
+- [ ] 4.8 Implement Interface
+- [ ] 4.9 Validate Compilation
+- [ ] 4.10 Change Method Signature
+- [ ] 4.11 Extract Interface
+- [ ] 4.12 Safe Delete
+
 ---
 
 ## Issue Tracking
@@ -515,5 +719,6 @@ User creates a story, Aura generates implementation steps, user executes steps o
 - [ ] Mode 3 tests pass
 - [ ] Mode 1 tests pass
 - [ ] Mode 2 tests pass
+- [ ] Internal Agent Tools tests pass
 - [ ] No critical/high issues open
 - [ ] Ready for v1.5.0 release
