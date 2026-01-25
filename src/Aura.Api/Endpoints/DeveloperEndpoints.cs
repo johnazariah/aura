@@ -421,6 +421,8 @@ public static class DeveloperEndpoints
                     passed = result.GateResult.Passed,
                     gateType = result.GateResult.GateType,
                     afterWave = result.GateResult.AfterWave,
+                    buildOutput = result.GateResult.BuildOutput,
+                    testOutput = result.GateResult.TestOutput,
                     testsPassed = result.GateResult.TestsPassed,
                     testsFailed = result.GateResult.TestsFailed,
                     error = result.GateResult.Error,

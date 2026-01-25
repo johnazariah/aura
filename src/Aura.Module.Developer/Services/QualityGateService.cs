@@ -39,10 +39,10 @@ public sealed partial class QualityGateService : IQualityGateService
         if (command.Contains("dotnet", StringComparison.OrdinalIgnoreCase))
         {
             _logger.LogInformation("Running restore before build...");
-            // Use explicit NuGet source for LocalSystem which may not have nuget.config access
+            // Don't use --source flag as it interferes with SDK workload resolution (e.g., Aspire SDK)
             var (restoreCode, restoreOutput) = await RunCommandAsync(
                 command,
-                "restore --source https://api.nuget.org/v3/index.json",
+                "restore",
                 worktreePath,
                 ct);
             if (restoreCode != 0)
