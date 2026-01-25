@@ -1106,6 +1106,203 @@ public sealed class StoryService(
     }
 
     /// <inheritdoc/>
+    public async IAsyncEnumerable<StoryProgressEvent> RunStreamAsync(
+        Guid storyId,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
+    {
+        var story = await _db.Workflows
+            .Include(w => w.Steps)
+            .FirstOrDefaultAsync(w => w.Id == storyId, ct)
+            ?? throw new InvalidOperationException($"Story {storyId} not found");
+
+        if (!story.Steps.Any())
+        {
+            throw new InvalidOperationException("Story has no steps. Call PlanAsync or DecomposeAsync first.");
+        }
+
+        if (string.IsNullOrEmpty(story.WorktreePath))
+        {
+            throw new InvalidOperationException("Story has no worktree. Create a worktree first.");
+        }
+
+        var steps = story.Steps.ToList();
+        var waveCount = steps.Max(s => s.Wave);
+
+        yield return StoryProgressEvent.Started(storyId, waveCount);
+
+        var currentWave = story.CurrentWave == 0 ? 1 : story.CurrentWave;
+
+        // Loop through all waves
+        while (currentWave <= waveCount && !ct.IsCancellationRequested)
+        {
+            // Handle GatePending from previous wave
+            if (story.Status == StoryStatus.GatePending)
+            {
+                yield return StoryProgressEvent.GateStarted(storyId, currentWave - 1);
+
+                var gateResult = await _qualityGateService.RunFullGateAsync(story.WorktreePath, currentWave - 1, ct);
+
+                if (!gateResult.Passed)
+                {
+                    if (gateResult.WasCancelled)
+                    {
+                        _logger.LogWarning("Quality gate was cancelled after wave {Wave}", currentWave - 1);
+                        yield return StoryProgressEvent.GateFailed(storyId, currentWave - 1, gateResult);
+                        yield break;
+                    }
+
+                    story.Status = StoryStatus.GateFailed;
+                    story.GateResult = JsonSerializer.Serialize(new { gateResult.Passed, gateResult.Error, gateResult.BuildOutput, gateResult.TestOutput });
+                    story.UpdatedAt = DateTimeOffset.UtcNow;
+                    await _db.SaveChangesAsync(ct);
+
+                    yield return StoryProgressEvent.GateFailed(storyId, currentWave - 1, gateResult);
+                    yield break;
+                }
+
+                yield return StoryProgressEvent.GatePassed(storyId, currentWave - 1, gateResult);
+                story.GateResult = null;
+            }
+
+            // Get pending steps for this wave
+            var waveSteps = steps
+                .Where(s => s.Wave == currentWave && s.Status == StepStatus.Pending)
+                .ToList();
+
+            if (waveSteps.Count == 0)
+            {
+                // Check if all steps complete
+                if (steps.All(s => s.Status == StepStatus.Completed || s.Status == StepStatus.Skipped))
+                {
+                    story.Status = StoryStatus.Completed;
+                    story.UpdatedAt = DateTimeOffset.UtcNow;
+                    await _db.SaveChangesAsync(ct);
+
+                    yield return StoryProgressEvent.Completed(storyId, waveCount);
+                    yield break;
+                }
+
+                currentWave++;
+                continue;
+            }
+
+            yield return StoryProgressEvent.WaveStarted(storyId, currentWave, waveCount);
+
+            story.Status = StoryStatus.Executing;
+            story.CurrentWave = currentWave;
+            story.UpdatedAt = DateTimeOffset.UtcNow;
+            await _db.SaveChangesAsync(ct);
+
+            _logger.LogInformation(
+                "Streaming wave {Wave}/{TotalWaves} with {StepCount} steps",
+                currentWave, waveCount, waveSteps.Count);
+
+            // Emit step started events for all steps in this wave
+            foreach (var step in waveSteps)
+            {
+                yield return StoryProgressEvent.StepStarted(storyId, step.Id, step.Name, currentWave);
+            }
+
+            // Convert steps to tasks and dispatch
+            var waveTasks = waveSteps.Select(s => StoryTask.FromStep(s)).ToList();
+            var priorCompletedTasks = steps
+                .Where(s => s.Wave < currentWave && s.Status == StepStatus.Completed)
+                .Select(s => StoryTask.FromStep(s))
+                .ToList();
+
+            var worktreeName = Path.GetFileName(story.WorktreePath);
+            IReadOnlyList<StoryTask> executedTasks;
+
+            if (_dispatchers.TryGetValue(story.DispatchTarget, out var dispatcher))
+            {
+                executedTasks = await dispatcher.DispatchTasksAsync(
+                    waveTasks,
+                    story.WorktreePath,
+                    story.MaxParallelism,
+                    priorCompletedTasks,
+                    ct);
+            }
+            else
+            {
+                executedTasks = await _copilotDispatcher.DispatchTasksAsync(
+                    waveTasks,
+                    story.WorktreePath,
+                    story.MaxParallelism,
+                    priorCompletedTasks,
+                    ct);
+            }
+
+            // Update steps from executed tasks and emit events
+            var stepDict = waveSteps.ToDictionary(s => s.Id.ToString());
+            var completedCount = 0;
+            var failedCount = 0;
+
+            foreach (var executed in executedTasks)
+            {
+                if (stepDict.TryGetValue(executed.Id, out var step))
+                {
+                    step.Status = executed.Status switch
+                    {
+                        StoryTaskStatus.Completed => StepStatus.Completed,
+                        StoryTaskStatus.Failed => StepStatus.Failed,
+                        StoryTaskStatus.Skipped => StepStatus.Skipped,
+                        StoryTaskStatus.Running => StepStatus.Running,
+                        _ => StepStatus.Pending,
+                    };
+                    step.Output = executed.Output;
+                    step.Error = executed.Error;
+                    step.AssignedAgentId = executed.AgentSessionId;
+                    step.StartedAt = executed.StartedAt;
+                    step.CompletedAt = executed.CompletedAt;
+
+                    if (step.Status == StepStatus.Completed)
+                    {
+                        completedCount++;
+                        yield return StoryProgressEvent.StepCompleted(storyId, step.Id, step.Name, step.Output);
+                    }
+                    else if (step.Status == StepStatus.Failed)
+                    {
+                        failedCount++;
+                        yield return StoryProgressEvent.StepFailed(storyId, step.Id, step.Name, step.Error);
+                    }
+                }
+            }
+
+            await _db.SaveChangesAsync(ct);
+
+            yield return StoryProgressEvent.WaveCompleted(storyId, currentWave, completedCount, failedCount);
+
+            if (failedCount > 0)
+            {
+                story.Status = StoryStatus.Failed;
+                story.UpdatedAt = DateTimeOffset.UtcNow;
+                await _db.SaveChangesAsync(ct);
+
+                yield return StoryProgressEvent.Failed(storyId, currentWave, $"{failedCount} step(s) failed in wave {currentWave}");
+                yield break;
+            }
+
+            // Move to next wave with gate check
+            if (currentWave < waveCount)
+            {
+                story.Status = StoryStatus.GatePending;
+                story.CurrentWave = currentWave + 1;
+                story.UpdatedAt = DateTimeOffset.UtcNow;
+                await _db.SaveChangesAsync(ct);
+            }
+
+            currentWave++;
+        }
+
+        // All waves complete
+        story.Status = StoryStatus.Completed;
+        story.UpdatedAt = DateTimeOffset.UtcNow;
+        await _db.SaveChangesAsync(ct);
+
+        yield return StoryProgressEvent.Completed(storyId, waveCount);
+    }
+
+    /// <inheritdoc/>
     public async Task<StoryOrchestratorStatus> GetOrchestratorStatusAsync(Guid storyId, CancellationToken ct = default)
     {
         var story = await _db.Workflows

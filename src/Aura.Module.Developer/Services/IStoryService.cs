@@ -155,6 +155,16 @@ public interface IStoryService
     Task<StoryRunResult> RunAsync(Guid storyId, CancellationToken ct = default);
 
     /// <summary>
+    /// Runs the story execution with real-time progress streaming.
+    /// Yields progress events as execution proceeds through waves and steps.
+    /// Use this for SSE endpoints to show "wall of flying text" to users.
+    /// </summary>
+    /// <param name="storyId">The story ID. Story must be decomposed.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>An async enumerable of progress events.</returns>
+    IAsyncEnumerable<StoryProgressEvent> RunStreamAsync(Guid storyId, CancellationToken ct = default);
+
+    /// <summary>
     /// Gets the current orchestrator status and task progress.
     /// </summary>
     /// <param name="storyId">The story ID.</param>

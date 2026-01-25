@@ -37,6 +37,7 @@ public static class DeveloperEndpoints
         app.MapPost("/api/developer/stories/{id:guid}/plan", PlanStory);
         app.MapPost("/api/developer/stories/{id:guid}/decompose", DecomposeStory);
         app.MapPost("/api/developer/stories/{id:guid}/run", RunStory);
+        app.MapGet("/api/developer/stories/{id:guid}/stream", StreamStoryExecution);
         app.MapGet("/api/developer/stories/{id:guid}/orchestrator-status", GetOrchestratorStatus);
         app.MapPost("/api/developer/stories/{id:guid}/execute-all", ExecuteAllSteps);
         app.MapPost("/api/developer/stories/{id:guid}/complete", CompleteStory);
@@ -489,6 +490,63 @@ public static class DeveloperEndpoints
         catch (InvalidOperationException ex)
         {
             return Results.BadRequest(new { error = ex.Message });
+        }
+    }
+
+    private static async Task StreamStoryExecution(
+        Guid id,
+        IStoryService storyService,
+        HttpContext httpContext,
+        CancellationToken ct)
+    {
+        httpContext.Response.Headers.ContentType = "text/event-stream";
+        httpContext.Response.Headers.CacheControl = "no-cache";
+        httpContext.Response.Headers.Connection = "keep-alive";
+
+        try
+        {
+            await foreach (var evt in storyService.RunStreamAsync(id, ct))
+            {
+                var eventData = JsonSerializer.Serialize(new
+                {
+                    type = evt.Type.ToString(),
+                    storyId = evt.StoryId,
+                    timestamp = evt.Timestamp,
+                    wave = evt.Wave,
+                    totalWaves = evt.TotalWaves,
+                    stepId = evt.StepId,
+                    stepName = evt.StepName,
+                    output = evt.Output,
+                    error = evt.Error,
+                    gateResult = evt.GateResult != null ? new
+                    {
+                        passed = evt.GateResult.Passed,
+                        gateType = evt.GateResult.GateType,
+                        afterWave = evt.GateResult.AfterWave,
+                        buildOutput = evt.GateResult.BuildOutput,
+                        testOutput = evt.GateResult.TestOutput,
+                        error = evt.GateResult.Error,
+                    } : null,
+                });
+
+                var eventName = evt.Type.ToString().ToLowerInvariant();
+                await httpContext.Response.WriteAsync($"event: {eventName}\ndata: {eventData}\n\n", ct);
+                await httpContext.Response.Body.FlushAsync(ct);
+            }
+
+            // Send final done event
+            await httpContext.Response.WriteAsync("event: done\ndata: {}\n\n", ct);
+            await httpContext.Response.Body.FlushAsync(ct);
+        }
+        catch (InvalidOperationException ex)
+        {
+            var errorData = JsonSerializer.Serialize(new { message = ex.Message });
+            await httpContext.Response.WriteAsync($"event: error\ndata: {errorData}\n\n", ct);
+            await httpContext.Response.Body.FlushAsync(ct);
+        }
+        catch (OperationCanceledException)
+        {
+            // Client disconnected - this is expected
         }
     }
 
