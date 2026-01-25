@@ -79,8 +79,6 @@ fi
 # =============================================================================
 # 2. Normalize CRLF to LF (auto-fix) - MUST run before dotnet format
 # =============================================================================
-echo ""
-echo "🔍 Checking line endings..."
 
 CRLF_FIXED=0
 
@@ -93,22 +91,17 @@ for file in $STAGED_FILES; do
                 ;;
         esac
         
-        # Check if file has CRLF line endings
+        # Check if file has CRLF line endings - fix silently
         if git show ":$file" 2>/dev/null | grep -q $'\r'; then
-            echo "${YELLOW}⚠️  CRLF detected in $file - converting to LF${NC}"
-            # Convert CRLF to LF in working directory
             sed -i 's/\r$//' "$file"
-            # Re-stage the fixed file
             git add "$file"
-            CRLF_FIXED=1
+            CRLF_FIXED=$((CRLF_FIXED + 1))
         fi
     fi
 done
 
-if [ $CRLF_FIXED -eq 1 ]; then
-    echo "${GREEN}✅ Line endings normalized to LF and re-staged${NC}"
-else
-    echo "${GREEN}✅ Line endings OK${NC}"
+if [ $CRLF_FIXED -gt 0 ]; then
+    echo "📝 Auto-fixed CRLF → LF in $CRLF_FIXED file(s)"
 fi
 
 # =============================================================================
