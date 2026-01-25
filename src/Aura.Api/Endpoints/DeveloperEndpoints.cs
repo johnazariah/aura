@@ -425,6 +425,7 @@ public static class DeveloperEndpoints
                     testOutput = result.GateResult.TestOutput,
                     testsPassed = result.GateResult.TestsPassed,
                     testsFailed = result.GateResult.TestsFailed,
+                    wasCancelled = result.GateResult.WasCancelled,
                     error = result.GateResult.Error,
                 } : null,
                 error = result.Error,

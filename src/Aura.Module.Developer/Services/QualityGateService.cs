@@ -10,6 +10,21 @@ using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 
 /// <summary>
+/// Result of running an external command.
+/// </summary>
+internal sealed record CommandResult
+{
+    /// <summary>Gets the exit code (0 = success, -1 = cancelled/error).</summary>
+    public required int ExitCode { get; init; }
+
+    /// <summary>Gets the combined stdout/stderr output.</summary>
+    public required string Output { get; init; }
+
+    /// <summary>Gets whether the command was cancelled before completion.</summary>
+    public bool WasCancelled { get; init; }
+}
+
+/// <summary>
 /// Runs quality gates (build, test) between orchestrator waves.
 /// </summary>
 public sealed partial class QualityGateService : IQualityGateService
@@ -40,33 +55,62 @@ public sealed partial class QualityGateService : IQualityGateService
         {
             _logger.LogInformation("Running restore before build...");
             // Don't use --source flag as it interferes with SDK workload resolution (e.g., Aspire SDK)
-            var (restoreCode, restoreOutput) = await RunCommandAsync(
+            var restoreResult = await RunCommandAsync(
                 command,
                 "restore",
                 worktreePath,
                 ct);
-            if (restoreCode != 0)
+
+            if (restoreResult.WasCancelled)
             {
-                _logger.LogWarning("Restore failed:\n{Output}", restoreOutput);
+                _logger.LogWarning("Restore was cancelled");
                 return new QualityGateResult
                 {
                     Passed = false,
                     GateType = "build",
                     AfterWave = afterWave,
-                    BuildOutput = restoreOutput,
-                    Error = $"Restore failed with exit code {restoreCode}",
+                    BuildOutput = restoreResult.Output,
+                    Error = "Restore was cancelled",
+                    WasCancelled = true,
+                };
+            }
+
+            if (restoreResult.ExitCode != 0)
+            {
+                _logger.LogWarning("Restore failed:\n{Output}", restoreResult.Output);
+                return new QualityGateResult
+                {
+                    Passed = false,
+                    GateType = "build",
+                    AfterWave = afterWave,
+                    BuildOutput = restoreResult.Output,
+                    Error = $"Restore failed with exit code {restoreResult.ExitCode}",
                 };
             }
         }
 
         _logger.LogInformation("Running build command: {Command} {Args}", command, args);
-        var (exitCode, output) = await RunCommandAsync(command, args, worktreePath, ct);
+        var buildResult = await RunCommandAsync(command, args, worktreePath, ct);
 
-        var passed = exitCode == 0;
+        if (buildResult.WasCancelled)
+        {
+            _logger.LogWarning("Build was cancelled");
+            return new QualityGateResult
+            {
+                Passed = false,
+                GateType = "build",
+                AfterWave = afterWave,
+                BuildOutput = buildResult.Output,
+                Error = "Build was cancelled",
+                WasCancelled = true,
+            };
+        }
+
+        var passed = buildResult.ExitCode == 0;
         _logger.LogInformation("Build gate {Result} after wave {Wave}", passed ? "passed" : "failed", afterWave);
         if (!passed)
         {
-            _logger.LogWarning("Build output:\n{Output}", output);
+            _logger.LogWarning("Build output:\n{Output}", buildResult.Output);
         }
 
         return new QualityGateResult
@@ -74,8 +118,8 @@ public sealed partial class QualityGateService : IQualityGateService
             Passed = passed,
             GateType = "build",
             AfterWave = afterWave,
-            BuildOutput = output,
-            Error = passed ? null : $"Build failed with exit code {exitCode}",
+            BuildOutput = buildResult.Output,
+            Error = passed ? null : $"Build failed with exit code {buildResult.ExitCode}",
         };
     }
 
@@ -87,12 +131,26 @@ public sealed partial class QualityGateService : IQualityGateService
         // Detect project type and run appropriate test command
         var (command, args) = DetectTestCommand(worktreePath);
 
-        var (exitCode, output) = await RunCommandAsync(command, args, worktreePath, ct);
+        var testResult = await RunCommandAsync(command, args, worktreePath, ct);
 
-        var passed = exitCode == 0;
+        if (testResult.WasCancelled)
+        {
+            _logger.LogWarning("Tests were cancelled");
+            return new QualityGateResult
+            {
+                Passed = false,
+                GateType = "test",
+                AfterWave = afterWave,
+                TestOutput = testResult.Output,
+                Error = "Tests were cancelled",
+                WasCancelled = true,
+            };
+        }
+
+        var passed = testResult.ExitCode == 0;
 
         // Try to parse test counts from output
-        var (testsPassed, testsFailed) = ParseTestCounts(output);
+        var (testsPassed, testsFailed) = ParseTestCounts(testResult.Output);
 
         _logger.LogInformation(
             "Test gate {Result} after wave {Wave}: {Passed} passed, {Failed} failed",
@@ -103,10 +161,10 @@ public sealed partial class QualityGateService : IQualityGateService
             Passed = passed,
             GateType = "test",
             AfterWave = afterWave,
-            TestOutput = output,
+            TestOutput = testResult.Output,
             TestsPassed = testsPassed,
             TestsFailed = testsFailed,
-            Error = passed ? null : $"Tests failed with exit code {exitCode}",
+            Error = passed ? null : $"Tests failed with exit code {testResult.ExitCode}",
         };
     }
 
@@ -246,7 +304,7 @@ public sealed partial class QualityGateService : IQualityGateService
     [GeneratedRegex(@"(\d+)\s+passed.*?(\d+)\s+failed", RegexOptions.IgnoreCase)]
     private static partial Regex PytestResultsRegex();
 
-    private async Task<(int ExitCode, string Output)> RunCommandAsync(
+    private async Task<CommandResult> RunCommandAsync(
         string command,
         string arguments,
         string workingDirectory,
@@ -290,12 +348,47 @@ public sealed partial class QualityGateService : IQualityGateService
 
             await process.WaitForExitAsync(ct);
 
-            return (process.ExitCode, outputBuilder.ToString());
+            return new CommandResult
+            {
+                ExitCode = process.ExitCode,
+                Output = outputBuilder.ToString(),
+                WasCancelled = false,
+            };
+        }
+        catch (OperationCanceledException)
+        {
+            // Cancellation requested - kill the process and report cancellation
+            _logger.LogWarning("Command cancelled: {Command} {Args}", command, arguments);
+
+            try
+            {
+                if (!process.HasExited)
+                {
+                    process.Kill(entireProcessTree: true);
+                    _logger.LogInformation("Killed process tree for {Command}", command);
+                }
+            }
+            catch (Exception killEx)
+            {
+                _logger.LogWarning(killEx, "Failed to kill process {Command}", command);
+            }
+
+            return new CommandResult
+            {
+                ExitCode = -1,
+                Output = outputBuilder.ToString() + "\n[Cancelled]",
+                WasCancelled = true,
+            };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to run {Command} {Args}", command, arguments);
-            return (-1, ex.Message);
+            return new CommandResult
+            {
+                ExitCode = -1,
+                Output = ex.Message,
+                WasCancelled = false,
+            };
         }
     }
 

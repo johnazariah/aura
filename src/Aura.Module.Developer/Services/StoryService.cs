@@ -807,6 +807,30 @@ public sealed class StoryService(
 
             if (!gateResult.Passed)
             {
+                // If the gate was cancelled (e.g., HTTP client disconnect), don't mark the story as failed.
+                // Leave it in WaitingForGate so it can be retried.
+                if (gateResult.WasCancelled)
+                {
+                    _logger.LogWarning(
+                        "Quality gate was cancelled after wave {Wave}. Story remains in WaitingForGate state for retry.",
+                        currentWave - 1);
+
+                    // Don't change the status - keep it in WaitingForGate
+                    // WaitingForGate property is computed from Status, so we don't need to set it
+                    return new StoryRunResult
+                    {
+                        StoryId = storyId,
+                        Status = OrchestratorStatus.WaitingForGate,
+                        CurrentWave = currentWave - 1,
+                        TotalWaves = waveCount,
+                        StartedTasks = [],
+                        CompletedTasks = [],
+                        FailedTasks = [],
+                        GateResult = gateResult,
+                        Error = "Quality gate was cancelled. Retry when ready.",
+                    };
+                }
+
                 _logger.LogWarning("Quality gate failed after wave {Wave}: {Error}", currentWave - 1, gateResult.Error);
 
                 story.OrchestratorStatus = OrchestratorStatus.Failed;

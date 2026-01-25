@@ -486,4 +486,10 @@ public record QualityGateResult
 
     /// <summary>Gets any error message.</summary>
     public string? Error { get; init; }
+
+    /// <summary>
+    /// Gets whether the gate was cancelled (e.g., client disconnect, timeout).
+    /// When true, the story should remain in WaitingForGate state, not Failed.
+    /// </summary>
+    public bool WasCancelled { get; init; }
 }
