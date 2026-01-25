@@ -5,6 +5,7 @@
 namespace Aura.Api.Mcp;
 
 using System.Text.Json;
+using Aura.Api.Mcp.Tools;
 using Aura.Foundation.Data.Entities;
 using Aura.Foundation.Git;
 using Aura.Foundation.Rag;
@@ -45,6 +46,7 @@ public sealed class McpHandler
     private readonly ITestGenerationService _testGenerationService;
     private readonly IGitWorktreeService _worktreeService;
     private readonly ITreeBuilderService _treeBuilderService;
+    private readonly IAuraDocsTool _auraDocsTool;
     private readonly ILogger<McpHandler> _logger;
 
     private readonly Dictionary<string, Func<JsonElement?, CancellationToken, Task<object>>> _tools;
@@ -64,6 +66,7 @@ public sealed class McpHandler
         ITestGenerationService testGenerationService,
         IGitWorktreeService worktreeService,
         ITreeBuilderService treeBuilderService,
+        IAuraDocsTool auraDocsTool,
         ILogger<McpHandler> logger)
     {
         _ragService = ragService;
@@ -77,6 +80,7 @@ public sealed class McpHandler
         _testGenerationService = testGenerationService;
         _worktreeService = worktreeService;
         _treeBuilderService = treeBuilderService;
+        _auraDocsTool = auraDocsTool;
         _logger = logger;
 
         // Phase 7: Consolidated meta-tools (28 tools → 11 tools)
@@ -95,6 +99,7 @@ public sealed class McpHandler
             ["aura_edit"] = EditAsync,
             ["aura_tree"] = TreeAsync,
             ["aura_get_node"] = GetNodeAsync,
+            ["aura_docs"] = DocsAsync,
         };
     }
 
@@ -4609,6 +4614,19 @@ public sealed class McpHandler
                 language = node.Metadata.Language
             }
         };
+    }
+
+    /// <summary>
+    /// aura_docs - Perform semantic search over Aura documentation.
+    /// </summary>
+    private async Task<object> DocsAsync(JsonElement? args, CancellationToken ct)
+    {
+        var query = args?.GetProperty("query").GetString()
+            ?? throw new ArgumentException("query is required");
+
+        _logger.LogDebug("aura_docs: query={Query}", query);
+
+        return await _auraDocsTool.SearchDocumentationAsync(query, ct);
     }
 
     private static object SerializeTreeNode(TreeNode node)
