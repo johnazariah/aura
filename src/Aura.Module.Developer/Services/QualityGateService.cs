@@ -248,7 +248,8 @@ public sealed partial class QualityGateService : IQualityGateService
             Directory.GetFiles(worktreePath, "*.csproj", SearchOption.TopDirectoryOnly).Length > 0)
         {
             var dotnetPath = FindDotnetPath() ?? "dotnet";
-            return (dotnetPath, "test --no-build -v q");
+            // Run only unit tests, exclude integration tests that require infrastructure
+            return (dotnetPath, "test --no-build -v q --filter \"FullyQualifiedName!~IntegrationTests\"");
         }
 
         // Check for Node.js project

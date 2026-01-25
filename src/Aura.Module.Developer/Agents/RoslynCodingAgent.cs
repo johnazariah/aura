@@ -54,7 +54,11 @@ public sealed class RoslynCodingAgent(
         Temperature: DefaultTemperature,
         Tools:
         [
-            // File operations
+            // Aura semantic tools (PREFERRED for C# modifications)
+            "aura.generate",     // Create types, add properties, add methods, generate tests
+            "aura.refactor",     // Rename, change signature, extract interface, safe delete
+            "aura.validate",     // Get compilation/test commands
+            // File operations (for non-C# files only)
             "file.read",
             "file.modify",
             "file.write",
@@ -70,8 +74,11 @@ public sealed class RoslynCodingAgent(
             "roslyn.find_callers",
             // Code graph tools
             "graph.get_type_members",
+            // Git operations
+            "git.commit",
+            "git.status",
             // Test tools
-            "roslyn.run_tests",
+            "dotnet.run_tests",
         ],
         Tags: ["coding", "roslyn", "agentic", "csharp", "sophisticated"]);
 
@@ -157,39 +164,38 @@ public sealed class RoslynCodingAgent(
 
         task.AppendLine("## Instructions");
         task.AppendLine("""
-            You are an expert C# developer using Roslyn-powered tools to make code changes.
+            You are an expert C# developer using Aura and Roslyn-powered tools to make code changes.
             
-            Follow this workflow:
-            1. **Understand**: Read relevant files, list classes, understand the codebase structure
-            2. **Plan**: Think through the changes needed before making them
-            3. **Implement**: Make targeted edits using file.modify (preferred) or file.write for new files
-            4. **Validate**: Use roslyn.validate_compilation to check for errors after changes
-            5. **Fix**: If there are compilation errors, analyze them and fix
-            6. **Document**: Add/update XML documentation comments
-            7. **Test**: Consider if tests are needed and create them
+            ## Tool Selection (CRITICAL)
             
-            Best Practices:
-            - Use file.modify for surgical edits to existing files (find exact text, replace it)
-            - Prefer small, targeted changes over large rewrites
-            - Always validate compilation after making changes
+            For ALL C# code changes, use Aura semantic tools. Do NOT use file.modify for C#:
+            
+            | Task | CORRECT Tool | WRONG Tool |
+            |------|--------------|------------|
+            | Add field to class | `aura.generate(operation: "property", isField: true)` | file.modify |
+            | Add property to class | `aura.generate(operation: "property")` | file.modify |
+            | Add method to class | `aura.generate(operation: "method")` | file.modify |
+            | Add constructor param | `aura.generate(operation: "constructor")` | file.modify |
+            | Create new C# file | `aura.generate(operation: "create_type")` | file.write |
+            | Implement interface | `aura.generate(operation: "implement_interface")` | file.modify |
+            | Rename symbol | `aura.refactor(operation: "rename")` | find/replace |
+            | Generate tests | `aura.generate(operation: "tests")` | Manual test writing |
+            
+            **Why?** Aura tools understand C# syntax, handle usings, formatting, and find the right insertion point.
+            **file.modify often creates duplicate declarations or syntax errors.**
+            
+            ## Workflow
+            1. **Understand**: Use roslyn.get_class_info, roslyn.list_classes to understand existing code
+            2. **Implement**: Use aura.generate or aura.refactor for C# changes
+            3. **Validate**: Use roslyn.validate_compilation after changes
+            4. **Fix**: If errors, use aura tools to fix them
+            5. **Commit**: Use git.commit with a clear message
+            
+            ## Best Practices
             - Follow .NET naming conventions (PascalCase for public, _camelCase for private fields)
             - Use modern C# features (records, pattern matching, nullable reference types)
             - Include XML documentation for public APIs
-
-            When writing tests:
-            - **CRITICAL: BEFORE writing any test file, use file.list to find existing *Tests.cs files**
-            - **Read at least one existing test file to learn the testing framework and conventions**
-            - Match the project's framework: xUnit uses [Fact]/[Theory], NUnit uses [Test]/[TestFixture]
-            - Use the same assertion style and mocking library as existing tests
-            - If you see [Fact] in existing tests, use [Fact] not [Test]
-            - If you see Assert.Equal(), don't use Assert.AreEqual()
-            - **After validation passes, use roslyn.run_tests to actually run the tests and verify they pass**
-            - If tests fail, analyze the error and fix the test code
-            
-            When modifying files:
-            - Read the file first to understand its structure
-            - Use exact text matching for old_text in file.modify
-            - Include enough context in old_text to be unique
+            - Only use file.modify/file.write for non-C# files (JSON, YAML, Markdown)
             
             **CRITICAL: Indentation in file.modify:**
             - When using file.modify, the newText MUST preserve the EXACT same indentation as the oldText

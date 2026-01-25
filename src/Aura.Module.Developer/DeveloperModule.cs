@@ -92,6 +92,10 @@ public sealed class DeveloperModule : IAuraModule
         services.AddSingleton<IStoryVerificationService, StoryVerificationService>();
 
         // Register orchestrator services (for parallel dispatch)
+        // InternalAgentsDispatcher uses IAgentRegistry for agent selection, supporting:
+        // - Hardcoded agents (RoslynCodingAgent via DeveloperAgentProvider)
+        // - YAML-configured agents (LanguageSpecialistAgent via RegisterLanguageAgentsTask)
+        // - Handlebars prompt agents (from agents/*.md via AgentRegistryInitializer)
         services.AddSingleton<IGitHubCopilotDispatcher, GitHubCopilotDispatcher>();
         services.AddSingleton<ITaskDispatcher, GitHubCopilotDispatcher>();
         services.AddSingleton<ITaskDispatcher, InternalAgentsDispatcher>();

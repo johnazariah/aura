@@ -61,6 +61,11 @@ public class RoslynCodingAgentTests
     {
         var tools = _agent.Metadata.Tools;
 
+        // Aura semantic tools (preferred for C# modifications)
+        Assert.Contains("aura.generate", tools);
+        Assert.Contains("aura.refactor", tools);
+        Assert.Contains("aura.validate", tools);
+
         // File tools
         Assert.Contains("file.read", tools);
         Assert.Contains("file.modify", tools);
@@ -76,7 +81,7 @@ public class RoslynCodingAgentTests
         Assert.Contains("graph.get_type_members", tools);
 
         // Test tools
-        Assert.Contains("roslyn.run_tests", tools);
+        Assert.Contains("dotnet.run_tests", tools);
     }
 
     [Fact]

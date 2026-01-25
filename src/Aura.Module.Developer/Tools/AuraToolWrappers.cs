@@ -320,6 +320,8 @@ public sealed class AuraRefactorTool(
         "Transform existing code: rename symbols, change signatures, extract interfaces, safe delete, move types. " +
         "Defaults to analyze mode (analyze=true) to show blast radius before executing.";
 
+    public override IReadOnlyList<string> Categories => ["aura", "roslyn", "refactoring"];
+
     public override async Task<ToolResult<AuraRefactorOutput>> ExecuteAsync(
         AuraRefactorInput input,
         CancellationToken ct = default)
@@ -509,6 +511,8 @@ public sealed class AuraGenerateTool(
     public override string Description =>
         "Generate new code: tests, types, interfaces, constructors, properties, methods. " +
         "Test generation includes framework detection and proper namespace imports.";
+
+    public override IReadOnlyList<string> Categories => ["aura", "roslyn", "generation"];
 
     public override async Task<ToolResult<AuraGenerateOutput>> ExecuteAsync(
         AuraGenerateInput input,
@@ -777,6 +781,8 @@ public sealed class AuraValidateTool(
     public override string Description =>
         "Validate code: get compilation validation or test execution commands. " +
         "Returns the appropriate command to run for validation.";
+
+    public override IReadOnlyList<string> Categories => ["aura", "dotnet", "validation"];
 
     public override Task<ToolResult<AuraValidateOutput>> ExecuteAsync(
         AuraValidateInput input,
