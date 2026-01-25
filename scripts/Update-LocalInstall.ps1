@@ -26,7 +26,7 @@
 #>
 
 param(
-    [string]$InstallPath = "C:\Program Files\Aura",
+    [string]$InstallPath,
     [switch]$SkipApi,
     [switch]$SkipExtension,
     [switch]$SkipAgents,
@@ -34,6 +34,17 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+
+# Set platform-specific defaults
+if (-not $InstallPath) {
+    if ($IsMacOS) {
+        $InstallPath = "/usr/local/share/aura"
+    } elseif ($IsLinux) {
+        $InstallPath = "/usr/local/share/aura"
+    } else {
+        $InstallPath = "C:\Program Files\Aura"
+    }
+}
 
 function Write-Header($message) {
     Write-Host ""
@@ -59,11 +70,22 @@ if (-not (Test-Path $InstallPath)) {
     throw "Aura installation not found at $InstallPath. Run the installer first."
 }
 
-$apiPath = Join-Path $InstallPath "api"
-$agentsPath = Join-Path $InstallPath "agents"
-$patternsPath = Join-Path $InstallPath "patterns"
-$promptsPath = Join-Path $InstallPath "prompts"
-$extensionPath = Join-Path $InstallPath "extension"
+# Platform-specific paths
+if ($IsMacOS -or $IsLinux) {
+    # macOS/Linux: source layout
+    $apiPath = Join-Path $InstallPath "src/Aura.Api"
+    $agentsPath = Join-Path $InstallPath "agents"
+    $patternsPath = Join-Path $InstallPath "patterns"
+    $promptsPath = Join-Path $InstallPath "prompts"
+    $extensionPath = Join-Path $InstallPath "extension"
+} else {
+    # Windows: published layout
+    $apiPath = Join-Path $InstallPath "api"
+    $agentsPath = Join-Path $InstallPath "agents"
+    $patternsPath = Join-Path $InstallPath "patterns"
+    $promptsPath = Join-Path $InstallPath "prompts"
+    $extensionPath = Join-Path $InstallPath "extension"
+}
 
 if (-not (Test-Path $apiPath)) {
     throw "API directory not found at $apiPath"
@@ -81,52 +103,84 @@ try {
     if ($StopService -and -not $SkipApi) {
         Write-Header "Stopping Aura Services"
         
-        # Stop Windows Service if exists
-        $service = Get-Service -Name "AuraService" -ErrorAction SilentlyContinue
-        if ($service -and $service.Status -eq "Running") {
-            Write-Step "Stopping AuraService..."
-            Stop-Service -Name "AuraService" -Force
-            Start-Sleep -Seconds 2
-        }
-        
-        # Stop tray app if running
-        $tray = Get-Process -Name "Aura.Tray" -ErrorAction SilentlyContinue
-        if ($tray) {
-            Write-Step "Stopping Aura.Tray..."
-            Stop-Process -Name "Aura.Tray" -Force
-        }
-        
-        # Stop API process if running standalone
-        $api = Get-Process -Name "Aura.Api" -ErrorAction SilentlyContinue
-        if ($api) {
-            Write-Step "Stopping Aura.Api..."
-            Stop-Process -Name "Aura.Api" -Force
+        if ($IsMacOS) {
+            # macOS: Stop launchd service
+            $plistPath = "$HOME/Library/LaunchAgents/com.aura.api.plist"
+            if (Test-Path $plistPath) {
+                Write-Step "Stopping Aura launchd service..."
+                launchctl unload $plistPath 2>$null
+                Start-Sleep -Seconds 2
+            }
+            
+            # Also kill any stray dotnet processes running Aura.Api
+            $auraProcs = Get-Process -Name "dotnet" -ErrorAction SilentlyContinue | Where-Object {
+                try { $_.CommandLine -match "Aura.Api" } catch { $false }
+            }
+            if ($auraProcs) {
+                Write-Step "Stopping Aura.Api processes..."
+                $auraProcs | Stop-Process -Force
+            }
+        } else {
+            # Windows: Stop Windows Service if exists
+            $service = Get-Service -Name "AuraService" -ErrorAction SilentlyContinue
+            if ($service -and $service.Status -eq "Running") {
+                Write-Step "Stopping AuraService..."
+                Stop-Service -Name "AuraService" -Force
+                Start-Sleep -Seconds 2
+            }
+            
+            # Stop tray app if running
+            $tray = Get-Process -Name "Aura.Tray" -ErrorAction SilentlyContinue
+            if ($tray) {
+                Write-Step "Stopping Aura.Tray..."
+                Stop-Process -Name "Aura.Tray" -Force
+            }
+            
+            # Stop API process if running standalone
+            $api = Get-Process -Name "Aura.Api" -ErrorAction SilentlyContinue
+            if ($api) {
+                Write-Step "Stopping Aura.Api..."
+                Stop-Process -Name "Aura.Api" -Force
+            }
         }
     }
 
     # =============================================================================
-    # Build API and Extension in PARALLEL for speed
+    # Build API and Extension in PARALLEL for speed (Windows) or sequentially (macOS)
     # =============================================================================
     $apiJob = $null
     $extensionJob = $null
     $tempDir = Join-Path $root ".update-temp"
     if (-not (Test-Path $tempDir)) { New-Item -ItemType Directory -Path $tempDir -Force | Out-Null }
     
+    # Track if we built API directly (macOS) vs in background (Windows)
+    $apiBuiltDirectly = $false
+    
     if (-not $SkipApi) {
-        Write-Step "Building Aura.Api (background)..."
-        $apiLogFile = Join-Path $tempDir "api-build.log"
-        $apiJob = Start-Job -ScriptBlock {
-            param($root, $logFile)
-            Set-Location $root
-            $output = dotnet publish src/Aura.Api/Aura.Api.csproj `
-                -c Release `
-                -r win-x64 `
-                -p:PublishSelfContained=true `
-                -o ".update-temp/api" 2>&1
-            $output | Out-File -FilePath $logFile -Encoding utf8
-            if ($LASTEXITCODE -ne 0) { throw "Failed to build Aura.Api. See $logFile" }
-            return "API build complete"
-        } -ArgumentList $root, $apiLogFile
+        if ($IsMacOS -or $IsLinux) {
+            # macOS/Linux: build directly (simpler, avoids job issues)
+            Write-Step "Building Aura.Api..."
+            dotnet build src/Aura.Api/Aura.Api.csproj -c Release --verbosity quiet
+            if ($LASTEXITCODE -ne 0) { throw "Failed to build Aura.Api" }
+            Write-Step "API build complete"
+            $apiBuiltDirectly = $true
+        } else {
+            # Windows: background job for parallel builds
+            Write-Step "Building Aura.Api (background)..."
+            $apiLogFile = Join-Path $tempDir "api-build.log"
+            $apiJob = Start-Job -ScriptBlock {
+                param($root, $logFile)
+                Set-Location $root
+                $output = dotnet publish src/Aura.Api/Aura.Api.csproj `
+                    -c Release `
+                    -r win-x64 `
+                    -p:PublishSelfContained=true `
+                    -o ".update-temp/api" 2>&1
+                $output | Out-File -FilePath $logFile -Encoding utf8
+                if ($LASTEXITCODE -ne 0) { throw "Failed to build Aura.Api. See $logFile" }
+                return "API build complete"
+            } -ArgumentList $root, $apiLogFile
+        }
     } else {
         Write-Skip "API"
     }
@@ -259,6 +313,25 @@ try {
         }
         
         Write-Step "API updated"
+    } elseif ($apiBuiltDirectly) {
+        # macOS/Linux: rsync source files and rebuild in place
+        Write-Step "Syncing source to $InstallPath..."
+        
+        # Use rsync for efficient sync (excludes bin/obj/.git)
+        $rsyncExcludes = "--exclude=bin --exclude=obj --exclude=.git --exclude=node_modules --exclude=.update-temp"
+        $rsyncCmd = "rsync -a $rsyncExcludes '$root/' '$InstallPath/'"
+        bash -c $rsyncCmd
+        
+        Write-Step "Building in install location..."
+        Push-Location $InstallPath
+        try {
+            dotnet build src/Aura.Api/Aura.Api.csproj -c Release --verbosity quiet
+            if ($LASTEXITCODE -ne 0) { throw "Failed to build in install location" }
+        } finally {
+            Pop-Location
+        }
+        
+        Write-Step "API updated"
     }
 
     # =============================================================================
@@ -288,13 +361,28 @@ try {
     if ($StopService -and -not $SkipApi) {
         Write-Header "Restarting Aura Services"
         
-        $service = Get-Service -Name "AuraService" -ErrorAction SilentlyContinue
-        if ($service) {
-            Write-Step "Starting AuraService..."
-            Start-Service -Name "AuraService"
+        if ($IsMacOS) {
+            # macOS: Start launchd service
+            $plistPath = "$HOME/Library/LaunchAgents/com.aura.api.plist"
+            if (Test-Path $plistPath) {
+                Write-Step "Starting Aura launchd service..."
+                launchctl load $plistPath
+            } else {
+                Write-Step "Starting Aura.Api manually..."
+                $env:ASPNETCORE_URLS = "http://localhost:5300"
+                $env:ASPNETCORE_ENVIRONMENT = "Production"
+                Start-Process -FilePath "dotnet" -ArgumentList "run", "--project", "$InstallPath/src/Aura.Api", "--no-build" -WindowStyle Hidden
+            }
         } else {
-            Write-Step "Starting Aura.Api manually..."
-            Start-Process -FilePath (Join-Path $apiPath "Aura.Api.exe") -WindowStyle Hidden
+            # Windows
+            $service = Get-Service -Name "AuraService" -ErrorAction SilentlyContinue
+            if ($service) {
+                Write-Step "Starting AuraService..."
+                Start-Service -Name "AuraService"
+            } else {
+                Write-Step "Starting Aura.Api manually..."
+                Start-Process -FilePath (Join-Path $apiPath "Aura.Api.exe") -WindowStyle Hidden
+            }
         }
         
         # Wait for API to be ready
@@ -310,13 +398,15 @@ try {
             }
         }
         
-        # Restart tray app if it was stopped
-        $trayPath = Join-Path $InstallPath "tray\Aura.Tray.exe"
-        if (Test-Path $trayPath) {
-            $trayRunning = Get-Process -Name "Aura.Tray" -ErrorAction SilentlyContinue
-            if (-not $trayRunning) {
-                Write-Step "Starting Aura.Tray..."
-                Start-Process -FilePath $trayPath -ArgumentList "--minimized" -WindowStyle Hidden
+        if (-not $IsMacOS) {
+            # Restart tray app if it was stopped (Windows only)
+            $trayPath = Join-Path $InstallPath "tray\Aura.Tray.exe"
+            if (Test-Path $trayPath) {
+                $trayRunning = Get-Process -Name "Aura.Tray" -ErrorAction SilentlyContinue
+                if (-not $trayRunning) {
+                    Write-Step "Starting Aura.Tray..."
+                    Start-Process -FilePath $trayPath -ArgumentList "--minimized" -WindowStyle Hidden
+                }
             }
         }
     }

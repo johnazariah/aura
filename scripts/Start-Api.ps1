@@ -93,8 +93,22 @@ if (-not $SkipChecks) {
         }
     } catch { }
     
-    $portCheck = Test-NetConnection -ComputerName localhost -Port 5432 -WarningAction SilentlyContinue -ErrorAction SilentlyContinue
-    if ($portCheck.TcpTestSucceeded -and -not $existingContainer) {
+    # Cross-platform port check
+    $portInUse = $false
+    if ($IsWindows -or $env:OS -match 'Windows') {
+        $portCheck = Test-NetConnection -ComputerName localhost -Port 5432 -WarningAction SilentlyContinue -ErrorAction SilentlyContinue
+        $portInUse = $portCheck.TcpTestSucceeded
+    } else {
+        # macOS/Linux: use nc (netcat) or lsof
+        try {
+            $null = bash -c "nc -z localhost 5432" 2>&1
+            $portInUse = ($LASTEXITCODE -eq 0)
+        } catch {
+            $portInUse = $false
+        }
+    }
+    
+    if ($portInUse -and -not $existingContainer) {
         Write-Host ""
         Write-Host "WARNING: Port 5432 is in use by another process!" -ForegroundColor Yellow
         Write-Host ""
