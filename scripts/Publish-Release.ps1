@@ -91,9 +91,11 @@ try {
     New-Item -ItemType Directory -Path "$OutputDir/win-x64/extension" -Force | Out-Null
     Copy-Item "extension/aura-$Version.vsix" "$OutputDir/win-x64/extension/"
     
-    # Copy extension install helper script
+    # Copy scripts for installer
     New-Item -ItemType Directory -Path "$OutputDir/win-x64/scripts" -Force | Out-Null
     Copy-Item "installers/windows/install-extension.ps1" "$OutputDir/win-x64/scripts/"
+    Copy-Item "scripts/Create-ServiceAccount.ps1" "$OutputDir/win-x64/scripts/"
+    Copy-Item "scripts/Get-ServiceAccountCredential.ps1" "$OutputDir/win-x64/scripts/"
 
     # Download and bundle PostgreSQL
     Write-Host "`nPreparing PostgreSQL..." -ForegroundColor Green

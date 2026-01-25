@@ -146,6 +146,28 @@ try {
     }
 
     # =============================================================================
+    # Ensure Service Account Exists (Windows only)
+    # =============================================================================
+    if (-not ($IsMacOS -or $IsLinux)) {
+        # The Aura service runs as a dedicated AuraService user account for proper user context.
+        # This provides a real user profile with standard tool caches for all languages.
+        Write-Header "Checking Service Account"
+        
+        $serviceAccountScript = Join-Path $root "scripts\Create-ServiceAccount.ps1"
+        if (Test-Path $serviceAccountScript) {
+            $existingUser = Get-LocalUser -Name "AuraService" -ErrorAction SilentlyContinue
+            if (-not $existingUser) {
+                Write-Step "Creating AuraService account..."
+                & $serviceAccountScript | Out-Null
+            } else {
+                Write-Step "AuraService account exists"
+            }
+        } else {
+            Write-Warning "Create-ServiceAccount.ps1 not found. Service may run as LocalSystem."
+        }
+    }
+
+    # =============================================================================
     # Build API and Extension in PARALLEL for speed (Windows) or sequentially (macOS)
     # =============================================================================
     $apiJob = $null
@@ -377,6 +399,18 @@ try {
             # Windows
             $service = Get-Service -Name "AuraService" -ErrorAction SilentlyContinue
             if ($service) {
+                # Check if service is using the correct account (migrate from LocalSystem if needed)
+                $serviceWmi = Get-WmiObject Win32_Service -Filter "Name='AuraService'"
+                if ($serviceWmi.StartName -eq "LocalSystem") {
+                    Write-Step "Migrating service from LocalSystem to AuraService account..."
+                    $credScript = Join-Path $root "scripts\Get-ServiceAccountCredential.ps1"
+                    if (Test-Path $credScript) {
+                        $cred = & $credScript
+                        sc.exe config AuraService obj= $cred.FullUsername password= $cred.Password | Out-Null
+                        Write-Step "Service account updated"
+                    }
+                }
+                
                 Write-Step "Starting AuraService..."
                 Start-Service -Name "AuraService"
             } else {

@@ -51,22 +51,16 @@ public sealed partial class QualityGateService : IQualityGateService
         // Detect project type and run appropriate build command
         var (command, args) = DetectBuildCommand(worktreePath);
 
-        // For .NET projects, run restore first (LocalSystem may not have package cache access)
+        // For .NET projects, run restore first to ensure packages are available
         if (command.Contains("dotnet", StringComparison.OrdinalIgnoreCase))
         {
             _logger.LogInformation("[{WorktreeName}] Running restore before build...", worktreeName);
 
-            // Use a shared package cache accessible to the service (LocalSystem doesn't have user cache)
-            var sharedPackagesPath = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-                "Aura",
-                "nuget-packages");
-            Directory.CreateDirectory(sharedPackagesPath);
-
-            // Don't use --source flag as it interferes with SDK workload resolution (e.g., Aspire SDK)
+            // The service runs as the AuraService user account, which has its own NuGet cache
+            // in its user profile. No special cache path needed.
             var restoreResult = await RunCommandAsync(
                 command,
-                $"restore --packages \"{sharedPackagesPath}\"",
+                "restore",
                 worktreePath,
                 ct);
 
@@ -213,8 +207,9 @@ public sealed partial class QualityGateService : IQualityGateService
         {
             // Use full path to dotnet since service may run as LocalSystem without PATH
             var dotnetPath = FindDotnetPath() ?? "dotnet";
-            // Include restore since worktree may not have packages restored
-            return (dotnetPath, "build -v q");
+
+            // Build with --no-restore since we do restore separately with proper cache config
+            return (dotnetPath, "build --no-restore -v q");
         }
 
         // Check for Node.js project

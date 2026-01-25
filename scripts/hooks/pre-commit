@@ -50,8 +50,9 @@ if [ -n "$STAGED_FILES" ]; then
                 FAILED=1
             fi
             
-            # Check for connection strings (but allow localhost/development ones)
-            if git show ":$file" 2>/dev/null | grep -iE "$CONN_STRING_PATTERN" | grep -v "localhost\|127.0.0.1\|example\|aura_dev\|postgres:postgres" > /dev/null 2>&1; then
+            # Check for connection strings (but allow localhost/development ones and PowerShell variables)
+            # Exclude: $password, $cred., GeneratePassword, SecureString, ServiceAccountPassword
+            if git show ":$file" 2>/dev/null | grep -iE "$CONN_STRING_PATTERN" | grep -v 'localhost\|127.0.0.1\|example\|aura_dev\|postgres:postgres\|\$password\|\$cred\.\|GeneratePassword\|SecureString\|ServiceAccountPassword\|ConvertTo-SecureString' > /dev/null 2>&1; then
                 echo "${RED}❌ Potential hardcoded password in connection string: $file${NC}"
                 FAILED=1
             fi

@@ -89,8 +89,11 @@ Filename: "{app}\pgsql\bin\pg_isready.exe"; Parameters: "-h localhost -p 5433 -t
 Filename: "{app}\pgsql\bin\createdb.exe"; Parameters: "-h localhost -p 5433 -U postgres auradb"; Flags: runhidden; Check: not AuraDbDatabaseExists
 ; Enable pgvector extension
 Filename: "{app}\pgsql\bin\psql.exe"; Parameters: "-h localhost -p 5433 -U postgres -d auradb -c ""CREATE EXTENSION IF NOT EXISTS vector"""; Flags: runhidden
-; Install as Windows Service
-Filename: "sc.exe"; Parameters: "create AuraService binPath= ""{app}\api\{#MyAppExeName}"" start= auto"; Flags: runhidden; Tasks: installservice
+
+; Create dedicated service account (provides proper user context for all languages)
+Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -File ""{app}\scripts\Create-ServiceAccount.ps1"""; Flags: runhidden; Tasks: installservice
+; Install as Windows Service with dedicated account
+Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -Command ""$cred = & '{app}\scripts\Get-ServiceAccountCredential.ps1'; sc.exe create AuraService binPath= '\"""{app}\api\{#MyAppExeName}\""' obj= $cred.FullUsername password= $cred.Password start= auto"""; Flags: runhidden; Tasks: installservice
 Filename: "sc.exe"; Parameters: "description AuraService ""Aura local AI assistant service"""; Flags: runhidden; Tasks: installservice
 ; Set environment for service to use Production settings
 Filename: "reg.exe"; Parameters: "add ""HKLM\SYSTEM\CurrentControlSet\Services\AuraService"" /v Environment /t REG_MULTI_SZ /d ""ASPNETCORE_ENVIRONMENT=Production"" /f"; Flags: runhidden; Tasks: installservice
