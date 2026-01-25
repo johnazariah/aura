@@ -91,8 +91,10 @@ public sealed class DeveloperModule : IAuraModule
         services.AddSingleton<IProjectVerificationDetector, ProjectVerificationDetector>();
         services.AddSingleton<IStoryVerificationService, StoryVerificationService>();
 
-        // Register orchestrator services (for parallel dispatch to GH Copilot CLI)
+        // Register orchestrator services (for parallel dispatch)
         services.AddSingleton<IGitHubCopilotDispatcher, GitHubCopilotDispatcher>();
+        services.AddSingleton<ITaskDispatcher, GitHubCopilotDispatcher>();
+        services.AddSingleton<ITaskDispatcher, InternalAgentsDispatcher>();
         services.AddSingleton<IQualityGateService, QualityGateService>();
 
         // Register Code Graph indexer (for Graph RAG)

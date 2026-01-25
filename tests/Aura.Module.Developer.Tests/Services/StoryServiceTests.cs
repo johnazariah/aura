@@ -74,6 +74,11 @@ public class StoryServiceTests : IDisposable
         _qualityGateService = Substitute.For<IQualityGateService>();
         _options = Options.Create(new DeveloperModuleOptions { BranchPrefix = "workflow/" });
 
+        // Create a mock task dispatcher for testing
+        var mockDispatcher = Substitute.For<ITaskDispatcher>();
+        mockDispatcher.Target.Returns(DispatchTarget.CopilotCli);
+        var taskDispatchers = new[] { mockDispatcher };
+
         _sut = new StoryService(
             _db,
             _agentRegistry,
@@ -88,6 +93,7 @@ public class StoryServiceTests : IDisposable
             _llmProviderRegistry,
             _verificationService,
             _copilotDispatcher,
+            taskDispatchers,
             _qualityGateService,
             _options,
             NullLogger<StoryService>.Instance);

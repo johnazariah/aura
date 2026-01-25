@@ -85,12 +85,20 @@ public static class DeveloperEndpoints
                 automationMode = am;
             }
 
+            // Parse dispatch target from string
+            var dispatchTarget = DispatchTarget.CopilotCli;
+            if (!string.IsNullOrEmpty(request.DispatchTarget) && Enum.TryParse<DispatchTarget>(request.DispatchTarget, true, out var dt))
+            {
+                dispatchTarget = dt;
+            }
+
             var story = await storyService.CreateAsync(
                 request.Title,
                 request.Description,
                 request.RepositoryPath,
                 automationMode,
                 request.IssueUrl,
+                dispatchTarget,
                 ct);
 
             return Results.Created($"/api/developer/stories/{story.Id}", new
@@ -100,6 +108,7 @@ public static class DeveloperEndpoints
                 description = story.Description,
                 status = story.Status.ToString(),
                 automationMode = story.AutomationMode.ToString(),
+                dispatchTarget = story.DispatchTarget.ToString(),
                 gitBranch = story.GitBranch,
                 worktreePath = story.WorktreePath,
                 repositoryPath = story.RepositoryPath,
@@ -171,6 +180,8 @@ public static class DeveloperEndpoints
             title = story.Title,
             description = story.Description,
             status = story.Status.ToString(),
+            automationMode = story.AutomationMode.ToString(),
+            dispatchTarget = story.DispatchTarget.ToString(),
             gitBranch = story.GitBranch,
             worktreePath = story.WorktreePath,
             repositoryPath = story.RepositoryPath,
@@ -181,6 +192,9 @@ public static class DeveloperEndpoints
             issueRepo = story.IssueRepo,
             analyzedContext = story.AnalyzedContext,
             executionPlan = story.ExecutionPlan,
+            orchestratorStatus = story.OrchestratorStatus.ToString(),
+            currentWave = story.CurrentWave,
+            maxParallelism = story.MaxParallelism,
             steps = story.Steps.OrderBy(s => s.Order).Select(s => new
             {
                 id = s.Id,
@@ -993,6 +1007,7 @@ public static class DeveloperEndpoints
                 request.RepositoryPath,
                 AutomationMode.Assisted, // Issue-based workflows default to assisted mode
                 request.IssueUrl,
+                DispatchTarget.CopilotCli,
                 ct);
 
             // Post a comment to the issue that work has started

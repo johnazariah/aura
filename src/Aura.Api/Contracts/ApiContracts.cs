@@ -133,7 +133,8 @@ public record CreateStoryRequest(
     string? RepositoryPath = null,
     string? Mode = null,
     string? AutomationMode = null,
-    string? IssueUrl = null);
+    string? IssueUrl = null,
+    string? DispatchTarget = null);
 
 /// <summary>Request to execute all pending steps.</summary>
 public record ExecuteAllStepsRequest(

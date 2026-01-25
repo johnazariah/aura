@@ -3,17 +3,20 @@ using System;
 using Aura.Module.Developer.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
-namespace Aura.Module.Developer.Migrations
+namespace Aura.Module.Developer.Data.Migrations
 {
     [DbContext(typeof(DeveloperDbContext))]
-    partial class DeveloperDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260125075156_AddDispatchTarget")]
+    partial class AddDispatchTarget
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

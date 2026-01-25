@@ -42,7 +42,8 @@ public sealed partial class QualityGateService : IQualityGateService
     /// <inheritdoc/>
     public async Task<QualityGateResult> RunBuildGateAsync(string worktreePath, int afterWave, CancellationToken ct = default)
     {
-        _logger.LogInformation("Running build gate after wave {Wave} in {Path}", afterWave, worktreePath);
+        var worktreeName = Path.GetFileName(worktreePath);
+        _logger.LogInformation("[{WorktreeName}] Running build gate after wave {Wave}", worktreeName, afterWave);
 
         // Normalize line endings (Copilot CLI creates CRLF, project requires LF)
         NormalizeLineEndings(worktreePath);
@@ -53,7 +54,7 @@ public sealed partial class QualityGateService : IQualityGateService
         // For .NET projects, run restore first (LocalSystem may not have package cache access)
         if (command.Contains("dotnet", StringComparison.OrdinalIgnoreCase))
         {
-            _logger.LogInformation("Running restore before build...");
+            _logger.LogInformation("[{WorktreeName}] Running restore before build...", worktreeName);
             // Don't use --source flag as it interferes with SDK workload resolution (e.g., Aspire SDK)
             var restoreResult = await RunCommandAsync(
                 command,
@@ -63,7 +64,7 @@ public sealed partial class QualityGateService : IQualityGateService
 
             if (restoreResult.WasCancelled)
             {
-                _logger.LogWarning("Restore was cancelled");
+                _logger.LogWarning("[{WorktreeName}] Restore was cancelled", worktreeName);
                 return new QualityGateResult
                 {
                     Passed = false,
@@ -77,7 +78,7 @@ public sealed partial class QualityGateService : IQualityGateService
 
             if (restoreResult.ExitCode != 0)
             {
-                _logger.LogWarning("Restore failed:\n{Output}", restoreResult.Output);
+                _logger.LogWarning("[{WorktreeName}] Restore failed:\n{Output}", worktreeName, restoreResult.Output);
                 return new QualityGateResult
                 {
                     Passed = false,
@@ -89,12 +90,12 @@ public sealed partial class QualityGateService : IQualityGateService
             }
         }
 
-        _logger.LogInformation("Running build command: {Command} {Args}", command, args);
+        _logger.LogInformation("[{WorktreeName}] Running build command: {Command} {Args}", worktreeName, command, args);
         var buildResult = await RunCommandAsync(command, args, worktreePath, ct);
 
         if (buildResult.WasCancelled)
         {
-            _logger.LogWarning("Build was cancelled");
+            _logger.LogWarning("[{WorktreeName}] Build was cancelled", worktreeName);
             return new QualityGateResult
             {
                 Passed = false,
@@ -107,10 +108,10 @@ public sealed partial class QualityGateService : IQualityGateService
         }
 
         var passed = buildResult.ExitCode == 0;
-        _logger.LogInformation("Build gate {Result} after wave {Wave}", passed ? "passed" : "failed", afterWave);
+        _logger.LogInformation("[{WorktreeName}] Build gate {Result} after wave {Wave}", worktreeName, passed ? "passed" : "failed", afterWave);
         if (!passed)
         {
-            _logger.LogWarning("Build output:\n{Output}", buildResult.Output);
+            _logger.LogWarning("[{WorktreeName}] Build output:\n{Output}", worktreeName, buildResult.Output);
         }
 
         return new QualityGateResult
@@ -126,7 +127,8 @@ public sealed partial class QualityGateService : IQualityGateService
     /// <inheritdoc/>
     public async Task<QualityGateResult> RunTestGateAsync(string worktreePath, int afterWave, CancellationToken ct = default)
     {
-        _logger.LogInformation("Running test gate after wave {Wave} in {Path}", afterWave, worktreePath);
+        var worktreeName = Path.GetFileName(worktreePath);
+        _logger.LogInformation("[{WorktreeName}] Running test gate after wave {Wave}", worktreeName, afterWave);
 
         // Detect project type and run appropriate test command
         var (command, args) = DetectTestCommand(worktreePath);
@@ -135,7 +137,7 @@ public sealed partial class QualityGateService : IQualityGateService
 
         if (testResult.WasCancelled)
         {
-            _logger.LogWarning("Tests were cancelled");
+            _logger.LogWarning("[{WorktreeName}] Tests were cancelled", worktreeName);
             return new QualityGateResult
             {
                 Passed = false,
@@ -153,8 +155,8 @@ public sealed partial class QualityGateService : IQualityGateService
         var (testsPassed, testsFailed) = ParseTestCounts(testResult.Output);
 
         _logger.LogInformation(
-            "Test gate {Result} after wave {Wave}: {Passed} passed, {Failed} failed",
-            passed ? "passed" : "failed", afterWave, testsPassed, testsFailed);
+            "[{WorktreeName}] Test gate {Result} after wave {Wave}: {Passed} passed, {Failed} failed",
+            worktreeName, passed ? "passed" : "failed", afterWave, testsPassed, testsFailed);
 
         return new QualityGateResult
         {

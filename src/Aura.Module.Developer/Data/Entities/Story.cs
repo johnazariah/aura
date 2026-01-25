@@ -120,6 +120,9 @@ public sealed class Story
 
     /// <summary>Gets or sets the maximum number of parallel agents to use.</summary>
     public int MaxParallelism { get; set; } = 4;
+
+    /// <summary>Gets or sets the dispatch target for task execution.</summary>
+    public DispatchTarget DispatchTarget { get; set; } = DispatchTarget.CopilotCli;
 }
 
 /// <summary>
@@ -246,4 +249,21 @@ public enum OrchestratorStatus
 
     /// <summary>Unrecoverable failure occurred.</summary>
     Failed,
+}
+/// <summary>
+/// The dispatch target for parallel task execution.
+/// </summary>
+public enum DispatchTarget
+{
+    /// <summary>
+    /// Use GitHub Copilot CLI agents (spawns external process).
+    /// Leverages Claude via Copilot with access to Aura MCP tools.
+    /// </summary>
+    CopilotCli,
+
+    /// <summary>
+    /// Use Aura's internal ReAct agents (in-process).
+    /// Uses configured LLM provider with Aura's tool registry.
+    /// </summary>
+    InternalAgents,
 }

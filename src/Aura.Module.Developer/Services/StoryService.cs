@@ -42,6 +42,7 @@ public sealed class StoryService(
     ILlmProviderRegistry llmProviderRegistry,
     IStoryVerificationService verificationService,
     IGitHubCopilotDispatcher copilotDispatcher,
+    IEnumerable<ITaskDispatcher> taskDispatchers,
     IQualityGateService qualityGateService,
     IOptions<DeveloperModuleOptions> options,
     ILogger<StoryService> logger) : IStoryService
@@ -59,6 +60,7 @@ public sealed class StoryService(
     private readonly ILlmProviderRegistry _llmProviderRegistry = llmProviderRegistry;
     private readonly IStoryVerificationService _verificationService = verificationService;
     private readonly IGitHubCopilotDispatcher _copilotDispatcher = copilotDispatcher;
+    private readonly Dictionary<DispatchTarget, ITaskDispatcher> _dispatchers = taskDispatchers.ToDictionary(d => d.Target);
     private readonly IQualityGateService _qualityGateService = qualityGateService;
     private readonly DeveloperModuleOptions _options = options.Value;
     private readonly ILogger<StoryService> _logger = logger;
@@ -70,6 +72,7 @@ public sealed class StoryService(
         string? repositoryPath = null,
         AutomationMode automationMode = AutomationMode.Assisted,
         string? issueUrl = null,
+        DispatchTarget dispatchTarget = DispatchTarget.CopilotCli,
         CancellationToken ct = default)
     {
         // Create a branch name from the title
@@ -91,6 +94,7 @@ public sealed class StoryService(
             GitBranch = branchName,
             Status = StoryStatus.Created,
             AutomationMode = automationMode,
+            DispatchTarget = dispatchTarget,
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow,
         };
@@ -183,6 +187,7 @@ public sealed class StoryService(
             request.RepositoryPath,
             AutomationMode.Assisted,
             issueUrl: null,
+            DispatchTarget.CopilotCli,
             ct);
 
         // Set guardian-specific fields
@@ -920,13 +925,40 @@ public sealed class StoryService(
             .Where(t => t.Wave < currentWave && t.Status == StoryTaskStatus.Completed)
             .ToList();
 
-        // Dispatch tasks to GH Copilot CLI
-        var executedTasks = await _copilotDispatcher.DispatchTasksAsync(
-            waveTasks,
-            story.WorktreePath,
-            story.MaxParallelism,
-            priorCompletedTasks,
-            ct);
+        // Dispatch tasks using the configured dispatcher
+        var worktreeName = Path.GetFileName(story.WorktreePath);
+        IReadOnlyList<StoryTask> executedTasks;
+
+        if (_dispatchers.TryGetValue(story.DispatchTarget, out var dispatcher))
+        {
+            _logger.LogInformation(
+                "[{WorktreeName}] Using {DispatchTarget} dispatcher for wave {Wave}",
+                worktreeName,
+                story.DispatchTarget,
+                currentWave);
+
+            executedTasks = await dispatcher.DispatchTasksAsync(
+                waveTasks,
+                story.WorktreePath,
+                story.MaxParallelism,
+                priorCompletedTasks,
+                ct);
+        }
+        else
+        {
+            // Fallback to Copilot dispatcher for backward compatibility
+            _logger.LogWarning(
+                "[{WorktreeName}] No dispatcher for {DispatchTarget}, falling back to Copilot CLI",
+                worktreeName,
+                story.DispatchTarget);
+
+            executedTasks = await _copilotDispatcher.DispatchTasksAsync(
+                waveTasks,
+                story.WorktreePath,
+                story.MaxParallelism,
+                priorCompletedTasks,
+                ct);
+        }
 
         // Update tasks in the full list
         var taskDict = tasks.ToDictionary(t => t.Id);

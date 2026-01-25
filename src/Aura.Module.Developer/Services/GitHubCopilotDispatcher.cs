@@ -14,13 +14,16 @@ using Microsoft.Extensions.Logging;
 /// <summary>
 /// Dispatches tasks to GitHub Copilot CLI agents running in YOLO mode.
 /// </summary>
-public sealed class GitHubCopilotDispatcher : IGitHubCopilotDispatcher
+public sealed class GitHubCopilotDispatcher : IGitHubCopilotDispatcher, ITaskDispatcher
 {
     private readonly IPromptRegistry _promptRegistry;
     private readonly ILogger<GitHubCopilotDispatcher> _logger;
     private readonly SemaphoreSlim _availabilityCheck = new(1, 1);
     private bool? _isAvailable;
     private string? _copilotPath;
+
+    /// <inheritdoc/>
+    public DispatchTarget Target => DispatchTarget.CopilotCli;
 
     // Common installation paths for copilot CLI
     private static readonly string[] CopilotSearchPaths =
@@ -102,7 +105,12 @@ public sealed class GitHubCopilotDispatcher : IGitHubCopilotDispatcher
             StartedAt = DateTimeOffset.UtcNow,
         };
 
-        _logger.LogInformation("Dispatching task {TaskId}: {TaskTitle} to GH Copilot CLI", task.Id, task.Title);
+        var worktreeName = Path.GetFileName(worktreePath);
+        _logger.LogInformation(
+            "[{WorktreeName}] Dispatching task {TaskId}: {TaskTitle} to GH Copilot CLI",
+            worktreeName,
+            task.Id,
+            task.Title);
 
         try
         {
@@ -129,12 +137,12 @@ public sealed class GitHubCopilotDispatcher : IGitHubCopilotDispatcher
 
             if (toolProposal != null)
             {
-                _logger.LogInformation("Task {TaskId} included tool improvement proposal", task.Id);
+                _logger.LogInformation("[{WorktreeName}] Task {TaskId} included tool improvement proposal", worktreeName, task.Id);
             }
 
             if (exitCode == 0)
             {
-                _logger.LogInformation("Task {TaskId} completed successfully", task.Id);
+                _logger.LogInformation("[{WorktreeName}] Task {TaskId} completed successfully", worktreeName, task.Id);
                 return startedTask with
                 {
                     Status = StoryTaskStatus.Completed,
@@ -145,7 +153,7 @@ public sealed class GitHubCopilotDispatcher : IGitHubCopilotDispatcher
             }
             else
             {
-                _logger.LogWarning("Task {TaskId} failed with exit code {ExitCode}", task.Id, exitCode);
+                _logger.LogWarning("[{WorktreeName}] Task {TaskId} failed with exit code {ExitCode}", worktreeName, task.Id, exitCode);
                 return startedTask with
                 {
                     Status = StoryTaskStatus.Failed,
@@ -157,7 +165,7 @@ public sealed class GitHubCopilotDispatcher : IGitHubCopilotDispatcher
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Task {TaskId} failed with exception", task.Id);
+            _logger.LogError(ex, "[{WorktreeName}] Task {TaskId} failed with exception", worktreeName, task.Id);
             return startedTask with
             {
                 Status = StoryTaskStatus.Failed,
@@ -180,9 +188,12 @@ public sealed class GitHubCopilotDispatcher : IGitHubCopilotDispatcher
             return [];
         }
 
+        var worktreeName = Path.GetFileName(worktreePath);
         _logger.LogInformation(
-            "Dispatching {TaskCount} tasks with parallelism {MaxParallelism}",
-            tasks.Count, maxParallelism);
+            "[{WorktreeName}] Dispatching {TaskCount} tasks with parallelism {MaxParallelism}",
+            worktreeName,
+            tasks.Count,
+            maxParallelism);
 
         // Use SemaphoreSlim to limit parallelism
         using var semaphore = new SemaphoreSlim(maxParallelism, maxParallelism);
@@ -206,8 +217,10 @@ public sealed class GitHubCopilotDispatcher : IGitHubCopilotDispatcher
         var completed = results.Count(t => t.Status == StoryTaskStatus.Completed);
         var failed = results.Count(t => t.Status == StoryTaskStatus.Failed);
         _logger.LogInformation(
-            "Dispatch complete: {Completed} succeeded, {Failed} failed",
-            completed, failed);
+            "[{WorktreeName}] Dispatch complete: {Completed} succeeded, {Failed} failed",
+            worktreeName,
+            completed,
+            failed);
 
         return results;
     }
