@@ -119,7 +119,42 @@ else
 fi
 
 # =============================================================================
-# 4. Check for common mistakes
+# 4. Normalize CRLF to LF (auto-fix)
+# =============================================================================
+echo ""
+echo "🔍 Checking line endings..."
+
+CRLF_FIXED=0
+
+for file in $STAGED_FILES; do
+    if [ -f "$file" ]; then
+        # Skip binary files
+        case "$file" in
+            *.png|*.jpg|*.jpeg|*.gif|*.ico|*.woff|*.woff2|*.ttf|*.eot|*.pdf|*.zip|*.dll|*.exe|*.vsix)
+                continue
+                ;;
+        esac
+        
+        # Check if file has CRLF line endings
+        if git show ":$file" 2>/dev/null | grep -q $'\r'; then
+            echo "${YELLOW}⚠️  CRLF detected in $file - converting to LF${NC}"
+            # Convert CRLF to LF in working directory
+            sed -i 's/\r$//' "$file"
+            # Re-stage the fixed file
+            git add "$file"
+            CRLF_FIXED=1
+        fi
+    fi
+done
+
+if [ $CRLF_FIXED -eq 1 ]; then
+    echo "${GREEN}✅ Line endings normalized to LF and re-staged${NC}"
+else
+    echo "${GREEN}✅ Line endings OK${NC}"
+fi
+
+# =============================================================================
+# 5. Check for common mistakes
 # =============================================================================
 echo ""
 echo "🔍 Checking for common mistakes..."
@@ -168,7 +203,7 @@ fi
 echo "${GREEN}✅ No blocking mistakes found${NC}"
 
 # =============================================================================
-# 5. Quick build check (optional - only if explicitly enabled)
+# 6. Quick build check (optional - only if explicitly enabled)
 # =============================================================================
 if [ -n "$AURA_PRECOMMIT_BUILD" ]; then
     echo ""
