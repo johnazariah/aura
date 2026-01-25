@@ -195,9 +195,95 @@ begin
     Result := 'code';  // Fallback to PATH
 end;
 
-function InitializeSetup(): Boolean;
+function GetPreviousInstallPath(): String;
+var
+  InstallPath: String;
+begin
+  Result := '';
+  // Check registry for previous installation
+  if RegQueryStringValue(HKLM, 'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{#SetupSetting("AppId")}_is1',
+                         'InstallLocation', InstallPath) then
+    Result := InstallPath;
+end;
+
+function GetPreviousUninstallString(): String;
+var
+  UninstallString: String;
+begin
+  Result := '';
+  if RegQueryStringValue(HKLM, 'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{#SetupSetting("AppId")}_is1',
+                         'UninstallString', UninstallString) then
+    Result := UninstallString;
+end;
+
+procedure StopAuraServices();
+var
+  ResultCode: Integer;
+begin
+  // Stop the tray application gracefully
+  Exec('taskkill.exe', '/IM Aura.Tray.exe /F', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  
+  // Stop the AuraService Windows service
+  Exec('sc.exe', 'stop AuraService', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  
+  // Give services time to fully stop
+  Sleep(2000);
+end;
+
+function UninstallPreviousVersion(): Boolean;
+var
+  UninstallString: String;
+  ResultCode: Integer;
 begin
   Result := True;
+  UninstallString := GetPreviousUninstallString();
+  
+  if UninstallString <> '' then
+  begin
+    // Remove quotes if present
+    if (Length(UninstallString) > 0) and (UninstallString[1] = '"') then
+      UninstallString := RemoveQuotes(UninstallString);
+    
+    // Run uninstaller silently, keeping user data
+    // /VERYSILENT = no UI, /SUPPRESSMSGBOXES = no prompts
+    // We do NOT pass /NORESTART since we're about to install anyway
+    if not Exec(UninstallString, '/VERYSILENT /SUPPRESSMSGBOXES', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+    begin
+      // Uninstall failed, but we can try to continue
+      Log('Previous uninstall failed with code: ' + IntToStr(ResultCode));
+    end;
+    
+    // Wait for uninstaller to complete file operations
+    Sleep(1000);
+  end;
+end;
+
+function InitializeSetup(): Boolean;
+var
+  PrevInstall: String;
+begin
+  Result := True;
+  
+  // Check for previous installation and handle upgrade
+  PrevInstall := GetPreviousInstallPath();
+  if PrevInstall <> '' then
+  begin
+    if MsgBox('A previous version of Aura is installed at:' + #13#10 +
+              PrevInstall + #13#10 + #13#10 +
+              'The installer will stop running services and upgrade the installation.' + #13#10 +
+              'Your data and settings will be preserved.' + #13#10 + #13#10 +
+              'Continue with upgrade?', mbConfirmation, MB_YESNO) = IDNO then
+    begin
+      Result := False;
+      Exit;
+    end;
+    
+    // Stop services before uninstalling
+    StopAuraServices();
+    
+    // Uninstall the previous version
+    UninstallPreviousVersion();
+  end;
   
   // Check for port conflicts (unless our services are already using them)
   if not AuraDBServiceExists() then
@@ -249,4 +335,21 @@ begin
            'powershell -File "' + ExpandConstant('{app}') + '\scripts\install-extension.ps1"',
            mbInformation, MB_OK);
   end;
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  Result := '';
+  NeedsRestart := False;
+  
+  // Always stop services before copying files (handles upgrade case)
+  // This runs right before file operations begin
+  StopAuraServices();
+  
+  // Also delete the AuraService if it exists (we'll recreate it with correct settings)
+  // This ensures service account changes are applied on upgrade
+  Exec('sc.exe', 'delete AuraService', '', SW_HIDE, ewWaitUntilTerminated, 0);
+  
+  // Give Windows time to release file handles
+  Sleep(1000);
 end;
