@@ -1578,6 +1578,74 @@ export class WorkflowPanelProvider {
         .log-entry.error { color: var(--vscode-terminal-ansiBrightRed, #f14c4c); }
         .log-entry.done { color: var(--vscode-terminal-ansiBrightGreen, #4ec9b0); font-weight: bold; }
 
+        /* Step-level streaming output */
+        .step-streaming {
+            margin-top: 8px;
+            border: 1px solid var(--vscode-panel-border);
+            border-radius: 4px;
+            overflow: hidden;
+            animation: fadeIn 0.2s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .step-streaming-header {
+            background: var(--vscode-sideBarSectionHeader-background);
+            padding: 6px 10px;
+            font-size: 0.8em;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .step-streaming-header .spinner {
+            width: 12px;
+            height: 12px;
+            border: 2px solid var(--vscode-progressBar-background);
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .step-streaming-content {
+            padding: 8px 10px;
+            font-family: var(--vscode-editor-font-family, 'Consolas', monospace);
+            font-size: 11px;
+            max-height: 200px;
+            overflow-y: auto;
+            background: var(--vscode-terminal-background, var(--vscode-editor-background));
+        }
+        .step-streaming-line {
+            padding: 1px 0;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        .step-streaming-line.output { color: var(--vscode-terminal-foreground); }
+        .step-streaming-line.error { color: var(--vscode-terminal-ansiBrightRed); }
+        .step-streaming-line.success { color: var(--vscode-terminal-ansiBrightGreen); }
+        .step-streaming-line.info { color: var(--vscode-terminal-ansiCyan); }
+
+        /* Wave progress banner */
+        .wave-progress-banner {
+            background: linear-gradient(90deg, var(--vscode-progressBar-background) 0%, transparent 100%);
+            padding: 8px 12px;
+            margin-bottom: 12px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 600;
+        }
+        .wave-progress-banner .wave-indicator {
+            background: var(--vscode-badge-background);
+            color: var(--vscode-badge-foreground);
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.85em;
+        }
+
         /* Approve/reject buttons */
         .output-actions {
             display: flex;
@@ -3355,49 +3423,157 @@ export class WorkflowPanelProvider {
             
             switch (type) {
                 case 'Started':
-                    appendProgressLog('[' + ts + '] 🚀 Starting execution (' + event.totalWaves + ' waves)', 'info');
+                    appendProgressLog('🚀 Starting execution (' + event.totalWaves + ' waves)', 'info');
                     break;
                 case 'WaveStarted':
-                    appendProgressLog('[' + ts + '] ━━━ Wave ' + event.wave + '/' + event.totalWaves + ' ━━━', 'wave');
+                    showWaveBanner(event.wave, event.totalWaves);
+                    appendProgressLog('━━━ Wave ' + event.wave + '/' + event.totalWaves + ' ━━━', 'wave');
                     break;
                 case 'StepStarted':
-                    appendProgressLog('[' + ts + '] ▶ Starting: ' + event.stepName, 'step-start');
+                    updateStepStatus(event.stepId, 'running', '▶ Executing...');
+                    showStepStreaming(event.stepId, event.stepName);
+                    appendProgressLog('▶ ' + event.stepName, 'step-start');
                     break;
                 case 'StepOutput':
-                    if (event.output) {
-                        appendProgressLog('   ' + event.output, 'info');
+                    if (event.output && event.stepId) {
+                        appendStepOutput(event.stepId, event.output, 'output');
                     }
                     break;
                 case 'StepCompleted':
-                    appendProgressLog('[' + ts + '] ✓ Completed: ' + event.stepName, 'step-complete');
+                    updateStepStatus(event.stepId, 'completed', '✓ Completed');
+                    appendStepOutput(event.stepId, '✓ ' + (event.output || 'Task completed successfully'), 'success');
+                    finalizeStepStreaming(event.stepId, true);
+                    appendProgressLog('✓ ' + event.stepName, 'step-complete');
                     break;
                 case 'StepFailed':
-                    appendProgressLog('[' + ts + '] ✗ Failed: ' + event.stepName + (event.error ? ' - ' + event.error : ''), 'step-fail');
+                    updateStepStatus(event.stepId, 'failed', '✗ Failed');
+                    appendStepOutput(event.stepId, '✗ Error: ' + (event.error || 'Unknown error'), 'error');
+                    finalizeStepStreaming(event.stepId, false);
+                    appendProgressLog('✗ ' + event.stepName + ': ' + (event.error || 'Failed'), 'step-fail');
                     break;
                 case 'WaveCompleted':
-                    appendProgressLog('[' + ts + '] ━━━ Wave ' + event.wave + ' done (' + event.output + ') ━━━', 'wave');
+                    hideWaveBanner();
+                    appendProgressLog('━━━ Wave ' + event.wave + ' complete ━━━', 'wave');
                     break;
                 case 'GateStarted':
-                    appendProgressLog('[' + ts + '] 🔨 Running quality gate...', 'gate');
+                    appendProgressLog('🔨 Running quality gate...', 'gate');
                     break;
                 case 'GatePassed':
-                    appendProgressLog('[' + ts + '] ✓ Quality gate passed', 'step-complete');
+                    appendProgressLog('✓ Quality gate passed', 'step-complete');
                     break;
                 case 'GateFailed':
-                    appendProgressLog('[' + ts + '] ✗ Quality gate failed: ' + (event.error || 'See errors below'), 'step-fail');
+                    appendProgressLog('✗ Quality gate failed', 'step-fail');
                     if (event.gateResult && event.gateResult.buildOutput) {
-                        appendProgressLog('   Build output: ' + event.gateResult.buildOutput, 'error');
+                        appendProgressLog('   ' + event.gateResult.buildOutput, 'error');
                     }
                     break;
                 case 'Completed':
-                    appendProgressLog('[' + ts + '] 🎉 All waves completed successfully!', 'done');
+                    appendProgressLog('🎉 All waves completed!', 'done');
+                    hideWaveBanner();
+                    setTimeout(() => vscode.postMessage({ type: 'refresh' }), 1000);
                     break;
                 case 'Failed':
-                    appendProgressLog('[' + ts + '] ❌ Execution failed: ' + event.error, 'error');
+                    appendProgressLog('❌ ' + event.error, 'error');
+                    hideWaveBanner();
                     break;
                 case 'Cancelled':
-                    appendProgressLog('[' + ts + '] ⏹ Execution cancelled', 'info');
+                    appendProgressLog('⏹ Execution cancelled', 'info');
+                    hideWaveBanner();
                     break;
+            }
+        }
+
+        function showWaveBanner(wave, totalWaves) {
+            let banner = document.getElementById('waveBanner');
+            if (!banner) {
+                banner = document.createElement('div');
+                banner.id = 'waveBanner';
+                banner.className = 'wave-progress-banner';
+                const stepsSection = document.querySelector('.section');
+                if (stepsSection) {
+                    stepsSection.insertBefore(banner, stepsSection.firstChild);
+                }
+            }
+            banner.innerHTML = '<div class="spinner" style="width:14px;height:14px;border:2px solid var(--vscode-progressBar-background);border-top-color:transparent;border-radius:50%;animation:spin 0.8s linear infinite;"></div> Executing <span class="wave-indicator">Wave ' + wave + '/' + totalWaves + '</span>';
+            banner.style.display = 'flex';
+        }
+
+        function hideWaveBanner() {
+            const banner = document.getElementById('waveBanner');
+            if (banner) banner.style.display = 'none';
+        }
+
+        function updateStepStatus(stepId, status, label) {
+            const stepCard = document.querySelector('[data-step-id="' + stepId + '"]');
+            if (!stepCard) return;
+            
+            // Remove old status classes and add new one
+            stepCard.classList.remove('pending', 'running', 'completed', 'failed');
+            stepCard.classList.add(status);
+            
+            // Update status icon
+            const statusEl = stepCard.querySelector('.step-status');
+            if (statusEl) {
+                const icons = { 'running': '◐', 'completed': '✓', 'failed': '✗', 'pending': '○' };
+                statusEl.textContent = icons[status] || '○';
+            }
+            
+            // Add/update progress bar for running steps
+            if (status === 'running') {
+                if (!stepCard.querySelector('.step-progress')) {
+                    const header = stepCard.querySelector('.step-header');
+                    if (header) {
+                        const progress = document.createElement('div');
+                        progress.className = 'step-progress';
+                        progress.innerHTML = '<div class="progress-bar"></div>';
+                        header.after(progress);
+                    }
+                }
+            } else {
+                const progress = stepCard.querySelector('.step-progress');
+                if (progress) progress.remove();
+            }
+        }
+
+        function showStepStreaming(stepId, stepName) {
+            const stepCard = document.querySelector('[data-step-id="' + stepId + '"]');
+            if (!stepCard) return;
+            
+            // Remove existing streaming section if any
+            const existing = stepCard.querySelector('.step-streaming');
+            if (existing) existing.remove();
+            
+            // Create streaming output section
+            const streaming = document.createElement('div');
+            streaming.className = 'step-streaming';
+            streaming.id = 'streaming-' + stepId;
+            streaming.innerHTML = '<div class="step-streaming-header"><div class="spinner"></div>Executing...</div><div class="step-streaming-content" id="streaming-content-' + stepId + '"></div>';
+            
+            // Insert after the header (and progress bar if present)
+            const header = stepCard.querySelector('.step-header');
+            const progress = stepCard.querySelector('.step-progress');
+            (progress || header).after(streaming);
+        }
+
+        function appendStepOutput(stepId, text, type) {
+            const content = document.getElementById('streaming-content-' + stepId);
+            if (!content) return;
+            
+            const line = document.createElement('div');
+            line.className = 'step-streaming-line ' + (type || 'output');
+            line.textContent = text;
+            content.appendChild(line);
+            content.scrollTop = content.scrollHeight;
+        }
+
+        function finalizeStepStreaming(stepId, success) {
+            const streaming = document.getElementById('streaming-' + stepId);
+            if (!streaming) return;
+            
+            const header = streaming.querySelector('.step-streaming-header');
+            if (header) {
+                header.innerHTML = success ? '✓ Completed' : '✗ Failed';
+                header.style.color = success ? 'var(--vscode-terminal-ansiBrightGreen)' : 'var(--vscode-terminal-ansiBrightRed)';
             }
         }
     </script>

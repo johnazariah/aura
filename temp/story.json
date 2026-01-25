@@ -1,0 +1,6 @@
+{
+  "title": "Add greeting to health endpoint",
+  "description": "Add a greeting field to the /health response",
+  "repositoryPath": "c:\\work\\aura",
+  "dispatchTarget": "InternalAgents"
+}
