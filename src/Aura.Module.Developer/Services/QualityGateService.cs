@@ -55,10 +55,18 @@ public sealed partial class QualityGateService : IQualityGateService
         if (command.Contains("dotnet", StringComparison.OrdinalIgnoreCase))
         {
             _logger.LogInformation("[{WorktreeName}] Running restore before build...", worktreeName);
+
+            // Use a shared package cache accessible to the service (LocalSystem doesn't have user cache)
+            var sharedPackagesPath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+                "Aura",
+                "nuget-packages");
+            Directory.CreateDirectory(sharedPackagesPath);
+
             // Don't use --source flag as it interferes with SDK workload resolution (e.g., Aspire SDK)
             var restoreResult = await RunCommandAsync(
                 command,
-                "restore",
+                $"restore --packages \"{sharedPackagesPath}\"",
                 worktreePath,
                 ct);
 
