@@ -5,6 +5,7 @@
 namespace Aura.Api.Endpoints;
 
 using System.Text;
+using System.Text.Json;
 using Aura.Api.Contracts;
 using Aura.Api.Problems;
 using Aura.Foundation.Git;
@@ -149,14 +150,14 @@ public static class DeveloperEndpoints
                 id = w.Id,
                 title = w.Title,
                 description = w.Description,
-                status = w.Status.ToString(),
+                status = GetEffectiveStatus(w),
                 gitBranch = w.GitBranch,
                 repositoryPath = w.RepositoryPath,
                 worktreePath = w.WorktreePath,
                 issueUrl = w.IssueUrl,
                 issueNumber = w.IssueNumber,
-                stepCount = w.Steps.Count,
-                completedSteps = w.Steps.Count(s => s.Status == StepStatus.Completed),
+                currentWave = w.CurrentWave,
+                waveCount = GetWaveCount(w),
                 createdAt = w.CreatedAt,
                 updatedAt = w.UpdatedAt
             })
@@ -175,12 +176,16 @@ public static class DeveloperEndpoints
             return Problem.StoryNotFound(id, context);
         }
 
+        var tasks = ParseTasks(story);
+        var waveCount = GetWaveCount(story);
+
         return Results.Ok(new
         {
             id = story.Id,
             title = story.Title,
             description = story.Description,
-            status = story.Status.ToString(),
+            // Use effective status: orchestrator status if decomposed, legacy status otherwise
+            status = GetEffectiveStatus(story),
             automationMode = story.AutomationMode.ToString(),
             dispatchTarget = story.DispatchTarget.ToString(),
             gitBranch = story.GitBranch,
@@ -193,9 +198,13 @@ public static class DeveloperEndpoints
             issueRepo = story.IssueRepo,
             analyzedContext = story.AnalyzedContext,
             executionPlan = story.ExecutionPlan,
-            orchestratorStatus = story.OrchestratorStatus.ToString(),
+            // Wave-based execution state
             currentWave = story.CurrentWave,
+            waveCount,
             maxParallelism = story.MaxParallelism,
+            // Tasks from decomposition (parallel execution model)
+            tasks,
+            // Legacy steps (sequential execution model) - deprecated
             steps = story.Steps.OrderBy(s => s.Order).Select(s => new
             {
                 id = s.Id,
@@ -1238,6 +1247,83 @@ public static class DeveloperEndpoints
         catch (HttpRequestException ex)
         {
             return Problem.GitHubError($"Failed to close issue: {ex.Message}", context);
+        }
+    }
+
+    /// <summary>
+    /// Gets the effective status of a story.
+    /// If decomposed (has tasks), returns OrchestratorStatus; otherwise returns legacy Status.
+    /// </summary>
+    private static string GetEffectiveStatus(Story story)
+    {
+        // If story has been decomposed into tasks, use orchestrator status
+        if (!string.IsNullOrEmpty(story.TasksJson))
+        {
+            return story.OrchestratorStatus.ToString();
+        }
+
+        // Otherwise use legacy step-based status
+        return story.Status.ToString();
+    }
+
+    /// <summary>
+    /// Parses the tasks JSON from a story into a list of task DTOs.
+    /// </summary>
+    private static List<object>? ParseTasks(Story story)
+    {
+        if (string.IsNullOrEmpty(story.TasksJson))
+        {
+            return null;
+        }
+
+        try
+        {
+            var tasks = JsonSerializer.Deserialize<List<StoryTask>>(story.TasksJson, new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true,
+            });
+
+            return tasks?.Select(t => (object)new
+            {
+                id = t.Id,
+                title = t.Title,
+                description = t.Description,
+                wave = t.Wave,
+                dependsOn = t.DependsOn,
+                status = t.Status.ToString(),
+                output = t.Output,
+                error = t.Error,
+                startedAt = t.StartedAt,
+                completedAt = t.CompletedAt,
+            }).ToList();
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Gets the wave count from tasks.
+    /// </summary>
+    private static int GetWaveCount(Story story)
+    {
+        if (string.IsNullOrEmpty(story.TasksJson))
+        {
+            return 0;
+        }
+
+        try
+        {
+            var tasks = JsonSerializer.Deserialize<List<StoryTask>>(story.TasksJson, new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true,
+            });
+            return tasks?.Max(t => t.Wave) ?? 0;
+        }
+        catch
+        {
+            return 0;
         }
     }
 }
