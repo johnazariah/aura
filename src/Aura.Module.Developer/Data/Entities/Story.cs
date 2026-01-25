@@ -107,22 +107,30 @@ public sealed class Story
     /// <summary>Gets or sets the verification result as JSON.</summary>
     public string? VerificationResult { get; set; }
 
-    // === Orchestration (Parallel Dispatch) ===
-
-    /// <summary>Gets or sets the decomposed tasks as JSON array of StoryTask.</summary>
-    public string? TasksJson { get; set; }
-
-    /// <summary>Gets or sets the orchestrator execution status.</summary>
-    public OrchestratorStatus OrchestratorStatus { get; set; } = OrchestratorStatus.NotDecomposed;
+    // === Orchestration (Wave Execution) ===
 
     /// <summary>Gets or sets the current execution wave (0 = not started, 1+ = running wave N).</summary>
     public int CurrentWave { get; set; }
+
+    /// <summary>Gets or sets the gate mode (how to pause at quality gates).</summary>
+    public GateMode GateMode { get; set; } = GateMode.AutoProceed;
+
+    /// <summary>Gets or sets the last gate result as JSON (type, passed, errors).</summary>
+    public string? GateResult { get; set; }
 
     /// <summary>Gets or sets the maximum number of parallel agents to use.</summary>
     public int MaxParallelism { get; set; } = 4;
 
     /// <summary>Gets or sets the dispatch target for task execution.</summary>
     public DispatchTarget DispatchTarget { get; set; } = DispatchTarget.CopilotCli;
+
+    // === Legacy Orchestration (to be removed after migration to Steps with Wave) ===
+
+    /// <summary>Gets or sets the decomposed tasks as JSON array. Will be replaced by Steps with Wave.</summary>
+    public string? TasksJson { get; set; }
+
+    /// <summary>Gets or sets the legacy orchestrator status. Will be unified with Status.</summary>
+    public OrchestratorStatus OrchestratorStatus { get; set; } = OrchestratorStatus.NotDecomposed;
 }
 
 /// <summary>
@@ -217,6 +225,12 @@ public enum StoryStatus
     /// <summary>Steps being executed.</summary>
     Executing,
 
+    /// <summary>Build/test gate is running between waves.</summary>
+    GatePending,
+
+    /// <summary>Gate failed, waiting for user action (fix wave or cancel).</summary>
+    GateFailed,
+
     /// <summary>All steps completed successfully.</summary>
     Completed,
 
@@ -228,7 +242,37 @@ public enum StoryStatus
 }
 
 /// <summary>
-/// The orchestrator status for parallel task dispatch.
+/// Controls how the orchestrator pauses at quality gates.
+/// </summary>
+public enum GateMode
+{
+    /// <summary>Auto-proceed when gate passes, only pause on failure.</summary>
+    AutoProceed,
+
+    /// <summary>Pause at every gate for human validation.</summary>
+    PauseAlways,
+}
+
+/// <summary>
+/// The dispatch target for parallel task execution.
+/// </summary>
+public enum DispatchTarget
+{
+    /// <summary>
+    /// Use GitHub Copilot CLI agents (spawns external process).
+    /// Leverages Claude via Copilot with access to Aura MCP tools.
+    /// </summary>
+    CopilotCli,
+
+    /// <summary>
+    /// Use Aura's internal ReAct agents (in-process).
+    /// Uses configured LLM provider with Aura's tool registry.
+    /// </summary>
+    InternalAgents,
+}
+
+/// <summary>
+/// Legacy orchestrator status. Will be unified with StoryStatus.
 /// </summary>
 public enum OrchestratorStatus
 {
@@ -249,21 +293,4 @@ public enum OrchestratorStatus
 
     /// <summary>Unrecoverable failure occurred.</summary>
     Failed,
-}
-/// <summary>
-/// The dispatch target for parallel task execution.
-/// </summary>
-public enum DispatchTarget
-{
-    /// <summary>
-    /// Use GitHub Copilot CLI agents (spawns external process).
-    /// Leverages Claude via Copilot with access to Aura MCP tools.
-    /// </summary>
-    CopilotCli,
-
-    /// <summary>
-    /// Use Aura's internal ReAct agents (in-process).
-    /// Uses configured LLM provider with Aura's tool registry.
-    /// </summary>
-    InternalAgents,
 }

@@ -202,13 +202,16 @@ public static class DeveloperEndpoints
             currentWave = story.CurrentWave,
             waveCount,
             maxParallelism = story.MaxParallelism,
+            gateMode = story.GateMode.ToString(),
+            gateResult = story.GateResult,
             // Tasks from decomposition (parallel execution model)
             tasks,
-            // Legacy steps (sequential execution model) - deprecated
-            steps = story.Steps.OrderBy(s => s.Order).Select(s => new
+            // Steps - now include wave for parallel execution
+            steps = story.Steps.OrderBy(s => s.Wave).ThenBy(s => s.Order).Select(s => new
             {
                 id = s.Id,
                 order = s.Order,
+                wave = s.Wave,
                 name = s.Name,
                 capability = s.Capability,
                 language = s.Language,
@@ -1252,17 +1255,29 @@ public static class DeveloperEndpoints
 
     /// <summary>
     /// Gets the effective status of a story.
-    /// If decomposed (has tasks), returns OrchestratorStatus; otherwise returns legacy Status.
+    /// If decomposed (has tasks), returns OrchestratorStatus; otherwise returns Story.Status.
+    /// Also maps new StoryStatus values (GatePending, GateFailed) to meaningful strings.
     /// </summary>
     private static string GetEffectiveStatus(Story story)
     {
+        // Check for new gate statuses first (they're in StoryStatus)
+        if (story.Status == StoryStatus.GatePending)
+        {
+            return "GatePending";
+        }
+
+        if (story.Status == StoryStatus.GateFailed)
+        {
+            return "GateFailed";
+        }
+
         // If story has been decomposed into tasks, use orchestrator status
         if (!string.IsNullOrEmpty(story.TasksJson))
         {
             return story.OrchestratorStatus.ToString();
         }
 
-        // Otherwise use legacy step-based status
+        // Otherwise use step-based status
         return story.Status.ToString();
     }
 
@@ -1304,13 +1319,24 @@ public static class DeveloperEndpoints
     }
 
     /// <summary>
-    /// Gets the wave count from tasks.
+    /// Gets the wave count from steps or tasks.
     /// </summary>
     private static int GetWaveCount(Story story)
     {
+        // First check if steps have wave assignments (new model)
+        if (story.Steps.Count > 0)
+        {
+            var maxWave = story.Steps.Max(s => s.Wave);
+            if (maxWave > 0)
+            {
+                return maxWave;
+            }
+        }
+
+        // Fall back to TasksJson (legacy model)
         if (string.IsNullOrEmpty(story.TasksJson))
         {
-            return 0;
+            return story.Steps.Count > 0 ? 1 : 0; // Sequential steps = 1 wave
         }
 
         try

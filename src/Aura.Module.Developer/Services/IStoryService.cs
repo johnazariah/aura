@@ -415,7 +415,7 @@ public record StoryRunResult
     /// <summary>Gets the story ID.</summary>
     public required Guid StoryId { get; init; }
 
-    /// <summary>Gets the orchestrator status.</summary>
+    /// <summary>Gets the orchestrator status after this run.</summary>
     public required OrchestratorStatus Status { get; init; }
 
     /// <summary>Gets the current wave being executed.</summary>
