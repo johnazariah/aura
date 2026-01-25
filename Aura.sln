@@ -25,6 +25,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Aura.Api.IntegrationTests",
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Aura.Module.Developer.Tests", "tests\Aura.Module.Developer.Tests\Aura.Module.Developer.Tests.csproj", "{9E5A7509-BDEC-4291-8F91-D30B806A0BD8}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Aura.Api.Tests", "tests\Aura.Api.Tests\Aura.Api.Tests.csproj", "{D7DA832F-0DD4-472C-946A-E833E06B45F1}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -143,6 +145,18 @@ Global
 		{9E5A7509-BDEC-4291-8F91-D30B806A0BD8}.Release|x64.Build.0 = Release|Any CPU
 		{9E5A7509-BDEC-4291-8F91-D30B806A0BD8}.Release|x86.ActiveCfg = Release|Any CPU
 		{9E5A7509-BDEC-4291-8F91-D30B806A0BD8}.Release|x86.Build.0 = Release|Any CPU
+		{D7DA832F-0DD4-472C-946A-E833E06B45F1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D7DA832F-0DD4-472C-946A-E833E06B45F1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D7DA832F-0DD4-472C-946A-E833E06B45F1}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{D7DA832F-0DD4-472C-946A-E833E06B45F1}.Debug|x64.Build.0 = Debug|Any CPU
+		{D7DA832F-0DD4-472C-946A-E833E06B45F1}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{D7DA832F-0DD4-472C-946A-E833E06B45F1}.Debug|x86.Build.0 = Debug|Any CPU
+		{D7DA832F-0DD4-472C-946A-E833E06B45F1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D7DA832F-0DD4-472C-946A-E833E06B45F1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D7DA832F-0DD4-472C-946A-E833E06B45F1}.Release|x64.ActiveCfg = Release|Any CPU
+		{D7DA832F-0DD4-472C-946A-E833E06B45F1}.Release|x64.Build.0 = Release|Any CPU
+		{D7DA832F-0DD4-472C-946A-E833E06B45F1}.Release|x86.ActiveCfg = Release|Any CPU
+		{D7DA832F-0DD4-472C-946A-E833E06B45F1}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -157,5 +171,6 @@ Global
 		{BAE57772-ED47-4E52-8372-FB16DA9D89DC} = {A1B2C3D4-E5F6-A7B8-C9D0-E1F2A3B4C5D6}
 		{DD168CEA-09AB-40BC-B809-E9F294218C78} = {B2C3D4E5-F6A7-B8C9-D0E1-F2A3B4C5D6E7}
 		{9E5A7509-BDEC-4291-8F91-D30B806A0BD8} = {B2C3D4E5-F6A7-B8C9-D0E1-F2A3B4C5D6E7}
+		{D7DA832F-0DD4-472C-946A-E833E06B45F1} = {B2C3D4E5-F6A7-B8C9-D0E1-F2A3B4C5D6E7}
 	EndGlobalSection
 EndGlobal
