@@ -184,6 +184,23 @@ Load step-by-step playbooks for complex tasks.
 → Returns step-by-step procedure for domain renames
 ```
 
+### Documentation Search (`aura_docs`)
+
+Search Aura's indexed documentation using semantic search.
+
+**Purpose:**
+- Self-service help for configuration, troubleshooting, best practices
+- Find examples and usage patterns
+- Understand Aura capabilities without asking the user
+
+**Example:**
+```
+"How do I configure OpenAI GPT-4?"
+→ Returns relevant docs about LLM configuration
+```
+
+**Details:** See [aura_docs reference](../mcp-tools/aura_docs.md) for complete documentation with JSON-RPC examples.
+
 ## Best Practices
 
 ### Use Semantic Tools First
