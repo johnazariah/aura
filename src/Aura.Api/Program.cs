@@ -21,11 +21,27 @@ builder.Host.UseWindowsService(options =>
 });
 
 // Configure Serilog for file logging
-var logPath = Path.Combine(
-    Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-    "Aura", "logs", "aura-.log");
-var logDir = Path.GetDirectoryName(logPath);
-if (!string.IsNullOrEmpty(logDir) && !Directory.Exists(logDir))
+// Use platform-appropriate log directory:
+// - Windows: C:\ProgramData\Aura\logs
+// - macOS/Linux: ~/.local/share/Aura/logs (or $AURA_LOG_DIR if set)
+string logDir;
+if (OperatingSystem.IsWindows())
+{
+    logDir = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+        "Aura", "logs");
+}
+else
+{
+    // On macOS/Linux, prefer XDG_DATA_HOME or fall back to ~/.local/share
+    var dataHome = Environment.GetEnvironmentVariable("XDG_DATA_HOME")
+        ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "share");
+    logDir = Environment.GetEnvironmentVariable("AURA_LOG_DIR")
+        ?? Path.Combine(dataHome, "Aura", "logs");
+}
+
+var logPath = Path.Combine(logDir, "aura-.log");
+if (!Directory.Exists(logDir))
 {
     Directory.CreateDirectory(logDir);
 }
