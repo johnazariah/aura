@@ -9,6 +9,7 @@ using System.Text.Json;
 using Aura.Foundation.Guardians;
 using Aura.Module.Developer.Data.Entities;
 using Aura.Module.Developer.Services;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 /// <summary>
@@ -16,22 +17,22 @@ using Microsoft.Extensions.Logging;
 /// </summary>
 public sealed class GuardianExecutor : IGuardianExecutor
 {
-    private readonly IStoryService _workflowService;
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<GuardianExecutor> _logger;
     private readonly TimeProvider _timeProvider;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="GuardianExecutor"/> class.
     /// </summary>
-    /// <param name="workflowService">Workflow service for creating workflows.</param>
+    /// <param name="scopeFactory">Service scope factory for resolving scoped services.</param>
     /// <param name="logger">Logger instance.</param>
     /// <param name="timeProvider">Time provider for testability.</param>
     public GuardianExecutor(
-        IStoryService workflowService,
+        IServiceScopeFactory scopeFactory,
         ILogger<GuardianExecutor> logger,
         TimeProvider? timeProvider = null)
     {
-        _workflowService = workflowService;
+        _scopeFactory = scopeFactory;
         _logger = logger;
         _timeProvider = timeProvider ?? TimeProvider.System;
     }
@@ -209,7 +210,11 @@ public sealed class GuardianExecutor : IGuardianExecutor
                 detectedAt = _timeProvider.GetUtcNow(),
             });
 
-            var workflow = await _workflowService.CreateFromGuardianAsync(
+            // Use a scope to resolve the scoped IStoryService
+            await using var scope = _scopeFactory.CreateAsyncScope();
+            var workflowService = scope.ServiceProvider.GetRequiredService<IStoryService>();
+
+            var workflow = await workflowService.CreateFromGuardianAsync(
                 new GuardianWorkflowRequest
                 {
                     Title = title,

@@ -4,6 +4,7 @@ using Aura.Foundation.Guardians;
 using Aura.Module.Developer.Guardians;
 using Aura.Module.Developer.Services;
 using FluentAssertions;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
@@ -15,6 +16,7 @@ namespace Aura.Module.Developer.Tests.Guardians;
 public class GuardianExecutorTests
 {
     private readonly IStoryService _workflowService;
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly FakeTimeProvider _timeProvider;
     private readonly GuardianExecutor _sut;
 
@@ -22,8 +24,17 @@ public class GuardianExecutorTests
     {
         _workflowService = Substitute.For<IStoryService>();
         _timeProvider = new FakeTimeProvider(DateTimeOffset.UtcNow);
+
+        // Create a mock scope factory that returns the workflow service
+        var scope = Substitute.For<IServiceScope>();
+        var serviceProvider = Substitute.For<IServiceProvider>();
+        serviceProvider.GetService(typeof(IStoryService)).Returns(_workflowService);
+        scope.ServiceProvider.Returns(serviceProvider);
+        _scopeFactory = Substitute.For<IServiceScopeFactory>();
+        _scopeFactory.CreateScope().Returns(scope);
+
         _sut = new GuardianExecutor(
-            _workflowService,
+            _scopeFactory,
             NullLogger<GuardianExecutor>.Instance,
             _timeProvider);
     }
@@ -183,10 +194,16 @@ public class GuardianExecutorTests
     {
         // Arrange
         var guardian = new GuardianDefinition { Id = "test-id", Name = "test-name" };
-        var _workflowService = Substitute.For<IStoryService>();
-        var _logger = Substitute.For<ILogger<GuardianExecutor>>();
-        var _timeProvider = Substitute.For<TimeProvider?>();
-        var sut = new GuardianExecutor(_workflowService, _logger, _timeProvider);
+        var workflowService = Substitute.For<IStoryService>();
+
+        var scope = Substitute.For<IServiceScope>();
+        var serviceProvider = Substitute.For<IServiceProvider>();
+        serviceProvider.GetService(typeof(IStoryService)).Returns(workflowService);
+        scope.ServiceProvider.Returns(serviceProvider);
+        var scopeFactory = Substitute.For<IServiceScopeFactory>();
+        scopeFactory.CreateScope().Returns(scope);
+
+        var sut = new GuardianExecutor(scopeFactory, NullLogger<GuardianExecutor>.Instance, null);
 
         // Act
         var result = await sut.ExecuteAsync(guardian, CancellationToken.None);
@@ -200,10 +217,16 @@ public class GuardianExecutorTests
     {
         // Arrange
         var guardian = new GuardianDefinition { Id = "test-id", Name = "test-name" };
-        var _workflowService = Substitute.For<IStoryService>();
-        var _logger = Substitute.For<ILogger<GuardianExecutor>>();
-        var _timeProvider = Substitute.For<TimeProvider?>();
-        var sut = new GuardianExecutor(_workflowService, _logger, _timeProvider);
+        var workflowService = Substitute.For<IStoryService>();
+
+        var scope = Substitute.For<IServiceScope>();
+        var serviceProvider = Substitute.For<IServiceProvider>();
+        serviceProvider.GetService(typeof(IStoryService)).Returns(workflowService);
+        scope.ServiceProvider.Returns(serviceProvider);
+        var scopeFactory = Substitute.For<IServiceScopeFactory>();
+        scopeFactory.CreateScope().Returns(scope);
+
+        var sut = new GuardianExecutor(scopeFactory, NullLogger<GuardianExecutor>.Instance, null);
 
         // Act
         var result = await sut.ExecuteAsync(guardian, CancellationToken.None);
