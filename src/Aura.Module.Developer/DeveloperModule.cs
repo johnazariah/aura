@@ -133,6 +133,11 @@ public sealed class DeveloperModule : IAuraModule
         // Register dotnet tools
         services.AddSingleton<RunTestsTool>();
 
+        // Register Aura tools (wrappers for Roslyn refactoring/generation)
+        services.AddSingleton<AuraRefactorTool>();
+        services.AddSingleton<AuraGenerateTool>();
+        services.AddSingleton<AuraValidateTool>();
+
         // Register Graph RAG tools (need scoped due to DbContext dependency)
         services.AddScoped<IndexCodeGraphTool>();
         services.AddScoped<FindImplementationsTool>();
@@ -185,6 +190,16 @@ public sealed class DeveloperModule : IAuraModule
         // Dotnet tools
         var runTests = services.GetRequiredService<RunTestsTool>();
         toolRegistry.RegisterTool<RunTestsInput, RunTestsOutput>(runTests);
+
+        // Aura tools (Roslyn refactoring and code generation)
+        var auraRefactor = services.GetRequiredService<AuraRefactorTool>();
+        toolRegistry.RegisterTool<AuraRefactorInput, AuraRefactorOutput>(auraRefactor);
+
+        var auraGenerate = services.GetRequiredService<AuraGenerateTool>();
+        toolRegistry.RegisterTool<AuraGenerateInput, AuraGenerateOutput>(auraGenerate);
+
+        var auraValidate = services.GetRequiredService<AuraValidateTool>();
+        toolRegistry.RegisterTool<AuraValidateInput, AuraValidateOutput>(auraValidate);
 
         // Graph RAG tools (code graph queries)
         var indexCodeGraph = services.GetRequiredService<IndexCodeGraphTool>();

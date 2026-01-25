@@ -9,7 +9,11 @@ tools:
   - file.modify
   - file.list
   - file.exists
-  # Roslyn semantic tools (C# - prefer these over file.modify for C# code)
+  # Aura semantic tools (C# refactoring and generation - prefer these)
+  - aura.refactor      # rename, change_signature, extract_interface, safe_delete, move_type_to_file
+  - aura.generate      # tests, create_type, implement_interface, constructor, property, method
+  - aura.validate      # get compilation/test commands
+  # Roslyn semantic tools (C# - code analysis)
   - roslyn.list_projects
   - roslyn.list_classes
   - roslyn.get_class_info
@@ -65,28 +69,51 @@ Issue: {{issueTitle}}
 
 ### Tool Selection: Use Semantic Tools for C#
 
-For **C# projects**, prefer Roslyn semantic tools over basic file manipulation:
+For **C# projects**, prefer Aura and Roslyn semantic tools over basic file manipulation:
 
 | Task | Use This | NOT This |
 |------|----------|----------|
+| Rename symbol | `aura.refactor(operation: "rename")` | Find/replace across files |
+| Add method to class | `aura.generate(operation: "method")` | `file.modify` |
+| Add property to class | `aura.generate(operation: "property")` | `file.modify` |
+| Create new C# type | `aura.generate(operation: "create_type")` | `file.write` |
+| Generate tests | `aura.generate(operation: "tests")` | Manual test writing |
+| Implement interface | `aura.generate(operation: "implement_interface")` | Manual stubs |
+| Extract interface | `aura.refactor(operation: "extract_interface")` | Copy/paste |
 | Understand a class | `roslyn.get_class_info` | `file.read` + manual parsing |
 | Find all usages | `roslyn.find_usages` | `grep` patterns |
 | List classes in project | `roslyn.list_classes` | `file.list` + guessing |
 | Find implementations | `graph.find_implementations` | searching files |
 | Validate code compiles | `code.validate` | `shell.execute dotnet build` |
 
+**Aura Refactor Operations:**
+- `rename` - Rename symbols with blast radius analysis (defaults to analyze mode)
+- `change_signature` - Add/remove parameters from methods
+- `extract_interface` - Extract interface from class
+- `safe_delete` - Safely delete unused symbols
+- `move_type_to_file` - Move type to its own file
+
+**Aura Generate Operations:**
+- `tests` - Generate test scaffolding with framework detection
+- `create_type` - Create new class/record/struct/interface
+- `implement_interface` - Implement interface methods
+- `constructor` - Generate constructor
+- `property` - Add property to class
+- `method` - Add method to class
+
 **When creating new C# files:**
-1. Use `roslyn.list_classes` to see existing patterns in the namespace
-2. Look at similar files with `roslyn.get_class_info` to match conventions
-3. Create the file with `file.write` using proper namespace and XML docs
+1. Prefer `aura.generate(operation: "create_type")` for new classes/records/interfaces
+2. Use `roslyn.list_classes` to see existing patterns in the namespace
+3. Look at similar files with `roslyn.get_class_info` to match conventions
 4. Validate with `code.validate` before finishing
 
 **When writing tests:**
-1. Use `roslyn.get_class_info` to understand the class under test
-2. Include ALL required `using` statements (check existing test files for patterns)
-3. Use `file.write` to create the test file
-4. Run `dotnet.run_tests` or `code.validate` to verify tests compile
-5. **For complex test scenarios, load the pattern:** `pattern.load(name: "generate-tests", language: "csharp")`
+1. Prefer `aura.generate(operation: "tests", target: "ClassName", analyzeOnly: true)` to analyze testability
+2. Then `aura.generate(operation: "tests", target: "ClassName")` to generate tests
+3. For manual tests, use `roslyn.get_class_info` to understand the class under test
+4. Include ALL required `using` statements (check existing test files for patterns)
+5. Run `dotnet.run_tests` or `code.validate` to verify tests compile
+6. **For complex test scenarios, load the pattern:** `pattern.load(name: "generate-tests", language: "csharp")`
 
 ### Using Patterns for Complex Tasks
 
