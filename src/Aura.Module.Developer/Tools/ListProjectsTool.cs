@@ -16,6 +16,9 @@ public record ListProjectsInput
     /// <summary>Directory to search for projects (defaults to working directory)</summary>
     public string? Directory { get; init; }
 
+    /// <summary>Working directory (injected by framework, do not set manually)</summary>
+    public string? WorkingDirectory { get; init; }
+
     /// <summary>Whether to include detailed dependency information</summary>
     public bool IncludeDependencies { get; init; }
 }
@@ -93,7 +96,9 @@ public class ListProjectsTool(
         ListProjectsInput input,
         CancellationToken ct = default)
     {
-        var directory = input.Directory ?? Environment.CurrentDirectory;
+        // Use explicit Directory if provided, otherwise fall back to injected WorkingDirectory,
+        // then Environment.CurrentDirectory as last resort (warning: may be System32 when running as service)
+        var directory = input.Directory ?? input.WorkingDirectory ?? Environment.CurrentDirectory;
 
         if (!Directory.Exists(directory))
         {

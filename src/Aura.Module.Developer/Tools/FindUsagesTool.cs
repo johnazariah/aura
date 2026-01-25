@@ -24,6 +24,9 @@ public record FindUsagesInput
     /// <summary>Optional: project to search in (searches all if not specified)</summary>
     public string? ProjectName { get; init; }
 
+    /// <summary>Working directory (injected by framework, do not set manually)</summary>
+    public string? WorkingDirectory { get; init; }
+
     /// <summary>Maximum results to return</summary>
     public int MaxResults { get; init; } = 50;
 }
@@ -114,10 +117,11 @@ public class FindUsagesTool(
 
         try
         {
-            var solutionPath = _workspace.FindSolutionFile(Environment.CurrentDirectory);
+            var searchDir = input.WorkingDirectory ?? Environment.CurrentDirectory;
+            var solutionPath = _workspace.FindSolutionFile(searchDir);
             if (solutionPath is null)
             {
-                return ToolResult<FindUsagesOutput>.Fail("No solution file found in current directory");
+                return ToolResult<FindUsagesOutput>.Fail($"No solution file found in directory: {searchDir}");
             }
 
             var solution = await _workspace.GetSolutionAsync(solutionPath, ct);

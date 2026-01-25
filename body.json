@@ -1,0 +1,6 @@
+{
+  "title": "Run unit tests for AuraDocsTool",
+  "description": "Execute the unit tests for the AuraDocsTool MCP tool to verify it works correctly.",
+  "dispatchTarget": "InternalAgents",
+  "repositoryPath": "c:\\work\\aura"
+}

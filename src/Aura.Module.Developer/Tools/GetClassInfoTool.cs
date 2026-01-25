@@ -21,6 +21,9 @@ public record GetClassInfoInput
     /// <summary>Project name (optional if class name is unique)</summary>
     public string? ProjectName { get; init; }
 
+    /// <summary>Working directory (injected by framework, do not set manually)</summary>
+    public string? WorkingDirectory { get; init; }
+
     /// <summary>Include method implementations (source code)</summary>
     public bool IncludeImplementations { get; init; }
 
@@ -193,7 +196,7 @@ public class GetClassInfoTool(
 
         try
         {
-            var (symbol, syntax, filePath) = await FindClassAsync(input.ClassName, input.ProjectName, ct);
+            var (symbol, syntax, filePath) = await FindClassAsync(input.ClassName, input.ProjectName, input.WorkingDirectory, ct);
 
             if (symbol is null || syntax is null)
             {
@@ -236,9 +239,11 @@ public class GetClassInfoTool(
     private async Task<(INamedTypeSymbol? Symbol, TypeDeclarationSyntax? Syntax, string? FilePath)> FindClassAsync(
         string className,
         string? projectName,
+        string? workingDirectory,
         CancellationToken ct)
     {
-        var solutionPath = _workspace.FindSolutionFile(Environment.CurrentDirectory);
+        var searchDir = workingDirectory ?? Environment.CurrentDirectory;
+        var solutionPath = _workspace.FindSolutionFile(searchDir);
         if (solutionPath is null)
         {
             return (null, null, null);

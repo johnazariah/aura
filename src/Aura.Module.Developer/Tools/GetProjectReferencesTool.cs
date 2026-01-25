@@ -17,6 +17,9 @@ public record GetProjectReferencesInput
     /// <summary>Project name to get references for</summary>
     public required string ProjectName { get; init; }
 
+    /// <summary>Working directory (injected by framework, do not set manually)</summary>
+    public string? WorkingDirectory { get; init; }
+
     /// <summary>Include transitive (indirect) dependencies</summary>
     public bool IncludeTransitive { get; init; }
 
@@ -101,10 +104,11 @@ public class GetProjectReferencesTool(
 
         try
         {
-            var solutionPath = _workspace.FindSolutionFile(Environment.CurrentDirectory);
+            var searchDir = input.WorkingDirectory ?? Environment.CurrentDirectory;
+            var solutionPath = _workspace.FindSolutionFile(searchDir);
             if (solutionPath is null)
             {
-                return ToolResult<GetProjectReferencesOutput>.Fail("No solution file found in current directory");
+                return ToolResult<GetProjectReferencesOutput>.Fail($"No solution file found in directory: {searchDir}");
             }
 
             var solution = await _workspace.GetSolutionAsync(solutionPath, ct);

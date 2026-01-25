@@ -18,6 +18,9 @@ public record ListClassesInput
     /// <summary>Project name to search in</summary>
     public required string ProjectName { get; init; }
 
+    /// <summary>Working directory (injected by framework, do not set manually)</summary>
+    public string? WorkingDirectory { get; init; }
+
     /// <summary>Optional namespace filter (partial match)</summary>
     public string? NamespaceFilter { get; init; }
 
@@ -133,7 +136,7 @@ public class ListClassesTool(
         try
         {
             // Find the project in any loaded solution
-            Project? project = await FindProjectByNameAsync(input.ProjectName, ct);
+            Project? project = await FindProjectByNameAsync(input.ProjectName, input.WorkingDirectory, ct);
 
             if (project is null)
             {
@@ -202,10 +205,11 @@ public class ListClassesTool(
         }
     }
 
-    private async Task<Project?> FindProjectByNameAsync(string projectName, CancellationToken ct)
+    private async Task<Project?> FindProjectByNameAsync(string projectName, string? workingDirectory, CancellationToken ct)
     {
-        // Try to find a solution in current directory
-        var solutionPath = _workspace.FindSolutionFile(Environment.CurrentDirectory);
+        // Try to find a solution in working directory
+        var searchDir = workingDirectory ?? Environment.CurrentDirectory;
+        var solutionPath = _workspace.FindSolutionFile(searchDir);
         if (solutionPath is not null)
         {
             var solution = await _workspace.GetSolutionAsync(solutionPath, ct);
@@ -214,7 +218,7 @@ public class ListClassesTool(
         }
 
         // Try direct project path match
-        var projectFiles = _workspace.FindProjectFiles(Environment.CurrentDirectory);
+        var projectFiles = _workspace.FindProjectFiles(searchDir);
         var matchingFile = projectFiles.FirstOrDefault(f =>
             Path.GetFileNameWithoutExtension(f).Equals(projectName, StringComparison.OrdinalIgnoreCase));
 
