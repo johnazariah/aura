@@ -338,6 +338,52 @@ public sealed class StoryService(
     }
 
     /// <inheritdoc/>
+    public async Task<Story> ResetOrchestratorAsync(Guid workflowId, bool resetFailedTasks = false, CancellationToken ct = default)
+    {
+        var story = await _db.Workflows
+            .FirstOrDefaultAsync(w => w.Id == workflowId, ct)
+            ?? throw new InvalidOperationException($"Story {workflowId} not found");
+
+        if (story.OrchestratorStatus != OrchestratorStatus.Failed)
+        {
+            throw new InvalidOperationException($"Can only reset orchestrator when status is Failed. Current status: {story.OrchestratorStatus}");
+        }
+
+        // Reset orchestrator to WaitingForGate so /run will retry the quality gate
+        story.OrchestratorStatus = OrchestratorStatus.WaitingForGate;
+        story.UpdatedAt = DateTimeOffset.UtcNow;
+
+        // Optionally reset failed tasks in the current wave
+        if (resetFailedTasks && !string.IsNullOrEmpty(story.TasksJson))
+        {
+            var tasks = JsonSerializer.Deserialize<List<StoryTask>>(story.TasksJson, new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true,
+            }) ?? [];
+
+            var currentWave = story.CurrentWave == 0 ? 1 : story.CurrentWave;
+            var resetTasks = tasks.Select(t =>
+                t.Wave == currentWave && t.Status == StoryTaskStatus.Failed
+                    ? t with { Status = StoryTaskStatus.Pending, Error = null }
+                    : t).ToList();
+
+            var resetCount = tasks.Count(t => t.Wave == currentWave && t.Status == StoryTaskStatus.Failed);
+
+            if (resetCount > 0)
+            {
+                story.TasksJson = JsonSerializer.Serialize(resetTasks);
+                _logger.LogInformation("Reset {Count} failed tasks in wave {Wave} to Pending", resetCount, currentWave);
+            }
+        }
+
+        await _db.SaveChangesAsync(ct);
+
+        _logger.LogInformation("Reset orchestrator for story {StoryId} from Failed to WaitingForGate", workflowId);
+
+        return story;
+    }
+
+    /// <inheritdoc/>
     public async Task UpdateAsync(Story workflow, CancellationToken ct = default)
     {
         _db.Workflows.Update(workflow);

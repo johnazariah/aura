@@ -91,6 +91,16 @@ public interface IStoryService
     Task<Story> ResetStatusAsync(Guid workflowId, StoryStatus newStatus, CancellationToken ct = default);
 
     /// <summary>
+    /// Resets the orchestrator status to allow retrying from a failed state.
+    /// Optionally resets failed tasks in the current wave to Pending.
+    /// </summary>
+    /// <param name="workflowId">The workflow ID.</param>
+    /// <param name="resetFailedTasks">If true, resets failed tasks in the current wave to Pending.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>The updated workflow.</returns>
+    Task<Story> ResetOrchestratorAsync(Guid workflowId, bool resetFailedTasks = false, CancellationToken ct = default);
+
+    /// <summary>
     /// Updates a workflow.
     /// </summary>
     /// <param name="workflow">The workflow to update.</param>

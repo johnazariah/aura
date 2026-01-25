@@ -29,6 +29,7 @@ public static class DeveloperEndpoints
         app.MapGet("/api/developer/stories/{id:guid}", GetStory);
         app.MapDelete("/api/developer/stories/{id:guid}", DeleteStory);
         app.MapPatch("/api/developer/stories/{id:guid}/status", ResetStoryStatus);
+        app.MapPatch("/api/developer/stories/{id:guid}/orchestrator", ResetOrchestratorStatus);
 
         // story lifecycle
         app.MapPost("/api/developer/stories/{id:guid}/analyze", AnalyzeStory);
@@ -305,6 +306,34 @@ public static class DeveloperEndpoints
     }
 
     private record ResetStatusRequest(string Status);
+    private record ResetOrchestratorRequest(bool ResetFailedTasks = false);
+
+    private static async Task<IResult> ResetOrchestratorStatus(
+        Guid id,
+        HttpContext context,
+        IStoryService storyService,
+        HttpRequest request,
+        CancellationToken ct)
+    {
+        try
+        {
+            var body = await request.ReadFromJsonAsync<ResetOrchestratorRequest>(ct);
+            var resetFailedTasks = body?.ResetFailedTasks ?? false;
+
+            var story = await storyService.ResetOrchestratorAsync(id, resetFailedTasks, ct);
+            return Results.Ok(new
+            {
+                id = story.Id,
+                orchestratorStatus = story.OrchestratorStatus.ToString(),
+                currentWave = story.CurrentWave,
+                message = $"Orchestrator reset to {story.OrchestratorStatus}. Call /run to retry."
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Problem.InvalidState(ex.Message, context);
+        }
+    }
 
     private static async Task<IResult> AnalyzeStory(
         Guid id,
