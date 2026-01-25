@@ -92,13 +92,13 @@ public interface IStoryService
 
     /// <summary>
     /// Resets the orchestrator status to allow retrying from a failed state.
-    /// Optionally resets failed tasks in the current wave to Pending.
+    /// Optionally resets failed steps in the current wave to Pending.
     /// </summary>
     /// <param name="workflowId">The workflow ID.</param>
-    /// <param name="resetFailedTasks">If true, resets failed tasks in the current wave to Pending.</param>
+    /// <param name="resetFailedSteps">If true, resets failed steps in the current wave to Pending.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>The updated workflow.</returns>
-    Task<Story> ResetOrchestratorAsync(Guid workflowId, bool resetFailedTasks = false, CancellationToken ct = default);
+    Task<Story> ResetOrchestratorAsync(Guid workflowId, bool resetFailedSteps = false, CancellationToken ct = default);
 
     /// <summary>
     /// Updates a workflow.
@@ -390,15 +390,15 @@ public record GuardianWorkflowRequest
 }
 
 /// <summary>
-/// Result from decomposing a story into parallelizable tasks.
+/// Result from decomposing a story into parallelizable steps.
 /// </summary>
 public record StoryDecomposeResult
 {
     /// <summary>Gets the story ID.</summary>
     public required Guid StoryId { get; init; }
 
-    /// <summary>Gets the decomposed tasks.</summary>
-    public required IReadOnlyList<StoryTask> Tasks { get; init; }
+    /// <summary>Gets the decomposed steps with wave assignments.</summary>
+    public required IReadOnlyList<StoryStep> Steps { get; init; }
 
     /// <summary>Gets the total number of execution waves.</summary>
     public required int WaveCount { get; init; }
@@ -415,8 +415,8 @@ public record StoryRunResult
     /// <summary>Gets the story ID.</summary>
     public required Guid StoryId { get; init; }
 
-    /// <summary>Gets the orchestrator status after this run.</summary>
-    public required OrchestratorStatus Status { get; init; }
+    /// <summary>Gets the story status after this run.</summary>
+    public required StoryStatus Status { get; init; }
 
     /// <summary>Gets the current wave being executed.</summary>
     public required int CurrentWave { get; init; }
@@ -424,20 +424,20 @@ public record StoryRunResult
     /// <summary>Gets the total number of waves.</summary>
     public required int TotalWaves { get; init; }
 
-    /// <summary>Gets the tasks that were started in this run.</summary>
-    public required IReadOnlyList<StoryTask> StartedTasks { get; init; }
+    /// <summary>Gets the steps that were started in this run.</summary>
+    public required IReadOnlyList<StoryStep> StartedSteps { get; init; }
 
-    /// <summary>Gets the tasks that completed.</summary>
-    public required IReadOnlyList<StoryTask> CompletedTasks { get; init; }
+    /// <summary>Gets the steps that completed.</summary>
+    public required IReadOnlyList<StoryStep> CompletedSteps { get; init; }
 
-    /// <summary>Gets the tasks that failed.</summary>
-    public required IReadOnlyList<StoryTask> FailedTasks { get; init; }
+    /// <summary>Gets the steps that failed.</summary>
+    public required IReadOnlyList<StoryStep> FailedSteps { get; init; }
 
     /// <summary>Gets whether the run completed all waves.</summary>
-    public bool IsComplete => Status == OrchestratorStatus.Completed;
+    public bool IsComplete => Status == StoryStatus.Completed;
 
     /// <summary>Gets whether quality gate is pending.</summary>
-    public bool WaitingForGate => Status == OrchestratorStatus.WaitingForGate;
+    public bool WaitingForGate => Status == StoryStatus.GatePending;
 
     /// <summary>Gets the quality gate result if waiting.</summary>
     public QualityGateResult? GateResult { get; init; }
@@ -454,8 +454,8 @@ public record StoryOrchestratorStatus
     /// <summary>Gets the story ID.</summary>
     public required Guid StoryId { get; init; }
 
-    /// <summary>Gets the orchestrator status.</summary>
-    public required OrchestratorStatus Status { get; init; }
+    /// <summary>Gets the story status.</summary>
+    public required StoryStatus Status { get; init; }
 
     /// <summary>Gets the current wave.</summary>
     public required int CurrentWave { get; init; }
@@ -463,8 +463,8 @@ public record StoryOrchestratorStatus
     /// <summary>Gets the total wave count.</summary>
     public required int TotalWaves { get; init; }
 
-    /// <summary>Gets all tasks with their current status.</summary>
-    public required IReadOnlyList<StoryTask> Tasks { get; init; }
+    /// <summary>Gets all steps with their current status.</summary>
+    public required IReadOnlyList<StoryStep> Steps { get; init; }
 
     /// <summary>Gets the max parallelism setting.</summary>
     public required int MaxParallelism { get; init; }

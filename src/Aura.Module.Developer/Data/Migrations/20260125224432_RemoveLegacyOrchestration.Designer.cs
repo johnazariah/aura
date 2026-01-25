@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Aura.Module.Developer.Data.Migrations
 {
     [DbContext(typeof(DeveloperDbContext))]
-    [Migration("20260125223011_AddWaveAndGateFields")]
-    partial class AddWaveAndGateFields
+    [Migration("20260125224432_RemoveLegacyOrchestration")]
+    partial class RemoveLegacyOrchestration
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -106,9 +106,6 @@ namespace Aura.Module.Developer.Data.Migrations
                     b.Property<int>("MaxParallelism")
                         .HasColumnType("integer");
 
-                    b.Property<int>("OrchestratorStatus")
-                        .HasColumnType("integer");
-
                     b.Property<string>("PatternLanguage")
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)")
@@ -145,9 +142,6 @@ namespace Aura.Module.Developer.Data.Migrations
                         .HasColumnName("status");
 
                     b.Property<string>("SuggestedCapability")
-                        .HasColumnType("text");
-
-                    b.Property<string>("TasksJson")
                         .HasColumnType("text");
 
                     b.Property<string>("Title")

@@ -123,14 +123,6 @@ public sealed class Story
 
     /// <summary>Gets or sets the dispatch target for task execution.</summary>
     public DispatchTarget DispatchTarget { get; set; } = DispatchTarget.CopilotCli;
-
-    // === Legacy Orchestration (to be removed after migration to Steps with Wave) ===
-
-    /// <summary>Gets or sets the decomposed tasks as JSON array. Will be replaced by Steps with Wave.</summary>
-    public string? TasksJson { get; set; }
-
-    /// <summary>Gets or sets the legacy orchestrator status. Will be unified with Status.</summary>
-    public OrchestratorStatus OrchestratorStatus { get; set; } = OrchestratorStatus.NotDecomposed;
 }
 
 /// <summary>
@@ -269,28 +261,4 @@ public enum DispatchTarget
     /// Uses configured LLM provider with Aura's tool registry.
     /// </summary>
     InternalAgents,
-}
-
-/// <summary>
-/// Legacy orchestrator status. Will be unified with StoryStatus.
-/// </summary>
-public enum OrchestratorStatus
-{
-    /// <summary>Story created but not decomposed into tasks.</summary>
-    NotDecomposed,
-
-    /// <summary>Story decomposed into tasks, ready to run.</summary>
-    Decomposed,
-
-    /// <summary>Currently executing tasks in parallel.</summary>
-    Running,
-
-    /// <summary>Waiting for quality gate (build/test) between waves.</summary>
-    WaitingForGate,
-
-    /// <summary>All tasks completed successfully.</summary>
-    Completed,
-
-    /// <summary>Unrecoverable failure occurred.</summary>
-    Failed,
 }

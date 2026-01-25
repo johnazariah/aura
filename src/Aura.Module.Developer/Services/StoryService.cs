@@ -338,47 +338,48 @@ public sealed class StoryService(
     }
 
     /// <inheritdoc/>
-    public async Task<Story> ResetOrchestratorAsync(Guid workflowId, bool resetFailedTasks = false, CancellationToken ct = default)
+    public async Task<Story> ResetOrchestratorAsync(Guid workflowId, bool resetFailedSteps = false, CancellationToken ct = default)
     {
         var story = await _db.Workflows
+            .Include(w => w.Steps)
             .FirstOrDefaultAsync(w => w.Id == workflowId, ct)
             ?? throw new InvalidOperationException($"Story {workflowId} not found");
 
-        if (story.OrchestratorStatus != OrchestratorStatus.Failed)
+        if (story.Status != StoryStatus.Failed && story.Status != StoryStatus.GateFailed)
         {
-            throw new InvalidOperationException($"Can only reset orchestrator when status is Failed. Current status: {story.OrchestratorStatus}");
+            throw new InvalidOperationException($"Can only reset orchestrator when status is Failed or GateFailed. Current status: {story.Status}");
         }
 
-        // Reset orchestrator to WaitingForGate so /run will retry the quality gate
-        story.OrchestratorStatus = OrchestratorStatus.WaitingForGate;
+        // Reset to GatePending so /run will retry the quality gate
+        story.Status = StoryStatus.GatePending;
+        story.GateResult = null;
         story.UpdatedAt = DateTimeOffset.UtcNow;
 
-        // Optionally reset failed tasks in the current wave
-        if (resetFailedTasks && !string.IsNullOrEmpty(story.TasksJson))
+        // Optionally reset failed steps in the current wave
+        if (resetFailedSteps)
         {
-            var tasks = JsonSerializer.Deserialize<List<StoryTask>>(story.TasksJson, new JsonSerializerOptions
-            {
-                PropertyNameCaseInsensitive = true,
-            }) ?? [];
-
             var currentWave = story.CurrentWave == 0 ? 1 : story.CurrentWave;
-            var resetTasks = tasks.Select(t =>
-                t.Wave == currentWave && t.Status == StoryTaskStatus.Failed
-                    ? t with { Status = StoryTaskStatus.Pending, Error = null }
-                    : t).ToList();
+            var failedSteps = story.Steps
+                .Where(s => s.Wave == currentWave && s.Status == StepStatus.Failed)
+                .ToList();
 
-            var resetCount = tasks.Count(t => t.Wave == currentWave && t.Status == StoryTaskStatus.Failed);
-
-            if (resetCount > 0)
+            foreach (var step in failedSteps)
             {
-                story.TasksJson = JsonSerializer.Serialize(resetTasks);
-                _logger.LogInformation("Reset {Count} failed tasks in wave {Wave} to Pending", resetCount, currentWave);
+                step.Status = StepStatus.Pending;
+                step.Error = null;
+                step.StartedAt = null;
+                step.CompletedAt = null;
+            }
+
+            if (failedSteps.Count > 0)
+            {
+                _logger.LogInformation("Reset {Count} failed steps in wave {Wave} to Pending", failedSteps.Count, currentWave);
             }
         }
 
         await _db.SaveChangesAsync(ct);
 
-        _logger.LogInformation("Reset orchestrator for story {StoryId} from Failed to WaitingForGate", workflowId);
+        _logger.LogInformation("Reset orchestrator for story {StoryId} from {PreviousStatus} to GatePending", workflowId, story.Status);
 
         return story;
     }
@@ -685,6 +686,7 @@ public sealed class StoryService(
         CancellationToken ct = default)
     {
         var story = await _db.Workflows
+            .Include(w => w.Steps)
             .FirstOrDefaultAsync(w => w.Id == storyId, ct)
             ?? throw new InvalidOperationException($"Story {storyId} not found");
 
@@ -737,20 +739,44 @@ public sealed class StoryService(
         var response = await provider.ChatAsync(agent.Metadata.Model, messages, chatOptions, ct);
         var rawResponse = response.Content;
 
-        // Parse the JSON response
-        var tasks = ParseTasksFromResponse(rawResponse);
+        // Parse the JSON response into task DTOs
+        var taskDtos = ParseTaskDecompositionFromResponse(rawResponse);
 
-        if (tasks.Count == 0)
+        if (taskDtos.Count == 0)
         {
             throw new InvalidOperationException("Decomposition produced no tasks. Raw response: " + rawResponse);
         }
 
-        // Calculate wave count
-        var waveCount = tasks.Max(t => t.Wave);
+        // Clear existing steps and create new ones from decomposition
+        var existingSteps = await _db.WorkflowSteps
+            .Where(s => s.StoryId == storyId)
+            .ToListAsync(ct);
+        _db.WorkflowSteps.RemoveRange(existingSteps);
 
-        // Serialize tasks to JSON and store on story
-        story.TasksJson = JsonSerializer.Serialize(tasks);
-        story.OrchestratorStatus = OrchestratorStatus.Decomposed;
+        var order = 1;
+        var steps = new List<StoryStep>();
+        foreach (var dto in taskDtos)
+        {
+            var step = new StoryStep
+            {
+                Id = Guid.NewGuid(),
+                StoryId = storyId,
+                Order = order++,
+                Wave = dto.Wave,
+                Name = dto.Title ?? "Untitled task",
+                Description = dto.Description,
+                Capability = Capabilities.Coding, // Default for decomposed tasks
+                Status = StepStatus.Pending,
+            };
+            _db.WorkflowSteps.Add(step);
+            steps.Add(step);
+        }
+
+        // Calculate wave count
+        var waveCount = taskDtos.Max(t => t.Wave);
+
+        // Update story - ready to run
+        story.Status = StoryStatus.Planned;
         story.MaxParallelism = maxParallelism;
         story.CurrentWave = 0;
         story.UpdatedAt = DateTimeOffset.UtcNow;
@@ -758,19 +784,19 @@ public sealed class StoryService(
         await _db.SaveChangesAsync(ct);
 
         _logger.LogInformation(
-            "Decomposed story {StoryId} into {TaskCount} tasks across {WaveCount} waves",
-            storyId, tasks.Count, waveCount);
+            "Decomposed story {StoryId} into {StepCount} steps across {WaveCount} waves",
+            storyId, steps.Count, waveCount);
 
         return new StoryDecomposeResult
         {
             StoryId = storyId,
-            Tasks = tasks,
+            Steps = steps,
             WaveCount = waveCount,
             Story = story,
         };
     }
 
-    private static List<StoryTask> ParseTasksFromResponse(string response)
+    private static List<TaskDecompositionDto> ParseTaskDecompositionFromResponse(string response)
     {
         // Extract JSON array from response (handle markdown code blocks)
         var json = response.Trim();
@@ -791,18 +817,7 @@ public sealed class StoryService(
                 PropertyNameCaseInsensitive = true,
             });
 
-            if (taskDtos is null)
-            {
-                return [];
-            }
-
-            return taskDtos.Select(dto => new StoryTask(
-                Id: dto.Id ?? $"task-{Guid.NewGuid():N}"[..12],
-                Title: dto.Title ?? "Untitled task",
-                Description: dto.Description ?? string.Empty,
-                Wave: dto.Wave,
-                DependsOn: dto.DependsOn ?? [],
-                Status: StoryTaskStatus.Pending)).ToList();
+            return taskDtos ?? [];
         }
         catch (JsonException ex)
         {
@@ -821,17 +836,14 @@ public sealed class StoryService(
     public async Task<StoryRunResult> RunAsync(Guid storyId, CancellationToken ct = default)
     {
         var story = await _db.Workflows
+            .Include(w => w.Steps)
             .FirstOrDefaultAsync(w => w.Id == storyId, ct)
             ?? throw new InvalidOperationException($"Story {storyId} not found");
 
-        if (story.OrchestratorStatus == OrchestratorStatus.NotDecomposed)
+        // Story must have steps to run
+        if (!story.Steps.Any())
         {
-            throw new InvalidOperationException("Story must be decomposed before running. Call DecomposeAsync first.");
-        }
-
-        if (string.IsNullOrEmpty(story.TasksJson))
-        {
-            throw new InvalidOperationException("Story has no tasks. Call DecomposeAsync first.");
+            throw new InvalidOperationException("Story has no steps. Call PlanAsync or DecomposeAsync first.");
         }
 
         if (string.IsNullOrEmpty(story.WorktreePath))
@@ -839,19 +851,14 @@ public sealed class StoryService(
             throw new InvalidOperationException("Story has no worktree. Create a worktree first.");
         }
 
-        // Parse tasks from JSON
-        var tasks = JsonSerializer.Deserialize<List<StoryTask>>(story.TasksJson, new JsonSerializerOptions
-        {
-            PropertyNameCaseInsensitive = true,
-        }) ?? [];
-
-        var waveCount = tasks.Count > 0 ? tasks.Max(t => t.Wave) : 0;
+        var steps = story.Steps.ToList();
+        var waveCount = steps.Max(s => s.Wave);
 
         // Determine current wave to execute
         var currentWave = story.CurrentWave == 0 ? 1 : story.CurrentWave;
 
         // Check if we're waiting for a quality gate
-        if (story.OrchestratorStatus == OrchestratorStatus.WaitingForGate)
+        if (story.Status == StoryStatus.GatePending)
         {
             // Run quality gate
             var gateResult = await _qualityGateService.RunFullGateAsync(story.WorktreePath, currentWave - 1, ct);
@@ -859,24 +866,22 @@ public sealed class StoryService(
             if (!gateResult.Passed)
             {
                 // If the gate was cancelled (e.g., HTTP client disconnect), don't mark the story as failed.
-                // Leave it in WaitingForGate so it can be retried.
+                // Leave it in GatePending so it can be retried.
                 if (gateResult.WasCancelled)
                 {
                     _logger.LogWarning(
-                        "Quality gate was cancelled after wave {Wave}. Story remains in WaitingForGate state for retry.",
+                        "Quality gate was cancelled after wave {Wave}. Story remains in GatePending state for retry.",
                         currentWave - 1);
 
-                    // Don't change the status - keep it in WaitingForGate
-                    // WaitingForGate property is computed from Status, so we don't need to set it
                     return new StoryRunResult
                     {
                         StoryId = storyId,
-                        Status = OrchestratorStatus.WaitingForGate,
+                        Status = StoryStatus.GatePending,
                         CurrentWave = currentWave - 1,
                         TotalWaves = waveCount,
-                        StartedTasks = [],
-                        CompletedTasks = [],
-                        FailedTasks = [],
+                        StartedSteps = [],
+                        CompletedSteps = [],
+                        FailedSteps = [],
                         GateResult = gateResult,
                         Error = "Quality gate was cancelled. Retry when ready.",
                     };
@@ -884,50 +889,52 @@ public sealed class StoryService(
 
                 _logger.LogWarning("Quality gate failed after wave {Wave}: {Error}", currentWave - 1, gateResult.Error);
 
-                story.OrchestratorStatus = OrchestratorStatus.Failed;
+                story.Status = StoryStatus.GateFailed;
+                story.GateResult = JsonSerializer.Serialize(new { gateResult.Passed, gateResult.Error, gateResult.BuildOutput, gateResult.TestOutput });
                 story.UpdatedAt = DateTimeOffset.UtcNow;
                 await _db.SaveChangesAsync(ct);
 
                 return new StoryRunResult
                 {
                     StoryId = storyId,
-                    Status = OrchestratorStatus.Failed,
+                    Status = StoryStatus.GateFailed,
                     CurrentWave = currentWave - 1,
                     TotalWaves = waveCount,
-                    StartedTasks = [],
-                    CompletedTasks = [],
-                    FailedTasks = [],
+                    StartedSteps = [],
+                    CompletedSteps = [],
+                    FailedSteps = [],
                     GateResult = gateResult,
                     Error = $"Quality gate failed: {gateResult.Error}",
                 };
             }
 
             _logger.LogInformation("Quality gate passed after wave {Wave}", currentWave - 1);
+            story.GateResult = null; // Clear gate result on success
         }
 
-        // Get tasks for current wave that are pending
-        var waveTasks = tasks
-            .Where(t => t.Wave == currentWave && t.Status == StoryTaskStatus.Pending)
+        // Get steps for current wave that are pending
+        var waveSteps = steps
+            .Where(s => s.Wave == currentWave && s.Status == StepStatus.Pending)
             .ToList();
 
-        if (waveTasks.Count == 0)
+        if (waveSteps.Count == 0)
         {
-            // Check if all tasks are complete
-            if (tasks.All(t => t.Status == StoryTaskStatus.Completed || t.Status == StoryTaskStatus.Skipped))
+            // Check if all steps are complete
+            if (steps.All(s => s.Status == StepStatus.Completed || s.Status == StepStatus.Skipped))
             {
-                story.OrchestratorStatus = OrchestratorStatus.Completed;
+                story.Status = StoryStatus.Completed;
                 story.UpdatedAt = DateTimeOffset.UtcNow;
                 await _db.SaveChangesAsync(ct);
 
                 return new StoryRunResult
                 {
                     StoryId = storyId,
-                    Status = OrchestratorStatus.Completed,
+                    Status = StoryStatus.Completed,
                     CurrentWave = waveCount,
                     TotalWaves = waveCount,
-                    StartedTasks = [],
-                    CompletedTasks = tasks.Where(t => t.Status == StoryTaskStatus.Completed).ToList(),
-                    FailedTasks = [],
+                    StartedSteps = [],
+                    CompletedSteps = steps.Where(s => s.Status == StepStatus.Completed).ToList(),
+                    FailedSteps = [],
                 };
             }
 
@@ -935,40 +942,44 @@ public sealed class StoryService(
             currentWave++;
             if (currentWave > waveCount)
             {
-                story.OrchestratorStatus = OrchestratorStatus.Completed;
+                story.Status = StoryStatus.Completed;
                 story.UpdatedAt = DateTimeOffset.UtcNow;
                 await _db.SaveChangesAsync(ct);
 
                 return new StoryRunResult
                 {
                     StoryId = storyId,
-                    Status = OrchestratorStatus.Completed,
+                    Status = StoryStatus.Completed,
                     CurrentWave = waveCount,
                     TotalWaves = waveCount,
-                    StartedTasks = [],
-                    CompletedTasks = tasks.Where(t => t.Status == StoryTaskStatus.Completed).ToList(),
-                    FailedTasks = [],
+                    StartedSteps = [],
+                    CompletedSteps = steps.Where(s => s.Status == StepStatus.Completed).ToList(),
+                    FailedSteps = [],
                 };
             }
 
-            waveTasks = tasks
-                .Where(t => t.Wave == currentWave && t.Status == StoryTaskStatus.Pending)
+            waveSteps = steps
+                .Where(s => s.Wave == currentWave && s.Status == StepStatus.Pending)
                 .ToList();
         }
 
         // Update story status
-        story.OrchestratorStatus = OrchestratorStatus.Running;
+        story.Status = StoryStatus.Executing;
         story.CurrentWave = currentWave;
         story.UpdatedAt = DateTimeOffset.UtcNow;
         await _db.SaveChangesAsync(ct);
 
         _logger.LogInformation(
-            "Running wave {Wave}/{TotalWaves} with {TaskCount} tasks (max parallelism: {MaxParallelism})",
-            currentWave, waveCount, waveTasks.Count, story.MaxParallelism);
+            "Running wave {Wave}/{TotalWaves} with {StepCount} steps (max parallelism: {MaxParallelism})",
+            currentWave, waveCount, waveSteps.Count, story.MaxParallelism);
+
+        // Convert steps to tasks for dispatch
+        var waveTasks = waveSteps.Select(s => StoryTask.FromStep(s)).ToList();
 
         // Get completed tasks from prior waves to provide context
-        var priorCompletedTasks = tasks
-            .Where(t => t.Wave < currentWave && t.Status == StoryTaskStatus.Completed)
+        var priorCompletedTasks = steps
+            .Where(s => s.Wave < currentWave && s.Status == StepStatus.Completed)
+            .Select(s => StoryTask.FromStep(s))
             .ToList();
 
         // Dispatch tasks using the configured dispatcher
@@ -992,7 +1003,7 @@ public sealed class StoryService(
         }
         else
         {
-            // Fallback to Copilot dispatcher for backward compatibility
+            // Fallback to Copilot dispatcher
             _logger.LogWarning(
                 "[{WorktreeName}] No dispatcher for {DispatchTarget}, falling back to Copilot CLI",
                 worktreeName,
@@ -1006,39 +1017,51 @@ public sealed class StoryService(
                 ct);
         }
 
-        // Update tasks in the full list
-        var taskDict = tasks.ToDictionary(t => t.Id);
+        // Update steps from executed tasks
+        var stepDict = waveSteps.ToDictionary(s => s.Id.ToString());
         foreach (var executed in executedTasks)
         {
-            taskDict[executed.Id] = executed;
+            if (stepDict.TryGetValue(executed.Id, out var step))
+            {
+                step.Status = executed.Status switch
+                {
+                    StoryTaskStatus.Completed => StepStatus.Completed,
+                    StoryTaskStatus.Failed => StepStatus.Failed,
+                    StoryTaskStatus.Skipped => StepStatus.Skipped,
+                    StoryTaskStatus.Running => StepStatus.Running,
+                    _ => StepStatus.Pending,
+                };
+                step.Output = executed.Output;
+                step.Error = executed.Error;
+                step.AssignedAgentId = executed.AgentSessionId;
+                step.StartedAt = executed.StartedAt;
+                step.CompletedAt = executed.CompletedAt;
+            }
         }
 
-        tasks = taskDict.Values.ToList();
+        await _db.SaveChangesAsync(ct);
 
-        // Save updated tasks
-        story.TasksJson = JsonSerializer.Serialize(tasks);
-
-        var completedTasks = executedTasks.Where(t => t.Status == StoryTaskStatus.Completed).ToList();
-        var failedTasks = executedTasks.Where(t => t.Status == StoryTaskStatus.Failed).ToList();
+        var completedSteps = waveSteps.Where(s => s.Status == StepStatus.Completed).ToList();
+        var failedSteps = waveSteps.Where(s => s.Status == StepStatus.Failed).ToList();
 
         // Determine next status
-        if (failedTasks.Count > 0)
+        if (failedSteps.Count > 0)
         {
-            // Some tasks failed - mark story as failed
-            story.OrchestratorStatus = OrchestratorStatus.Failed;
+            // Some steps failed - mark story as failed
+            story.Status = StoryStatus.Failed;
             story.UpdatedAt = DateTimeOffset.UtcNow;
             await _db.SaveChangesAsync(ct);
 
             return new StoryRunResult
             {
                 StoryId = storyId,
-                Status = OrchestratorStatus.Failed,
+                Status = StoryStatus.Failed,
                 CurrentWave = currentWave,
                 TotalWaves = waveCount,
-                StartedTasks = executedTasks,
-                CompletedTasks = completedTasks,
-                FailedTasks = failedTasks,
-                Error = $"{failedTasks.Count} task(s) failed in wave {currentWave}",
+                StartedSteps = waveSteps,
+                CompletedSteps = completedSteps,
+                FailedSteps = failedSteps,
+                Error = $"{failedSteps.Count} step(s) failed in wave {currentWave}",
             };
         }
 
@@ -1046,7 +1069,7 @@ public sealed class StoryService(
         if (currentWave < waveCount)
         {
             // More waves to go - wait for quality gate
-            story.OrchestratorStatus = OrchestratorStatus.WaitingForGate;
+            story.Status = StoryStatus.GatePending;
             story.CurrentWave = currentWave + 1;
             story.UpdatedAt = DateTimeOffset.UtcNow;
             await _db.SaveChangesAsync(ct);
@@ -1054,17 +1077,17 @@ public sealed class StoryService(
             return new StoryRunResult
             {
                 StoryId = storyId,
-                Status = OrchestratorStatus.WaitingForGate,
+                Status = StoryStatus.GatePending,
                 CurrentWave = currentWave,
                 TotalWaves = waveCount,
-                StartedTasks = executedTasks,
-                CompletedTasks = completedTasks,
-                FailedTasks = [],
+                StartedSteps = waveSteps,
+                CompletedSteps = completedSteps,
+                FailedSteps = [],
             };
         }
 
         // All waves complete
-        story.OrchestratorStatus = OrchestratorStatus.Completed;
+        story.Status = StoryStatus.Completed;
         story.UpdatedAt = DateTimeOffset.UtcNow;
         await _db.SaveChangesAsync(ct);
 
@@ -1073,12 +1096,12 @@ public sealed class StoryService(
         return new StoryRunResult
         {
             StoryId = storyId,
-            Status = OrchestratorStatus.Completed,
+            Status = StoryStatus.Completed,
             CurrentWave = waveCount,
             TotalWaves = waveCount,
-            StartedTasks = executedTasks,
-            CompletedTasks = tasks.Where(t => t.Status == StoryTaskStatus.Completed).ToList(),
-            FailedTasks = [],
+            StartedSteps = waveSteps,
+            CompletedSteps = steps.Where(s => s.Status == StepStatus.Completed).ToList(),
+            FailedSteps = [],
         };
     }
 
@@ -1086,28 +1109,20 @@ public sealed class StoryService(
     public async Task<StoryOrchestratorStatus> GetOrchestratorStatusAsync(Guid storyId, CancellationToken ct = default)
     {
         var story = await _db.Workflows
+            .Include(w => w.Steps)
             .FirstOrDefaultAsync(w => w.Id == storyId, ct)
             ?? throw new InvalidOperationException($"Story {storyId} not found");
 
-        var tasks = new List<StoryTask>();
-        var waveCount = 0;
-
-        if (!string.IsNullOrEmpty(story.TasksJson))
-        {
-            tasks = JsonSerializer.Deserialize<List<StoryTask>>(story.TasksJson, new JsonSerializerOptions
-            {
-                PropertyNameCaseInsensitive = true,
-            }) ?? [];
-            waveCount = tasks.Count > 0 ? tasks.Max(t => t.Wave) : 0;
-        }
+        var steps = story.Steps.ToList();
+        var waveCount = steps.Count > 0 ? steps.Max(s => s.Wave) : 0;
 
         return new StoryOrchestratorStatus
         {
             StoryId = storyId,
-            Status = story.OrchestratorStatus,
+            Status = story.Status,
             CurrentWave = story.CurrentWave,
             TotalWaves = waveCount,
-            Tasks = tasks,
+            Steps = steps,
             MaxParallelism = story.MaxParallelism,
         };
     }

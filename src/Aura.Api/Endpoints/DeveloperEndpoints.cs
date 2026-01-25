@@ -176,7 +176,6 @@ public static class DeveloperEndpoints
             return Problem.StoryNotFound(id, context);
         }
 
-        var tasks = ParseTasks(story);
         var waveCount = GetWaveCount(story);
 
         return Results.Ok(new
@@ -184,7 +183,7 @@ public static class DeveloperEndpoints
             id = story.Id,
             title = story.Title,
             description = story.Description,
-            // Use effective status: orchestrator status if decomposed, legacy status otherwise
+            // Use story status directly
             status = GetEffectiveStatus(story),
             automationMode = story.AutomationMode.ToString(),
             dispatchTarget = story.DispatchTarget.ToString(),
@@ -204,9 +203,7 @@ public static class DeveloperEndpoints
             maxParallelism = story.MaxParallelism,
             gateMode = story.GateMode.ToString(),
             gateResult = story.GateResult,
-            // Tasks from decomposition (parallel execution model)
-            tasks,
-            // Steps - now include wave for parallel execution
+            // Steps with wave for parallel execution
             steps = story.Steps.OrderBy(s => s.Wave).ThenBy(s => s.Order).Select(s => new
             {
                 id = s.Id,
@@ -330,15 +327,15 @@ public static class DeveloperEndpoints
         try
         {
             var body = await request.ReadFromJsonAsync<ResetOrchestratorRequest>(ct);
-            var resetFailedTasks = body?.ResetFailedTasks ?? false;
+            var resetFailedSteps = body?.ResetFailedTasks ?? false;
 
-            var story = await storyService.ResetOrchestratorAsync(id, resetFailedTasks, ct);
+            var story = await storyService.ResetOrchestratorAsync(id, resetFailedSteps, ct);
             return Results.Ok(new
             {
                 id = story.Id,
-                orchestratorStatus = story.OrchestratorStatus.ToString(),
+                status = story.Status.ToString(),
                 currentWave = story.CurrentWave,
-                message = $"Orchestrator reset to {story.OrchestratorStatus}. Call /run to retry."
+                message = $"Orchestrator reset to {story.Status}. Call /run to retry.",
             });
         }
         catch (InvalidOperationException ex)
@@ -421,14 +418,14 @@ public static class DeveloperEndpoints
 
             return Results.Ok(new DecomposeStoryResponse(
                 result.StoryId,
-                result.Tasks.Select(t => new StoryTaskDto(
-                    t.Id,
-                    t.Title,
-                    t.Description,
-                    t.Wave,
-                    t.DependsOn,
-                    t.Status.ToString(),
-                    t.ToolImprovementProposal)).ToList(),
+                result.Steps.Select(s => new StoryTaskDto(
+                    s.Id.ToString(),
+                    s.Name,
+                    s.Description ?? string.Empty,
+                    s.Wave,
+                    [], // No DependsOn in Steps, we use Wave ordering
+                    s.Status.ToString(),
+                    null)).ToList(),
                 result.WaveCount));
         }
         catch (InvalidOperationException ex)
@@ -454,22 +451,25 @@ public static class DeveloperEndpoints
                 totalWaves = result.TotalWaves,
                 isComplete = result.IsComplete,
                 waitingForGate = result.WaitingForGate,
-                startedTasks = result.StartedTasks.Select(t => new
+                startedSteps = result.StartedSteps.Select(s => new
                 {
-                    id = t.Id,
-                    title = t.Title,
-                    status = t.Status.ToString(),
+                    id = s.Id,
+                    name = s.Name,
+                    wave = s.Wave,
+                    status = s.Status.ToString(),
                 }),
-                completedTasks = result.CompletedTasks.Select(t => new
+                completedSteps = result.CompletedSteps.Select(s => new
                 {
-                    id = t.Id,
-                    title = t.Title,
+                    id = s.Id,
+                    name = s.Name,
+                    wave = s.Wave,
                 }),
-                failedTasks = result.FailedTasks.Select(t => new
+                failedSteps = result.FailedSteps.Select(s => new
                 {
-                    id = t.Id,
-                    title = t.Title,
-                    error = t.Error,
+                    id = s.Id,
+                    name = s.Name,
+                    wave = s.Wave,
+                    error = s.Error,
                 }),
                 gateResult = result.GateResult != null ? new
                 {
@@ -508,17 +508,16 @@ public static class DeveloperEndpoints
                 currentWave = result.CurrentWave,
                 totalWaves = result.TotalWaves,
                 maxParallelism = result.MaxParallelism,
-                tasks = result.Tasks.Select(t => new
+                steps = result.Steps.Select(s => new
                 {
-                    id = t.Id,
-                    title = t.Title,
-                    description = t.Description,
-                    wave = t.Wave,
-                    dependsOn = t.DependsOn,
-                    status = t.Status.ToString(),
-                    startedAt = t.StartedAt,
-                    completedAt = t.CompletedAt,
-                    error = t.Error,
+                    id = s.Id,
+                    name = s.Name,
+                    description = s.Description,
+                    wave = s.Wave,
+                    status = s.Status.ToString(),
+                    startedAt = s.StartedAt,
+                    completedAt = s.CompletedAt,
+                    error = s.Error,
                 }),
             });
         }
@@ -1260,96 +1259,20 @@ public static class DeveloperEndpoints
     /// </summary>
     private static string GetEffectiveStatus(Story story)
     {
-        // Check for new gate statuses first (they're in StoryStatus)
-        if (story.Status == StoryStatus.GatePending)
-        {
-            return "GatePending";
-        }
-
-        if (story.Status == StoryStatus.GateFailed)
-        {
-            return "GateFailed";
-        }
-
-        // If story has been decomposed into tasks, use orchestrator status
-        if (!string.IsNullOrEmpty(story.TasksJson))
-        {
-            return story.OrchestratorStatus.ToString();
-        }
-
-        // Otherwise use step-based status
+        // Just use the story status directly
         return story.Status.ToString();
     }
 
     /// <summary>
-    /// Parses the tasks JSON from a story into a list of task DTOs.
-    /// </summary>
-    private static List<object>? ParseTasks(Story story)
-    {
-        if (string.IsNullOrEmpty(story.TasksJson))
-        {
-            return null;
-        }
-
-        try
-        {
-            var tasks = JsonSerializer.Deserialize<List<StoryTask>>(story.TasksJson, new JsonSerializerOptions
-            {
-                PropertyNameCaseInsensitive = true,
-            });
-
-            return tasks?.Select(t => (object)new
-            {
-                id = t.Id,
-                title = t.Title,
-                description = t.Description,
-                wave = t.Wave,
-                dependsOn = t.DependsOn,
-                status = t.Status.ToString(),
-                output = t.Output,
-                error = t.Error,
-                startedAt = t.StartedAt,
-                completedAt = t.CompletedAt,
-            }).ToList();
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    /// <summary>
-    /// Gets the wave count from steps or tasks.
+    /// Gets the wave count from steps.
     /// </summary>
     private static int GetWaveCount(Story story)
     {
-        // First check if steps have wave assignments (new model)
         if (story.Steps.Count > 0)
         {
-            var maxWave = story.Steps.Max(s => s.Wave);
-            if (maxWave > 0)
-            {
-                return maxWave;
-            }
+            return story.Steps.Max(s => s.Wave);
         }
 
-        // Fall back to TasksJson (legacy model)
-        if (string.IsNullOrEmpty(story.TasksJson))
-        {
-            return story.Steps.Count > 0 ? 1 : 0; // Sequential steps = 1 wave
-        }
-
-        try
-        {
-            var tasks = JsonSerializer.Deserialize<List<StoryTask>>(story.TasksJson, new JsonSerializerOptions
-            {
-                PropertyNameCaseInsensitive = true,
-            });
-            return tasks?.Max(t => t.Wave) ?? 0;
-        }
-        catch
-        {
-            return 0;
-        }
+        return 0;
     }
 }

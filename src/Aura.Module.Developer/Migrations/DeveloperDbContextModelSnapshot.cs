@@ -103,9 +103,6 @@ namespace Aura.Module.Developer.Migrations
                     b.Property<int>("MaxParallelism")
                         .HasColumnType("integer");
 
-                    b.Property<int>("OrchestratorStatus")
-                        .HasColumnType("integer");
-
                     b.Property<string>("PatternLanguage")
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)")
@@ -142,9 +139,6 @@ namespace Aura.Module.Developer.Migrations
                         .HasColumnName("status");
 
                     b.Property<string>("SuggestedCapability")
-                        .HasColumnType("text");
-
-                    b.Property<string>("TasksJson")
                         .HasColumnType("text");
 
                     b.Property<string>("Title")

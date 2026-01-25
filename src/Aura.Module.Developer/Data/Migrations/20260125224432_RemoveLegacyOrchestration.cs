@@ -5,23 +5,20 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace Aura.Module.Developer.Data.Migrations
 {
     /// <inheritdoc />
-    public partial class AddWaveAndGateFields : Migration
+    public partial class RemoveLegacyOrchestration : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.AddColumn<int>(
-                name: "GateMode",
+            migrationBuilder.RenameColumn(
+                name: "TasksJson",
                 table: "workflows",
-                type: "integer",
-                nullable: false,
-                defaultValue: 0);
+                newName: "GateResult");
 
-            migrationBuilder.AddColumn<string>(
-                name: "GateResult",
+            migrationBuilder.RenameColumn(
+                name: "OrchestratorStatus",
                 table: "workflows",
-                type: "text",
-                nullable: true);
+                newName: "GateMode");
 
             migrationBuilder.AddColumn<int>(
                 name: "Wave",
@@ -35,16 +32,18 @@ namespace Aura.Module.Developer.Data.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropColumn(
-                name: "GateMode",
-                table: "workflows");
-
-            migrationBuilder.DropColumn(
-                name: "GateResult",
-                table: "workflows");
-
-            migrationBuilder.DropColumn(
                 name: "Wave",
                 table: "workflow_steps");
+
+            migrationBuilder.RenameColumn(
+                name: "GateResult",
+                table: "workflows",
+                newName: "TasksJson");
+
+            migrationBuilder.RenameColumn(
+                name: "GateMode",
+                table: "workflows",
+                newName: "OrchestratorStatus");
         }
     }
 }
