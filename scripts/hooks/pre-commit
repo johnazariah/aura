@@ -77,50 +77,7 @@ else
 fi
 
 # =============================================================================
-# 2. Code formatting check
-# =============================================================================
-echo ""
-echo "🔍 Checking code formatting..."
-
-dotnet format --verify-no-changes --verbosity minimal 2>&1
-
-if [ $? -ne 0 ]; then
-    echo ""
-    echo "${RED}❌ Code formatting check failed!${NC}"
-    echo ""
-    echo "Run 'dotnet format' to fix formatting issues, then try again."
-    echo ""
-    exit 1
-fi
-
-echo "${GREEN}✅ Code formatting passed${NC}"
-
-# =============================================================================
-# 3. Feature file validation
-# =============================================================================
-echo ""
-echo "🔍 Validating feature files..."
-
-if [ -f "scripts/Validate-Features.ps1" ]; then
-    # Run PowerShell validation script
-    if command -v pwsh > /dev/null 2>&1; then
-        pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/Validate-Features.ps1 2>&1
-        if [ $? -ne 0 ]; then
-            echo ""
-            echo "${RED}❌ Feature validation failed!${NC}"
-            echo ""
-            exit 1
-        fi
-        echo "${GREEN}✅ Feature files valid${NC}"
-    else
-        echo "${YELLOW}⚠️  PowerShell not found, skipping feature validation${NC}"
-    fi
-else
-    echo "${YELLOW}⚠️  Validate-Features.ps1 not found, skipping${NC}"
-fi
-
-# =============================================================================
-# 4. Normalize CRLF to LF (auto-fix)
+# 2. Normalize CRLF to LF (auto-fix) - MUST run before dotnet format
 # =============================================================================
 echo ""
 echo "🔍 Checking line endings..."
@@ -152,6 +109,49 @@ if [ $CRLF_FIXED -eq 1 ]; then
     echo "${GREEN}✅ Line endings normalized to LF and re-staged${NC}"
 else
     echo "${GREEN}✅ Line endings OK${NC}"
+fi
+
+# =============================================================================
+# 3. Code formatting check
+# =============================================================================
+echo ""
+echo "🔍 Checking code formatting..."
+
+dotnet format --verify-no-changes --verbosity minimal 2>&1
+
+if [ $? -ne 0 ]; then
+    echo ""
+    echo "${RED}❌ Code formatting check failed!${NC}"
+    echo ""
+    echo "Run 'dotnet format' to fix formatting issues, then try again."
+    echo ""
+    exit 1
+fi
+
+echo "${GREEN}✅ Code formatting passed${NC}"
+
+# =============================================================================
+# 4. Feature file validation
+# =============================================================================
+echo ""
+echo "🔍 Validating feature files..."
+
+if [ -f "scripts/Validate-Features.ps1" ]; then
+    # Run PowerShell validation script
+    if command -v pwsh > /dev/null 2>&1; then
+        pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/Validate-Features.ps1 2>&1
+        if [ $? -ne 0 ]; then
+            echo ""
+            echo "${RED}❌ Feature validation failed!${NC}"
+            echo ""
+            exit 1
+        fi
+        echo "${GREEN}✅ Feature files valid${NC}"
+    else
+        echo "${YELLOW}⚠️  PowerShell not found, skipping feature validation${NC}"
+    fi
+else
+    echo "${YELLOW}⚠️  Validate-Features.ps1 not found, skipping${NC}"
 fi
 
 # =============================================================================
