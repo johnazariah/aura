@@ -21,6 +21,27 @@ When encountering issues, fix them properly in the product—don't apply quick w
 4. **Document all decisions** - Update `.project/STATUS.md` after significant changes
 5. **Complete features properly** - Follow the ceremony in `.github/prompts/aura.complete-feature.prompt.md`
 6. **Product-first mindset** - Fix issues for all users, not just the current environment
+7. **Investigate failures properly** - Never dismiss errors as "transient" without evidence (see below)
+
+## Failure Investigation Protocol
+
+**Every failure is a bug until proven otherwise.** When Aura operations fail:
+
+1. **Check the logs first** - `C:\ProgramData\Aura\logs\aura-YYYYMMDD.log` contains actual error details
+2. **Reproduce the exact command** - Run the same command manually to see if it's truly transient
+3. **Look for root cause** - Error messages often hide the real issue (e.g., "Restore failed" may mean SDK resolution failure)
+4. **Fix in product, not environment** - If a workaround is needed, that's a bug in Aura
+
+**Common pitfalls to avoid:**
+- ❌ "This is a transient network issue" - Check logs; it may be a configuration bug
+- ❌ "Works when I run it manually" - The service runs in a different context (LocalSystem, different PATH)
+- ❌ "Just retry" - Understand WHY it failed before retrying
+- ✅ Read actual error output from logs or captured output
+- ✅ Consider all users: what if they have SDK workloads, different NuGet configs, etc.?
+
+**Recent examples of "transient" issues that were real bugs:**
+- `dotnet restore --source nuget.org` broke SDK workload resolution (Aspire SDK)
+- HTTP client disconnects permanently failed stories instead of allowing retry
 
 ## Quick Context
 
