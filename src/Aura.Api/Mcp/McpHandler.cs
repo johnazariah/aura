@@ -687,6 +687,24 @@ public sealed class McpHandler
                     required = new[] { "workspacePath", "nodeId" }
                 }
             },
+
+            // =================================================================
+            // aura_docs - Search documentation
+            // =================================================================
+            new McpToolDefinition
+            {
+                Name = "aura_docs",
+                Description = "Search documentation with semantic retrieval. Returns relevant documentation chunks with scores and metadata. (Read)",
+                InputSchema = new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        query = new { type = "string", description = "The documentation search query (concept, term, or question)" }
+                    },
+                    required = new[] { "query" }
+                }
+            },
         };
 
         return new JsonRpcResponse
