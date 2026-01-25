@@ -49,3 +49,5 @@ secrets.json
 cache/
 
 .update-temp/
+
+secedit.*

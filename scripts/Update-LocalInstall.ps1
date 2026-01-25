@@ -156,9 +156,15 @@ try {
         $serviceAccountScript = Join-Path $root "scripts\Create-ServiceAccount.ps1"
         if (Test-Path $serviceAccountScript) {
             $existingUser = Get-LocalUser -Name "AuraService" -ErrorAction SilentlyContinue
+            $hasStoredPassword = (Test-Path "HKLM:\SOFTWARE\Aura") -and 
+                (Get-ItemProperty -Path "HKLM:\SOFTWARE\Aura" -Name "ServiceAccountPassword" -ErrorAction SilentlyContinue)
+            
             if (-not $existingUser) {
                 Write-Step "Creating AuraService account..."
-                & $serviceAccountScript | Out-Null
+                & $serviceAccountScript
+            } elseif (-not $hasStoredPassword) {
+                Write-Step "AuraService account exists but password not stored - fixing..."
+                & $serviceAccountScript
             } else {
                 Write-Step "AuraService account exists"
             }

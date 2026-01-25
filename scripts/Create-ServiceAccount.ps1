@@ -74,29 +74,38 @@ function Initialize-UserProfile {
         [string]$Password
     )
     
+    # Wait for account to be fully available in the security database
+    Write-Step "Waiting for account to be available..."
+    Start-Sleep -Seconds 3
+    
     # Create a scheduled task that runs as the user to initialize their profile
     $taskName = "AuraProfileInit"
-    $securePassword = ConvertTo-SecureString $Password -AsPlainText -Force
-    $credential = New-Object System.Management.Automation.PSCredential(".\$Username", $securePassword)
+    $fullUsername = "$env:COMPUTERNAME\$Username"
     
-    # Simple command to ensure profile is created
-    $action = New-ScheduledTaskAction -Execute "cmd.exe" -Argument "/c echo Profile initialized"
-    $principal = New-ScheduledTaskPrincipal -UserId ".\$Username" -LogonType Password -RunLevel Limited
-    
-    # Register and run immediately
-    Register-ScheduledTask -TaskName $taskName -Action $action -Principal $principal -Force | Out-Null
-    Start-ScheduledTask -TaskName $taskName
-    
-    # Wait for completion
-    $timeout = 30
-    for ($i = 0; $i -lt $timeout; $i++) {
-        $task = Get-ScheduledTask -TaskName $taskName
-        if ($task.State -eq "Ready") { break }
-        Start-Sleep -Seconds 1
+    try {
+        # Simple command to ensure profile is created
+        $action = New-ScheduledTaskAction -Execute "cmd.exe" -Argument "/c echo Profile initialized"
+        $principal = New-ScheduledTaskPrincipal -UserId $fullUsername -LogonType Password -RunLevel Limited
+        
+        # Register and run immediately
+        Register-ScheduledTask -TaskName $taskName -Action $action -Principal $principal -Force -Password $Password -User $fullUsername | Out-Null
+        Start-ScheduledTask -TaskName $taskName
+        
+        # Wait for completion
+        $timeout = 30
+        for ($i = 0; $i -lt $timeout; $i++) {
+            $task = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+            if ($null -eq $task -or $task.State -eq "Ready") { break }
+            Start-Sleep -Seconds 1
+        }
+        
+        # Cleanup
+        Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
     }
-    
-    # Cleanup
-    Unregister-ScheduledTask -TaskName $taskName -Confirm:$false
+    catch {
+        Write-Warning "Profile initialization via scheduled task failed: $_"
+        Write-Warning "The profile will be created when the service first starts."
+    }
 }
 
 # =============================================================================
@@ -105,29 +114,36 @@ function Initialize-UserProfile {
 
 Write-Step "Configuring Aura service account: $AccountName"
 
+# Helper function to generate a secure password (PowerShell 7 / .NET Core compatible)
+function New-SecurePassword {
+    $chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_+-=[]{}|;:,.<>?'
+    $bytes = [byte[]]::new(24)
+    [System.Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
+    return -join ($bytes | ForEach-Object { $chars[$_ % $chars.Length] })
+}
+
 # Check if account exists
 $existingUser = Get-LocalUser -Name $AccountName -ErrorAction SilentlyContinue
 
-if ($existingUser -and -not $Force) {
-    Write-Step "Account $AccountName already exists"
-    
-    # Account exists but we don't have the password
-    # Generate new password and update
-    Add-Type -AssemblyName System.Web
-    $password = [System.Web.Security.Membership]::GeneratePassword(24, 4)
+# Check if we have the password stored
+$registryPath = "HKLM:\SOFTWARE\Aura"
+$hasStoredPassword = (Test-Path $registryPath) -and (Get-ItemProperty -Path $registryPath -Name "ServiceAccountPassword" -ErrorAction SilentlyContinue)
+
+if ($existingUser -and -not $Force -and $hasStoredPassword) {
+    Write-Step "AuraService account exists"
+    # Account exists and password is stored - nothing to do
+    exit 0
+}
+
+if ($existingUser -and (-not $hasStoredPassword -or $Force)) {
+    Write-Step "Account exists but password not stored - regenerating..."
+    $password = New-SecurePassword
     $securePassword = ConvertTo-SecureString $password -AsPlainText -Force
-    
     Set-LocalUser -Name $AccountName -Password $securePassword
     Write-Step "Password reset for existing account"
-} else {
-    if ($existingUser -and $Force) {
-        Write-Step "Removing existing account (Force mode)"
-        Remove-LocalUser -Name $AccountName
-    }
-    
+} elseif (-not $existingUser) {
     # Generate secure password
-    Add-Type -AssemblyName System.Web
-    $password = [System.Web.Security.Membership]::GeneratePassword(24, 4)
+    $password = New-SecurePassword
     $securePassword = ConvertTo-SecureString $password -AsPlainText -Force
     
     # Create the account
