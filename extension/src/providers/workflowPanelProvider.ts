@@ -985,14 +985,14 @@ export class WorkflowPanelProvider {
                     },
                     onDone: () => {
                         panel.webview.postMessage({ type: 'streamEnd' });
-                        this.refreshPanel(workflowId);
+                        // Don't auto-refresh - preserve streaming output for user review
                     },
                     onError: (message) => {
                         panel.webview.postMessage({
                             type: 'streamError',
                             message
                         });
-                        this.refreshPanel(workflowId);
+                        // Don't auto-refresh - preserve streaming output for user review
                     }
                 },
                 this.streamAbortController
@@ -1000,7 +1000,7 @@ export class WorkflowPanelProvider {
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Streaming execution failed';
             panel.webview.postMessage({ type: 'streamError', message });
-            await this.refreshPanel(workflowId);
+            // Don't auto-refresh - preserve streaming output for user review
         }
     }
 
@@ -3410,9 +3410,11 @@ export class WorkflowPanelProvider {
                     break;
                 case 'streamEnd':
                     appendProgressLog('✅ Execution completed!', 'done');
+                    showRefreshPrompt('Execution complete. Refresh to see updated step outputs.');
                     break;
                 case 'streamError':
                     appendProgressLog('❌ Error: ' + message.message, 'error');
+                    showRefreshPrompt('Execution ended with errors. Refresh to see details.');
                     break;
             }
         });
@@ -3470,7 +3472,8 @@ export class WorkflowPanelProvider {
                 case 'Completed':
                     appendProgressLog('🎉 All waves completed!', 'done');
                     hideWaveBanner();
-                    setTimeout(() => vscode.postMessage({ type: 'refresh' }), 1000);
+                    // Don't auto-refresh - preserve streaming output for user review
+                    // User can click refresh button when ready
                     break;
                 case 'Failed':
                     appendProgressLog('❌ ' + event.error, 'error');
@@ -3501,6 +3504,19 @@ export class WorkflowPanelProvider {
         function hideWaveBanner() {
             const banner = document.getElementById('waveBanner');
             if (banner) banner.style.display = 'none';
+        }
+
+        function showRefreshPrompt(message) {
+            const logContent = document.getElementById('progressLogContent');
+            if (!logContent) return;
+            
+            const prompt = document.createElement('div');
+            prompt.className = 'refresh-prompt';
+            prompt.innerHTML = '<span>' + message + '</span> <button onclick="vscode.postMessage({type: \'refresh\'})">🔄 Refresh</button>';
+            prompt.style.cssText = 'margin-top: 12px; padding: 10px; background: var(--vscode-inputValidation-infoBackground); border: 1px solid var(--vscode-inputValidation-infoBorder); border-radius: 4px; display: flex; align-items: center; justify-content: space-between; gap: 12px;';
+            prompt.querySelector('button').style.cssText = 'background: var(--vscode-button-background); color: var(--vscode-button-foreground); border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: 500;';
+            logContent.appendChild(prompt);
+            logContent.scrollTop = logContent.scrollHeight;
         }
 
         function updateStepStatus(stepId, status, label) {
