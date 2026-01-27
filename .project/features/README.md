@@ -77,6 +77,7 @@ features/
 | [Agentic Execution v2](completed/agentic-execution-v2.md) | Sub-agents, retry loops, token budget awareness | 2026-01-23 |
 | [RFC 7807 Problem Details](completed/rfc7807-problem-details.md) | Standardized HTTP error responses | 2026-01-24 |
 | [Hierarchical Code Exploration](completed/aura-tree-hierarchical-exploration.md) | aura_tree and aura_get_node MCP tools | 2026-01-24 |
+| [Bundled Documentation](completed/aura-docs-bundled-documentation.md) | aura_docs_list and aura_docs_get MCP tools | 2025-01-27 |
 
 ## Upcoming Features
 

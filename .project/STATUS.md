@@ -1,6 +1,6 @@
 # Aura Project Status
 
-> **Last Updated**: 2026-01-23
+> **Last Updated**: 2025-01-27
 > **Current Release**: v1.3.1
 > **Branch**: main
 > **Overall Status**: ✅ Production Ready
@@ -18,7 +18,7 @@ Aura is a **local-first, privacy-safe AI foundation** for knowledge work. The De
 | **Aura.Api** | ✅ Complete | `src/Aura.Api/Program.cs` |
 | **Aura.AppHost** | ✅ Complete | `src/Aura.AppHost/` |
 | **VS Code Extension** | ✅ Complete | `extension/src/` |
-| **Tests** | ✅ 628 passing | `tests/` |
+| **Tests** | ✅ 754 passing | `tests/` |
 
 ## Feature Inventory
 
