@@ -6,6 +6,7 @@ namespace Aura.Api.Mcp;
 
 using System.Text.Json;
 using Aura.Api.Mcp.Tools;
+using Aura.Api.Services;
 using Aura.Foundation.Data.Entities;
 using Aura.Foundation.Git;
 using Aura.Foundation.Rag;
@@ -47,6 +48,7 @@ public sealed class McpHandler
     private readonly IGitWorktreeService _worktreeService;
     private readonly ITreeBuilderService _treeBuilderService;
     private readonly IAuraDocsTool _auraDocsTool;
+    private readonly IDocsService _docsService;
     private readonly ILogger<McpHandler> _logger;
 
     private readonly Dictionary<string, Func<JsonElement?, CancellationToken, Task<object>>> _tools;
@@ -67,6 +69,7 @@ public sealed class McpHandler
         IGitWorktreeService worktreeService,
         ITreeBuilderService treeBuilderService,
         IAuraDocsTool auraDocsTool,
+        IDocsService docsService,
         ILogger<McpHandler> logger)
     {
         _ragService = ragService;
@@ -81,6 +84,7 @@ public sealed class McpHandler
         _worktreeService = worktreeService;
         _treeBuilderService = treeBuilderService;
         _auraDocsTool = auraDocsTool;
+        _docsService = docsService;
         _logger = logger;
 
         // Phase 7: Consolidated meta-tools (28 tools → 11 tools)
@@ -100,6 +104,8 @@ public sealed class McpHandler
             ["aura_tree"] = TreeAsync,
             ["aura_get_node"] = GetNodeAsync,
             ["aura_docs"] = DocsAsync,
+            ["aura_docs_list"] = DocsListAsync,
+            ["aura_docs_get"] = DocsGetAsync,
         };
     }
 
@@ -4645,6 +4651,76 @@ public sealed class McpHandler
         _logger.LogDebug("aura_docs: query={Query}", query);
 
         return await _auraDocsTool.SearchDocumentationAsync(query, ct);
+    }
+
+    /// <summary>
+    /// aura_docs_list - List documents with optional filtering by category and tags.
+    /// </summary>
+    private Task<object> DocsListAsync(JsonElement? args, CancellationToken ct)
+    {
+        string? category = null;
+        IReadOnlyList<string>? tags = null;
+
+        if (args.HasValue)
+        {
+            if (args.Value.TryGetProperty("category", out var categoryEl))
+            {
+                category = categoryEl.GetString();
+            }
+
+            if (args.Value.TryGetProperty("tags", out var tagsEl))
+            {
+                tags = tagsEl.EnumerateArray()
+                    .Select(e => e.GetString() ?? string.Empty)
+                    .Where(s => !string.IsNullOrWhiteSpace(s))
+                    .ToList();
+            }
+        }
+
+        _logger.LogDebug("aura_docs_list: category={Category}, tags={Tags}", category, tags);
+
+        var docs = _docsService.ListDocuments(category, tags);
+
+        return Task.FromResult<object>(new
+        {
+            count = docs.Count,
+            docs = docs.Select(d => new
+            {
+                id = d.Id,
+                title = d.Title,
+                summary = d.Summary,
+                category = d.Category,
+                tags = d.Tags
+            })
+        });
+    }
+
+    /// <summary>
+    /// aura_docs_get - Retrieve the full content of a document by its identifier.
+    /// </summary>
+    private Task<object> DocsGetAsync(JsonElement? args, CancellationToken ct)
+    {
+        var id = args?.GetProperty("id").GetString()
+            ?? throw new ArgumentException("id is required");
+
+        _logger.LogDebug("aura_docs_get: id={Id}", id);
+
+        var doc = _docsService.GetDocument(id);
+
+        if (doc is null)
+        {
+            throw new KeyNotFoundException($"Document with ID '{id}' not found");
+        }
+
+        return Task.FromResult<object>(new
+        {
+            id = doc.Id,
+            title = doc.Title,
+            category = doc.Category,
+            tags = doc.Tags,
+            content = doc.Content,
+            last_updated = doc.LastUpdated
+        });
     }
 
     private static object SerializeTreeNode(TreeNode node)
