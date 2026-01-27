@@ -65,6 +65,10 @@ public static class DeveloperEndpoints
         app.MapPost("/api/developer/stories/{id:guid}/post-update", PostUpdateToIssue);
         app.MapPost("/api/developer/stories/{id:guid}/close-issue", CloseLinkedIssue);
 
+        // Configuration endpoints
+        app.MapPost("/api/developer/config/github-token", SetGitHubToken);
+        app.MapGet("/api/developer/config/github-token/status", GetGitHubTokenStatus);
+
         return app;
     }
 
@@ -1332,5 +1336,35 @@ public static class DeveloperEndpoints
         }
 
         return 0;
+    }
+
+    private record SetGitHubTokenRequest(string Token);
+
+    /// <summary>
+    /// Sets the GitHub token for the CopilotCli dispatcher to use.
+    /// </summary>
+    private static async Task<IResult> SetGitHubToken(
+        HttpRequest request,
+        IGitHubCopilotDispatcher copilotDispatcher,
+        CancellationToken ct)
+    {
+        var body = await request.ReadFromJsonAsync<SetGitHubTokenRequest>(ct);
+        if (body is null || string.IsNullOrEmpty(body.Token))
+        {
+            return Results.BadRequest(new { error = "Token is required" });
+        }
+
+        copilotDispatcher.SetGitHubToken(body.Token);
+
+        return Results.Ok(new { message = "GitHub token configured", hasToken = true });
+    }
+
+    /// <summary>
+    /// Gets the status of the GitHub token configuration.
+    /// </summary>
+    private static IResult GetGitHubTokenStatus(
+        IGitHubCopilotDispatcher copilotDispatcher)
+    {
+        return Results.Ok(new { hasToken = copilotDispatcher.HasGitHubToken });
     }
 }

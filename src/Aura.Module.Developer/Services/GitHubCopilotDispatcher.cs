@@ -21,9 +21,27 @@ public sealed class GitHubCopilotDispatcher : IGitHubCopilotDispatcher, ITaskDis
     private readonly SemaphoreSlim _availabilityCheck = new(1, 1);
     private bool? _isAvailable;
     private string? _copilotPath;
+    private string? _githubToken;
 
     /// <inheritdoc/>
     public DispatchTarget Target => DispatchTarget.CopilotCli;
+
+    /// <inheritdoc/>
+    public bool HasGitHubToken => !string.IsNullOrEmpty(_githubToken);
+
+    /// <inheritdoc/>
+    public void SetGitHubToken(string? token)
+    {
+        _githubToken = token;
+        if (!string.IsNullOrEmpty(token))
+        {
+            _logger.LogInformation("GitHub token configured (length: {Length})", token.Length);
+        }
+        else
+        {
+            _logger.LogInformation("GitHub token cleared");
+        }
+    }
 
     // Common installation paths for copilot CLI
     private static readonly string[] CopilotSearchPaths =
@@ -312,6 +330,13 @@ public sealed class GitHubCopilotDispatcher : IGitHubCopilotDispatcher, ITaskDis
             UseShellExecute = false,
             CreateNoWindow = true,
         };
+
+        // Pass GitHub token as environment variable if configured
+        if (!string.IsNullOrEmpty(_githubToken))
+        {
+            psi.Environment["GITHUB_TOKEN"] = _githubToken;
+            psi.Environment["GH_TOKEN"] = _githubToken;
+        }
 
         using var process = new Process { StartInfo = psi };
         var outputBuilder = new StringBuilder();

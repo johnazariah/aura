@@ -47,4 +47,16 @@ public interface IGitHubCopilotDispatcher
     /// <param name="ct">Cancellation token.</param>
     /// <returns>True if available, false otherwise.</returns>
     Task<bool> IsAvailableAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Sets the GitHub token to use for authentication.
+    /// This token will be passed as GITHUB_TOKEN environment variable to copilot CLI.
+    /// </summary>
+    /// <param name="token">The GitHub personal access token.</param>
+    void SetGitHubToken(string? token);
+
+    /// <summary>
+    /// Gets whether a GitHub token has been configured.
+    /// </summary>
+    bool HasGitHubToken { get; }
 }
