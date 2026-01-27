@@ -1031,7 +1031,11 @@ public sealed class StoryService(
                     StoryTaskStatus.Running => StepStatus.Running,
                     _ => StepStatus.Pending,
                 };
-                step.Output = executed.Output;
+
+                // Wrap dispatcher output in JSON since the column is JSONB
+                step.Output = executed.Output != null
+                    ? JsonSerializer.Serialize(new { content = executed.Output })
+                    : null;
                 step.Error = executed.Error;
                 step.AssignedAgentId = executed.AgentSessionId;
                 step.StartedAt = executed.StartedAt;
@@ -1249,7 +1253,12 @@ public sealed class StoryService(
                         StoryTaskStatus.Running => StepStatus.Running,
                         _ => StepStatus.Pending,
                     };
-                    step.Output = executed.Output;
+
+                    // Wrap dispatcher output in JSON since the column is JSONB
+                    var outputJson = executed.Output != null
+                        ? JsonSerializer.Serialize(new { content = executed.Output })
+                        : null;
+                    step.Output = outputJson;
                     step.Error = executed.Error;
                     step.AssignedAgentId = executed.AgentSessionId;
                     step.StartedAt = executed.StartedAt;
