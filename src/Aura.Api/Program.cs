@@ -92,6 +92,7 @@ developerModule.ConfigureServices(builder.Services, builder.Configuration);
 // Add MCP handler for GitHub Copilot integration
 builder.Services.AddScoped<McpHandler>();
 builder.Services.AddSingleton<Aura.Api.Mcp.Tools.IAuraDocsTool, Aura.Api.Mcp.Tools.AuraDocsTool>();
+builder.Services.AddSingleton<Aura.Api.Services.IDocsService, Aura.Api.Services.DocsService>();
 
 // Add CORS for the VS Code extension
 builder.Services.AddCors(options =>
