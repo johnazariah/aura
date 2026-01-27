@@ -17,12 +17,14 @@ public interface IGitHubCopilotDispatcher
     /// <param name="task">The task to execute.</param>
     /// <param name="worktreePath">The worktree path to execute in.</param>
     /// <param name="completedTasks">Previously completed tasks for context (optional).</param>
+    /// <param name="githubToken">GitHub token for authentication (optional, passed per-request).</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>The updated task with execution result.</returns>
     Task<StoryTask> DispatchTaskAsync(
         StoryTask task,
         string worktreePath,
         IReadOnlyList<StoryTask>? completedTasks = null,
+        string? githubToken = null,
         CancellationToken ct = default);
 
     /// <summary>
@@ -32,6 +34,7 @@ public interface IGitHubCopilotDispatcher
     /// <param name="worktreePath">The worktree path to execute in.</param>
     /// <param name="maxParallelism">Maximum concurrent agents.</param>
     /// <param name="completedTasks">Previously completed tasks for context (optional).</param>
+    /// <param name="githubToken">GitHub token for authentication (optional, passed per-request).</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>The updated tasks with execution results.</returns>
     Task<IReadOnlyList<StoryTask>> DispatchTasksAsync(
@@ -39,6 +42,7 @@ public interface IGitHubCopilotDispatcher
         string worktreePath,
         int maxParallelism,
         IReadOnlyList<StoryTask>? completedTasks = null,
+        string? githubToken = null,
         CancellationToken ct = default);
 
     /// <summary>
@@ -47,16 +51,4 @@ public interface IGitHubCopilotDispatcher
     /// <param name="ct">Cancellation token.</param>
     /// <returns>True if available, false otherwise.</returns>
     Task<bool> IsAvailableAsync(CancellationToken ct = default);
-
-    /// <summary>
-    /// Sets the GitHub token to use for authentication.
-    /// This token will be passed as GITHUB_TOKEN environment variable to copilot CLI.
-    /// </summary>
-    /// <param name="token">The GitHub personal access token.</param>
-    void SetGitHubToken(string? token);
-
-    /// <summary>
-    /// Gets whether a GitHub token has been configured.
-    /// </summary>
-    bool HasGitHubToken { get; }
 }

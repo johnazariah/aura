@@ -833,7 +833,7 @@ public sealed class StoryService(
         string[]? DependsOn);
 
     /// <inheritdoc/>
-    public async Task<StoryRunResult> RunAsync(Guid storyId, CancellationToken ct = default)
+    public async Task<StoryRunResult> RunAsync(Guid storyId, string? githubToken = null, CancellationToken ct = default)
     {
         var story = await _db.Workflows
             .Include(w => w.Steps)
@@ -999,6 +999,7 @@ public sealed class StoryService(
                 story.WorktreePath,
                 story.MaxParallelism,
                 priorCompletedTasks,
+                githubToken,
                 ct);
         }
         else
@@ -1014,6 +1015,7 @@ public sealed class StoryService(
                 story.WorktreePath,
                 story.MaxParallelism,
                 priorCompletedTasks,
+                githubToken,
                 ct);
         }
 
@@ -1112,6 +1114,7 @@ public sealed class StoryService(
     /// <inheritdoc/>
     public async IAsyncEnumerable<StoryProgressEvent> RunStreamAsync(
         Guid storyId,
+        string? githubToken = null,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
     {
         var story = await _db.Workflows
@@ -1224,6 +1227,7 @@ public sealed class StoryService(
                     story.WorktreePath,
                     story.MaxParallelism,
                     priorCompletedTasks,
+                    githubToken,
                     ct);
             }
             else
@@ -1233,6 +1237,7 @@ public sealed class StoryService(
                     story.WorktreePath,
                     story.MaxParallelism,
                     priorCompletedTasks,
+                    githubToken,
                     ct);
             }
 

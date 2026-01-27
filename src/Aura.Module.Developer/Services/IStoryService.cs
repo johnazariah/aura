@@ -150,9 +150,10 @@ public interface IStoryService
     /// Executes one wave at a time, with quality gates between waves.
     /// </summary>
     /// <param name="storyId">The story ID. Story must be decomposed.</param>
+    /// <param name="githubToken">GitHub token for CopilotCli dispatcher (optional, per-request).</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>The orchestrator run result with progress info.</returns>
-    Task<StoryRunResult> RunAsync(Guid storyId, CancellationToken ct = default);
+    Task<StoryRunResult> RunAsync(Guid storyId, string? githubToken = null, CancellationToken ct = default);
 
     /// <summary>
     /// Runs the story execution with real-time progress streaming.
@@ -160,9 +161,10 @@ public interface IStoryService
     /// Use this for SSE endpoints to show "wall of flying text" to users.
     /// </summary>
     /// <param name="storyId">The story ID. Story must be decomposed.</param>
+    /// <param name="githubToken">GitHub token for CopilotCli dispatcher (optional, per-request).</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>An async enumerable of progress events.</returns>
-    IAsyncEnumerable<StoryProgressEvent> RunStreamAsync(Guid storyId, CancellationToken ct = default);
+    IAsyncEnumerable<StoryProgressEvent> RunStreamAsync(Guid storyId, string? githubToken = null, CancellationToken ct = default);
 
     /// <summary>
     /// Gets the current orchestrator status and task progress.

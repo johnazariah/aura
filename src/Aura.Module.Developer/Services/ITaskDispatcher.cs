@@ -23,12 +23,14 @@ public interface ITaskDispatcher
     /// <param name="task">The task to execute.</param>
     /// <param name="worktreePath">The worktree path to execute in.</param>
     /// <param name="completedTasks">Previously completed tasks for context (optional).</param>
+    /// <param name="githubToken">GitHub token for authentication (optional, for CopilotCli).</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>The updated task with execution result.</returns>
     Task<StoryTask> DispatchTaskAsync(
         StoryTask task,
         string worktreePath,
         IReadOnlyList<StoryTask>? completedTasks = null,
+        string? githubToken = null,
         CancellationToken ct = default);
 
     /// <summary>
@@ -38,6 +40,7 @@ public interface ITaskDispatcher
     /// <param name="worktreePath">The worktree path to execute in.</param>
     /// <param name="maxParallelism">Maximum concurrent agents.</param>
     /// <param name="completedTasks">Previously completed tasks for context (optional).</param>
+    /// <param name="githubToken">GitHub token for authentication (optional, for CopilotCli).</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>The updated tasks with execution results.</returns>
     Task<IReadOnlyList<StoryTask>> DispatchTasksAsync(
@@ -45,6 +48,7 @@ public interface ITaskDispatcher
         string worktreePath,
         int maxParallelism,
         IReadOnlyList<StoryTask>? completedTasks = null,
+        string? githubToken = null,
         CancellationToken ct = default);
 
     /// <summary>

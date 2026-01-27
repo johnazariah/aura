@@ -63,6 +63,7 @@ public sealed class InternalAgentsDispatcher : ITaskDispatcher
         StoryTask task,
         string worktreePath,
         IReadOnlyList<StoryTask>? completedTasks = null,
+        string? githubToken = null,
         CancellationToken ct = default)
     {
         var startedTask = task with
@@ -270,6 +271,7 @@ public sealed class InternalAgentsDispatcher : ITaskDispatcher
         string worktreePath,
         int maxParallelism,
         IReadOnlyList<StoryTask>? completedTasks = null,
+        string? githubToken = null,
         CancellationToken ct = default)
     {
         var worktreeName = Path.GetFileName(worktreePath);
@@ -285,7 +287,7 @@ public sealed class InternalAgentsDispatcher : ITaskDispatcher
             await semaphore.WaitAsync(ct);
             try
             {
-                return await DispatchTaskAsync(task, worktreePath, completedTasks, ct);
+                return await DispatchTaskAsync(task, worktreePath, completedTasks, githubToken, ct);
             }
             finally
             {
