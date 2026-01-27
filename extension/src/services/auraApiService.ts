@@ -241,11 +241,44 @@ export interface StepChatResponse {
 
 export class AuraApiService {
     private httpClient: AxiosInstance;
+    private cachedGitHubToken: string | null = null;
+    private tokenCacheExpiry: number = 0;
 
     constructor() {
         this.httpClient = axios.create({
             timeout: 30000  // 30s default for general API calls
         });
+    }
+
+    /**
+     * Gets a GitHub token for CopilotCli dispatcher authentication.
+     * Uses VS Code's built-in GitHub authentication provider.
+     * Tokens are cached for 5 minutes to avoid repeated auth prompts.
+     */
+    async getGitHubToken(): Promise<string | null> {
+        // Check cache first (tokens are valid for much longer, but we refresh every 5 min)
+        const now = Date.now();
+        if (this.cachedGitHubToken && now < this.tokenCacheExpiry) {
+            return this.cachedGitHubToken;
+        }
+
+        try {
+            // Request a GitHub session - this will prompt the user if not already authenticated
+            const session = await vscode.authentication.getSession('github', ['repo'], {
+                createIfNone: false  // Don't force login, just get existing session
+            });
+
+            if (session) {
+                this.cachedGitHubToken = session.accessToken;
+                this.tokenCacheExpiry = now + (5 * 60 * 1000); // Cache for 5 minutes
+                return session.accessToken;
+            }
+
+            return null;
+        } catch (error) {
+            console.warn('Failed to get GitHub token:', error);
+            return null;
+        }
     }
 
     getBaseUrl(): string {
@@ -669,12 +702,22 @@ export class AuraApiService {
     ): Promise<void> {
         const url = `${this.getBaseUrl()}/api/developer/stories/${storyId}/stream`;
 
+        // Get GitHub token for CopilotCli dispatcher authentication
+        const githubToken = await this.getGitHubToken();
+
         try {
+            const headers: Record<string, string> = {
+                'Accept': 'text/event-stream'
+            };
+
+            // Pass GitHub token if available (required for CopilotCli dispatcher)
+            if (githubToken) {
+                headers['X-GitHub-Token'] = githubToken;
+            }
+
             const response = await fetch(url, {
                 method: 'GET',
-                headers: {
-                    'Accept': 'text/event-stream'
-                },
+                headers,
                 signal: abortController?.signal
             });
 
