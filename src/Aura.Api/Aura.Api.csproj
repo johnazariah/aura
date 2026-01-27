@@ -25,12 +25,17 @@
     <PackageReference Include="Serilog.AspNetCore" Version="8.0.2" />
     <PackageReference Include="Serilog.Sinks.EventLog" Version="4.0.0" />
     <PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
+    <PackageReference Include="YamlDotNet" Version="16.*" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Aura.Foundation\Aura.Foundation.csproj" />
     <ProjectReference Include="..\Aura.Module.Developer\Aura.Module.Developer.csproj" />
     <ProjectReference Include="..\Aura.ServiceDefaults\Aura.ServiceDefaults.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Docs\**\*" />
   </ItemGroup>
 
 </Project>
