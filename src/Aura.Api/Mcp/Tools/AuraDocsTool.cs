@@ -30,34 +30,54 @@ public sealed class AuraDocsTool : IAuraDocsTool
     /// <inheritdoc/>
     public async Task<object> SearchDocumentationAsync(string query, CancellationToken ct)
     {
-        _logger.LogDebug("Searching Aura documentation for query: {Query}", query);
-
-        var options = new RagQueryOptions
+        // Validate query parameter
+        if (string.IsNullOrWhiteSpace(query))
         {
-            TopK = 10,
-            ContentTypes = new[] { RagContentType.Documentation, RagContentType.Markdown },
-            MinScore = 0.5
-        };
+            _logger.LogWarning("SearchDocumentationAsync called with empty or null query");
+            throw new ArgumentException("Query cannot be null or empty", nameof(query));
+        }
 
-        var results = await _ragService.QueryAsync(query, options, ct);
-
-        _logger.LogInformation(
-            "Found {ResultCount} documentation results for query: {Query}",
-            results.Count,
-            query);
-
-        return new
+        try
         {
-            query,
-            resultCount = results.Count,
-            results = results.Select(r => new
+            _logger.LogDebug("Searching Aura documentation for query: {Query}", query);
+
+            var options = new RagQueryOptions
             {
-                content = r.Text,
-                sourcePath = r.SourcePath,
-                score = r.Score,
-                contentType = r.ContentType.ToString(),
-                metadata = r.Metadata
-            })
-        };
+                TopK = 10,
+                ContentTypes = new[] { RagContentType.Documentation, RagContentType.Markdown },
+                MinScore = 0.5
+            };
+
+            var results = await _ragService.QueryAsync(query, options, ct);
+
+            _logger.LogInformation(
+                "Found {ResultCount} documentation results for query: {Query}",
+                results.Count,
+                query);
+
+            return new
+            {
+                query,
+                resultCount = results.Count,
+                results = results.Select(r => new
+                {
+                    content = r.Text,
+                    sourcePath = r.SourcePath,
+                    score = r.Score,
+                    contentType = r.ContentType.ToString(),
+                    metadata = r.Metadata
+                })
+            };
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogInformation("Documentation search cancelled for query: {Query}", query);
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error searching documentation for query: {Query}", query);
+            throw;
+        }
     }
 }
