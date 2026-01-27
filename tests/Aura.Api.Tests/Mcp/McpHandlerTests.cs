@@ -518,4 +518,429 @@ public class McpHandlerTests
         response.Error!.Code.Should().Be(-32601);
         response.Error.Message.Should().Contain("Method not found");
     }
+
+    [Fact]
+    public async Task AuraDocsList_WithNoFilters_ReturnsAllDocuments()
+    {
+        // Arrange
+        var allDocuments = new List<DocumentEntry>
+        {
+            new("quick-start", "Quick Start Guide", "Get started with Aura in 5 minutes", "guides", new List<string> { "beginner", "setup" }),
+            new("architecture", "Architecture Overview", "Learn about Aura's architecture", "reference", new List<string> { "advanced", "architecture" }),
+            new("api-reference", "API Reference", "Complete API documentation", "reference", new List<string> { "api", "reference" })
+        };
+
+        _docsService.ListDocuments(null, null).Returns(allDocuments);
+
+        var request = new
+        {
+            jsonrpc = "2.0",
+            method = "tools/call",
+            id = 100,
+            @params = new
+            {
+                name = "aura_docs_list",
+                arguments = new { }
+            }
+        };
+
+        var requestJson = JsonSerializer.Serialize(request);
+
+        // Act
+        var responseJson = await _handler.HandleAsync(requestJson);
+
+        // Assert
+        var response = JsonSerializer.Deserialize<JsonRpcResponse>(responseJson);
+        response.Should().NotBeNull();
+        response!.Error.Should().BeNull();
+        response.Result.Should().NotBeNull();
+
+        var resultJson = JsonSerializer.Serialize(response.Result);
+        var resultDoc = JsonDocument.Parse(resultJson);
+        var root = resultDoc.RootElement;
+
+        root.GetProperty("content").EnumerateArray().Should().HaveCount(1);
+        var content = root.GetProperty("content")[0];
+        content.GetProperty("type").GetString().Should().Be("text");
+
+        var textContent = content.GetProperty("text").GetString();
+        textContent.Should().Contain("quick-start");
+        textContent.Should().Contain("architecture");
+        textContent.Should().Contain("api-reference");
+
+        _docsService.Received(1).ListDocuments(null, null);
+    }
+
+    [Fact]
+    public async Task AuraDocsList_WithCategoryFilter_ReturnsFilteredDocuments()
+    {
+        // Arrange
+        var filteredDocuments = new List<DocumentEntry>
+        {
+            new("architecture", "Architecture Overview", "Learn about Aura's architecture", "reference", new List<string> { "advanced", "architecture" }),
+            new("api-reference", "API Reference", "Complete API documentation", "reference", new List<string> { "api", "reference" })
+        };
+
+        _docsService.ListDocuments("reference", null).Returns(filteredDocuments);
+
+        var request = new
+        {
+            jsonrpc = "2.0",
+            method = "tools/call",
+            id = 101,
+            @params = new
+            {
+                name = "aura_docs_list",
+                arguments = new { category = "reference" }
+            }
+        };
+
+        var requestJson = JsonSerializer.Serialize(request);
+
+        // Act
+        var responseJson = await _handler.HandleAsync(requestJson);
+
+        // Assert
+        var response = JsonSerializer.Deserialize<JsonRpcResponse>(responseJson);
+        response.Should().NotBeNull();
+        response!.Error.Should().BeNull();
+        response.Result.Should().NotBeNull();
+
+        var resultJson = JsonSerializer.Serialize(response.Result);
+        var resultDoc = JsonDocument.Parse(resultJson);
+        var root = resultDoc.RootElement;
+
+        root.GetProperty("content").EnumerateArray().Should().HaveCount(1);
+        var content = root.GetProperty("content")[0];
+        var textContent = content.GetProperty("text").GetString();
+
+        textContent.Should().Contain("architecture");
+        textContent.Should().Contain("api-reference");
+        textContent.Should().NotContain("quick-start");
+
+        _docsService.Received(1).ListDocuments("reference", null);
+    }
+
+    [Fact]
+    public async Task AuraDocsList_WithTagsFilter_ReturnsFilteredDocuments()
+    {
+        // Arrange
+        var filteredDocuments = new List<DocumentEntry>
+        {
+            new("quick-start", "Quick Start Guide", "Get started with Aura in 5 minutes", "guides", new List<string> { "beginner", "setup" }),
+            new("installation", "Installation Guide", "Install Aura on your system", "guides", new List<string> { "beginner", "installation" })
+        };
+
+        _docsService.ListDocuments(
+            null,
+            Arg.Is<IReadOnlyList<string>>(tags => tags.Contains("beginner")))
+            .Returns(filteredDocuments);
+
+        var request = new
+        {
+            jsonrpc = "2.0",
+            method = "tools/call",
+            id = 102,
+            @params = new
+            {
+                name = "aura_docs_list",
+                arguments = new { tags = new[] { "beginner" } }
+            }
+        };
+
+        var requestJson = JsonSerializer.Serialize(request);
+
+        // Act
+        var responseJson = await _handler.HandleAsync(requestJson);
+
+        // Assert
+        var response = JsonSerializer.Deserialize<JsonRpcResponse>(responseJson);
+        response.Should().NotBeNull();
+        response!.Error.Should().BeNull();
+        response.Result.Should().NotBeNull();
+
+        var resultJson = JsonSerializer.Serialize(response.Result);
+        var resultDoc = JsonDocument.Parse(resultJson);
+        var root = resultDoc.RootElement;
+
+        root.GetProperty("content").EnumerateArray().Should().HaveCount(1);
+        var content = root.GetProperty("content")[0];
+        var textContent = content.GetProperty("text").GetString();
+
+        textContent.Should().Contain("quick-start");
+        textContent.Should().Contain("installation");
+
+        _docsService.Received(1).ListDocuments(
+            null,
+            Arg.Is<IReadOnlyList<string>>(tags => tags.Contains("beginner")));
+    }
+
+    [Fact]
+    public async Task AuraDocsList_WithCategoryAndTagsFilter_ReturnsFilteredDocuments()
+    {
+        // Arrange
+        var filteredDocuments = new List<DocumentEntry>
+        {
+            new("quick-start", "Quick Start Guide", "Get started with Aura in 5 minutes", "guides", new List<string> { "beginner", "setup" })
+        };
+
+        _docsService.ListDocuments(
+            "guides",
+            Arg.Is<IReadOnlyList<string>>(tags => tags.Contains("beginner")))
+            .Returns(filteredDocuments);
+
+        var request = new
+        {
+            jsonrpc = "2.0",
+            method = "tools/call",
+            id = 103,
+            @params = new
+            {
+                name = "aura_docs_list",
+                arguments = new
+                {
+                    category = "guides",
+                    tags = new[] { "beginner" }
+                }
+            }
+        };
+
+        var requestJson = JsonSerializer.Serialize(request);
+
+        // Act
+        var responseJson = await _handler.HandleAsync(requestJson);
+
+        // Assert
+        var response = JsonSerializer.Deserialize<JsonRpcResponse>(responseJson);
+        response.Should().NotBeNull();
+        response!.Error.Should().BeNull();
+
+        _docsService.Received(1).ListDocuments(
+            "guides",
+            Arg.Is<IReadOnlyList<string>>(tags => tags.Contains("beginner")));
+    }
+
+    [Fact]
+    public async Task AuraDocsList_WithEmptyTagsArray_FiltersEmpty()
+    {
+        // Arrange
+        var allDocuments = new List<DocumentEntry>
+        {
+            new("quick-start", "Quick Start Guide", "Get started with Aura", "guides", new List<string> { "beginner" })
+        };
+
+        _docsService.ListDocuments(null, Arg.Is<IReadOnlyList<string>>(tags => tags.Count == 0))
+            .Returns(allDocuments);
+
+        var request = new
+        {
+            jsonrpc = "2.0",
+            method = "tools/call",
+            id = 104,
+            @params = new
+            {
+                name = "aura_docs_list",
+                arguments = new { tags = Array.Empty<string>() }
+            }
+        };
+
+        var requestJson = JsonSerializer.Serialize(request);
+
+        // Act
+        var responseJson = await _handler.HandleAsync(requestJson);
+
+        // Assert
+        var response = JsonSerializer.Deserialize<JsonRpcResponse>(responseJson);
+        response.Should().NotBeNull();
+        response!.Error.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task AuraDocsGet_WithValidId_ReturnsDocumentContent()
+    {
+        // Arrange
+        var documentContent = new DocumentContent(
+            "quick-start",
+            "Quick Start Guide",
+            "guides",
+            new List<string> { "beginner", "setup" },
+            "# Quick Start\n\nWelcome to Aura...",
+            "2024-01-27");
+
+        _docsService.GetDocument("quick-start").Returns(documentContent);
+
+        var request = new
+        {
+            jsonrpc = "2.0",
+            method = "tools/call",
+            id = 105,
+            @params = new
+            {
+                name = "aura_docs_get",
+                arguments = new { id = "quick-start" }
+            }
+        };
+
+        var requestJson = JsonSerializer.Serialize(request);
+
+        // Act
+        var responseJson = await _handler.HandleAsync(requestJson);
+
+        // Assert
+        var response = JsonSerializer.Deserialize<JsonRpcResponse>(responseJson);
+        response.Should().NotBeNull();
+        response!.Error.Should().BeNull();
+        response.Result.Should().NotBeNull();
+
+        var resultJson = JsonSerializer.Serialize(response.Result);
+        var resultDoc = JsonDocument.Parse(resultJson);
+        var root = resultDoc.RootElement;
+
+        root.GetProperty("content").EnumerateArray().Should().HaveCount(1);
+        var content = root.GetProperty("content")[0];
+        content.GetProperty("type").GetString().Should().Be("text");
+
+        var textContent = content.GetProperty("text").GetString();
+        textContent.Should().Contain("quick-start");
+        textContent.Should().Contain("Quick Start Guide");
+        textContent.Should().Contain("# Quick Start");
+        textContent.Should().Contain("Welcome to Aura");
+
+        _docsService.Received(1).GetDocument("quick-start");
+    }
+
+    [Fact]
+    public async Task AuraDocsGet_WithInvalidId_ReturnsError()
+    {
+        // Arrange
+        _docsService.GetDocument("non-existent").Returns((DocumentContent?)null);
+
+        var request = new
+        {
+            jsonrpc = "2.0",
+            method = "tools/call",
+            id = 106,
+            @params = new
+            {
+                name = "aura_docs_get",
+                arguments = new { id = "non-existent" }
+            }
+        };
+
+        var requestJson = JsonSerializer.Serialize(request);
+
+        // Act
+        var responseJson = await _handler.HandleAsync(requestJson);
+
+        // Assert
+        var response = JsonSerializer.Deserialize<JsonRpcResponse>(responseJson);
+        response.Should().NotBeNull();
+        response!.Error.Should().NotBeNull();
+        response.Error!.Message.Should().Contain("non-existent");
+        response.Error.Message.Should().Contain("not found");
+
+        _docsService.Received(1).GetDocument("non-existent");
+    }
+
+    [Fact]
+    public async Task AuraDocsGet_WithMissingIdParameter_ReturnsError()
+    {
+        // Arrange
+        var request = new
+        {
+            jsonrpc = "2.0",
+            method = "tools/call",
+            id = 107,
+            @params = new
+            {
+                name = "aura_docs_get",
+                arguments = new { }
+            }
+        };
+
+        var requestJson = JsonSerializer.Serialize(request);
+
+        // Act
+        var responseJson = await _handler.HandleAsync(requestJson);
+
+        // Assert
+        var response = JsonSerializer.Deserialize<JsonRpcResponse>(responseJson);
+        response.Should().NotBeNull();
+        response!.Error.Should().NotBeNull();
+        response.Error!.Message.Should().ContainAny("key", "dictionary");
+
+        _docsService.DidNotReceiveWithAnyArgs().GetDocument(Arg.Any<string>());
+    }
+
+    [Fact]
+    public async Task AuraDocsGet_WithEmptyId_CallsServiceWithEmptyString()
+    {
+        // Arrange
+        _docsService.GetDocument(string.Empty).Returns((DocumentContent?)null);
+
+        var request = new
+        {
+            jsonrpc = "2.0",
+            method = "tools/call",
+            id = 108,
+            @params = new
+            {
+                name = "aura_docs_get",
+                arguments = new { id = string.Empty }
+            }
+        };
+
+        var requestJson = JsonSerializer.Serialize(request);
+
+        // Act
+        var responseJson = await _handler.HandleAsync(requestJson);
+
+        // Assert
+        var response = JsonSerializer.Deserialize<JsonRpcResponse>(responseJson);
+        response.Should().NotBeNull();
+        response!.Error.Should().NotBeNull();
+
+        _docsService.Received(1).GetDocument(string.Empty);
+    }
+
+    [Fact]
+    public async Task AuraDocsList_WithMultipleTags_PassesAllTags()
+    {
+        // Arrange
+        var filteredDocuments = new List<DocumentEntry>
+        {
+            new("doc1", "Document 1", "Summary 1", "guides", new List<string> { "tag1", "tag2" })
+        };
+
+        _docsService.ListDocuments(
+            null,
+            Arg.Is<IReadOnlyList<string>>(tags => tags.Count == 3 && tags.Contains("tag1") && tags.Contains("tag2") && tags.Contains("tag3")))
+            .Returns(filteredDocuments);
+
+        var request = new
+        {
+            jsonrpc = "2.0",
+            method = "tools/call",
+            id = 109,
+            @params = new
+            {
+                name = "aura_docs_list",
+                arguments = new { tags = new[] { "tag1", "tag2", "tag3" } }
+            }
+        };
+
+        var requestJson = JsonSerializer.Serialize(request);
+
+        // Act
+        var responseJson = await _handler.HandleAsync(requestJson);
+
+        // Assert
+        var response = JsonSerializer.Deserialize<JsonRpcResponse>(responseJson);
+        response.Should().NotBeNull();
+        response!.Error.Should().BeNull();
+
+        _docsService.Received(1).ListDocuments(
+            null,
+            Arg.Is<IReadOnlyList<string>>(tags => tags.Count == 3));
+    }
 }
