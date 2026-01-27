@@ -423,7 +423,7 @@ public class McpHandlerTests
 
         // Assert
         toolNames.Should().Contain("aura_docs");
-        toolNames.Should().HaveCount(14); // All registered tools including aura_docs
+        toolNames.Should().HaveCount(16); // All registered tools including aura_docs, aura_docs_list, aura_docs_get
     }
 
     [Fact]
