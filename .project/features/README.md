@@ -81,8 +81,18 @@ features/
 | [Test Generation](completed/test-generation.md) | Automated C# test generation via aura_generate | 2026-01-28 |
 | [Service Account](completed/service-account-for-aura.md) | Dedicated AuraService user for Windows service | 2026-01-28 |
 | [Worktree Index Detection](completed/worktree-index-detection.md) | Extension detects parent repo index for worktrees | 2026-01-28 |
+| [Coding Agent Validation](completed/coding-agent-v2-mcp-validation.md) | code.validate tool + enforced validation loops | 2026-01-28 |
+| [Orchestrator Parallel Dispatch](completed/orchestrator-parallel-dispatch.md) | Parallel task dispatch to Copilot CLI agents | 2026-01-28 |
 
 ## Upcoming Features
+
+### Critical (Pre-1.0)
+
+| Feature | Description |
+|---------|-------------|
+| [Technical Debt Cleanup](upcoming/technical-debt-cleanup.md) | Catalog of debt items with execution order |
+| [Unified Wave Orchestration](upcoming/unified-wave-orchestration.md) | Simplify story execution: one entity, one status, one path |
+| [Database Schema Cleanup](upcoming/database-schema-cleanup.md) | Flatten migrations, normalize naming |
 
 ### High Priority
 

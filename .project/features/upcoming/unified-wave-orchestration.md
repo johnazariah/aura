@@ -1,308 +1,361 @@
-# Unified Wave Orchestration with Progress Visibility
+# Unified Wave Orchestration
 
-**Status:** 🔄 Design  
-**Author:** Copilot  
+**Status:** 📋 Ready for Development
+**Priority:** High (pre-1.0 simplification)
 **Created:** 2026-01-26
+**Updated:** 2026-01-28
 
-## Problem Statement
+## Executive Summary
 
-**Users think the system is hung** because they can't see what's happening.
+The current story execution system has accumulated multiple overlapping paradigms that create confusion and maintenance burden. This spec unifies everything into a single, clear execution model.
 
-Current issues:
-1. **No wave visibility** - Extension shows steps but not the parallel wave structure
-2. **Status confusion** - Two status enums, user sees "Planned" when it's actually "Running"
-3. **No progress feedback** - When agent is working, UI is static
-4. **Two code paths** - `StoryStep` (DB) vs `StoryTask` (JSON) causes maintenance burden
-
-## Proposed Solution
-
-**Unify on waves with real-time progress visibility.** Keep it simple - focus on feedback, not formal approval gates.
+**Before:** 5 enums, 2 task representations, 2 dispatch targets, complex interactions
+**After:** 1 status enum, 1 step entity with waves, 1 execution path, clear visibility
 
 ---
 
-## Design Decisions
+## Problem Statement
 
-### 1. Nuke `StoryTask` JSON - Use `StoryStep` Only
+### Current State Analysis
 
-Add `Wave` column to `StoryStep`. Delete the JSON blob approach entirely.
+**1. Too Many Execution Modes**
+
+The `Story` entity has accumulated overlapping fields:
+
+| Field | Purpose | Problem |
+|-------|---------|---------|
+| `AutomationMode` | Assisted/Autonomous/FullAutonomous | Approval control |
+| `DispatchTarget` | CopilotCli/InternalAgents | Two execution engines |
+| `GateMode` | AutoProceed/PauseAlways | Gate behavior |
+| `CurrentWave` | Wave orchestration | Parallel execution |
+| `PatternName` | Pattern-driven | Step generation source |
+
+**Interactions are undocumented.** What happens with `AutomationMode=Autonomous` + `DispatchTarget=CopilotCli` + `GateMode=PauseAlways`?
+
+**2. StoryStep vs StoryTask Duality**
+
+```
+StoryStep (DB entity) → runtime conversion → StoryTask (record)
+     ↓                                            ↓
+  Wave column                              Status tracking
+  Persisted                                 In-memory
+```
+
+Which is the source of truth? Status lives on both. This causes:
+- Conversion bugs
+- Stale state
+- Unclear ownership
+
+**3. Status Enum Sprawl**
+
+| Enum | Values | Used By |
+|------|--------|---------|
+| `StoryStatus` | 12 values | Story entity |
+| `StoryTaskStatus` | 5 values | StoryTask record |
+| `StepStatus` | ~5 values | StoryStep entity |
+
+The extension calculates "effective status" separately from the API. Status is derived differently in different contexts.
+
+**4. Two Dispatch Targets, One Tested**
 
 ```csharp
-public class StoryStep
+public enum DispatchTarget
 {
-    // Existing...
-    public int Order { get; set; }
-    
-    // NEW: Wave support
-    public int Wave { get; set; } = 1;  // Steps in same wave run in parallel
+    CopilotCli,      // ← Primary path, well-tested
+    InternalAgents,  // ← Secondary path, less coverage
 }
 ```
 
-**Migration:**
-- Add `Wave` column to `StoryStep` table (default 1 = sequential)
-- Delete `TasksJson` column from `Story`
-- Delete `StoryTask` record and `StoryTaskStatus` enum
-- Delete `OrchestratorStatus` enum (use `StoryStatus` only)
+Maintaining two execution engines doubles testing burden and creates subtle behavior differences.
 
-### 2. Single Status Enum
+**5. No Unified Execution Contract**
 
-```csharp
-public enum StoryStatus
-{
-    Created,
-    Analyzing,
-    Analyzed,
-    Planning,
-    Planned,
-    
-    Executing,      // Wave is running (agents working)
-    GatePending,    // Build/test gate running
-    GateFailed,     // Gate failed, user can see errors
-    
-    Completed,
-    Failed,
-    Cancelled,
-}
-```
+There's no single interface abstracting "execute this step":
+- `GitHubCopilotDispatcher` for Copilot CLI
+- `ReActExecutor` for internal agents
+- Different SSE streaming approaches
 
-Remove `OrchestratorStatus` entirely.
+---
 
-### 3. Progress Visibility (The Real Fix)
+## Design: The Unified Model
 
-**What users need to see:**
+### Core Principles
 
-| State | UI Shows |
-|-------|----------|
-| Executing | "Wave 2/4 • Running 2 of 3 tasks..." |
-| Task running | "🔄 Implementing UserService..." (animated) |
-| Task done | "✓ Implementing UserService" |
-| Gate running | "🔨 Building..." |
-| Gate failed | "❌ Build failed - 3 errors" + error list |
-| All done | "✓ Completed in 4 waves" |
+1. **One entity for tasks**: `StoryStep` with `Wave` column (delete `StoryTask`)
+2. **One status enum**: Merge step/task status into step
+3. **One execution path**: Pick Copilot CLI (delete `InternalAgents` dispatch)
+4. **Wave-first visibility**: UI shows waves, not flat step list
+5. **Streaming by default**: User sees agent output in real-time
 
-**Extension changes:**
-1. **Streaming agent output** - "Wall of flying text" from agents (live activity)
-2. **Wave progress bar** - Visual indicator of wave progress
-3. **Live step status** - Show which steps are running NOW
-4. **Gate interruption** - Pause at gates for human validation (optional)
-
-### 4. Agent Output Streaming
-
-Show live agent output so user knows it's working:
+### The Simplified Model
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│ Wave 2/4 • Implementing UserService                            │
-├─────────────────────────────────────────────────────────────────┤
-│ > Analyzing class structure...                                  │
-│ > Found 3 methods to implement                                  │
-│ > Calling aura.generate for GetUserById...                      │
-│ > ✓ Added GetUserById method                                    │
-│ > Calling aura.generate for CreateUser...                       │
-│ > ✓ Added CreateUser method                                     │
-│ > Calling roslyn.validate_compilation...                        │
-│ > Build successful                                              │
-│ > Calling git.commit...                                         │
-│ █                                                               │
-├─────────────────────────────────────────────────────────────────┤
-│ [Pause] [Cancel]                                                │
-└─────────────────────────────────────────────────────────────────┘
+Story
+├── Status: Created → Analyzing → Analyzed → Planning → Planned → Executing → Completed
+├── CurrentWave: int (0 = not started)
+├── GateMode: AutoProceed | PauseAlways
+│
+└── Steps[]
+    ├── Wave: int (1, 2, 3...)
+    ├── Status: Pending → Running → Completed | Failed | Skipped
+    ├── Name, Description, Output, Error
+    └── (Steps in same wave run in parallel)
 ```
 
-**Implementation options:**
-- **SSE (Server-Sent Events)** - Extension subscribes to `/api/developer/stories/{id}/stream`
-- **Polling** - Extension polls for new output lines (simpler, less real-time)
-- **WebSocket** - Full duplex, but more complex
-
-**Recommendation:** SSE - good balance of real-time and simplicity.
-
-### 5. Gate Interruption (Optional Human Validation)
-
-Gates pause execution and let user validate before continuing:
+### Status Flow
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│ ⏸️ Gate: Build Check                                            │
-├─────────────────────────────────────────────────────────────────┤
-│ Wave 2 completed. Build gate running...                        │
-│                                                                 │
-│ ✓ Build succeeded (0 errors, 2 warnings)                        │
-│                                                                 │
-│ Warnings:                                                       │
-│   CS0168: Variable 'ex' declared but never used                 │
-│   CS8618: Non-nullable property not initialized                 │
-│                                                                 │
-├─────────────────────────────────────────────────────────────────┤
-│ [Continue to Wave 3]  [Review Changes]  [Cancel]                │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-**Gate behavior (configurable per story):**
-
-| Mode | Behavior |
-|------|----------|
-| `AutoProceed` | Gate passes → auto-continue to next wave |
-| `PauseOnSuccess` | Gate passes → pause for human to review before continuing |
-| `PauseOnFailure` | Gate fails → pause (default, always true) |
-
-```csharp
-public class Story
-{
-    // Existing...
-    public GateMode GateMode { get; set; } = GateMode.AutoProceed;
-}
-
-public enum GateMode
-{
-    AutoProceed,      // Only pause on failure
-    PauseAlways,      // Pause at every gate for validation
-}
-```
-
-### 6. Simplified Flow
-
-```
-Planned
+Created
+   ↓
+Analyzing ──► Analyzed
+   ↓
+Planning ──► Planned
+   ↓
+Executing (Wave N)
    │
-   ▼
-Executing (Wave 1)  ──► show "Wave 1/N • Running X tasks"
+   ├─► all steps complete → GatePending (build/test)
+   │                            │
+   │                            ├─► pass → next wave (loop) or Completed
+   │                            └─► fail → GateFailed
    │
-   ├─ all tasks complete
-   ▼
-GatePending  ──► show "🔨 Running build gate..."
-   │
-   ├─ gate passes ──► next wave (loop) or Completed
-   │
-   └─ gate fails ──► GateFailed
-                       │
-                       └─► show errors, user clicks "Add Fix Wave" or "Cancel"
+   └─► any step fails → Failed
 ```
 
-No formal approval gates. Just visibility and manual intervention when things break.
+### Deleted Concepts
+
+| Concept | Reason |
+|---------|--------|
+| `StoryTask` record | Use `StoryStep` only |
+| `StoryTaskStatus` enum | Use step status |
+| `OrchestratorStatus` enum | Never existed (mentioned in old specs) |
+| `DispatchTarget.InternalAgents` | Use Copilot CLI only |
+| `TasksJson` column | Steps are the source of truth |
+| `AutomationMode` complexity | Simplify to GateMode only |
+
+---
+
+## Implementation Roadmap
+
+### Phase 1: Database Cleanup (Day 1)
+
+**Goal:** Single source of truth for steps
+
+1. **Add `Wave` column to `StoryStep`** (if not already present)
+   ```sql
+   ALTER TABLE story_steps ADD COLUMN wave INT NOT NULL DEFAULT 1;
+   ```
+
+2. **Add `StepStatus` values if missing**
+   - Pending, Running, Completed, Failed, Skipped
+
+3. **Remove unused columns from `Story`**
+   - Delete `TasksJson` column (not used if steps have waves)
+
+4. **Flatten migrations**
+   - Since pre-production, regenerate clean `InitialCreate`
+
+### Phase 2: Remove StoryTask (Day 1-2)
+
+**Goal:** Delete the parallel task abstraction
+
+1. **Update `GitHubCopilotDispatcher`**
+   - Accept `StoryStep` directly instead of converting to `StoryTask`
+   - Update step status in DB, not in-memory task
+
+2. **Delete `StoryTask.cs`**
+
+3. **Delete `StoryTaskStatus` enum**
+
+4. **Update `StoryService`**
+   - Remove task ↔ step conversion logic
+   - Operate on steps directly
+
+### Phase 3: Simplify Dispatch (Day 2)
+
+**Goal:** One execution path
+
+1. **Remove `DispatchTarget` enum** (or keep only `CopilotCli`)
+
+2. **Remove `InternalAgents` code path** from orchestrator
+   - Internal agents still work for single-step chat
+   - Just not for wave-based parallel execution
+
+3. **Simplify `AutomationMode`**
+   - Keep for single-step execution (Assisted vs Autonomous)
+   - Wave execution always uses Copilot CLI in YOLO mode
+
+### Phase 4: Status Unification (Day 2-3)
+
+**Goal:** One status enum per entity
+
+1. **Finalize `StoryStatus`**
+   ```csharp
+   public enum StoryStatus
+   {
+       Created,
+       Analyzing,
+       Analyzed,
+       Planning,
+       Planned,
+       Executing,
+       GatePending,
+       GateFailed,
+       Completed,
+       Failed,
+       Cancelled,
+   }
+   ```
+
+2. **Finalize step status**
+   ```csharp
+   public enum StepStatus
+   {
+       Pending,
+       Running,
+       Completed,
+       Failed,
+       Skipped,
+   }
+   ```
+
+3. **Remove "effective status" calculation in extension**
+   - API returns authoritative status
+   - Extension just displays it
+
+### Phase 5: Wave Visibility in UI (Day 3-4)
+
+**Goal:** Users see wave progress
+
+1. **API response includes wave grouping**
+   ```json
+   {
+     "status": "Executing",
+     "currentWave": 2,
+     "totalWaves": 4,
+     "waves": [
+       { "wave": 1, "status": "completed", "steps": [...] },
+       { "wave": 2, "status": "running", "steps": [...] }
+     ]
+   }
+   ```
+
+2. **Extension wave view**
+   - Group steps by wave visually
+   - Show "Wave 2/4 • Running 2 tasks" in story list
+
+3. **Progress indicator**
+   - Compute from completed waves / total waves
+
+### Phase 6: Streaming Output (Day 4-5)
+
+**Goal:** User sees agent working
+
+1. **SSE endpoint** `/api/developer/stories/{id}/stream`
+   - Streams agent output lines
+   - Streams step status changes
+   - Streams gate results
+
+2. **Extension streaming panel**
+   - "Wall of flying text" showing agent activity
+   - Collapsible per-step
+
+3. **Gate pause UI**
+   - Show errors on failure
+   - "Add Fix Wave" button
 
 ---
 
 ## API Changes
 
-### Modified Endpoints
+### GET /api/developer/stories/{id}
 
-**GET /api/developer/stories/{id}**
+Add wave-grouped response:
+
 ```json
 {
   "id": "...",
   "status": "Executing",
   "currentWave": 2,
   "totalWaves": 4,
+  "gateResult": null,
   "steps": [
-    { "id": "...", "wave": 1, "status": "Completed", "name": "Setup project" },
+    { "id": "...", "wave": 1, "status": "Completed", "name": "Setup" },
     { "id": "...", "wave": 2, "status": "Running", "name": "Implement UserService" },
     { "id": "...", "wave": 2, "status": "Pending", "name": "Implement OrderService" }
-  ],
-  "gateResult": null
+  ]
 }
 ```
 
-**When gate fails:**
-```json
-{
-  "status": "GateFailed",
-  "currentWave": 2,
-  "gateResult": {
-    "type": "build",
-    "passed": false,
-    "errors": ["CS0103: The name 'foo' does not exist..."],
-    "errorCount": 3
-  }
-}
-```
+### POST /api/developer/stories/{id}/execute
 
-### New Endpoint
+Simplified behavior:
+- Executes next wave (all pending steps in that wave)
+- Returns SSE stream of progress
+- Runs gate after wave completes
+- Auto-proceeds to next wave if gate passes and `GateMode=AutoProceed`
 
-**POST /api/developer/stories/{id}/add-fix-wave**
-- Creates a new wave with a single "Fix build errors" step
+### POST /api/developer/stories/{id}/add-fix-wave
+
+When gate fails:
+- Creates new wave with "Fix build errors" step
+- Agent context includes the build errors
 - Sets status back to Executing
-- Agent gets the build errors as context
 
 ---
 
-## Extension UX
+## File Changes
 
-### Story List View
+### Delete
 
-```
-┌─────────────────────────────────────────────┐
-│ 📋 Add health check timestamp              │
-│    Wave 2/4 • Running 2 tasks...           │
-│    ████████░░░░░░░░  50%                   │
-└─────────────────────────────────────────────┘
-```
+| File | Reason |
+|------|--------|
+| `src/Aura.Module.Developer/Data/Entities/StoryTask.cs` | Use StoryStep |
 
-### Story Detail - Wave View
+### Modify
 
-```
-Wave 1 ✓
-├─ ✓ Setup project structure
-└─ ✓ Add dependencies
+| File | Change |
+|------|--------|
+| `src/Aura.Module.Developer/Data/Entities/Story.cs` | Remove TasksJson, simplify enums |
+| `src/Aura.Module.Developer/Data/Entities/StoryStep.cs` | Ensure Wave, finalize Status |
+| `src/Aura.Module.Developer/Services/GitHubCopilotDispatcher.cs` | Accept steps directly |
+| `src/Aura.Module.Developer/Services/StoryService.cs` | Remove task conversion |
+| `src/Aura.Api/Endpoints/DeveloperEndpoints.cs` | Wave-grouped response |
+| `extension/src/providers/workflowTreeProvider.ts` | Wave grouping |
+| `extension/src/providers/workflowPanelProvider.ts` | Wave UI, streaming |
 
-Wave 2 (Running)
-├─ 🔄 Implementing UserService...
-├─ 🔄 Implementing OrderService...
-└─ ○ Add unit tests
+### New
 
-Wave 3 (Pending)
-└─ ○ Integration tests
-```
-
-### Gate Failed View
-
-```
-┌─────────────────────────────────────────────┐
-│ ❌ Build Failed - 3 errors                  │
-├─────────────────────────────────────────────┤
-│ CS0103: 'HealthResponse' does not exist    │
-│   > Program.cs line 42                      │
-│                                             │
-│ CS0029: Cannot convert DateTime to string   │
-│   > Program.cs line 45                      │
-├─────────────────────────────────────────────┤
-│  [Add Fix Wave]  [View Full Output] [Cancel]│
-└─────────────────────────────────────────────┘
-```
+| File | Purpose |
+|------|---------|
+| `src/Aura.Api/Endpoints/StoryStreamEndpoints.cs` | SSE streaming |
 
 ---
 
-## Implementation Steps
+## Success Criteria
 
-### Backend
-1. [ ] Add `Wave` column to `StoryStep` (migration)
-2. [ ] Add `GateMode` column to `Story` (migration)
-3. [ ] Delete `TasksJson`, `OrchestratorStatus`, `StoryTask`
-4. [ ] Simplify `StoryStatus` enum (add GatePending, GateFailed)
-5. [ ] Update orchestrator to use `StoryStep.Wave`
-6. [ ] Add `gateResult` to API response
-7. [ ] Add `/add-fix-wave` endpoint
-8. [ ] Add SSE endpoint `/stories/{id}/stream` for live output
-
-### Extension
-9. [ ] Add wave grouping to step display
-10. [ ] Add progress bar to story list
-11. [ ] Add streaming output panel ("wall of flying text")
-12. [ ] Add gate pause UI with Continue/Review/Cancel
-13. [ ] Add gate failed UI with errors + Fix Wave button
+- [ ] `StoryTask` deleted, only `StoryStep` exists
+- [ ] Story has single `Status` enum with clear transitions
+- [ ] Step has single `Status` enum
+- [ ] Wave execution uses steps directly (no conversion)
+- [ ] Extension shows wave progress ("Wave 2/4")
+- [ ] Streaming output visible during execution
+- [ ] Gate failures show actionable errors
+- [ ] All tests pass with new model
 
 ---
 
 ## What We're NOT Building
 
-- ❌ Complex approval workflows
-- ❌ Task-level approval dialogs
-- ❌ Mandatory approval gates
-- ❌ Per-wave approval prompts
+- ❌ Complex approval workflows per step
+- ❌ Multiple dispatch targets (just Copilot CLI for waves)
+- ❌ Task-level dialogs
+- ❌ Mandatory approval gates (just optional pause)
 
-**Philosophy:** Show the user what's happening (streaming output). Let them interrupt at gates if they want. Don't block them with dialogs.
+**Philosophy:** Show the user what's happening. Let them interrupt if needed. Don't block with dialogs.
 
 ---
 
-## Related Documents
+## Related
 
-- [ADR-009: Lessons from Previous Attempts](.project/adr/009-lessons-from-previous-attempts.md)
-- [Orchestrator Parallel Dispatch](.project/features/upcoming/orchestrator-parallel-dispatch.md)
+- [Technical Debt Cleanup](upcoming/technical-debt-cleanup.md) - Broader cleanup items
+- [Orchestrator Parallel Dispatch](completed/orchestrator-parallel-dispatch.md) - Original implementation
