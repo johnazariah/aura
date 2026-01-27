@@ -83,27 +83,17 @@ public class AuraDocsToolTests
     }
 
     [Fact]
-    public async Task SearchDocumentationAsync_WithEmptyQuery_CallsRagServiceWithEmptyString()
+    public async Task SearchDocumentationAsync_WithEmptyQuery_ThrowsArgumentException()
     {
         // Arrange
         var query = string.Empty;
-        _ragService
-            .QueryAsync(Arg.Any<string>(), Arg.Any<RagQueryOptions>(), Arg.Any<CancellationToken>())
-            .Returns(new List<RagResult>());
 
         // Act
-        var result = await _tool.SearchDocumentationAsync(query, CancellationToken.None);
+        var act = () => _tool.SearchDocumentationAsync(query, CancellationToken.None);
 
         // Assert
-        await _ragService.Received(1).QueryAsync(
-            string.Empty,
-            Arg.Any<RagQueryOptions>(),
-            Arg.Any<CancellationToken>());
-
-        using var doc = ConvertToJsonDocument(result);
-        var root = doc.RootElement;
-        root.GetProperty("query").GetString().Should().BeEmpty();
-        root.GetProperty("resultCount").GetInt32().Should().Be(0);
+        await act.Should().ThrowAsync<ArgumentException>()
+            .WithMessage("*Query cannot be null or empty*");
     }
 
     [Theory]
