@@ -1,0 +1,42 @@
+documents:
+  - id: agents
+    title: "AI Agent Integration Guide"
+    summary: "How to use Aura MCP tools effectively - workflows, patterns, examples."
+    category: guide
+    tags:
+      - agents
+      - mcp
+      - tools
+      - getting-started
+    path: agents.md
+
+  - id: configuration
+    title: "Configuration Reference"
+    summary: "All configuration options for LLM, RAG, and workspace settings."
+    category: reference
+    tags:
+      - config
+      - llm
+      - rag
+      - setup
+    path: configuration.md
+
+  - id: tools-reference
+    title: "MCP Tools Reference"
+    summary: "Complete reference for all aura_* MCP tools with examples."
+    category: reference
+    tags:
+      - mcp
+      - tools
+      - api
+    path: tools-reference.md
+
+  - id: troubleshooting
+    title: "Troubleshooting Guide"
+    summary: "Common issues and solutions for Aura setup and usage."
+    category: troubleshooting
+    tags:
+      - debug
+      - errors
+      - help
+    path: troubleshooting.md
