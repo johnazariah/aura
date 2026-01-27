@@ -7,6 +7,7 @@ namespace Aura.Api.Tests.Mcp;
 using System.Text.Json;
 using Aura.Api.Mcp;
 using Aura.Api.Mcp.Tools;
+using Aura.Api.Services;
 using Aura.Foundation.Data.Entities;
 using Aura.Foundation.Git;
 using Aura.Foundation.Rag;
@@ -33,6 +34,7 @@ public class McpHandlerTests
     private readonly IGitWorktreeService _worktreeService;
     private readonly ITreeBuilderService _treeBuilderService;
     private readonly IAuraDocsTool _auraDocsTool;
+    private readonly IDocsService _docsService;
     private readonly McpHandler _handler;
 
     public McpHandlerTests()
@@ -49,6 +51,7 @@ public class McpHandlerTests
         _worktreeService = Substitute.For<IGitWorktreeService>();
         _treeBuilderService = Substitute.For<ITreeBuilderService>();
         _auraDocsTool = Substitute.For<IAuraDocsTool>();
+        _docsService = Substitute.For<IDocsService>();
 
         _handler = new McpHandler(
             _ragService,
@@ -63,6 +66,7 @@ public class McpHandlerTests
             _worktreeService,
             _treeBuilderService,
             _auraDocsTool,
+            _docsService,
             NullLogger<McpHandler>.Instance);
     }
 
