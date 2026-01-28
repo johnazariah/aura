@@ -248,6 +248,15 @@ export class AuraApiService {
         this.httpClient = axios.create({
             timeout: 30000  // 30s default for general API calls
         });
+
+        // Add request interceptor to automatically include GitHub token
+        this.httpClient.interceptors.request.use(async (config) => {
+            const token = await this.getGitHubToken();
+            if (token) {
+                config.headers['X-GitHub-Token'] = token;
+            }
+            return config;
+        });
     }
 
     /**
