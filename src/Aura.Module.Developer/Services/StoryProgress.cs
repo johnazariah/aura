@@ -41,7 +41,10 @@ public enum StoryProgressEventType
     /// <summary>Quality gate failed.</summary>
     GateFailed,
 
-    /// <summary>Story completed successfully.</summary>
+    /// <summary>All steps complete, ready for finalization.</summary>
+    ReadyToComplete,
+
+    /// <summary>Story completed and finalized.</summary>
     Completed,
 
     /// <summary>Story failed.</summary>
@@ -177,6 +180,15 @@ public sealed record StoryProgressEvent(
         Wave: wave,
         GateResult: result,
         Error: result.Error);
+
+    /// <summary>
+    /// Creates a ReadyToComplete event - all steps done, awaiting finalization.
+    /// </summary>
+    public static StoryProgressEvent ReadyToComplete(Guid storyId, int totalWaves) => new(
+        StoryProgressEventType.ReadyToComplete,
+        storyId,
+        DateTimeOffset.UtcNow,
+        TotalWaves: totalWaves);
 
     /// <summary>
     /// Creates a Completed event.

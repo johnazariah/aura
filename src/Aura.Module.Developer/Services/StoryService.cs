@@ -922,14 +922,14 @@ public sealed class StoryService(
             // Check if all steps are complete
             if (steps.All(s => s.Status == StepStatus.Completed || s.Status == StepStatus.Skipped))
             {
-                story.Status = StoryStatus.Completed;
+                story.Status = StoryStatus.ReadyToComplete;
                 story.UpdatedAt = DateTimeOffset.UtcNow;
                 await _db.SaveChangesAsync(ct);
 
                 return new StoryRunResult
                 {
                     StoryId = storyId,
-                    Status = StoryStatus.Completed,
+                    Status = StoryStatus.ReadyToComplete,
                     CurrentWave = waveCount,
                     TotalWaves = waveCount,
                     StartedSteps = [],
@@ -942,14 +942,14 @@ public sealed class StoryService(
             currentWave++;
             if (currentWave > waveCount)
             {
-                story.Status = StoryStatus.Completed;
+                story.Status = StoryStatus.ReadyToComplete;
                 story.UpdatedAt = DateTimeOffset.UtcNow;
                 await _db.SaveChangesAsync(ct);
 
                 return new StoryRunResult
                 {
                     StoryId = storyId,
-                    Status = StoryStatus.Completed,
+                    Status = StoryStatus.ReadyToComplete,
                     CurrentWave = waveCount,
                     TotalWaves = waveCount,
                     StartedSteps = [],
@@ -1092,17 +1092,17 @@ public sealed class StoryService(
             };
         }
 
-        // All waves complete
-        story.Status = StoryStatus.Completed;
+        // All waves complete - ready for finalization
+        story.Status = StoryStatus.ReadyToComplete;
         story.UpdatedAt = DateTimeOffset.UtcNow;
         await _db.SaveChangesAsync(ct);
 
-        _logger.LogInformation("Story {StoryId} orchestration completed successfully", storyId);
+        _logger.LogInformation("Story {StoryId} all steps complete, ready for finalization", storyId);
 
         return new StoryRunResult
         {
             StoryId = storyId,
-            Status = StoryStatus.Completed,
+            Status = StoryStatus.ReadyToComplete,
             CurrentWave = waveCount,
             TotalWaves = waveCount,
             StartedSteps = waveSteps,
@@ -1181,11 +1181,11 @@ public sealed class StoryService(
                 // Check if all steps complete
                 if (steps.All(s => s.Status == StepStatus.Completed || s.Status == StepStatus.Skipped))
                 {
-                    story.Status = StoryStatus.Completed;
+                    story.Status = StoryStatus.ReadyToComplete;
                     story.UpdatedAt = DateTimeOffset.UtcNow;
                     await _db.SaveChangesAsync(ct);
 
-                    yield return StoryProgressEvent.Completed(storyId, waveCount);
+                    yield return StoryProgressEvent.ReadyToComplete(storyId, waveCount);
                     yield break;
                 }
 
@@ -1308,12 +1308,12 @@ public sealed class StoryService(
             currentWave++;
         }
 
-        // All waves complete
-        story.Status = StoryStatus.Completed;
+        // All waves complete - ready for finalization
+        story.Status = StoryStatus.ReadyToComplete;
         story.UpdatedAt = DateTimeOffset.UtcNow;
         await _db.SaveChangesAsync(ct);
 
-        yield return StoryProgressEvent.Completed(storyId, waveCount);
+        yield return StoryProgressEvent.ReadyToComplete(storyId, waveCount);
     }
 
     /// <inheritdoc/>
@@ -1687,8 +1687,8 @@ public sealed class StoryService(
 
             if (allComplete)
             {
-                workflow.Status = StoryStatus.Completed;
-                workflow.CompletedAt = DateTimeOffset.UtcNow;
+                // Set to ReadyToComplete - user must call /complete to finalize (squash, push, PR)
+                workflow.Status = StoryStatus.ReadyToComplete;
             }
             else
             {

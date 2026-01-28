@@ -223,7 +223,10 @@ public enum StoryStatus
     /// <summary>Gate failed, waiting for user action (fix wave or cancel).</summary>
     GateFailed,
 
-    /// <summary>All steps completed successfully.</summary>
+    /// <summary>All steps completed, ready for finalization (squash, push, PR).</summary>
+    ReadyToComplete,
+
+    /// <summary>All steps completed and finalized (merged/PR created).</summary>
     Completed,
 
     /// <summary>Unrecoverable error.</summary>
