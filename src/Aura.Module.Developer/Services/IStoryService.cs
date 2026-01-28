@@ -232,12 +232,13 @@ public interface IStoryService
     Task RemoveStepAsync(Guid workflowId, Guid stepId, CancellationToken ct = default);
 
     /// <summary>
-    /// Marks the workflow as complete.
+    /// Marks the workflow as complete and finalizes git changes (squash, push, PR).
     /// </summary>
     /// <param name="workflowId">The workflow ID.</param>
+    /// <param name="githubToken">GitHub token for push/PR operations (optional).</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>The completed workflow.</returns>
-    Task<Story> CompleteAsync(Guid workflowId, CancellationToken ct = default);
+    Task<Story> CompleteAsync(Guid workflowId, string? githubToken = null, CancellationToken ct = default);
 
     /// <summary>
     /// Cancels the workflow.

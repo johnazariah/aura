@@ -3213,9 +3213,16 @@ public sealed class McpHandler
             return new { error = "storyId is required and must be a valid GUID" };
         }
 
+        // Get GitHub token if provided
+        string? githubToken = null;
+        if (args?.TryGetProperty("githubToken", out var tokenProp) == true)
+        {
+            githubToken = tokenProp.GetString();
+        }
+
         try
         {
-            var workflow = await _workflowService.CompleteAsync(storyId, ct);
+            var workflow = await _workflowService.CompleteAsync(storyId, githubToken, ct);
 
             return new
             {

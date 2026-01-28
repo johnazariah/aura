@@ -35,7 +35,11 @@ public interface IGitService
     Task<GitResult<string>> CommitAsync(string repoPath, string message, bool skipHooks = false, CancellationToken ct = default);
 
     /// <summary>Push the current branch</summary>
-    Task<GitResult<Unit>> PushAsync(string repoPath, bool setUpstream = false, CancellationToken ct = default);
+    /// <param name="repoPath">Path to the repository</param>
+    /// <param name="setUpstream">Set upstream tracking</param>
+    /// <param name="githubToken">GitHub token for authentication (optional)</param>
+    /// <param name="ct">Cancellation token</param>
+    Task<GitResult<Unit>> PushAsync(string repoPath, bool setUpstream = false, string? githubToken = null, CancellationToken ct = default);
 
     /// <summary>Pull latest changes</summary>
     Task<GitResult<Unit>> PullAsync(string repoPath, CancellationToken ct = default);
@@ -50,6 +54,7 @@ public interface IGitService
     /// <param name="baseBranch">Target branch for the PR</param>
     /// <param name="draft">Whether to create as draft PR</param>
     /// <param name="labels">Labels to add to the PR</param>
+    /// <param name="githubToken">GitHub token for authentication (optional)</param>
     /// <param name="ct">Cancellation token</param>
     Task<GitResult<PullRequestInfo>> CreatePullRequestAsync(
         string repoPath,
@@ -58,6 +63,7 @@ public interface IGitService
         string? baseBranch = null,
         bool draft = true,
         IEnumerable<string>? labels = null,
+        string? githubToken = null,
         CancellationToken ct = default);
 
     /// <summary>Get the remote URL for origin</summary>

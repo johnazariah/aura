@@ -243,7 +243,7 @@ public static class GitTools
                     return ToolResult.Fail("No repository path specified and no working directory set");
                 }
 
-                var result = await gitService.PushAsync(path, setUpstream, ct);
+                var result = await gitService.PushAsync(path, setUpstream, githubToken: null, ct);
                 if (!result.Success)
                 {
                     return ToolResult.Fail(result.Error ?? "Failed to push");

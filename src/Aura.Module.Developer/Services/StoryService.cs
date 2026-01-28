@@ -1943,7 +1943,7 @@ public sealed class StoryService(
     }
 
     /// <inheritdoc/>
-    public async Task<Story> CompleteAsync(Guid workflowId, CancellationToken ct = default)
+    public async Task<Story> CompleteAsync(Guid workflowId, string? githubToken = null, CancellationToken ct = default)
     {
         var workflow = await _db.Workflows
             .Include(w => w.Steps)
@@ -2041,7 +2041,7 @@ public sealed class StoryService(
             }
 
             // Push the branch (force push if squashed to update history)
-            var pushResult = await _gitService.PushAsync(workflow.WorktreePath, setUpstream: true, ct);
+            var pushResult = await _gitService.PushAsync(workflow.WorktreePath, setUpstream: true, githubToken, ct);
             if (!pushResult.Success)
             {
                 _logger.LogWarning("Failed to push branch: {Error}", pushResult.Error);
@@ -2059,6 +2059,7 @@ public sealed class StoryService(
                     baseBranch: null, // Use default branch
                     draft: true,
                     labels: ["aura-generated"],
+                    githubToken,
                     ct);
 
                 if (prResult.Success && prResult.Value is not null)

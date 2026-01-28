@@ -600,7 +600,10 @@ public static class DeveloperEndpoints
     {
         try
         {
-            var story = await storyService.CompleteAsync(id, ct);
+            // Get GitHub token from header for push/PR operations
+            var githubToken = context.Request.Headers["X-GitHub-Token"].FirstOrDefault();
+
+            var story = await storyService.CompleteAsync(id, githubToken, ct);
             return Results.Ok(new
             {
                 id = story.Id,
@@ -648,6 +651,9 @@ public static class DeveloperEndpoints
     {
         try
         {
+            // Get GitHub token from header for push/PR operations
+            var githubToken = context.Request.Headers["X-GitHub-Token"].FirstOrDefault();
+
             var story = await storyService.GetByIdWithStepsAsync(id, ct);
             if (story is null)
                 return Problem.StoryNotFound(id, context);
@@ -670,7 +676,7 @@ public static class DeveloperEndpoints
                 commitSha = commitResult.Value;
             }
 
-            var pushResult = await gitService.PushAsync(story.WorktreePath, setUpstream: true, ct);
+            var pushResult = await gitService.PushAsync(story.WorktreePath, setUpstream: true, githubToken, ct);
             if (!pushResult.Success)
                 return Problem.GitOperationFailed("Push", pushResult.Error ?? "Unknown error", context);
 
@@ -686,6 +692,7 @@ public static class DeveloperEndpoints
                     request.BaseBranch,
                     request.Draft,
                     labels: ["aura-generated"],
+                    githubToken,
                     ct);
 
                 if (!prResult.Success)
@@ -697,7 +704,7 @@ public static class DeveloperEndpoints
 
             if (story.Status != StoryStatus.Completed)
             {
-                await storyService.CompleteAsync(id, ct);
+                await storyService.CompleteAsync(id, githubToken, ct);
             }
 
             return Results.Ok(new
