@@ -7,6 +7,7 @@ using Serilog;
 using Serilog.Events;
 using Aura.Api.Endpoints;
 using Aura.Api.Mcp;
+using Aura.Api.Middleware;
 using Aura.Foundation;
 using Aura.Foundation.Data;
 using Aura.Module.Developer;
@@ -94,6 +95,9 @@ builder.Services.AddScoped<McpHandler>();
 builder.Services.AddSingleton<Aura.Api.Mcp.Tools.IAuraDocsTool, Aura.Api.Mcp.Tools.AuraDocsTool>();
 builder.Services.AddSingleton<Aura.Api.Services.IDocsService, Aura.Api.Services.DocsService>();
 
+// Add GitHub token accessor for per-request token access
+builder.Services.AddScoped<Aura.Api.Services.IGitHubTokenAccessor, Aura.Api.Services.GitHubTokenAccessor>();
+
 // Add CORS for the VS Code extension
 builder.Services.AddCors(options =>
 {
@@ -138,6 +142,9 @@ app.MapDefaultEndpoints();
 
 // Enable CORS
 app.UseCors();
+
+// Extract GitHub token from headers for all requests
+app.UseGitHubToken();
 
 // Map all endpoint groups
 app.MapHealthEndpoints();

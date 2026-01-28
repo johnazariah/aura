@@ -8,6 +8,7 @@ using System.Text;
 using System.Text.Json;
 using Aura.Api.Contracts;
 using Aura.Api.Problems;
+using Aura.Api.Services;
 using Aura.Foundation.Git;
 using Aura.Module.Developer.Data.Entities;
 using Aura.Module.Developer.GitHub;
@@ -438,15 +439,12 @@ public static class DeveloperEndpoints
     private static async Task<IResult> RunStory(
         Guid id,
         IStoryService storyService,
-        HttpContext httpContext,
+        IGitHubTokenAccessor tokenAccessor,
         CancellationToken ct)
     {
         try
         {
-            // Get GitHub token from header for CopilotCli dispatcher
-            var githubToken = httpContext.Request.Headers["X-GitHub-Token"].FirstOrDefault();
-
-            var result = await storyService.RunAsync(id, githubToken, ct);
+            var result = await storyService.RunAsync(id, tokenAccessor.Token, ct);
 
             return Results.Ok(new
             {
@@ -500,6 +498,7 @@ public static class DeveloperEndpoints
     private static async Task StreamStoryExecution(
         Guid id,
         IStoryService storyService,
+        IGitHubTokenAccessor tokenAccessor,
         HttpContext httpContext,
         CancellationToken ct)
     {
@@ -507,12 +506,9 @@ public static class DeveloperEndpoints
         httpContext.Response.Headers.CacheControl = "no-cache";
         httpContext.Response.Headers.Connection = "keep-alive";
 
-        // Get GitHub token from header for CopilotCli dispatcher
-        var githubToken = httpContext.Request.Headers["X-GitHub-Token"].FirstOrDefault();
-
         try
         {
-            await foreach (var evt in storyService.RunStreamAsync(id, githubToken, ct))
+            await foreach (var evt in storyService.RunStreamAsync(id, tokenAccessor.Token, ct))
             {
                 var eventData = JsonSerializer.Serialize(new
                 {
@@ -596,14 +592,12 @@ public static class DeveloperEndpoints
         Guid id,
         HttpContext context,
         IStoryService storyService,
+        IGitHubTokenAccessor tokenAccessor,
         CancellationToken ct)
     {
         try
         {
-            // Get GitHub token from header for push/PR operations
-            var githubToken = context.Request.Headers["X-GitHub-Token"].FirstOrDefault();
-
-            var story = await storyService.CompleteAsync(id, githubToken, ct);
+            var story = await storyService.CompleteAsync(id, tokenAccessor.Token, ct);
             return Results.Ok(new
             {
                 id = story.Id,
@@ -647,13 +641,11 @@ public static class DeveloperEndpoints
         HttpContext context,
         IStoryService storyService,
         IGitService gitService,
+        IGitHubTokenAccessor tokenAccessor,
         CancellationToken ct)
     {
         try
         {
-            // Get GitHub token from header for push/PR operations
-            var githubToken = context.Request.Headers["X-GitHub-Token"].FirstOrDefault();
-
             var story = await storyService.GetByIdWithStepsAsync(id, ct);
             if (story is null)
                 return Problem.StoryNotFound(id, context);
@@ -676,7 +668,7 @@ public static class DeveloperEndpoints
                 commitSha = commitResult.Value;
             }
 
-            var pushResult = await gitService.PushAsync(story.WorktreePath, setUpstream: true, githubToken, ct);
+            var pushResult = await gitService.PushAsync(story.WorktreePath, setUpstream: true, tokenAccessor.Token, ct);
             if (!pushResult.Success)
                 return Problem.GitOperationFailed("Push", pushResult.Error ?? "Unknown error", context);
 
@@ -692,7 +684,7 @@ public static class DeveloperEndpoints
                     request.BaseBranch,
                     request.Draft,
                     labels: ["aura-generated"],
-                    githubToken,
+                    tokenAccessor.Token,
                     ct);
 
                 if (!prResult.Success)
@@ -704,7 +696,7 @@ public static class DeveloperEndpoints
 
             if (story.Status != StoryStatus.Completed)
             {
-                await storyService.CompleteAsync(id, githubToken, ct);
+                await storyService.CompleteAsync(id, tokenAccessor.Token, ct);
             }
 
             return Results.Ok(new
