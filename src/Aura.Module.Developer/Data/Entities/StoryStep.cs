@@ -75,10 +75,17 @@ public sealed class StoryStep
 
     /// <summary>Gets or sets the previous output before re-execution (for comparison).</summary>
     public string? PreviousOutput { get; set; }
+
     /// <summary>
     /// Execution wave number (1-based). Steps in the same wave run in parallel.
     /// </summary>
     public int Wave { get; set; } = 1;
+
+    /// <summary>
+    /// Gets or sets the executor override for this specific step.
+    /// Values: "internal" (ReAct agents), "copilot" (GitHub Copilot CLI), or null (use story default).
+    /// </summary>
+    public string? ExecutorOverride { get; set; }
 }
 
 /// <summary>

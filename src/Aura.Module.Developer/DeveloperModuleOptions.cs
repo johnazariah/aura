@@ -35,4 +35,12 @@ public sealed class DeveloperModuleOptions
     /// Relative to the repository root.
     /// </summary>
     public string WorktreeDirectory { get; set; } = ".worktrees";
+
+    /// <summary>
+    /// Gets or sets the default step executor for story execution.
+    /// Values: "internal" (ReAct agents), "copilot" (GitHub Copilot CLI).
+    /// Can be overridden at story level (<see cref="Data.Entities.Story.PreferredExecutor"/>)
+    /// or step level (<see cref="Data.Entities.StoryStep.ExecutorOverride"/>).
+    /// </summary>
+    public string? DefaultExecutor { get; set; } = "copilot";
 }

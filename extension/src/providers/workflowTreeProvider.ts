@@ -88,7 +88,18 @@ export class WorkflowTreeProvider implements vscode.TreeDataProvider<WorkflowTre
 
         item.workflow = workflow;
         item.workflowId = workflow.id;
-        item.description = workflow.status;
+
+        // Show wave progress in description when executing
+        if (workflow.status === 'Executing' && workflow.waveCount > 0) {
+            item.description = `Wave ${workflow.currentWave}/${workflow.waveCount}`;
+        } else if (workflow.status === 'GatePending') {
+            item.description = `Gate pending (Wave ${workflow.currentWave})`;
+        } else if (workflow.status === 'GateFailed') {
+            item.description = `Gate failed (Wave ${workflow.currentWave})`;
+        } else {
+            item.description = workflow.status;
+        }
+
         item.iconPath = this.getStatusIcon(workflow.status);
         item.tooltip = this.getWorkflowTooltip(workflow);
 
@@ -151,34 +162,101 @@ export class WorkflowTreeProvider implements vscode.TreeDataProvider<WorkflowTre
             items.push(worktreeItem);
         }
 
-        // Add steps
+        // Add steps grouped by wave
         if (workflow.steps && workflow.steps.length > 0) {
+            // Group steps by wave
+            const waveGroups = new Map<number, typeof workflow.steps>();
             for (const step of workflow.steps) {
-                const stepItem = new WorkflowTreeItem(
-                    `${step.order}. ${step.name}`,
-                    vscode.TreeItemCollapsibleState.None,
-                    'step'
-                );
-                stepItem.step = step;
-                stepItem.workflowId = workflow.id;
-                stepItem.description = step.capability;
-                stepItem.iconPath = this.getStepIcon(step.status);
-                stepItem.tooltip = `${step.name}\nCapability: ${step.capability}\nStatus: ${step.status}`;
+                const wave = step.wave || 1;
+                if (!waveGroups.has(wave)) {
+                    waveGroups.set(wave, []);
+                }
+                waveGroups.get(wave)!.push(step);
+            }
 
-                // Allow executing pending steps
-                if (step.status === 'Pending') {
-                    stepItem.command = {
-                        command: 'aura.executeStep',
-                        title: 'Execute Step',
-                        arguments: [workflow.id, step.id]
-                    };
+            // Sort waves and render each
+            const sortedWaves = Array.from(waveGroups.keys()).sort((a, b) => a - b);
+            for (const wave of sortedWaves) {
+                const waveSteps = waveGroups.get(wave)!;
+
+                // Add wave header if there are multiple waves
+                if (sortedWaves.length > 1) {
+                    const waveStatus = this.getWaveStatus(waveSteps, wave, workflow.currentWave);
+                    const waveItem = new WorkflowTreeItem(
+                        `Wave ${wave}`,
+                        vscode.TreeItemCollapsibleState.None,
+                        'wave'
+                    );
+                    waveItem.description = waveStatus;
+                    waveItem.iconPath = this.getWaveIcon(waveSteps, wave, workflow.currentWave);
+                    items.push(waveItem);
                 }
 
-                items.push(stepItem);
+                // Add steps in this wave
+                for (const step of waveSteps.sort((a, b) => a.order - b.order)) {
+                    const stepItem = new WorkflowTreeItem(
+                        `${step.order}. ${step.name}`,
+                        vscode.TreeItemCollapsibleState.None,
+                        'step'
+                    );
+                    stepItem.step = step;
+                    stepItem.workflowId = workflow.id;
+                    stepItem.description = step.capability;
+                    stepItem.iconPath = this.getStepIcon(step.status);
+                    stepItem.tooltip = `${step.name}\nWave: ${step.wave}\nCapability: ${step.capability}\nStatus: ${step.status}`;
+
+                    // Allow executing pending steps
+                    if (step.status === 'Pending') {
+                        stepItem.command = {
+                            command: 'aura.executeStep',
+                            title: 'Execute Step',
+                            arguments: [workflow.id, step.id]
+                        };
+                    }
+
+                    items.push(stepItem);
+                }
             }
         }
 
         return items;
+    }
+
+    private getWaveStatus(steps: { status: string }[], wave: number, currentWave: number): string {
+        const completed = steps.filter(s => s.status === 'Completed').length;
+        const failed = steps.filter(s => s.status === 'Failed').length;
+        const running = steps.filter(s => s.status === 'Running').length;
+
+        if (failed > 0) {
+            return `${failed} failed`;
+        }
+        if (running > 0) {
+            return `Running ${running}/${steps.length}`;
+        }
+        if (completed === steps.length) {
+            return 'Complete';
+        }
+        if (wave < currentWave) {
+            return 'Complete';
+        }
+        return 'Pending';
+    }
+
+    private getWaveIcon(steps: { status: string }[], wave: number, currentWave: number): vscode.ThemeIcon {
+        const completed = steps.filter(s => s.status === 'Completed').length;
+        const failed = steps.filter(s => s.status === 'Failed').length;
+        const running = steps.filter(s => s.status === 'Running').length;
+
+        if (failed > 0) {
+            return new vscode.ThemeIcon('error', new vscode.ThemeColor('charts.red'));
+        }
+        if (running > 0) {
+            return new vscode.ThemeIcon('sync~spin');
+        }
+        if (completed === steps.length) {
+            return new vscode.ThemeIcon('check', new vscode.ThemeColor('charts.green'));
+        }
+        return new vscode.ThemeIcon('circle-outline');
     }
 
     private getStatusIcon(status: string): vscode.ThemeIcon {
@@ -193,6 +271,12 @@ export class WorkflowTreeProvider implements vscode.TreeDataProvider<WorkflowTre
                 return new vscode.ThemeIcon('checklist');
             case 'Executing':
                 return new vscode.ThemeIcon('play-circle');
+            case 'GatePending':
+                return new vscode.ThemeIcon('debug-pause', new vscode.ThemeColor('charts.yellow'));
+            case 'GateFailed':
+                return new vscode.ThemeIcon('warning', new vscode.ThemeColor('charts.orange'));
+            case 'ReadyToComplete':
+                return new vscode.ThemeIcon('check-all', new vscode.ThemeColor('charts.green'));
             case 'Completed':
                 return new vscode.ThemeIcon('check', new vscode.ThemeColor('charts.green'));
             case 'Failed':
@@ -245,7 +329,7 @@ export class WorkflowTreeProvider implements vscode.TreeDataProvider<WorkflowTre
 
 export class WorkflowTreeItem extends vscode.TreeItem {
     workflow?: Workflow;
-    step?: { id: string; order: number; name: string; capability: string; status: string };
+    step?: { id: string; order: number; wave: number; name: string; capability: string; status: string };
     workflowId?: string;
 
     constructor(

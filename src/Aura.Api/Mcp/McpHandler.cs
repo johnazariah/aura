@@ -2954,7 +2954,6 @@ public sealed class McpHandler
                 repositoryPath,
                 AutomationMode.Assisted, // MCP-created workflows default to assisted mode
                 issueUrl,
-                DispatchTarget.CopilotCli,
                 ct);
 
             // Post a comment to the issue that work has started

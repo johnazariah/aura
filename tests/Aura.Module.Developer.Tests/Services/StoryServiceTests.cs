@@ -42,7 +42,7 @@ public class StoryServiceTests : IDisposable
     private readonly IReActExecutor _reactExecutor;
     private readonly ILlmProviderRegistry _llmProviderRegistry;
     private readonly IStoryVerificationService _verificationService;
-    private readonly IGitHubCopilotDispatcher _copilotDispatcher;
+    private readonly IStepExecutorRegistry _stepExecutorRegistry;
     private readonly IQualityGateService _qualityGateService;
     private readonly IOptions<DeveloperModuleOptions> _options;
     private readonly StoryService _sut;
@@ -70,14 +70,9 @@ public class StoryServiceTests : IDisposable
         _reactExecutor = Substitute.For<IReActExecutor>();
         _llmProviderRegistry = Substitute.For<ILlmProviderRegistry>();
         _verificationService = Substitute.For<IStoryVerificationService>();
-        _copilotDispatcher = Substitute.For<IGitHubCopilotDispatcher>();
+        _stepExecutorRegistry = Substitute.For<IStepExecutorRegistry>();
         _qualityGateService = Substitute.For<IQualityGateService>();
         _options = Options.Create(new DeveloperModuleOptions { BranchPrefix = "workflow/" });
-
-        // Create a mock task dispatcher for testing
-        var mockDispatcher = Substitute.For<ITaskDispatcher>();
-        mockDispatcher.Target.Returns(DispatchTarget.CopilotCli);
-        var taskDispatchers = new[] { mockDispatcher };
 
         _sut = new StoryService(
             _db,
@@ -92,8 +87,7 @@ public class StoryServiceTests : IDisposable
             _reactExecutor,
             _llmProviderRegistry,
             _verificationService,
-            _copilotDispatcher,
-            taskDispatchers,
+            _stepExecutorRegistry,
             _qualityGateService,
             _options,
             NullLogger<StoryService>.Instance);

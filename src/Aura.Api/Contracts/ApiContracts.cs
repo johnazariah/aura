@@ -133,8 +133,7 @@ public record CreateStoryRequest(
     string? RepositoryPath = null,
     string? Mode = null,
     string? AutomationMode = null,
-    string? IssueUrl = null,
-    string? DispatchTarget = null);
+    string? IssueUrl = null);
 
 /// <summary>Request to execute all pending steps.</summary>
 public record ExecuteAllStepsRequest(
@@ -199,21 +198,20 @@ public record DecomposeStoryRequest(
     int MaxParallelism = 4,
     bool IncludeTests = true);
 
-/// <summary>Response from decomposing a story into tasks.</summary>
+/// <summary>Response from decomposing a story into steps.</summary>
 public record DecomposeStoryResponse(
     Guid StoryId,
-    IReadOnlyList<StoryTaskDto> Tasks,
+    IReadOnlyList<StoryStepDto> Steps,
     int WaveCount);
 
-/// <summary>DTO for a story task.</summary>
-public record StoryTaskDto(
-    string Id,
-    string Title,
-    string Description,
+/// <summary>DTO for a story step in decomposition response.</summary>
+public record StoryStepDto(
+    Guid Id,
+    string Name,
+    string? Description,
     int Wave,
-    string[] DependsOn,
-    string Status,
-    string? ToolImprovementProposal = null);
+    int Order,
+    string Status);
 
 // =============================================================================
 // Response Models

@@ -185,6 +185,7 @@ export interface StoryStreamCallbacks {
 export interface WorkflowStep {
     id: string;
     order: number;
+    wave: number;
     name: string;
     capability: string;
     description?: string;
@@ -206,6 +207,7 @@ export interface Workflow {
     title: string;
     description?: string;
     status: string;
+    automationMode?: string;
     gitBranch?: string;
     worktreePath?: string;
     repositoryPath?: string;
@@ -219,6 +221,12 @@ export interface Workflow {
     executionPlan?: string;
     pullRequestUrl?: string;
     chatHistory?: string;
+    // Wave execution state
+    currentWave: number;
+    waveCount: number;
+    maxParallelism: number;
+    gateMode?: string;
+    gateResult?: string;
     steps: WorkflowStep[];
     createdAt: string;
     updatedAt: string;

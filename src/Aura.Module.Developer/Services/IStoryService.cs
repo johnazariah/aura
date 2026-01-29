@@ -19,7 +19,6 @@ public interface IStoryService
     /// <param name="repositoryPath">Optional repository path.</param>
     /// <param name="automationMode">Automation mode (Assisted, Autonomous, FullAutonomous).</param>
     /// <param name="issueUrl">Optional external issue URL to link.</param>
-    /// <param name="dispatchTarget">Which dispatcher to use for task execution.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>The created workflow.</returns>
     Task<Story> CreateAsync(
@@ -28,7 +27,6 @@ public interface IStoryService
         string? repositoryPath = null,
         AutomationMode automationMode = AutomationMode.Assisted,
         string? issueUrl = null,
-        DispatchTarget dispatchTarget = DispatchTarget.CopilotCli,
         CancellationToken ct = default);
 
     /// <summary>

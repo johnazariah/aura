@@ -12,9 +12,11 @@ using Aura.Module.Developer.Data.Entities;
 using Microsoft.Extensions.Logging;
 
 /// <summary>
-/// Dispatches tasks to GitHub Copilot CLI agents running in YOLO mode.
+/// Executes steps using GitHub Copilot CLI in YOLO mode.
+/// Implements both <see cref="IStepExecutor"/> for unified execution
+/// and <see cref="IGitHubCopilotDispatcher"/> for legacy compatibility.
 /// </summary>
-public sealed class GitHubCopilotDispatcher : IGitHubCopilotDispatcher, ITaskDispatcher
+public sealed class GitHubCopilotDispatcher : IGitHubCopilotDispatcher, IStepExecutor
 {
     private readonly IPromptRegistry _promptRegistry;
     private readonly ILogger<GitHubCopilotDispatcher> _logger;
@@ -23,7 +25,10 @@ public sealed class GitHubCopilotDispatcher : IGitHubCopilotDispatcher, ITaskDis
     private string? _copilotPath;
 
     /// <inheritdoc/>
-    public DispatchTarget Target => DispatchTarget.CopilotCli;
+    public string ExecutorId => "copilot";
+
+    /// <inheritdoc/>
+    public string DisplayName => "GitHub Copilot CLI";
 
     // Common installation paths for copilot CLI
     private static readonly string[] CopilotSearchPaths =
@@ -83,45 +88,61 @@ public sealed class GitHubCopilotDispatcher : IGitHubCopilotDispatcher, ITaskDis
     }
 
     /// <inheritdoc/>
-    public async Task<StoryTask> DispatchTaskAsync(
-        StoryTask task,
+    public Task ExecuteStepAsync(
+        StoryStep step,
+        Story story,
+        IReadOnlyList<StoryStep>? priorSteps = null,
+        CancellationToken ct = default)
+    {
+        var worktreePath = story.WorktreePath ?? story.RepositoryPath
+            ?? throw new InvalidOperationException("Story has no worktree or repository path");
+        return DispatchStepAsync(step, worktreePath, priorSteps, githubToken: null, ct);
+    }
+
+    /// <inheritdoc/>
+    public Task ExecuteStepsAsync(
+        IReadOnlyList<StoryStep> steps,
+        Story story,
+        int maxParallelism,
+        IReadOnlyList<StoryStep>? priorSteps = null,
+        CancellationToken ct = default)
+    {
+        var worktreePath = story.WorktreePath ?? story.RepositoryPath
+            ?? throw new InvalidOperationException("Story has no worktree or repository path");
+        return DispatchStepsAsync(steps, worktreePath, maxParallelism, priorSteps, githubToken: null, ct);
+    }
+
+    /// <inheritdoc/>
+    public async Task DispatchStepAsync(
+        StoryStep step,
         string worktreePath,
-        IReadOnlyList<StoryTask>? completedTasks = null,
+        IReadOnlyList<StoryStep>? completedSteps = null,
         string? githubToken = null,
         CancellationToken ct = default)
     {
         if (!await IsAvailableAsync(ct))
         {
-            return task with
-            {
-                Status = StoryTaskStatus.Failed,
-                Error = "GitHub Copilot CLI is not available",
-                CompletedAt = DateTimeOffset.UtcNow,
-            };
+            step.Status = StepStatus.Failed;
+            step.Error = "GitHub Copilot CLI is not available";
+            step.CompletedAt = DateTimeOffset.UtcNow;
+            return;
         }
 
-        var startedTask = task with
-        {
-            Status = StoryTaskStatus.Running,
-            StartedAt = DateTimeOffset.UtcNow,
-        };
+        step.Status = StepStatus.Running;
+        step.StartedAt = DateTimeOffset.UtcNow;
+        step.Attempts++;
 
         var worktreeName = Path.GetFileName(worktreePath);
         _logger.LogInformation(
-            "[{WorktreeName}] Dispatching task {TaskId}: {TaskTitle} to GH Copilot CLI",
+            "[{WorktreeName}] Dispatching step {StepId}: {StepName} to GH Copilot CLI",
             worktreeName,
-            task.Id,
-            task.Title);
+            step.Id,
+            step.Name);
 
         try
         {
-            // Filter completed tasks to only those this task depends on
-            var dependencies = completedTasks?
-                .Where(t => task.DependsOn.Contains(t.Id))
-                .ToList();
-
             // Build the prompt for copilot
-            var prompt = BuildPrompt(task, dependencies);
+            var prompt = BuildPrompt(step, completedSteps);
 
             // Run copilot CLI in YOLO mode (auto-accept all tool calls)
             // --yolo: Allow all tools, paths, and URLs without confirmation
@@ -134,79 +155,63 @@ public sealed class GitHubCopilotDispatcher : IGitHubCopilotDispatcher, ITaskDis
             var (exitCode, output) = await RunCommandAsync(_copilotPath!, args, worktreePath, githubToken, ct);
 
             // Extract tool improvement proposal if present
-            var (cleanOutput, toolProposal) = ExtractToolImprovementProposal(output);
-
-            if (toolProposal != null)
-            {
-                _logger.LogInformation("[{WorktreeName}] Task {TaskId} included tool improvement proposal", worktreeName, task.Id);
-            }
+            var (cleanOutput, _) = ExtractToolImprovementProposal(output);
 
             if (exitCode == 0)
             {
-                _logger.LogInformation("[{WorktreeName}] Task {TaskId} completed successfully", worktreeName, task.Id);
-                return startedTask with
-                {
-                    Status = StoryTaskStatus.Completed,
-                    Output = cleanOutput,
-                    ToolImprovementProposal = toolProposal,
-                    CompletedAt = DateTimeOffset.UtcNow,
-                };
+                _logger.LogInformation("[{WorktreeName}] Step {StepId} completed successfully", worktreeName, step.Id);
+                step.Status = StepStatus.Completed;
+                // Wrap output in JSON since the column is JSONB
+                step.Output = JsonSerializer.Serialize(new { content = cleanOutput });
+                step.CompletedAt = DateTimeOffset.UtcNow;
             }
             else
             {
-                _logger.LogWarning("[{WorktreeName}] Task {TaskId} failed with exit code {ExitCode}", worktreeName, task.Id, exitCode);
-                return startedTask with
-                {
-                    Status = StoryTaskStatus.Failed,
-                    Error = $"Exit code {exitCode}: {output}",
-                    ToolImprovementProposal = toolProposal,
-                    CompletedAt = DateTimeOffset.UtcNow,
-                };
+                _logger.LogWarning("[{WorktreeName}] Step {StepId} failed with exit code {ExitCode}", worktreeName, step.Id, exitCode);
+                step.Status = StepStatus.Failed;
+                step.Error = $"Exit code {exitCode}: {output}";
+                step.CompletedAt = DateTimeOffset.UtcNow;
             }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "[{WorktreeName}] Task {TaskId} failed with exception", worktreeName, task.Id);
-            return startedTask with
-            {
-                Status = StoryTaskStatus.Failed,
-                Error = ex.Message,
-                CompletedAt = DateTimeOffset.UtcNow,
-            };
+            _logger.LogError(ex, "[{WorktreeName}] Step {StepId} failed with exception", worktreeName, step.Id);
+            step.Status = StepStatus.Failed;
+            step.Error = ex.Message;
+            step.CompletedAt = DateTimeOffset.UtcNow;
         }
     }
 
     /// <inheritdoc/>
-    public async Task<IReadOnlyList<StoryTask>> DispatchTasksAsync(
-        IReadOnlyList<StoryTask> tasks,
+    public async Task DispatchStepsAsync(
+        IReadOnlyList<StoryStep> steps,
         string worktreePath,
         int maxParallelism,
-        IReadOnlyList<StoryTask>? completedTasks = null,
+        IReadOnlyList<StoryStep>? completedSteps = null,
         string? githubToken = null,
         CancellationToken ct = default)
     {
-        if (tasks.Count == 0)
+        if (steps.Count == 0)
         {
-            return [];
+            return;
         }
 
         var worktreeName = Path.GetFileName(worktreePath);
         _logger.LogInformation(
-            "[{WorktreeName}] Dispatching {TaskCount} tasks with parallelism {MaxParallelism}",
+            "[{WorktreeName}] Dispatching {StepCount} steps with parallelism {MaxParallelism}",
             worktreeName,
-            tasks.Count,
+            steps.Count,
             maxParallelism);
 
         // Use SemaphoreSlim to limit parallelism
         using var semaphore = new SemaphoreSlim(maxParallelism, maxParallelism);
-        var results = new StoryTask[tasks.Count];
 
-        var dispatchTasks = tasks.Select(async (task, index) =>
+        var dispatchTasks = steps.Select(async step =>
         {
             await semaphore.WaitAsync(ct);
             try
             {
-                results[index] = await DispatchTaskAsync(task, worktreePath, completedTasks, githubToken, ct);
+                await DispatchStepAsync(step, worktreePath, completedSteps, githubToken, ct);
             }
             finally
             {
@@ -216,31 +221,29 @@ public sealed class GitHubCopilotDispatcher : IGitHubCopilotDispatcher, ITaskDis
 
         await Task.WhenAll(dispatchTasks);
 
-        var completed = results.Count(t => t.Status == StoryTaskStatus.Completed);
-        var failed = results.Count(t => t.Status == StoryTaskStatus.Failed);
+        var completed = steps.Count(s => s.Status == StepStatus.Completed);
+        var failed = steps.Count(s => s.Status == StepStatus.Failed);
         _logger.LogInformation(
             "[{WorktreeName}] Dispatch complete: {Completed} succeeded, {Failed} failed",
             worktreeName,
             completed,
             failed);
-
-        return results;
     }
 
-    private string BuildPrompt(StoryTask task, IReadOnlyList<StoryTask>? completedDependencies = null)
+    private string BuildPrompt(StoryStep step, IReadOnlyList<StoryStep>? completedDependencies = null)
     {
         // Try to use the template, fall back to inline if not found
         try
         {
             var dependencyOutputs = completedDependencies?
-                .Where(t => t.Output != null)
-                .Select(t => new { title = t.Title, output = t.Output })
+                .Where(s => s.Output != null)
+                .Select(s => new { title = s.Name, output = s.Output })
                 .ToList();
 
-            return _promptRegistry.Render("task-execute", new
+            return _promptRegistry.Render("step-execute", new
             {
-                title = task.Title,
-                description = task.Description,
+                title = step.Name,
+                description = step.Description ?? step.Name,
                 dependencyOutputs = dependencyOutputs?.Count > 0 ? dependencyOutputs : null,
             });
         }
@@ -248,12 +251,12 @@ public sealed class GitHubCopilotDispatcher : IGitHubCopilotDispatcher, ITaskDis
         {
             // Fallback to simple prompt if template not found
             var sb = new StringBuilder();
-            sb.AppendLine($"# Task: {task.Title}");
+            sb.AppendLine($"# Step: {step.Name}");
             sb.AppendLine();
             sb.AppendLine("## Instructions");
-            sb.AppendLine(task.Description);
+            sb.AppendLine(step.Description ?? step.Name);
             sb.AppendLine();
-            sb.AppendLine("Execute this task by making the necessary code changes. Be thorough and complete.");
+            sb.AppendLine("Execute this step by making the necessary code changes. Be thorough and complete.");
             return sb.ToString();
         }
     }

@@ -66,6 +66,9 @@ public sealed class DeveloperDbContext(DbContextOptions<DeveloperDbContext> opti
             entity.Property(e => e.PatternName).HasColumnName("pattern_name").HasMaxLength(100);
             entity.Property(e => e.PatternLanguage).HasColumnName("pattern_language").HasMaxLength(50);
 
+            // Executor preference
+            entity.Property(e => e.PreferredExecutor).HasColumnName("preferred_executor").HasMaxLength(50);
+
             // Chat
             entity.Property(e => e.ChatHistory).HasColumnName("chat_history").HasColumnType("jsonb");
 
@@ -102,6 +105,9 @@ public sealed class DeveloperDbContext(DbContextOptions<DeveloperDbContext> opti
             entity.Property(e => e.ChatHistory).HasColumnName("chat_history").HasColumnType("jsonb");
             entity.Property(e => e.NeedsRework).HasColumnName("needs_rework");
             entity.Property(e => e.PreviousOutput).HasColumnName("previous_output").HasColumnType("jsonb");
+
+            // Executor override
+            entity.Property(e => e.ExecutorOverride).HasColumnName("executor_override").HasMaxLength(50);
 
             entity.HasOne(e => e.Story)
                 .WithMany(w => w.Steps)

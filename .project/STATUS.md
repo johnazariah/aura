@@ -1,6 +1,6 @@
 # Aura Project Status
 
-> **Last Updated**: 2025-01-27
+> **Last Updated**: 2026-01-29
 > **Current Release**: v1.3.1
 > **Branch**: main
 > **Overall Status**: ✅ Production Ready
@@ -8,6 +8,15 @@
 ## Quick Summary
 
 Aura is a **local-first, privacy-safe AI foundation** for knowledge work. The Developer Module is production-ready with MCP integration for GitHub Copilot, Roslyn refactoring tools, pattern-driven workflows, and multi-language support.
+
+## Recent Changes
+
+- **2026-01-29**: Unified Wave Orchestration - Simplified story execution model
+  - Removed `StoryTask` abstraction (use `StoryStep` directly)
+  - Removed `InternalAgentsDispatcher` (use Copilot CLI only for wave execution)
+  - Removed `DispatchTarget` enum (no longer needed)
+  - Extension now shows wave progress ("Wave 2/4") and groups steps by wave
+  - Steps are updated in-place during dispatch (no conversion overhead)
 
 ## Component Status
 

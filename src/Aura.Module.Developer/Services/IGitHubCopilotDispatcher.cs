@@ -7,41 +7,42 @@ namespace Aura.Module.Developer.Services;
 using Aura.Module.Developer.Data.Entities;
 
 /// <summary>
-/// Dispatches tasks to GitHub Copilot CLI agents running in YOLO mode.
+/// Dispatches steps to GitHub Copilot CLI agents running in YOLO mode.
+/// This is the unified step dispatcher for wave-based parallel execution.
 /// </summary>
 public interface IGitHubCopilotDispatcher
 {
     /// <summary>
-    /// Dispatches a task to a GH Copilot CLI agent.
+    /// Dispatches a step to a GH Copilot CLI agent.
+    /// The step is updated in-place with execution results.
     /// </summary>
-    /// <param name="task">The task to execute.</param>
+    /// <param name="step">The step to execute (modified in place).</param>
     /// <param name="worktreePath">The worktree path to execute in.</param>
-    /// <param name="completedTasks">Previously completed tasks for context (optional).</param>
+    /// <param name="completedSteps">Previously completed steps for context (optional).</param>
     /// <param name="githubToken">GitHub token for authentication (optional, passed per-request).</param>
     /// <param name="ct">Cancellation token.</param>
-    /// <returns>The updated task with execution result.</returns>
-    Task<StoryTask> DispatchTaskAsync(
-        StoryTask task,
+    Task DispatchStepAsync(
+        StoryStep step,
         string worktreePath,
-        IReadOnlyList<StoryTask>? completedTasks = null,
+        IReadOnlyList<StoryStep>? completedSteps = null,
         string? githubToken = null,
         CancellationToken ct = default);
 
     /// <summary>
-    /// Dispatches multiple tasks in parallel.
+    /// Dispatches multiple steps in parallel.
+    /// Steps are updated in-place with execution results.
     /// </summary>
-    /// <param name="tasks">The tasks to execute.</param>
+    /// <param name="steps">The steps to execute (modified in place).</param>
     /// <param name="worktreePath">The worktree path to execute in.</param>
     /// <param name="maxParallelism">Maximum concurrent agents.</param>
-    /// <param name="completedTasks">Previously completed tasks for context (optional).</param>
+    /// <param name="completedSteps">Previously completed steps for context (optional).</param>
     /// <param name="githubToken">GitHub token for authentication (optional, passed per-request).</param>
     /// <param name="ct">Cancellation token.</param>
-    /// <returns>The updated tasks with execution results.</returns>
-    Task<IReadOnlyList<StoryTask>> DispatchTasksAsync(
-        IReadOnlyList<StoryTask> tasks,
+    Task DispatchStepsAsync(
+        IReadOnlyList<StoryStep> steps,
         string worktreePath,
         int maxParallelism,
-        IReadOnlyList<StoryTask>? completedTasks = null,
+        IReadOnlyList<StoryStep>? completedSteps = null,
         string? githubToken = null,
         CancellationToken ct = default);
 

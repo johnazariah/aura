@@ -89,20 +89,12 @@ public static class DeveloperEndpoints
                 automationMode = am;
             }
 
-            // Parse dispatch target from string
-            var dispatchTarget = DispatchTarget.CopilotCli;
-            if (!string.IsNullOrEmpty(request.DispatchTarget) && Enum.TryParse<DispatchTarget>(request.DispatchTarget, true, out var dt))
-            {
-                dispatchTarget = dt;
-            }
-
             var story = await storyService.CreateAsync(
                 request.Title,
                 request.Description,
                 request.RepositoryPath,
                 automationMode,
                 request.IssueUrl,
-                dispatchTarget,
                 ct);
 
             return Results.Created($"/api/developer/stories/{story.Id}", new
@@ -112,7 +104,6 @@ public static class DeveloperEndpoints
                 description = story.Description,
                 status = story.Status.ToString(),
                 automationMode = story.AutomationMode.ToString(),
-                dispatchTarget = story.DispatchTarget.ToString(),
                 gitBranch = story.GitBranch,
                 worktreePath = story.WorktreePath,
                 repositoryPath = story.RepositoryPath,
@@ -188,7 +179,6 @@ public static class DeveloperEndpoints
             // Use story status directly
             status = GetEffectiveStatus(story),
             automationMode = story.AutomationMode.ToString(),
-            dispatchTarget = story.DispatchTarget.ToString(),
             gitBranch = story.GitBranch,
             worktreePath = story.WorktreePath,
             repositoryPath = story.RepositoryPath,
@@ -420,14 +410,13 @@ public static class DeveloperEndpoints
 
             return Results.Ok(new DecomposeStoryResponse(
                 result.StoryId,
-                result.Steps.Select(s => new StoryTaskDto(
-                    s.Id.ToString(),
+                result.Steps.Select(s => new StoryStepDto(
+                    s.Id,
                     s.Name,
-                    s.Description ?? string.Empty,
+                    s.Description,
                     s.Wave,
-                    [], // No DependsOn in Steps, we use Wave ordering
-                    s.Status.ToString(),
-                    null)).ToList(),
+                    s.Order,
+                    s.Status.ToString())).ToList(),
                 result.WaveCount));
         }
         catch (InvalidOperationException ex)
@@ -1111,7 +1100,6 @@ public static class DeveloperEndpoints
                 request.RepositoryPath,
                 AutomationMode.Assisted, // Issue-based workflows default to assisted mode
                 request.IssueUrl,
-                DispatchTarget.CopilotCli,
                 ct);
 
             // Post a comment to the issue that work has started

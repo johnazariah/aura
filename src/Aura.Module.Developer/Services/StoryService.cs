@@ -41,8 +41,7 @@ public sealed class StoryService(
     IReActExecutor reactExecutor,
     ILlmProviderRegistry llmProviderRegistry,
     IStoryVerificationService verificationService,
-    IGitHubCopilotDispatcher copilotDispatcher,
-    IEnumerable<ITaskDispatcher> taskDispatchers,
+    IStepExecutorRegistry stepExecutorRegistry,
     IQualityGateService qualityGateService,
     IOptions<DeveloperModuleOptions> options,
     ILogger<StoryService> logger) : IStoryService
@@ -59,8 +58,7 @@ public sealed class StoryService(
     private readonly IReActExecutor _reactExecutor = reactExecutor;
     private readonly ILlmProviderRegistry _llmProviderRegistry = llmProviderRegistry;
     private readonly IStoryVerificationService _verificationService = verificationService;
-    private readonly IGitHubCopilotDispatcher _copilotDispatcher = copilotDispatcher;
-    private readonly Dictionary<DispatchTarget, ITaskDispatcher> _dispatchers = taskDispatchers.ToDictionary(d => d.Target);
+    private readonly IStepExecutorRegistry _stepExecutorRegistry = stepExecutorRegistry;
     private readonly IQualityGateService _qualityGateService = qualityGateService;
     private readonly DeveloperModuleOptions _options = options.Value;
     private readonly ILogger<StoryService> _logger = logger;
@@ -72,7 +70,6 @@ public sealed class StoryService(
         string? repositoryPath = null,
         AutomationMode automationMode = AutomationMode.Assisted,
         string? issueUrl = null,
-        DispatchTarget dispatchTarget = DispatchTarget.CopilotCli,
         CancellationToken ct = default)
     {
         // Create a branch name from the title
@@ -94,7 +91,6 @@ public sealed class StoryService(
             GitBranch = branchName,
             Status = StoryStatus.Created,
             AutomationMode = automationMode,
-            DispatchTarget = dispatchTarget,
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow,
         };
@@ -187,7 +183,6 @@ public sealed class StoryService(
             request.RepositoryPath,
             AutomationMode.Assisted,
             issueUrl: null,
-            DispatchTarget.CopilotCli,
             ct);
 
         // Set guardian-specific fields
@@ -973,77 +968,28 @@ public sealed class StoryService(
             "Running wave {Wave}/{TotalWaves} with {StepCount} steps (max parallelism: {MaxParallelism})",
             currentWave, waveCount, waveSteps.Count, story.MaxParallelism);
 
-        // Convert steps to tasks for dispatch
-        var waveTasks = waveSteps.Select(s => StoryTask.FromStep(s)).ToList();
-
-        // Get completed tasks from prior waves to provide context
-        var priorCompletedTasks = steps
+        // Get completed steps from prior waves to provide context
+        var priorCompletedSteps = steps
             .Where(s => s.Wave < currentWave && s.Status == StepStatus.Completed)
-            .Select(s => StoryTask.FromStep(s))
             .ToList();
 
-        // Dispatch tasks using the configured dispatcher
+        // Resolve executor for this wave (use first step to resolve, all steps in wave use same executor)
         var worktreeName = Path.GetFileName(story.WorktreePath);
-        IReadOnlyList<StoryTask> executedTasks;
+        var executor = await _stepExecutorRegistry.ResolveExecutorAsync(waveSteps[0], story, ct)
+            ?? throw new InvalidOperationException("No executor available for story");
 
-        if (_dispatchers.TryGetValue(story.DispatchTarget, out var dispatcher))
-        {
-            _logger.LogInformation(
-                "[{WorktreeName}] Using {DispatchTarget} dispatcher for wave {Wave}",
-                worktreeName,
-                story.DispatchTarget,
-                currentWave);
+        _logger.LogInformation(
+            "[{WorktreeName}] Using {Executor} for wave {Wave}",
+            worktreeName,
+            executor.DisplayName,
+            currentWave);
 
-            executedTasks = await dispatcher.DispatchTasksAsync(
-                waveTasks,
-                story.WorktreePath,
-                story.MaxParallelism,
-                priorCompletedTasks,
-                githubToken,
-                ct);
-        }
-        else
-        {
-            // Fallback to Copilot dispatcher
-            _logger.LogWarning(
-                "[{WorktreeName}] No dispatcher for {DispatchTarget}, falling back to Copilot CLI",
-                worktreeName,
-                story.DispatchTarget);
-
-            executedTasks = await _copilotDispatcher.DispatchTasksAsync(
-                waveTasks,
-                story.WorktreePath,
-                story.MaxParallelism,
-                priorCompletedTasks,
-                githubToken,
-                ct);
-        }
-
-        // Update steps from executed tasks
-        var stepDict = waveSteps.ToDictionary(s => s.Id.ToString());
-        foreach (var executed in executedTasks)
-        {
-            if (stepDict.TryGetValue(executed.Id, out var step))
-            {
-                step.Status = executed.Status switch
-                {
-                    StoryTaskStatus.Completed => StepStatus.Completed,
-                    StoryTaskStatus.Failed => StepStatus.Failed,
-                    StoryTaskStatus.Skipped => StepStatus.Skipped,
-                    StoryTaskStatus.Running => StepStatus.Running,
-                    _ => StepStatus.Pending,
-                };
-
-                // Wrap dispatcher output in JSON since the column is JSONB
-                step.Output = executed.Output != null
-                    ? JsonSerializer.Serialize(new { content = executed.Output })
-                    : null;
-                step.Error = executed.Error;
-                step.AssignedAgentId = executed.AgentSessionId;
-                step.StartedAt = executed.StartedAt;
-                step.CompletedAt = executed.CompletedAt;
-            }
-        }
+        await executor.ExecuteStepsAsync(
+            waveSteps,
+            story,
+            story.MaxParallelism,
+            priorCompletedSteps,
+            ct);
 
         await _db.SaveChangesAsync(ct);
 
@@ -1210,75 +1156,44 @@ public sealed class StoryService(
                 yield return StoryProgressEvent.StepStarted(storyId, step.Id, step.Name, currentWave);
             }
 
-            // Convert steps to tasks and dispatch
-            var waveTasks = waveSteps.Select(s => StoryTask.FromStep(s)).ToList();
-            var priorCompletedTasks = steps
+            // Get completed steps from prior waves to provide context
+            var priorCompletedSteps = steps
                 .Where(s => s.Wave < currentWave && s.Status == StepStatus.Completed)
-                .Select(s => StoryTask.FromStep(s))
                 .ToList();
 
+            // Resolve executor for this wave (use first step to resolve, all steps in wave use same executor)
             var worktreeName = Path.GetFileName(story.WorktreePath);
-            IReadOnlyList<StoryTask> executedTasks;
+            var executor = await _stepExecutorRegistry.ResolveExecutorAsync(waveSteps[0], story, ct)
+                ?? throw new InvalidOperationException("No executor available for story");
 
-            if (_dispatchers.TryGetValue(story.DispatchTarget, out var dispatcher))
-            {
-                executedTasks = await dispatcher.DispatchTasksAsync(
-                    waveTasks,
-                    story.WorktreePath,
-                    story.MaxParallelism,
-                    priorCompletedTasks,
-                    githubToken,
-                    ct);
-            }
-            else
-            {
-                executedTasks = await _copilotDispatcher.DispatchTasksAsync(
-                    waveTasks,
-                    story.WorktreePath,
-                    story.MaxParallelism,
-                    priorCompletedTasks,
-                    githubToken,
-                    ct);
-            }
+            _logger.LogInformation(
+                "[{WorktreeName}] Using {Executor} for wave {Wave}",
+                worktreeName,
+                executor.DisplayName,
+                currentWave);
 
-            // Update steps from executed tasks and emit events
-            var stepDict = waveSteps.ToDictionary(s => s.Id.ToString());
+            await executor.ExecuteStepsAsync(
+                waveSteps,
+                story,
+                story.MaxParallelism,
+                priorCompletedSteps,
+                ct);
+
+            // Emit events for step results
             var completedCount = 0;
             var failedCount = 0;
 
-            foreach (var executed in executedTasks)
+            foreach (var step in waveSteps)
             {
-                if (stepDict.TryGetValue(executed.Id, out var step))
+                if (step.Status == StepStatus.Completed)
                 {
-                    step.Status = executed.Status switch
-                    {
-                        StoryTaskStatus.Completed => StepStatus.Completed,
-                        StoryTaskStatus.Failed => StepStatus.Failed,
-                        StoryTaskStatus.Skipped => StepStatus.Skipped,
-                        StoryTaskStatus.Running => StepStatus.Running,
-                        _ => StepStatus.Pending,
-                    };
-
-                    // Wrap dispatcher output in JSON since the column is JSONB
-                    var outputJson = executed.Output != null
-                        ? JsonSerializer.Serialize(new { content = executed.Output })
-                        : null;
-                    step.Output = outputJson;
-                    step.Error = executed.Error;
-                    step.AssignedAgentId = executed.AgentSessionId;
-                    step.StartedAt = executed.StartedAt;
-                    step.CompletedAt = executed.CompletedAt;
-
-                    if (step.Status == StepStatus.Completed)
-                    {
-                        completedCount++;
-                        yield return StoryProgressEvent.StepCompleted(storyId, step.Id, step.Name, step.Output);
-                    }
-                    else if (step.Status == StepStatus.Failed)
-                    {
-                        failedCount++;
-                        yield return StoryProgressEvent.StepFailed(storyId, step.Id, step.Name, step.Error);
-                    }
+                    completedCount++;
+                    yield return StoryProgressEvent.StepCompleted(storyId, step.Id, step.Name, step.Output);
+                }
+                else if (step.Status == StepStatus.Failed)
+                {
+                    failedCount++;
+                    yield return StoryProgressEvent.StepFailed(storyId, step.Id, step.Name, step.Error);
                 }
             }
 

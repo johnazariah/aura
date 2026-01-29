@@ -121,8 +121,12 @@ public sealed class Story
     /// <summary>Gets or sets the maximum number of parallel agents to use.</summary>
     public int MaxParallelism { get; set; } = 4;
 
-    /// <summary>Gets or sets the dispatch target for task execution.</summary>
-    public DispatchTarget DispatchTarget { get; set; } = DispatchTarget.CopilotCli;
+    /// <summary>
+    /// Gets or sets the preferred executor for step execution.
+    /// Values: "internal" (ReAct agents), "copilot" (GitHub Copilot CLI), or null (use system default).
+    /// Can be overridden at the step level via <see cref="StoryStep.ExecutorOverride"/>.
+    /// </summary>
+    public string? PreferredExecutor { get; set; }
 }
 
 /// <summary>
@@ -246,22 +250,4 @@ public enum GateMode
 
     /// <summary>Pause at every gate for human validation.</summary>
     PauseAlways,
-}
-
-/// <summary>
-/// The dispatch target for parallel task execution.
-/// </summary>
-public enum DispatchTarget
-{
-    /// <summary>
-    /// Use GitHub Copilot CLI agents (spawns external process).
-    /// Leverages Claude via Copilot with access to Aura MCP tools.
-    /// </summary>
-    CopilotCli,
-
-    /// <summary>
-    /// Use Aura's internal ReAct agents (in-process).
-    /// Uses configured LLM provider with Aura's tool registry.
-    /// </summary>
-    InternalAgents,
 }
