@@ -9,26 +9,26 @@ This document identifies areas of technical debt, inconsistencies, and opportuni
 
 ## 1. High-Priority Simplifications
 
-### 1.1 Dual Naming: "Story" vs "Workflow"
+### 1.1 Dual Naming: "Story" vs "Workflow" ✅ COMPLETED
 
 **Problem:** The codebase uses both "Story" and "Workflow" terminology inconsistently:
 - Entity: `Story`, `StoryStep`, `StoryStatus`
 - API paths: `/api/developer/stories/...`
-- UI labels: "Workflows" view
-- Extension: `WorkflowTreeProvider`, `WorkflowPanelProvider`
+- UI labels: ~~"Workflows" view~~ → Now "Stories" view
+- Extension: ~~`WorkflowTreeProvider`, `WorkflowPanelProvider`~~ → Now `StoryTreeProvider`, `StoryPanelProvider`
 - Documentation: Mixed usage
 
-**Impact:** Confusing for developers, creates mental overhead.
+**Status:** Implemented 2026-01-29
 
-**Recommendation:** Standardize on "Story" throughout:
-- Rename extension providers: `StoryTreeProvider`, `StoryPanelProvider`
-- Rename UI labels: "Stories" view
-- Update all documentation
-
-**Files Affected:**
-- `extension/src/providers/workflowTreeProvider.ts`
-- `extension/src/providers/workflowPanelProvider.ts`
-- `extension/package.json` (view names, commands)
+**Changes Made:**
+- Renamed `workflowTreeProvider.ts` → `storyTreeProvider.ts`
+- Renamed `workflowPanelProvider.ts` → `storyPanelProvider.ts`
+- Renamed classes: `WorkflowTreeProvider` → `StoryTreeProvider`, `WorkflowPanelProvider` → `StoryPanelProvider`
+- Updated `package.json` view ID from `aura.workflows` → `aura.stories`
+- Updated all commands: `aura.createWorkflow` → `aura.createStory`, etc.
+- Updated keybindings, menus, and walkthrough
+- Updated `extension.ts` to use new provider names
+- Updated UI labels throughout
 
 ### 1.2 McpHandler is 4775 Lines
 
@@ -360,8 +360,8 @@ public interface IAuraEvents
 
 If incrementally refactoring rather than rewriting:
 
-### Phase 1: Naming (Low Risk)
-- Rename Workflow → Story in extension
+### Phase 1: Naming (Low Risk) ✅ COMPLETED
+- ~~Rename Workflow → Story in extension~~ Done 2026-01-29
 - Update documentation
 
 ### Phase 2: Structure (Medium Risk)
