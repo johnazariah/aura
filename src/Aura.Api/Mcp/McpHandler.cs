@@ -24,7 +24,7 @@ using RefactoringParameterInfo = Aura.Module.Developer.Services.ParameterInfo;
 /// Handles MCP (Model Context Protocol) JSON-RPC requests.
 /// Exposes Aura's RAG and Code Graph capabilities to GitHub Copilot.
 /// </summary>
-public sealed class McpHandler
+public sealed partial class McpHandler
 {
     private const string ProtocolVersion = "2024-11-05";
     private const string ServerName = "Aura";
@@ -285,14 +285,22 @@ public sealed class McpHandler
                         {
                             type = "string",
                             description = "Refactoring operation type",
-                            @enum = new[] { "rename", "change_signature", "extract_interface", "extract_method", "extract_variable", "safe_delete", "move_type_to_file" }
+                            @enum = new[] { "rename", "change_signature", "extract_interface", "extract_method", "extract_variable", "safe_delete", "move_type_to_file", "move_members_to_partial" }
                         },
                         symbolName = new { type = "string", description = "Symbol to refactor" },
                         newName = new { type = "string", description = "New name for rename, extract_method, extract_variable, extract_interface" },
                         containingType = new { type = "string", description = "Type containing the symbol (for C# disambiguation)" },
                         solutionPath = new { type = "string", description = "Path to solution file (.sln) - for C# operations" },
                         filePath = new { type = "string", description = "Path to file containing the code" },
-                        targetDirectory = new { type = "string", description = "Target directory for move_type_to_file (default: same as source)" },
+                        className = new { type = "string", description = "Class name - for move_members_to_partial" },
+                        memberNames = new
+                        {
+                            type = "array",
+                            items = new { type = "string" },
+                            description = "Member names to move - for move_members_to_partial"
+                        },
+                        targetFileName = new { type = "string", description = "Target filename for partial file (e.g., 'MyClass.Methods.cs') - for move_members_to_partial" },
+                        targetDirectory = new { type = "string", description = "Target directory for move_type_to_file or move_members_to_partial (default: same as source)" },
                         projectPath = new { type = "string", description = "Project root - for Python operations" },
                         offset = new { type = "integer", description = "Character offset for Python rename" },
                         startOffset = new { type = "integer", description = "Start offset for Python extract operations" },
@@ -1123,6 +1131,7 @@ public sealed class McpHandler
             "extract_variable" when language == "typescript" => await TypeScriptExtractVariableAsync(args, ct),
             "safe_delete" => await SafeDeleteAsync(args, ct),
             "move_type_to_file" => await MoveTypeToFileAsync(args, ct),
+            "move_members_to_partial" => await MoveMembersToPartialAsync(args, ct),
             "extract_method" => throw new NotSupportedException("C# extract_method not yet implemented. Use Python or TypeScript files, or manual extraction."),
             "extract_variable" => throw new NotSupportedException("C# extract_variable not yet implemented. Use Python or TypeScript files, or manual extraction."),
             _ => throw new ArgumentException($"Unknown refactor operation: {operation}")
@@ -3910,6 +3919,72 @@ public sealed class McpHandler
             modifiedFiles = result.ModifiedFiles,
             createdFiles = result.CreatedFiles,
             deletedFiles = result.DeletedFiles,
+            preview = result.Preview?.Select(p => new { p.FilePath, p.NewContent })
+        };
+    }
+
+    private async Task<object> MoveMembersToPartialAsync(JsonElement? args, CancellationToken ct)
+    {
+        var className = args?.GetProperty("className").GetString()
+            ?? throw new ArgumentException("className is required");
+        var solutionPath = args?.GetProperty("solutionPath").GetString()
+            ?? throw new ArgumentException("solutionPath is required");
+        var targetFileName = args?.GetProperty("targetFileName").GetString()
+            ?? throw new ArgumentException("targetFileName is required");
+
+        // memberNames can be a single string or an array
+        var memberNames = new List<string>();
+        if (args.HasValue && args.Value.TryGetProperty("memberNames", out var membersEl))
+        {
+            if (membersEl.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var m in membersEl.EnumerateArray())
+                {
+                    if (m.GetString() is { } name)
+                        memberNames.Add(name);
+                }
+            }
+            else if (membersEl.GetString() is { } singleName)
+            {
+                memberNames.Add(singleName);
+            }
+        }
+
+        if (memberNames.Count == 0)
+        {
+            throw new ArgumentException("memberNames is required (array of member names)");
+        }
+
+        string? targetDirectory = null;
+        if (args.HasValue && args.Value.TryGetProperty("targetDirectory", out var dirEl))
+        {
+            targetDirectory = dirEl.GetString();
+        }
+
+        var preview = args?.TryGetProperty("preview", out var previewEl) == true && previewEl.GetBoolean();
+        var ensurePartial = true;
+        if (args?.TryGetProperty("ensureSourceIsPartial", out var ensureEl) == true)
+        {
+            ensurePartial = ensureEl.GetBoolean();
+        }
+
+        var result = await _refactoringService.MoveMembersToPartialAsync(new MoveMembersToPartialRequest
+        {
+            ClassName = className,
+            SolutionPath = solutionPath,
+            MemberNames = memberNames,
+            TargetFileName = targetFileName,
+            TargetDirectory = targetDirectory,
+            Preview = preview,
+            EnsureSourceIsPartial = ensurePartial
+        }, ct);
+
+        return new
+        {
+            success = result.Success,
+            message = result.Message,
+            modifiedFiles = result.ModifiedFiles,
+            createdFiles = result.CreatedFiles,
             preview = result.Preview?.Select(p => new { p.FilePath, p.NewContent })
         };
     }

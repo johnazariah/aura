@@ -100,6 +100,15 @@ public interface IRoslynRefactoringService
     /// <param name="ct">Cancellation token.</param>
     /// <returns>Result containing the created file or error information.</returns>
     Task<RefactoringResult> CreateTypeAsync(CreateTypeRequest request, CancellationToken ct = default);
+
+    /// <summary>
+    /// Moves specified members from a class to a new partial class file.
+    /// Ensures the source class has the partial modifier.
+    /// </summary>
+    /// <param name="request">The move members request.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Result containing created/modified files or error information.</returns>
+    Task<RefactoringResult> MoveMembersToPartialAsync(MoveMembersToPartialRequest request, CancellationToken ct = default);
 }
 
 /// <summary>
@@ -592,4 +601,32 @@ public sealed record CreateTypeRequest
     /// Example: Repository&lt;TEntity&gt; where TEntity : class, IEntity
     /// </summary>
     public IReadOnlyList<TypeParameterInfo>? TypeParameters { get; init; }
+}
+
+
+/// <summary>
+/// Request to move members from a class to a new partial class file.
+/// </summary>
+public sealed record MoveMembersToPartialRequest
+{
+    /// <summary>Name of the class containing the members.</summary>
+    public required string ClassName { get; init; }
+
+    /// <summary>Path to the solution file.</summary>
+    public required string SolutionPath { get; init; }
+
+    /// <summary>Names of members (methods, properties, fields) to move.</summary>
+    public required IReadOnlyList<string> MemberNames { get; init; }
+
+    /// <summary>Target filename for the partial class (e.g., "McpHandler.Edit.cs").</summary>
+    public required string TargetFileName { get; init; }
+
+    /// <summary>Optional: target directory. If null, uses the same directory as source.</summary>
+    public string? TargetDirectory { get; init; }
+
+    /// <summary>If true, return preview without applying changes.</summary>
+    public bool Preview { get; init; }
+
+    /// <summary>If true, make source class partial if not already.</summary>
+    public bool EnsureSourceIsPartial { get; init; } = true;
 }
