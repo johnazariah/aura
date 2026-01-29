@@ -2934,7 +2934,7 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
                 .WithTypeParameterList(typeSyntax.TypeParameterList)
                 .WithConstraintClauses(typeSyntax.ConstraintClauses)
                 .WithMembers(SyntaxFactory.List(membersToMove))
-                .WithLeadingTrivia(SyntaxFactory.CarriageReturnLineFeed);
+                .WithLeadingTrivia(SyntaxFactory.LineFeed);
 
             // Build new file
             var targetFileRoot = SyntaxFactory.CompilationUnit()
@@ -2947,6 +2947,14 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
             var formattedTarget = Formatter.Format(targetFileRoot, solution.Workspace);
             var formattedSource = Formatter.Format(newSourceRoot, solution.Workspace);
 
+            // Normalize to LF line endings
+            var targetText = formattedTarget.ToFullString().Replace("\r\n", "\n").Replace("\r", "\n");
+            var sourceText = formattedSource.ToFullString().Replace("\r\n", "\n").Replace("\r", "\n");
+
+            // Ensure trailing newline
+            if (!targetText.EndsWith('\n')) targetText += '\n';
+            if (!sourceText.EndsWith('\n')) sourceText += '\n';
+
             if (request.Preview)
             {
                 var originalText = (await sourceDoc.GetTextAsync(ct)).ToString();
@@ -2956,8 +2964,8 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
                     Message = $"Preview: Would move {membersToMove.Count} member(s) to partial file",
                     Preview =
                     [
-                        new FileChange(sourceDoc.FilePath!, originalText, formattedSource.ToFullString()),
-                        new FileChange(targetPath, "", formattedTarget.ToFullString())
+                        new FileChange(sourceDoc.FilePath!, originalText, sourceText),
+                        new FileChange(targetPath, "", targetText)
                     ],
                     CreatedFiles = [targetPath],
                     ModifiedFiles = [sourceDoc.FilePath!]
@@ -2967,12 +2975,12 @@ public sealed class RoslynRefactoringService : IRoslynRefactoringService
             // Write files
             using (await AcquireFileLockAsync(targetPath, ct))
             {
-                await File.WriteAllTextAsync(targetPath, formattedTarget.ToFullString(), ct);
+                await File.WriteAllTextAsync(targetPath, targetText, ct);
             }
 
             using (await AcquireFileLockAsync(sourceDoc.FilePath!, ct))
             {
-                await File.WriteAllTextAsync(sourceDoc.FilePath!, formattedSource.ToFullString(), ct);
+                await File.WriteAllTextAsync(sourceDoc.FilePath!, sourceText, ct);
             }
 
             _workspaceService.ClearCache();
