@@ -36,29 +36,18 @@ See [Unified Wave Orchestration](unified-wave-orchestration.md) for detailed spe
 
 ## 2. Naming Inconsistency: Story vs Workflow
 
-**Effort:** 1 day | **Priority:** Medium
+**Status:** ✅ Complete (2026-01-29)
 
-### Problem
+Standardized on "Story" terminology throughout the extension:
 
-The codebase uses both "Story" and "Workflow" inconsistently:
-
-| Location | Uses |
-|----------|------|
-| Entity | `Story`, `StoryStep` |
-| API paths | `/api/developer/stories/...` |
-| UI labels | "Workflows" view |
-| Extension | `WorkflowTreeProvider`, `WorkflowPanelProvider` |
-| Copyright headers | "Workflow.cs" for Story.cs |
-
-### Fix
-
-Standardize on **"Story"** everywhere:
-
-- [ ] Rename `workflowTreeProvider.ts` → `storyTreeProvider.ts`
-- [ ] Rename `workflowPanelProvider.ts` → `storyPanelProvider.ts`
-- [ ] Update extension `package.json` view titles: "Workflows" → "Stories"
-- [ ] Update copyright headers in C# files
-- [ ] Grep for "workflow" and fix remaining occurrences
+- [x] Rename `workflowTreeProvider.ts` → `storyTreeProvider.ts`
+- [x] Rename `workflowPanelProvider.ts` → `storyPanelProvider.ts`
+- [x] Update extension `package.json` view titles: "Workflows" → "Stories"
+- [x] Rename API service types: `Workflow` → `Story`, `WorkflowStep` → `StoryStep`
+- [x] Rename API service methods: `createWorkflow` → `createStory`, `sendWorkflowChat` → `sendStoryChat`, etc.
+- [x] Update UI strings in extension.ts, learn-more.md, uiTest.ts
+- [ ] Update copyright headers in C# files (deferred - low priority)
+- [ ] Rename internal C# variables `_workflowService` → `_storyService` (deferred - internal only)
 
 ---
 
