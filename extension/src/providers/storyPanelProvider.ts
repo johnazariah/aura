@@ -1,9 +1,9 @@
 import * as vscode from 'vscode';
-import { AuraApiService, Workflow, WorkflowStep } from '../services/auraApiService';
+import { AuraApiService, Story, StoryStep } from '../services/auraApiService';
 
-export class WorkflowPanelProvider {
+export class StoryPanelProvider {
     private panels: Map<string, vscode.WebviewPanel> = new Map();
-    private newWorkflowPanel: vscode.WebviewPanel | undefined;
+    private newStoryPanel: vscode.WebviewPanel | undefined;
 
     constructor(
         private extensionUri: vscode.Uri,
@@ -11,12 +11,12 @@ export class WorkflowPanelProvider {
     ) {}
 
     /**
-     * Opens a panel to create a new workflow with a form UI
+     * Opens a panel to create a new story with a form UI
      */
-    async openNewWorkflowPanel(onCreated: (workflowId: string) => void): Promise<void> {
+    async openNewStoryPanel(onCreated: (storyId: string) => void): Promise<void> {
         // Reuse existing panel if open
-        if (this.newWorkflowPanel) {
-            this.newWorkflowPanel.reveal();
+        if (this.newStoryPanel) {
+            this.newStoryPanel.reveal();
             return;
         }
 
@@ -24,8 +24,8 @@ export class WorkflowPanelProvider {
 
         // Create new panel
         const panel = vscode.window.createWebviewPanel(
-            'auraNewWorkflow',
-            '✨ New Workflow',
+            'auraNewStory',
+            '✨ New Story',
             vscode.ViewColumn.One,
             {
                 enableScripts: true,
@@ -34,18 +34,18 @@ export class WorkflowPanelProvider {
             }
         );
 
-        this.newWorkflowPanel = panel;
+        this.newStoryPanel = panel;
 
         // Handle panel disposal
         panel.onDidDispose(() => {
-            this.newWorkflowPanel = undefined;
+            this.newStoryPanel = undefined;
         });
 
         // Handle messages from webview
         panel.webview.onDidReceiveMessage(async (message) => {
             switch (message.type) {
                 case 'create':
-                    await this.handleCreateWorkflow(message.title, message.description, workspacePath, panel, onCreated);
+                    await this.handleCreateStory(message.title, message.description, workspacePath, panel, onCreated);
                     break;
                 case 'cancel':
                     panel.dispose();
@@ -54,53 +54,53 @@ export class WorkflowPanelProvider {
         });
 
         // Set initial content
-        panel.webview.html = this.getNewWorkflowHtml(workspacePath);
+        panel.webview.html = this.getNewStoryHtml(workspacePath);
     }
 
-    private async handleCreateWorkflow(
+    private async handleCreateStory(
         title: string,
         description: string | undefined,
         workspacePath: string | undefined,
         panel: vscode.WebviewPanel,
-        onCreated: (workflowId: string) => void
+        onCreated: (storyId: string) => void
     ): Promise<void> {
-        panel.webview.postMessage({ type: 'loading', message: 'Creating workflow...' });
+        panel.webview.postMessage({ type: 'loading', message: 'Creating story...' });
 
         try {
-            const workflow = await this.apiService.createWorkflow(title, description, workspacePath);
+            const Story = await this.apiService.createStory(title, description, workspacePath);
 
             // Close the creation panel
             panel.dispose();
 
             // Notify caller
-            onCreated(workflow.id);
+            onCreated(Story.id);
 
             // Auto-open worktree in new VS Code window if available
-            if (workflow.worktreePath) {
+            if (Story.worktreePath) {
                 const openNow = await vscode.window.showInformationMessage(
-                    `Story created! Branch: ${workflow.gitBranch || 'N/A'}`,
+                    `Story created! Branch: ${Story.gitBranch || 'N/A'}`,
                     'Open in New Window',
                     'Stay Here'
                 );
                 if (openNow === 'Open in New Window') {
                     await vscode.commands.executeCommand(
                         'vscode.openFolder',
-                        vscode.Uri.file(workflow.worktreePath),
+                        vscode.Uri.file(Story.worktreePath),
                         { forceNewWindow: true }
                     );
                 }
             } else {
                 vscode.window.showInformationMessage(
-                    `Workflow created! Branch: ${workflow.gitBranch || 'N/A'}`
+                    `Story created! Branch: ${Story.gitBranch || 'N/A'}`
                 );
             }
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Unknown error';
-            panel.webview.postMessage({ type: 'error', message: `Failed to create workflow: ${message}` });
+            panel.webview.postMessage({ type: 'error', message: `Failed to create story: ${message}` });
         }
     }
 
-    private getNewWorkflowHtml(workspacePath: string | undefined): string {
+    private getNewStoryHtml(workspacePath: string | undefined): string {
         const repoName = workspacePath ? workspacePath.split(/[/\\]/).pop() || 'repo' : 'repo';
 
         return `<!DOCTYPE html>
@@ -108,7 +108,7 @@ export class WorkflowPanelProvider {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>New Workflow</title>
+    <title>New Story</title>
     <style>
         :root {
             --vscode-font-family: var(--vscode-editor-font-family, 'Segoe UI', sans-serif);
@@ -289,7 +289,7 @@ export class WorkflowPanelProvider {
 </head>
 <body>
     <div class="header">
-        <h1>✨ Create New Workflow</h1>
+        <h1>✨ Create New Story</h1>
         <p>Describe what you want to build or fix</p>
     </div>
 
@@ -309,7 +309,7 @@ export class WorkflowPanelProvider {
         <div class="form-group">
             <label for="title">What do you want to build?</label>
             <input type="text" id="title" placeholder="e.g., Add user authentication" autofocus>
-            <div class="hint">A short, descriptive title for this workflow</div>
+            <div class="hint">A short, descriptive title for this story</div>
         </div>
 
         <div class="form-group">
@@ -323,7 +323,7 @@ export class WorkflowPanelProvider {
             <div class="preview-item">
                 <span class="icon">🌿</span>
                 <span class="label">Branch:</span>
-                <span class="value" id="branchPreview">aura/workflow-...</span>
+                <span class="value" id="branchPreview">aura/story-...</span>
             </div>
             <div class="preview-item">
                 <span class="icon">📂</span>
@@ -335,7 +335,7 @@ export class WorkflowPanelProvider {
         <div class="button-row">
             <button class="btn btn-secondary" onclick="cancel()">Cancel</button>
             <button class="btn btn-primary" id="createBtn" onclick="create()" ${workspacePath ? '' : 'disabled'}>
-                ✨ Create Workflow
+                ✨ Create Story
             </button>
         </div>
 
@@ -344,7 +344,7 @@ export class WorkflowPanelProvider {
 
     <div id="loadingState" class="loading">
         <div class="spinner"></div>
-        <span id="loadingText">Creating workflow...</span>
+        <span id="loadingText">Creating story...</span>
     </div>
 
     <script>
@@ -408,7 +408,7 @@ export class WorkflowPanelProvider {
                 case 'loading':
                     document.getElementById('formContent').classList.add('hidden');
                     document.getElementById('loadingState').classList.add('active');
-                    document.getElementById('loadingText').textContent = message.message || 'Creating workflow...';
+                    document.getElementById('loadingText').textContent = message.message || 'Creating story...';
                     break;
                 case 'error':
                     document.getElementById('formContent').classList.remove('hidden');
@@ -422,35 +422,35 @@ export class WorkflowPanelProvider {
 </html>`;
     }
 
-    async openWorkflowPanel(workflowId: string): Promise<void> {
+    async openStoryPanel(storyId: string): Promise<void> {
         const startTime = Date.now();
-        console.log(`[WorkflowPanel] Opening panel for ${workflowId}`);
+        console.log(`[StoryPanel] Opening panel for ${storyId}`);
         
         // Check if panel already exists
-        const existingPanel = this.panels.get(workflowId);
+        const existingPanel = this.panels.get(storyId);
         if (existingPanel) {
-            console.log(`[WorkflowPanel] Revealing existing panel (+${Date.now() - startTime}ms)`);
+            console.log(`[StoryPanel] Revealing existing panel (+${Date.now() - startTime}ms)`);
             existingPanel.reveal();
-            await this.refreshPanel(workflowId);
+            await this.refreshPanel(storyId);
             return;
         }
 
-        // Fetch workflow data
-        let workflow: Workflow;
+        // Fetch story data
+        let story: Story;
         try {
-            console.log(`[WorkflowPanel] Fetching workflow data... (+${Date.now() - startTime}ms)`);
-            workflow = await this.apiService.getWorkflow(workflowId);
-            console.log(`[WorkflowPanel] Got workflow data (+${Date.now() - startTime}ms)`);
+            console.log(`[StoryPanel] Fetching story data... (+${Date.now() - startTime}ms)`);
+            story = await this.apiService.getStory(storyId);
+            console.log(`[StoryPanel] Got story data (+${Date.now() - startTime}ms)`);
         } catch (error) {
-            vscode.window.showErrorMessage('Failed to load workflow');
+            vscode.window.showErrorMessage('Failed to load story');
             return;
         }
 
         // Create new panel
-        console.log(`[WorkflowPanel] Creating webview panel... (+${Date.now() - startTime}ms)`);
+        console.log(`[StoryPanel] Creating webview panel... (+${Date.now() - startTime}ms)`);
         const panel = vscode.window.createWebviewPanel(
-            'auraWorkflow',
-            `📋 ${workflow.title}`,
+            'auraStory',
+            `📋 ${story.title}`,
             vscode.ViewColumn.One,
             {
                 enableScripts: true,
@@ -458,76 +458,76 @@ export class WorkflowPanelProvider {
                 localResourceRoots: [this.extensionUri]
             }
         );
-        console.log(`[WorkflowPanel] Webview panel created (+${Date.now() - startTime}ms)`);
+        console.log(`[StoryPanel] Webview panel created (+${Date.now() - startTime}ms)`);
 
-        this.panels.set(workflowId, panel);
+        this.panels.set(storyId, panel);
 
         // Handle panel disposal
         panel.onDidDispose(() => {
-            this.panels.delete(workflowId);
+            this.panels.delete(storyId);
         });
 
         // Handle messages from webview
         panel.webview.onDidReceiveMessage(async (message) => {
-            await this.handleMessage(workflowId, message, panel);
+            await this.handleMessage(storyId, message, panel);
         });
 
         // Set initial content
-        console.log(`[WorkflowPanel] Generating HTML... (+${Date.now() - startTime}ms)`);
-        const html = this.getHtml(workflow, panel.webview);
-        console.log(`[WorkflowPanel] Setting HTML (${html.length} chars)... (+${Date.now() - startTime}ms)`);
+        console.log(`[StoryPanel] Generating HTML... (+${Date.now() - startTime}ms)`);
+        const html = this.getHtml(story, panel.webview);
+        console.log(`[StoryPanel] Setting HTML (${html.length} chars)... (+${Date.now() - startTime}ms)`);
         panel.webview.html = html;
-        console.log(`[WorkflowPanel] Panel ready (+${Date.now() - startTime}ms)`);
+        console.log(`[StoryPanel] Panel ready (+${Date.now() - startTime}ms)`);
     }
 
-    private async refreshPanel(workflowId: string): Promise<void> {
-        const panel = this.panels.get(workflowId);
+    private async refreshPanel(storyId: string): Promise<void> {
+        const panel = this.panels.get(storyId);
         if (!panel) return;
 
         try {
-            const workflow = await this.apiService.getWorkflow(workflowId);
+            const story = await this.apiService.getStory(storyId);
             // Re-render the entire HTML to update the panel
-            panel.webview.html = this.getHtml(workflow, panel.webview);
+            panel.webview.html = this.getHtml(story, panel.webview);
         } catch (error) {
-            console.error('Failed to refresh workflow panel:', error);
+            console.error('Failed to refresh story panel:', error);
         }
     }
 
-    private async handleMessage(workflowId: string, message: any, panel: vscode.WebviewPanel): Promise<void> {
+    private async handleMessage(storyId: string, message: any, panel: vscode.WebviewPanel): Promise<void> {
         switch (message.type) {
             case 'analyze':
             case 'enrich':
-                await this.handleEnrich(workflowId, panel);
+                await this.handleEnrich(storyId, panel);
                 break;
             case 'indexCodebase':
-                await this.handleIndexCodebase(workflowId, panel);
+                await this.handleIndexCodebase(storyId, panel);
                 break;
             case 'indexAndEnrich':
-                await this.handleIndexAndEnrich(workflowId, panel);
+                await this.handleIndexAndEnrich(storyId, panel);
                 break;
             case 'plan':
-                await this.handlePlan(workflowId, panel);
+                await this.handlePlan(storyId, panel);
                 break;
             case 'executeStep':
-                await this.handleExecuteStep(workflowId, message.stepId, panel);
+                await this.handleExecuteStep(storyId, message.stepId, panel);
                 break;
             case 'executeAllPending':
-                await this.handleExecuteAllPending(workflowId, panel);
+                await this.handleExecuteAllPending(storyId, panel);
                 break;
             case 'runWithStreaming':
-                await this.handleRunWithStreaming(workflowId, panel);
+                await this.handleRunWithStreaming(storyId, panel);
                 break;
             case 'chat':
-                await this.handleChat(workflowId, message.text, panel);
+                await this.handleChat(storyId, message.text, panel);
                 break;
             case 'complete':
-                await this.handleComplete(workflowId, panel);
+                await this.handleComplete(storyId, panel);
                 break;
             case 'cancel':
-                await this.handleCancel(workflowId, panel);
+                await this.handleCancel(storyId, panel);
                 break;
             case 'finalize':
-                await this.handleFinalize(workflowId, message, panel);
+                await this.handleFinalize(storyId, message, panel);
                 break;
             case 'openUrl':
                 if (message.url) {
@@ -535,34 +535,34 @@ export class WorkflowPanelProvider {
                 }
                 break;
             case 'refresh':
-                await this.refreshPanel(workflowId);
+                await this.refreshPanel(storyId);
                 break;
             case 'openWorkspace':
                 await this.handleOpenWorkspace(message.worktreePath, message.gitBranch);
                 break;
             case 'skipStep':
-                await this.handleSkipStep(workflowId, message.stepId, panel);
+                await this.handleSkipStep(storyId, message.stepId, panel);
                 break;
             case 'resetStep':
-                await this.handleResetStep(workflowId, message.stepId, panel);
+                await this.handleResetStep(storyId, message.stepId, panel);
                 break;
             case 'stepChat':
-                await this.handleStepChat(workflowId, message.stepId, message.message, panel);
+                await this.handleStepChat(storyId, message.stepId, message.message, panel);
                 break;
             case 'approveStepOutput':
-                await this.handleApproveStepOutput(workflowId, message.stepId, panel);
+                await this.handleApproveStepOutput(storyId, message.stepId, panel);
                 break;
             case 'rejectStepOutput':
-                await this.handleRejectStepOutput(workflowId, message.stepId, message.reason, panel);
+                await this.handleRejectStepOutput(storyId, message.stepId, message.reason, panel);
                 break;
             case 'viewStepContext':
-                await this.handleViewStepContext(workflowId, message.stepId, panel);
+                await this.handleViewStepContext(storyId, message.stepId, panel);
                 break;
             case 'reassignStep':
-                await this.handleReassignStep(workflowId, message.stepId, message.agentId, panel);
+                await this.handleReassignStep(storyId, message.stepId, message.agentId, panel);
                 break;
             case 'updateStepDescription':
-                await this.handleUpdateStepDescription(workflowId, message.stepId, message.description, panel);
+                await this.handleUpdateStepDescription(storyId, message.stepId, message.description, panel);
                 break;
             case 'openFile':
                 await this.handleOpenFile(message.filePath, message.worktreePath);
@@ -632,17 +632,17 @@ export class WorkflowPanelProvider {
         }
     }
 
-    private async handleEnrich(workflowId: string, panel: vscode.WebviewPanel): Promise<void> {
-        console.log(`[Enrich] Starting enrichment for workflow ${workflowId}`);
+    private async handleEnrich(storyId: string, panel: vscode.WebviewPanel): Promise<void> {
+        console.log(`[Enrich] Starting enrichment for Story ${storyId}`);
         try {
-            // Get workflow to check repository path
-            const workflow = await this.apiService.getWorkflow(workflowId);
-            const repoPath = workflow.repositoryPath || workflow.worktreePath;
+            // Get Story to check repository path
+            const Story = await this.apiService.getStory(storyId);
+            const repoPath = Story.repositoryPath || Story.worktreePath;
             console.log(`[Enrich] Repository path: ${repoPath}`);
 
             if (!repoPath) {
                 console.log('[Enrich] No repository path - showing error');
-                panel.webview.postMessage({ type: 'error', message: 'No repository path associated with this workflow' });
+                panel.webview.postMessage({ type: 'error', message: 'No repository path associated with this Story' });
                 return;
             }
 
@@ -710,23 +710,23 @@ export class WorkflowPanelProvider {
             // Codebase is indexed, proceed with enrichment
             console.log('[Enrich] Codebase is indexed - proceeding with enrichment');
             panel.webview.postMessage({ type: 'loading', action: 'enrich' });
-            await this.apiService.analyzeWorkflow(workflowId);
-            await this.refreshPanel(workflowId);
-            panel.webview.postMessage({ type: 'success', message: 'Workflow enriched successfully' });
+            await this.apiService.analyzeStory(storyId);
+            await this.refreshPanel(storyId);
+            panel.webview.postMessage({ type: 'success', message: 'Story enriched successfully' });
         } catch (error) {
             console.error('[Enrich] Error:', error);
-            const message = error instanceof Error ? error.message : 'Failed to enrich workflow';
+            const message = error instanceof Error ? error.message : 'Failed to enrich Story';
             panel.webview.postMessage({ type: 'error', message });
         }
     }
 
-    private async handleIndexCodebase(workflowId: string, panel: vscode.WebviewPanel): Promise<void> {
+    private async handleIndexCodebase(storyId: string, panel: vscode.WebviewPanel): Promise<void> {
         try {
-            const workflow = await this.apiService.getWorkflow(workflowId);
-            const repoPath = workflow.repositoryPath || workflow.worktreePath;
+            const Story = await this.apiService.getStory(storyId);
+            const repoPath = Story.repositoryPath || Story.worktreePath;
 
             if (!repoPath) {
-                panel.webview.postMessage({ type: 'error', message: 'No repository path associated with this workflow' });
+                panel.webview.postMessage({ type: 'error', message: 'No repository path associated with this Story' });
                 return;
             }
 
@@ -776,7 +776,7 @@ export class WorkflowPanelProvider {
                 }
             );
 
-            await this.refreshPanel(workflowId);
+            await this.refreshPanel(storyId);
             panel.webview.postMessage({ type: 'success', message: 'Codebase indexed successfully' });
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Failed to index codebase';
@@ -834,13 +834,13 @@ export class WorkflowPanelProvider {
         return null;
     }
 
-    private async handleIndexAndEnrich(workflowId: string, panel: vscode.WebviewPanel): Promise<void> {
+    private async handleIndexAndEnrich(storyId: string, panel: vscode.WebviewPanel): Promise<void> {
         try {
-            const workflow = await this.apiService.getWorkflow(workflowId);
-            const repoPath = workflow.repositoryPath || workflow.worktreePath;
+            const Story = await this.apiService.getStory(storyId);
+            const repoPath = Story.repositoryPath || Story.worktreePath;
 
             if (!repoPath) {
-                panel.webview.postMessage({ type: 'error', message: 'No repository path associated with this workflow' });
+                panel.webview.postMessage({ type: 'error', message: 'No repository path associated with this Story' });
                 return;
             }
 
@@ -888,43 +888,43 @@ export class WorkflowPanelProvider {
 
             // Then enrich
             panel.webview.postMessage({ type: 'loading', action: 'enrich' });
-            await this.apiService.analyzeWorkflow(workflowId);
-            await this.refreshPanel(workflowId);
-            panel.webview.postMessage({ type: 'success', message: 'Codebase indexed and workflow enriched successfully' });
+            await this.apiService.analyzeStory(storyId);
+            await this.refreshPanel(storyId);
+            panel.webview.postMessage({ type: 'success', message: 'Codebase indexed and Story enriched successfully' });
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Failed to index and enrich';
             panel.webview.postMessage({ type: 'error', message });
         }
     }
 
-    private async handlePlan(workflowId: string, panel: vscode.WebviewPanel): Promise<void> {
+    private async handlePlan(storyId: string, panel: vscode.WebviewPanel): Promise<void> {
         panel.webview.postMessage({ type: 'loading', action: 'plan' });
         try {
-            await this.apiService.planWorkflow(workflowId);
-            await this.refreshPanel(workflowId);
+            await this.apiService.planStory(storyId);
+            await this.refreshPanel(storyId);
             panel.webview.postMessage({ type: 'success', message: 'Plan created successfully' });
         } catch (error) {
             panel.webview.postMessage({ type: 'error', message: 'Failed to create plan' });
         }
     }
 
-    private async handleExecuteStep(workflowId: string, stepId: string, panel: vscode.WebviewPanel): Promise<void> {
+    private async handleExecuteStep(storyId: string, stepId: string, panel: vscode.WebviewPanel): Promise<void> {
         panel.webview.postMessage({ type: 'loading', action: 'execute', stepId });
         try {
-            await this.apiService.executeWorkflowStep(workflowId, stepId);
-            await this.refreshPanel(workflowId);
+            await this.apiService.executeStoryStep(storyId, stepId);
+            await this.refreshPanel(storyId);
             panel.webview.postMessage({ type: 'success', message: 'Step executed successfully' });
         } catch (error) {
             panel.webview.postMessage({ type: 'error', message: 'Step execution failed' });
-            await this.refreshPanel(workflowId);
+            await this.refreshPanel(storyId);
         }
     }
 
-    private async handleExecuteAllPending(workflowId: string, panel: vscode.WebviewPanel): Promise<void> {
+    private async handleExecuteAllPending(storyId: string, panel: vscode.WebviewPanel): Promise<void> {
         try {
-            // Get fresh workflow to find pending steps
-            const workflow = await this.apiService.getWorkflow(workflowId);
-            const pendingSteps = (workflow.steps || []).filter(s => s.status === 'Pending').sort((a, b) => a.order - b.order);
+            // Get fresh Story to find pending steps
+            const Story = await this.apiService.getStory(storyId);
+            const pendingSteps = (Story.steps || []).filter(s => s.status === 'Pending').sort((a, b) => a.order - b.order);
 
             if (pendingSteps.length === 0) {
                 panel.webview.postMessage({ type: 'error', message: 'No pending steps to execute' });
@@ -942,21 +942,21 @@ export class WorkflowPanelProvider {
                 });
 
                 try {
-                    await this.apiService.executeWorkflowStep(workflowId, step.id);
-                    await this.refreshPanel(workflowId);
+                    await this.apiService.executeStoryStep(storyId, step.id);
+                    await this.refreshPanel(storyId);
                 } catch (stepError) {
                     // Stop on first failure
                     panel.webview.postMessage({
                         type: 'error',
                         message: `Step "${step.name}" failed. Stopping execution.`
                     });
-                    await this.refreshPanel(workflowId);
+                    await this.refreshPanel(storyId);
                     return;
                 }
             }
 
             panel.webview.postMessage({ type: 'success', message: `All ${pendingSteps.length} steps completed!` });
-            vscode.window.showInformationMessage(`All ${pendingSteps.length} workflow steps completed!`);
+            vscode.window.showInformationMessage(`All ${pendingSteps.length} Story steps completed!`);
         } catch (error) {
             panel.webview.postMessage({ type: 'error', message: 'Failed to execute steps' });
         }
@@ -964,7 +964,7 @@ export class WorkflowPanelProvider {
 
     private streamAbortController: AbortController | null = null;
 
-    private async handleRunWithStreaming(workflowId: string, panel: vscode.WebviewPanel): Promise<void> {
+    private async handleRunWithStreaming(storyId: string, panel: vscode.WebviewPanel): Promise<void> {
         // Cancel any existing stream
         if (this.streamAbortController) {
             this.streamAbortController.abort();
@@ -975,7 +975,7 @@ export class WorkflowPanelProvider {
 
         try {
             await this.apiService.streamStoryExecution(
-                workflowId,
+                storyId,
                 {
                     onEvent: (event) => {
                         panel.webview.postMessage({
@@ -1004,10 +1004,10 @@ export class WorkflowPanelProvider {
         }
     }
 
-    private async handleChat(workflowId: string, text: string, panel: vscode.WebviewPanel): Promise<void> {
+    private async handleChat(storyId: string, text: string, panel: vscode.WebviewPanel): Promise<void> {
         panel.webview.postMessage({ type: 'chatLoading' });
         try {
-            const response = await this.apiService.sendWorkflowChat(workflowId, text);
+            const response = await this.apiService.sendWorkflowChat(storyId, text);
             panel.webview.postMessage({
                 type: 'chatResponse',
                 response: response.response,
@@ -1015,44 +1015,44 @@ export class WorkflowPanelProvider {
                 analysisUpdated: response.analysisUpdated
             });
             if (response.planModified || response.analysisUpdated) {
-                await this.refreshPanel(workflowId);
+                await this.refreshPanel(storyId);
             }
         } catch (error) {
             panel.webview.postMessage({ type: 'chatError', message: 'Failed to send message' });
         }
     }
 
-    private async handleComplete(workflowId: string, panel: vscode.WebviewPanel): Promise<void> {
+    private async handleComplete(storyId: string, panel: vscode.WebviewPanel): Promise<void> {
         try {
-            await this.apiService.completeWorkflow(workflowId);
-            await this.refreshPanel(workflowId);
-            vscode.window.showInformationMessage('Workflow completed!');
+            await this.apiService.completeWorkflow(storyId);
+            await this.refreshPanel(storyId);
+            vscode.window.showInformationMessage('Story completed!');
         } catch (error) {
-            vscode.window.showErrorMessage('Failed to complete workflow');
+            vscode.window.showErrorMessage('Failed to complete Story');
         }
     }
 
-    private async handleCancel(workflowId: string, panel: vscode.WebviewPanel): Promise<void> {
+    private async handleCancel(storyId: string, panel: vscode.WebviewPanel): Promise<void> {
         const confirm = await vscode.window.showWarningMessage(
-            'Cancel this workflow?',
+            'Cancel this Story?',
             { modal: true },
-            'Cancel Workflow'
+            'Cancel Story'
         );
         if (confirm) {
             try {
-                await this.apiService.cancelWorkflow(workflowId);
-                await this.refreshPanel(workflowId);
+                await this.apiService.cancelWorkflow(storyId);
+                await this.refreshPanel(storyId);
             } catch (error) {
-                vscode.window.showErrorMessage('Failed to cancel workflow');
+                vscode.window.showErrorMessage('Failed to cancel Story');
             }
         }
     }
 
-    private async handleFinalize(workflowId: string, message: any, panel: vscode.WebviewPanel): Promise<void> {
+    private async handleFinalize(storyId: string, message: any, panel: vscode.WebviewPanel): Promise<void> {
         try {
             panel.webview.postMessage({ type: 'loading', action: 'finalize' });
             
-            const result = await this.apiService.finalizeWorkflow(workflowId, {
+            const result = await this.apiService.finalizeWorkflow(storyId, {
                 commitMessage: message.commitMessage,
                 createPullRequest: message.createPullRequest ?? true,
                 prTitle: message.prTitle,
@@ -1073,17 +1073,17 @@ export class WorkflowPanelProvider {
                 vscode.window.showInformationMessage(`✅ ${result.message}`);
             }
             
-            await this.refreshPanel(workflowId);
+            await this.refreshPanel(storyId);
         } catch (error) {
             panel.webview.postMessage({ type: 'loadingDone' });
-            const msg = error instanceof Error ? error.message : 'Failed to finalize workflow';
+            const msg = error instanceof Error ? error.message : 'Failed to finalize Story';
             vscode.window.showErrorMessage(`Finalize failed: ${msg}`);
         }
     }
 
     private async handleOpenWorkspace(workspacePath: string, gitBranch: string): Promise<void> {
         if (!workspacePath) {
-            vscode.window.showErrorMessage('No workspace path available for this workflow');
+            vscode.window.showErrorMessage('No workspace path available for this Story');
             return;
         }
 
@@ -1119,35 +1119,35 @@ export class WorkflowPanelProvider {
         }
     }
 
-    private async handleSkipStep(workflowId: string, stepId: string, panel: vscode.WebviewPanel): Promise<void> {
+    private async handleSkipStep(storyId: string, stepId: string, panel: vscode.WebviewPanel): Promise<void> {
         try {
             panel.webview.postMessage({ type: 'loading', action: 'skip', stepId });
-            await this.apiService.skipStep(workflowId, stepId);
+            await this.apiService.skipStep(storyId, stepId);
             vscode.window.showInformationMessage('Step skipped ⏭');
             panel.webview.postMessage({ type: 'loadingDone' });
-            await this.refreshPanel(workflowId);
+            await this.refreshPanel(storyId);
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Failed to skip step';
             panel.webview.postMessage({ type: 'error', message });
         }
     }
 
-    private async handleResetStep(workflowId: string, stepId: string, panel: vscode.WebviewPanel): Promise<void> {
+    private async handleResetStep(storyId: string, stepId: string, panel: vscode.WebviewPanel): Promise<void> {
         try {
             panel.webview.postMessage({ type: 'loading', action: 'reset', stepId });
-            await this.apiService.resetStep(workflowId, stepId);
+            await this.apiService.resetStep(storyId, stepId);
             vscode.window.showInformationMessage('Step reset to pending 🔄');
             panel.webview.postMessage({ type: 'loadingDone' });
-            await this.refreshPanel(workflowId);
+            await this.refreshPanel(storyId);
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Failed to reset step';
             panel.webview.postMessage({ type: 'error', message });
         }
     }
 
-    private async handleStepChat(workflowId: string, stepId: string, message: string, panel: vscode.WebviewPanel): Promise<void> {
+    private async handleStepChat(storyId: string, stepId: string, message: string, panel: vscode.WebviewPanel): Promise<void> {
         try {
-            const response = await this.apiService.chatWithStep(workflowId, stepId, message);
+            const response = await this.apiService.chatWithStep(storyId, stepId, message);
             panel.webview.postMessage({
                 type: 'stepChatResponse',
                 stepId,
@@ -1160,37 +1160,37 @@ export class WorkflowPanelProvider {
         }
     }
 
-    private async handleApproveStepOutput(workflowId: string, stepId: string, panel: vscode.WebviewPanel): Promise<void> {
+    private async handleApproveStepOutput(storyId: string, stepId: string, panel: vscode.WebviewPanel): Promise<void> {
         try {
             panel.webview.postMessage({ type: 'loading', action: 'approve', stepId });
-            await this.apiService.approveStepOutput(workflowId, stepId);
+            await this.apiService.approveStepOutput(storyId, stepId);
             vscode.window.showInformationMessage('Output approved ✓');
             panel.webview.postMessage({ type: 'loadingDone' });
-            await this.refreshPanel(workflowId);
+            await this.refreshPanel(storyId);
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Failed to approve output';
             panel.webview.postMessage({ type: 'error', message });
         }
     }
 
-    private async handleRejectStepOutput(workflowId: string, stepId: string, reason: string, panel: vscode.WebviewPanel): Promise<void> {
+    private async handleRejectStepOutput(storyId: string, stepId: string, reason: string, panel: vscode.WebviewPanel): Promise<void> {
         try {
             panel.webview.postMessage({ type: 'loading', action: 'reject', stepId });
-            await this.apiService.rejectStepOutput(workflowId, stepId, reason);
+            await this.apiService.rejectStepOutput(storyId, stepId, reason);
             vscode.window.showInformationMessage(`Output rejected - step reset to pending for re-execution`);
             panel.webview.postMessage({ type: 'loadingDone' });
-            await this.refreshPanel(workflowId);
+            await this.refreshPanel(storyId);
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Failed to reject output';
             panel.webview.postMessage({ type: 'error', message });
         }
     }
 
-    private async handleViewStepContext(workflowId: string, stepId: string, panel: vscode.WebviewPanel): Promise<void> {
+    private async handleViewStepContext(storyId: string, stepId: string, panel: vscode.WebviewPanel): Promise<void> {
         try {
             // Get step details and show in a new panel or message
-            const workflow = await this.apiService.getWorkflow(workflowId);
-            const step = (workflow.steps || []).find(s => s.id === stepId);
+            const Story = await this.apiService.getStory(storyId);
+            const step = (Story.steps || []).find(s => s.id === stepId);
             if (step) {
                 // Show step context in a quick pick or information message
                 vscode.window.showInformationMessage(`Step Context: ${step.name}\n\nCapability: ${step.capability}\nAgent: ${step.assignedAgentId || 'Not assigned'}\nStatus: ${step.status}`);
@@ -1201,13 +1201,13 @@ export class WorkflowPanelProvider {
         }
     }
 
-    private async handleReassignStep(workflowId: string, stepId: string, agentId: string, panel: vscode.WebviewPanel): Promise<void> {
+    private async handleReassignStep(storyId: string, stepId: string, agentId: string, panel: vscode.WebviewPanel): Promise<void> {
         try {
             panel.webview.postMessage({ type: 'loading', action: 'reassign', stepId });
-            await this.apiService.reassignStep(workflowId, stepId, agentId);
-            // Refresh the workflow to show updated step
-            const updatedWorkflow = await this.apiService.getWorkflow(workflowId);
-            panel.webview.postMessage({ type: 'refresh', workflow: updatedWorkflow });
+            await this.apiService.reassignStep(storyId, stepId, agentId);
+            // Refresh the Story to show updated step
+            const updatedWorkflow = await this.apiService.getStory(storyId);
+            panel.webview.postMessage({ type: 'refresh', Story: updatedWorkflow });
             panel.webview.postMessage({ type: 'loadingDone' });
             vscode.window.showInformationMessage(`Step reassigned to ${agentId}`);
         } catch (error) {
@@ -1216,13 +1216,13 @@ export class WorkflowPanelProvider {
         }
     }
 
-    private async handleUpdateStepDescription(workflowId: string, stepId: string, description: string, panel: vscode.WebviewPanel): Promise<void> {
+    private async handleUpdateStepDescription(storyId: string, stepId: string, description: string, panel: vscode.WebviewPanel): Promise<void> {
         try {
             panel.webview.postMessage({ type: 'loading', action: 'updateDescription', stepId });
-            await this.apiService.updateStepDescription(workflowId, stepId, description);
-            // Refresh the workflow to show updated step
-            const updatedWorkflow = await this.apiService.getWorkflow(workflowId);
-            panel.webview.postMessage({ type: 'refresh', workflow: updatedWorkflow });
+            await this.apiService.updateStepDescription(storyId, stepId, description);
+            // Refresh the Story to show updated step
+            const updatedWorkflow = await this.apiService.getStory(storyId);
+            panel.webview.postMessage({ type: 'refresh', Story: updatedWorkflow });
             panel.webview.postMessage({ type: 'loadingDone' });
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Failed to update description';
@@ -1230,16 +1230,16 @@ export class WorkflowPanelProvider {
         }
     }
 
-    private getHtml(workflow: Workflow, webview: vscode.Webview): string {
-        const stepsHtml = this.getStepsHtml(workflow.steps || []);
-        const statusClass = workflow.status.toLowerCase();
+    private getHtml(Story: Story, webview: vscode.Webview): string {
+        const stepsHtml = this.getStepsHtml(Story.steps || []);
+        const statusClass = Story.status.toLowerCase();
 
         return `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>${workflow.title}</title>
+    <title>${Story.title}</title>
     <style>
         :root {
             --vscode-font-family: var(--vscode-editor-font-family, 'Segoe UI', sans-serif);
@@ -2515,17 +2515,17 @@ export class WorkflowPanelProvider {
 </head>
 <body>
     <div class="header">
-        <h1 class="title">📋 ${this.escapeHtml(workflow.title)}</h1>
-        <span class="status ${statusClass}" id="status">${workflow.status}</span>
+        <h1 class="title">📋 ${this.escapeHtml(Story.title)}</h1>
+        <span class="status ${statusClass}" id="status">${Story.status}</span>
     </div>
 
     <div class="meta">
-        ${workflow.patternName ? `<div class="meta-item">📋 Pattern: <strong>${workflow.patternName}</strong></div>` : ''}
-        ${workflow.gitBranch ? `<div class="meta-item">🌿 ${workflow.gitBranch}</div>` : ''}
-        ${workflow.worktreePath ? `<div class="meta-item">📁 ${workflow.worktreePath}</div>` : ''}
+        ${Story.patternName ? `<div class="meta-item">📋 Pattern: <strong>${Story.patternName}</strong></div>` : ''}
+        ${Story.gitBranch ? `<div class="meta-item">🌿 ${Story.gitBranch}</div>` : ''}
+        ${Story.worktreePath ? `<div class="meta-item">📁 ${Story.worktreePath}</div>` : ''}
     </div>
 
-    ${workflow.worktreePath ? `
+    ${Story.worktreePath ? `
     <div class="changes-section" id="changesSection">
         <div class="changes-header" onclick="toggleChanges()">
             <span class="changes-title">📝 Worktree Changes</span>
@@ -2540,7 +2540,7 @@ export class WorkflowPanelProvider {
     ` : ''}
 
     <div class="action-bar" id="actionBar">
-        ${this.getActionButtons(workflow)}
+        ${this.getActionButtons(Story)}
     </div>
     <div id="loadingOverlay" class="loading-overlay">
         <div class="loading-content">
@@ -2563,10 +2563,10 @@ export class WorkflowPanelProvider {
     <div class="chat-section">
         <div class="chat-input-container">
             <input type="text" class="chat-input" id="chatInput"
-                   placeholder="${this.getChatPlaceholder(workflow)}"
-                   ${workflow.status === 'Completed' || workflow.status === 'Cancelled' ? 'disabled' : ''}>
+                   placeholder="${this.getChatPlaceholder(Story)}"
+                   ${Story.status === 'Completed' || Story.status === 'Cancelled' ? 'disabled' : ''}>
             <button class="btn btn-primary" id="chatSend" onclick="sendChat()"
-                    ${workflow.status === 'Completed' || workflow.status === 'Cancelled' ? 'disabled' : ''}>
+                    ${Story.status === 'Completed' || Story.status === 'Cancelled' ? 'disabled' : ''}>
                 Send
             </button>
         </div>
@@ -2574,7 +2574,7 @@ export class WorkflowPanelProvider {
             <div class="spinner"></div>
             <span>Thinking...</span>
         </div>
-        <div id="chatResponse" class="chat-response" ${workflow.chatHistory ? '' : 'style="display: none;"'}>${this.renderWorkflowChatHistory(workflow)}</div>
+        <div id="chatResponse" class="chat-response" ${Story.chatHistory ? '' : 'style="display: none;"'}>${this.renderWorkflowChatHistory(Story)}</div>
     </div>
 
     <h3>Timeline</h3>
@@ -2582,24 +2582,24 @@ export class WorkflowPanelProvider {
         ${stepsHtml}
     </div>
 
-    ${workflow.analyzedContext ? `
+    ${Story.analyzedContext ? `
     <div class="phase-section completed">
         <div class="phase-title">✓ Analyzed</div>
         <div class="analysis-content">
-            ${this.formatAnalyzedContext(workflow.analyzedContext)}
+            ${this.formatAnalyzedContext(Story.analyzedContext)}
         </div>
     </div>
     ` : ''}
 
     <div class="original-request">
         <h4>Original Request</h4>
-        <div>${this.escapeHtml(workflow.description || 'No description provided')}</div>
+        <div>${this.escapeHtml(Story.description || 'No description provided')}</div>
     </div>
 
     <script>
         const vscode = acquireVsCodeApi();
-        const workflowId = '${workflow.id}';
-        let workflow = ${JSON.stringify(workflow)};
+        const storyId = '${Story.id}';
+        let Story = ${JSON.stringify(Story)};
 
         function sendChat() {
             const input = document.getElementById('chatInput');
@@ -2642,17 +2642,17 @@ export class WorkflowPanelProvider {
                 actionBar.querySelectorAll('button').forEach(btn => btn.disabled = true);
                 // Show loading overlay with appropriate message
                 const messages = {
-                    'enrich': '🔍 Enriching workflow with codebase context...',
+                    'enrich': '🔍 Enriching Story with codebase context...',
                     'index': '📚 Indexing codebase for RAG...',
                     'plan': '📋 Creating execution plan...',
                     'execute': '▶ Executing step...',
                     'executeAll': '▶▶ Executing all pending steps...',
-                    'complete': '✓ Completing workflow...',
+                    'complete': '✓ Completing Story...',
                     'cancel': '🛑 Cancelling...',
                     'skip': '⏭ Skipping step...',
                     'reset': '🔃 Resetting step...',
                     'reassign': '🔄 Reassigning step...',
-                    'finalize': '🚀 Finalizing workflow (commit, push, PR)...'
+                    'finalize': '🚀 Finalizing Story (commit, push, PR)...'
                 };
                 loadingText.textContent = messages[action] || 'Processing...';
                 loadingOverlay.classList.add('active');
@@ -2843,14 +2843,14 @@ export class WorkflowPanelProvider {
                     <div class="modal-dialog" style="max-width: 450px;">
                         <div class="modal-content">
                             <div class="modal-icon">🚀</div>
-                            <div class="modal-message" style="font-size: 1.2em; font-weight: bold;">Finalize Workflow</div>
+                            <div class="modal-message" style="font-size: 1.2em; font-weight: bold;">Finalize Story</div>
                         </div>
                         <div style="margin: 16px 0; text-align: left;">
                             <label style="display: block; margin-bottom: 12px;">
                                 <div style="margin-bottom: 4px;"><strong>Commit Message</strong></div>
                                 <input type="text" id="finalizeCommitMsg" 
                                     style="width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid var(--vscode-input-border); background: var(--vscode-input-background); color: var(--vscode-input-foreground); border-radius: 4px;"
-                                    placeholder="feat: workflow changes">
+                                    placeholder="feat: Story changes">
                             </label>
                             <label style="display: flex; align-items: center; margin-bottom: 12px; cursor: pointer;">
                                 <input type="checkbox" id="finalizeCreatePr" checked style="margin-right: 8px;">
@@ -2860,7 +2860,7 @@ export class WorkflowPanelProvider {
                                 <div style="margin-bottom: 4px;"><strong>PR Title</strong></div>
                                 <input type="text" id="finalizePrTitle" 
                                     style="width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid var(--vscode-input-border); background: var(--vscode-input-background); color: var(--vscode-input-foreground); border-radius: 4px;"
-                                    placeholder="Workflow title">
+                                    placeholder="Story title">
                             </label>
                             <label style="display: flex; align-items: center; cursor: pointer;">
                                 <input type="checkbox" id="finalizeDraft" checked style="margin-right: 8px;">
@@ -2873,9 +2873,9 @@ export class WorkflowPanelProvider {
                 document.body.appendChild(dialog);
             }
             
-            // Pre-fill with workflow title
-            document.getElementById('finalizeCommitMsg').value = 'feat: ' + workflow.title;
-            document.getElementById('finalizePrTitle').value = workflow.title;
+            // Pre-fill with Story title
+            document.getElementById('finalizeCommitMsg').value = 'feat: ' + Story.title;
+            document.getElementById('finalizePrTitle').value = Story.title;
             
             // Set up buttons
             const buttonsDiv = document.getElementById('finalizeButtons');
@@ -2998,8 +2998,8 @@ export class WorkflowPanelProvider {
         function openWorkspace() {
             vscode.postMessage({
                 type: 'openWorkspace',
-                worktreePath: workflow.worktreePath,
-                gitBranch: workflow.gitBranch
+                worktreePath: Story.worktreePath,
+                gitBranch: Story.gitBranch
             });
         }
 
@@ -3019,10 +3019,10 @@ export class WorkflowPanelProvider {
         }
 
         function loadWorktreeChanges() {
-            if (workflow.worktreePath) {
+            if (Story.worktreePath) {
                 vscode.postMessage({
                     type: 'getWorktreeChanges',
-                    worktreePath: workflow.worktreePath
+                    worktreePath: Story.worktreePath
                 });
             }
         }
@@ -3030,7 +3030,7 @@ export class WorkflowPanelProvider {
         function openWorktreeInExplorer() {
             vscode.postMessage({
                 type: 'openWorktreeInExplorer',
-                worktreePath: workflow.worktreePath
+                worktreePath: Story.worktreePath
             });
         }
 
@@ -3332,7 +3332,7 @@ export class WorkflowPanelProvider {
             
             switch (message.type) {
                 case 'refresh':
-                    workflow = message.workflow;
+                    Story = message.Story;
                     location.reload(); // Simple refresh for now
                     break;
                 case 'chatLoading':
@@ -3597,7 +3597,7 @@ export class WorkflowPanelProvider {
 </html>`;
     }
 
-    private getStepsHtml(steps: WorkflowStep[]): string {
+    private getStepsHtml(steps: StoryStep[]): string {
         if (steps.length === 0) {
             return '<div class="step-card pending"><em>No steps yet. Run Plan to create steps.</em></div>';
         }
@@ -3627,7 +3627,7 @@ export class WorkflowPanelProvider {
         // Group steps by phase
         interface PhaseGroup {
             phase: string;
-            steps: Array<{ step: WorkflowStep; index: number; cleanDescription: string }>;
+            steps: Array<{ step: StoryStep; index: number; cleanDescription: string }>;
         }
         const phases: PhaseGroup[] = [];
         let currentPhase: PhaseGroup | null = null;
@@ -3647,7 +3647,7 @@ export class WorkflowPanelProvider {
         const hasMeaningfulPhases = phases.length > 1 || (phases.length === 1 && phases[0].phase !== 'Steps');
 
         // Render step card helper
-        const renderStepCard = (step: WorkflowStep, index: number, cleanDescription: string): string => {
+        const renderStepCard = (step: StoryStep, index: number, cleanDescription: string): string => {
             const statusClass = step.status.toLowerCase();
             const canExecute = canExecuteStep(index);
             const isBlocked = step.status === 'Pending' && !canExecute;
@@ -4013,27 +4013,27 @@ export class WorkflowPanelProvider {
             .join('');
     }
 
-    private getChatPlaceholder(workflow: Workflow): string {
-        switch (workflow.status) {
+    private getChatPlaceholder(Story: Story): string {
+        switch (Story.status) {
             case 'Created':
-                return 'Chat about the workflow before analysis...';
+                return 'Chat about the Story before analysis...';
             case 'Analyzed':
                 return 'Add context to refine analysis, or proceed to Create Plan...';
             case 'Planned':
             case 'Executing':
                 return 'Modify the plan... (e.g., "Add a step for logging")';
             default:
-                return 'Workflow is complete';
+                return 'Story is complete';
         }
     }
 
-    private renderWorkflowChatHistory(workflow: Workflow): string {
-        if (!workflow.chatHistory) {
+    private renderWorkflowChatHistory(Story: Story): string {
+        if (!Story.chatHistory) {
             return '';
         }
 
         try {
-            const messages = JSON.parse(workflow.chatHistory) as Array<{Role: string, Content: string}>;
+            const messages = JSON.parse(Story.chatHistory) as Array<{Role: string, Content: string}>;
             if (messages.length === 0) {
                 return '';
             }
@@ -4051,22 +4051,22 @@ export class WorkflowPanelProvider {
         }
     }
 
-    private getActionButtons(workflow: Workflow): string {
+    private getActionButtons(Story: Story): string {
         const leftButtons: string[] = [];
         const rightButtons: string[] = [];
-        const pendingSteps = (workflow.steps || []).filter(s => s.status === 'Pending');
+        const pendingSteps = (Story.steps || []).filter(s => s.status === 'Pending');
         const hasPendingSteps = pendingSteps.length > 0;
 
         // Status-specific primary actions (left side)
-        switch (workflow.status) {
+        switch (Story.status) {
             case 'Created':
                 leftButtons.push('<button class="btn btn-primary" onclick="enrich()">🔍 Enrich Issue</button>');
                 leftButtons.push('<button class="btn btn-primary" onclick="indexCodebase()">📚 Index Codebase</button>');
-                rightButtons.push('<button class="btn btn-danger" onclick="cancel()">Cancel Workflow</button>');
+                rightButtons.push('<button class="btn btn-danger" onclick="cancel()">Cancel Story</button>');
                 break;
             case 'Analyzed':
                 leftButtons.push('<button class="btn btn-primary" onclick="plan()">📋 Create Plan</button>');
-                rightButtons.push('<button class="btn btn-danger" onclick="cancel()">Cancel Workflow</button>');
+                rightButtons.push('<button class="btn btn-danger" onclick="cancel()">Cancel Story</button>');
                 break;
             case 'Planned':
             case 'Executing':
@@ -4074,24 +4074,24 @@ export class WorkflowPanelProvider {
                     leftButtons.push(`<button class="btn btn-primary" onclick="runWithStreaming()">▶ Run (${pendingSteps.length} steps)</button>`);
                 }
                 leftButtons.push('<button class="btn btn-primary" onclick="complete()">✓ Mark Complete</button>');
-                rightButtons.push('<button class="btn btn-danger" onclick="cancel()">Cancel Workflow</button>');
+                rightButtons.push('<button class="btn btn-danger" onclick="cancel()">Cancel Story</button>');
                 break;
             case 'Completed':
-                leftButtons.push('<span class="status-text success">✓ Workflow Completed</span>');
-                if (workflow.pullRequestUrl) {
-                    leftButtons.push(`<a href="${workflow.pullRequestUrl}" class="btn btn-success" style="text-decoration: none;" onclick="openPullRequest('${workflow.pullRequestUrl}'); return false;">🔗 View Pull Request</a>`);
+                leftButtons.push('<span class="status-text success">✓ Story Completed</span>');
+                if (Story.pullRequestUrl) {
+                    leftButtons.push(`<a href="${Story.pullRequestUrl}" class="btn btn-success" style="text-decoration: none;" onclick="openPullRequest('${Story.pullRequestUrl}'); return false;">🔗 View Pull Request</a>`);
                 } else {
                     leftButtons.push('<button class="btn btn-primary" onclick="showFinalizeDialog()">🚀 Finalize & Create PR</button>');
                 }
                 break;
             case 'Cancelled':
             case 'Failed':
-                leftButtons.push(`<span class="status-text error">✗ ${workflow.status}</span>`);
+                leftButtons.push(`<span class="status-text error">✗ ${Story.status}</span>`);
                 break;
         }
 
         // Utility buttons (left side, after primary actions)
-        if (workflow.worktreePath && workflow.status !== 'Completed' && workflow.status !== 'Cancelled' && workflow.status !== 'Failed') {
+        if (Story.worktreePath && Story.status !== 'Completed' && Story.status !== 'Cancelled' && Story.status !== 'Failed') {
             leftButtons.push('<button class="btn btn-primary" onclick="openWorkspace()">📂 Open Workspace</button>');
         }
         leftButtons.push('<button class="btn btn-primary" onclick="refresh()">🔄 Refresh</button>');

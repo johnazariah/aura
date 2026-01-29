@@ -2,8 +2,8 @@ import * as vscode from 'vscode';
 import { StatusTreeProvider } from './providers/statusTreeProvider';
 import { AgentTreeProvider, AgentItem, setExtensionPath } from './providers/agentTreeProvider';
 import { ChatWindowProvider } from './providers/chatWindowProvider';
-import { WorkflowTreeProvider } from './providers/workflowTreeProvider';
-import { WorkflowPanelProvider } from './providers/workflowPanelProvider';
+import { StoryTreeProvider } from './providers/storyTreeProvider';
+import { StoryPanelProvider } from './providers/storyPanelProvider';
 import { WelcomeViewProvider } from './providers/welcomeViewProvider';
 import { HealthCheckService } from './services/healthCheckService';
 import { AuraApiService, AgentInfo } from './services/auraApiService';
@@ -15,10 +15,10 @@ let healthCheckService: HealthCheckService;
 let logService: LogService;
 let statusTreeProvider: StatusTreeProvider;
 let agentTreeProvider: AgentTreeProvider;
-let workflowTreeProvider: WorkflowTreeProvider;
+let storyTreeProvider: StoryTreeProvider;
 let welcomeViewProvider: WelcomeViewProvider;
 let chatWindowProvider: ChatWindowProvider;
-let workflowPanelProvider: WorkflowPanelProvider;
+let storyPanelProvider: StoryPanelProvider;
 let statusBarItem: vscode.StatusBarItem;
 let refreshInterval: NodeJS.Timeout | undefined;
 let currentRefreshRate: number = 10000; // Default 10 second refresh
@@ -44,10 +44,10 @@ export async function activate(context: vscode.ExtensionContext) {
     // Initialize tree providers
     statusTreeProvider = new StatusTreeProvider(healthCheckService);
     agentTreeProvider = new AgentTreeProvider(auraApiService);
-    workflowTreeProvider = new WorkflowTreeProvider(auraApiService);
+    storyTreeProvider = new StoryTreeProvider(auraApiService);
     welcomeViewProvider = new WelcomeViewProvider(auraApiService);
     chatWindowProvider = new ChatWindowProvider(context.extensionUri, auraApiService);
-    workflowPanelProvider = new WorkflowPanelProvider(context.extensionUri, auraApiService);
+    storyPanelProvider = new StoryPanelProvider(context.extensionUri, auraApiService);
 
     // Register tree views
     const statusView = vscode.window.createTreeView('aura.status', {
@@ -60,8 +60,8 @@ export async function activate(context: vscode.ExtensionContext) {
         showCollapseAll: false
     });
 
-    const workflowView = vscode.window.createTreeView('aura.workflows', {
-        treeDataProvider: workflowTreeProvider,
+    const storyView = vscode.window.createTreeView('aura.stories', {
+        treeDataProvider: storyTreeProvider,
         showCollapseAll: true
     });
 
@@ -178,25 +178,25 @@ export async function activate(context: vscode.ExtensionContext) {
         await onboardWorkspace();
     });
 
-    // Workflow commands
-    const createWorkflowCommand = vscode.commands.registerCommand('aura.createWorkflow', async () => {
-        await createWorkflow();
+    // Story commands
+    const createStoryCommand = vscode.commands.registerCommand('aura.createStory', async () => {
+        await createStory();
     });
 
-    const openWorkflowCommand = vscode.commands.registerCommand('aura.openWorkflow', async (workflowId: string) => {
-        await workflowPanelProvider.openWorkflowPanel(workflowId);
+    const openStoryCommand = vscode.commands.registerCommand('aura.openStory', async (storyId: string) => {
+        await storyPanelProvider.openStoryPanel(storyId);
     });
 
-    const executeStepCommand = vscode.commands.registerCommand('aura.executeStep', async (workflowId: string, stepId: string) => {
-        await executeStep(workflowId, stepId);
+    const executeStepCommand = vscode.commands.registerCommand('aura.executeStep', async (storyId: string, stepId: string) => {
+        await executeStep(storyId, stepId);
     });
 
-    const refreshWorkflowsCommand = vscode.commands.registerCommand('aura.refreshWorkflows', async () => {
-        workflowTreeProvider.refresh();
+    const refreshStoriesCommand = vscode.commands.registerCommand('aura.refreshStories', async () => {
+        storyTreeProvider.refresh();
     });
 
-    const deleteWorkflowCommand = vscode.commands.registerCommand('aura.deleteWorkflow', async (item?: any) => {
-        await deleteWorkflow(item);
+    const deleteStoryCommand = vscode.commands.registerCommand('aura.deleteStory', async (item?: any) => {
+        await deleteStory(item);
     });
 
     // Help commands
@@ -332,7 +332,7 @@ export async function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
         statusView,
         welcomeView,
-        workflowView,
+        storyView,
         agentView,
         statusBarItem,
         refreshCommand,
@@ -348,11 +348,11 @@ export async function activate(context: vscode.ExtensionContext) {
         clearAndReindexCommand,
         showIndexingProgressCommand,
         onboardWorkspaceCommand,
-        createWorkflowCommand,
-        openWorkflowCommand,
+        createStoryCommand,
+        openStoryCommand,
         executeStepCommand,
-        refreshWorkflowsCommand,
-        deleteWorkflowCommand,
+        refreshStoriesCommand,
+        deleteStoryCommand,
         showHelpCommand,
         openDocsCommand,
         showCheatSheetCommand,
@@ -383,8 +383,8 @@ export async function activate(context: vscode.ExtensionContext) {
     // Check workspace onboarding status and set context for view visibility
     await checkOnboardingStatus();
 
-    // Check if this workspace is a workflow worktree and auto-open the panel
-    await checkAndOpenWorkflowForWorktree();
+    // Check if this workspace is a story worktree and auto-open the panel
+    await checkAndOpenStoryForWorktree();
 
     // Setup auto-refresh
     setupAutoRefresh();
@@ -452,7 +452,7 @@ async function indexWorkspace(): Promise<void> {
 
 /**
  * Check if the current workspace is onboarded and set VS Code context accordingly.
- * This controls which views are shown (welcome vs workflows).
+ * This controls which views are shown (welcome vs stories).
  * For worktrees, we check the parent repository's onboarding status.
  */
 async function checkOnboardingStatus(): Promise<void> {
@@ -508,31 +508,31 @@ async function checkOnboardingStatus(): Promise<void> {
 }
 
 /**
- * Check if the current workspace is a workflow worktree and auto-open the workflow panel.
+ * Check if the current workspace is a story worktree and auto-open the story panel.
  * This provides the "continue existing story" experience.
  */
-async function checkAndOpenWorkflowForWorktree(): Promise<void> {
+async function checkAndOpenStoryForWorktree(): Promise<void> {
     const workspaceFolders = vscode.workspace.workspaceFolders;
     if (!workspaceFolders || workspaceFolders.length === 0) {
         return;
     }
 
     const workspacePath = workspaceFolders[0].uri.fsPath;
-    console.log('[Aura] Checking if workspace is a workflow worktree:', workspacePath);
+    console.log('[Aura] Checking if workspace is a story worktree:', workspacePath);
 
     try {
-        const workflow = await auraApiService.getWorkflowByPath(workspacePath);
-        if (workflow) {
-            console.log('[Aura] Found workflow for worktree:', workflow.id, workflow.title);
+        const story = await auraApiService.getStoryByPath(workspacePath);
+        if (story) {
+            console.log('[Aura] Found story for worktree:', story.id, story.title);
             
             // Find current/next step
-            const steps = workflow.steps || [];
+            const steps = story.steps || [];
             const currentStep = steps.find((s: any) => s.status === 'Running' || s.status === 'Pending');
             const completedCount = steps.filter((s: any) => s.status === 'Completed').length;
             const totalCount = steps.length;
             
             // Build message with progress
-            let message = `📖 ${workflow.title}`;
+            let message = `📖 ${story.title}`;
             if (totalCount > 0) {
                 message += ` (${completedCount}/${totalCount} steps)`;
             }
@@ -548,14 +548,14 @@ async function checkAndOpenWorkflowForWorktree(): Promise<void> {
             );
 
             if (action === 'Open Story Panel') {
-                await workflowPanelProvider.openWorkflowPanel(workflow.id);
+                await storyPanelProvider.openStoryPanel(story.id);
             }
         } else {
-            console.log('[Aura] No workflow found for this path');
+            console.log('[Aura] No story found for this path');
         }
     } catch (error) {
         // Silently fail - this is an enhancement, not critical
-        console.log('[Aura] Failed to check for workflow worktree:', error);
+        console.log('[Aura] Failed to check for story worktree:', error);
     }
 }
 
@@ -573,11 +573,11 @@ async function showCurrentStory(): Promise<void> {
     const workspacePath = workspaceFolders[0].uri.fsPath;
 
     try {
-        const workflow = await auraApiService.getWorkflowByPath(workspacePath);
-        if (workflow) {
-            await workflowPanelProvider.openWorkflowPanel(workflow.id);
+        const story = await auraApiService.getStoryByPath(workspacePath);
+        if (story) {
+            await storyPanelProvider.openStoryPanel(story.id);
         } else {
-            // No workflow for this path - offer to pick from list or create new
+            // No story for this path - offer to pick from list or create new
             const items: vscode.QuickPickItem[] = [
                 { label: '$(add) Create New Story', description: 'Start a new development story' },
                 { label: '$(list-unordered) Browse All Stories', description: 'View existing stories' }
@@ -588,10 +588,10 @@ async function showCurrentStory(): Promise<void> {
             });
 
             if (selected?.label.includes('Create New')) {
-                await vscode.commands.executeCommand('aura.createWorkflow');
+                await vscode.commands.executeCommand('aura.createStory');
             } else if (selected?.label.includes('Browse All')) {
-                // Focus the workflows sidebar
-                await vscode.commands.executeCommand('aura.workflows.focus');
+                // Focus the stories sidebar
+                await vscode.commands.executeCommand('aura.stories.focus');
             }
         }
     } catch (error) {
@@ -630,7 +630,7 @@ async function onboardWorkspace(): Promise<void> {
 
             // Refresh views
             statusTreeProvider.refresh();
-            workflowTreeProvider.refresh();
+            storyTreeProvider.refresh();
             welcomeViewProvider.refresh();
         }
     } catch (error) {
@@ -1019,18 +1019,18 @@ async function executeAgent(item?: AgentItem): Promise<void> {
 }
 
 // =====================
-// Workflow Functions
+// Story Functions
 // =====================
 
-async function createWorkflow(): Promise<void> {
-    // Open the new workflow panel with a form
-    await workflowPanelProvider.openNewWorkflowPanel((workflowId: string) => {
-        // Refresh tree when workflow is created
-        workflowTreeProvider.refresh();
+async function createStory(): Promise<void> {
+    // Open the new story panel with a form
+    await storyPanelProvider.openNewStoryPanel((storyId: string) => {
+        // Refresh tree when story is created
+        storyTreeProvider.refresh();
     });
 }
 
-async function executeStep(workflowId: string, stepId: string): Promise<void> {
+async function executeStep(storyId: string, stepId: string): Promise<void> {
     try {
         await vscode.window.withProgress(
             {
@@ -1039,8 +1039,8 @@ async function executeStep(workflowId: string, stepId: string): Promise<void> {
                 cancellable: false
             },
             async () => {
-                const step = await auraApiService.executeWorkflowStep(workflowId, stepId);
-                workflowTreeProvider.refresh();
+                const step = await auraApiService.executeStoryStep(storyId, stepId);
+                storyTreeProvider.refresh();
 
                 if (step.status === 'Completed') {
                     vscode.window.showInformationMessage(`Step completed: ${step.name}`);
@@ -1052,31 +1052,31 @@ async function executeStep(workflowId: string, stepId: string): Promise<void> {
     } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error';
         vscode.window.showErrorMessage(`Failed to execute step: ${message}`);
-        workflowTreeProvider.refresh();
+        storyTreeProvider.refresh();
     }
 }
 
-async function deleteWorkflow(item?: any): Promise<void> {
-    // Get workflow ID from tree item
-    let workflowId: string | undefined;
-    let workflowTitle: string = 'this workflow';
+async function deleteStory(item?: any): Promise<void> {
+    // Get story ID from tree item
+    let storyId: string | undefined;
+    let storyTitle: string = 'this story';
 
-    if (item?.workflow) {
-        workflowId = item.workflow.id;
-        workflowTitle = item.workflow.title;
-    } else if (item?.workflowId) {
-        workflowId = item.workflowId;
-        workflowTitle = item.label || 'this workflow';
+    if (item?.story) {
+        storyId = item.story.id;
+        storyTitle = item.story.title;
+    } else if (item?.storyId) {
+        storyId = item.storyId;
+        storyTitle = item.label || 'this story';
     }
 
-    if (!workflowId) {
-        vscode.window.showErrorMessage('No workflow selected');
+    if (!storyId) {
+        vscode.window.showErrorMessage('No story selected');
         return;
     }
 
     // Confirm deletion
     const confirm = await vscode.window.showWarningMessage(
-        `Delete "${workflowTitle}"?`,
+        `Delete "${storyTitle}"?`,
         { modal: true },
         'Delete'
     );
@@ -1086,12 +1086,12 @@ async function deleteWorkflow(item?: any): Promise<void> {
     }
 
     try {
-        await auraApiService.deleteWorkflow(workflowId);
-        workflowTreeProvider.refresh();
-        vscode.window.showInformationMessage(`Deleted: ${workflowTitle}`);
+        await auraApiService.deleteStory(storyId);
+        storyTreeProvider.refresh();
+        vscode.window.showInformationMessage(`Deleted: ${storyTitle}`);
     } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error';
-        vscode.window.showErrorMessage(`Failed to delete workflow: ${message}`);
+        vscode.window.showErrorMessage(`Failed to delete story: ${message}`);
     }
 }
 
@@ -1130,29 +1130,29 @@ async function createStoryFromIssue(): Promise<void> {
                 cancellable: false
             },
             async () => {
-                const workflow = await auraApiService.createStoryFromIssue(
+                const story = await auraApiService.createStoryFromIssue(
                     issueUrl,
                     workspacePath
                 );
 
-                workflowTreeProvider.refresh();
+                storyTreeProvider.refresh();
 
                 // Auto-open worktree in new VS Code window
-                if (workflow.worktreePath) {
+                if (story.worktreePath) {
                     const action = await vscode.window.showInformationMessage(
-                        `Created story: ${workflow.title}`,
+                        `Created story: ${story.title}`,
                         'Open in New Window',
                         'Stay Here'
                     );
                     if (action === 'Open in New Window') {
                         await vscode.commands.executeCommand(
                             'vscode.openFolder',
-                            vscode.Uri.file(workflow.worktreePath),
+                            vscode.Uri.file(story.worktreePath),
                             { forceNewWindow: true }
                         );
                     }
                 } else {
-                    vscode.window.showInformationMessage(`Created story: ${workflow.title}`);
+                    vscode.window.showInformationMessage(`Created story: ${story.title}`);
                 }
             }
         );
@@ -1162,17 +1162,17 @@ async function createStoryFromIssue(): Promise<void> {
     }
 }
 
-async function refreshFromIssue(workflowId?: string): Promise<void> {
-    if (!workflowId) {
+async function refreshFromIssue(storyId?: string): Promise<void> {
+    if (!storyId) {
         vscode.window.showErrorMessage('No story selected');
         return;
     }
 
     try {
-        const result = await auraApiService.refreshFromIssue(workflowId);
+        const result = await auraApiService.refreshFromIssue(storyId);
         
         if (result.updated) {
-            workflowTreeProvider.refresh();
+            storyTreeProvider.refresh();
             vscode.window.showInformationMessage(`Story updated: ${result.changes.join(', ')}`);
         } else {
             vscode.window.showInformationMessage('Story is already up to date');
@@ -1183,8 +1183,8 @@ async function refreshFromIssue(workflowId?: string): Promise<void> {
     }
 }
 
-async function postUpdateToIssue(workflowId?: string): Promise<void> {
-    if (!workflowId) {
+async function postUpdateToIssue(storyId?: string): Promise<void> {
+    if (!storyId) {
         vscode.window.showErrorMessage('No story selected');
         return;
     }
@@ -1199,7 +1199,7 @@ async function postUpdateToIssue(workflowId?: string): Promise<void> {
     }
 
     try {
-        await auraApiService.postUpdateToIssue(workflowId, message);
+        await auraApiService.postUpdateToIssue(storyId, message);
         vscode.window.showInformationMessage('Update posted to issue');
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';

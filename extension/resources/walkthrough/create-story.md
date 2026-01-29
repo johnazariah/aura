@@ -1,6 +1,6 @@
-# Create Your First Workflow
+# Create Your First Story
 
-Workflows automate multi-step development tasks.
+Storys automate multi-step development tasks.
 
 ## How It Works
 
@@ -10,7 +10,7 @@ Workflows automate multi-step development tasks.
 4. **You review** and approve each step
 5. **Aura executes** the approved steps
 
-## Good Workflow Descriptions
+## Good Story Descriptions
 
 ✅ **Specific with context:**
 ```
@@ -31,4 +31,4 @@ Make the code better
 
 ## Keyboard Shortcut
 
-**Ctrl+Shift+W** (Cmd+Shift+W on Mac) - Create new workflow
+**Ctrl+Shift+W** (Cmd+Shift+W on Mac) - Create new Story

@@ -48,8 +48,8 @@
           "icon": "$(pulse)"
         },
         {
-          "id": "aura.workflows",
-          "name": "Workflows",
+          "id": "aura.stories",
+          "name": "Stories",
           "icon": "$(tasklist)",
           "when": "aura.workspaceOnboarded"
         },
@@ -117,13 +117,13 @@
         "icon": "$(refresh)"
       },
       {
-        "command": "aura.createWorkflow",
-        "title": "Aura: Create Workflow",
+        "command": "aura.createStory",
+        "title": "Aura: Create Story",
         "icon": "$(add)"
       },
       {
-        "command": "aura.openWorkflow",
-        "title": "Open Workflow",
+        "command": "aura.openStory",
+        "title": "Open Story",
         "icon": "$(window)"
       },
       {
@@ -132,13 +132,13 @@
         "icon": "$(run)"
       },
       {
-        "command": "aura.refreshWorkflows",
-        "title": "Refresh Workflows",
+        "command": "aura.refreshStories",
+        "title": "Refresh Stories",
         "icon": "$(refresh)"
       },
       {
-        "command": "aura.deleteWorkflow",
-        "title": "Delete Workflow",
+        "command": "aura.deleteStory",
+        "title": "Delete Story",
         "icon": "$(trash)"
       },
       {
@@ -230,13 +230,13 @@
           "group": "navigation"
         },
         {
-          "command": "aura.refreshWorkflows",
-          "when": "view == aura.workflows",
+          "command": "aura.refreshStories",
+          "when": "view == aura.stories",
           "group": "navigation"
         },
         {
-          "command": "aura.createWorkflow",
-          "when": "view == aura.workflows",
+          "command": "aura.createStory",
+          "when": "view == aura.stories",
           "group": "navigation"
         },
         {
@@ -273,19 +273,19 @@
         },
         {
           "command": "aura.executeStep",
-          "when": "view == aura.workflows && viewItem == step",
+          "when": "view == aura.stories && viewItem == step",
           "group": "inline"
         },
         {
-          "command": "aura.deleteWorkflow",
-          "when": "view == aura.workflows && viewItem == workflow",
+          "command": "aura.deleteStory",
+          "when": "view == aura.stories && viewItem == story",
           "group": "inline"
         }
       ]
     },
     "keybindings": [
       {
-        "command": "aura.createWorkflow",
+        "command": "aura.createStory",
         "key": "ctrl+shift+w",
         "mac": "cmd+shift+w",
         "when": "workspaceFolderCount > 0"
@@ -349,17 +349,17 @@
             }
           },
           {
-            "id": "aura.walkthrough.createWorkflow",
-            "title": "Create Your First Workflow",
-            "description": "Workflows are multi-step development tasks. Describe what you want to build and Aura creates a plan.\n\n[Create Workflow](command:aura.createWorkflow)",
+            "id": "aura.walkthrough.createStory",
+            "title": "Create Your First Story",
+            "description": "Stories are multi-step development tasks. Describe what you want to build and Aura creates a plan.\n\n[Create Story](command:aura.createStory)",
             "media": {
-              "markdown": "resources/walkthrough/create-workflow.md"
+              "markdown": "resources/walkthrough/create-story.md"
             }
           },
           {
             "id": "aura.walkthrough.learnMore",
             "title": "Learn More",
-            "description": "Explore the full documentation for detailed guides on workflows, chat, and all features.\n\n[Open Documentation](command:aura.openDocs)",
+            "description": "Explore the full documentation for detailed guides on stories, chat, and all features.\n\n[Open Documentation](command:aura.openDocs)",
             "media": {
               "markdown": "resources/walkthrough/learn-more.md"
             }
@@ -390,10 +390,10 @@
           "default": 120000,
           "description": "Timeout in milliseconds for agent execution (default: 2 minutes)"
         },
-        "aura.workflowTimeout": {
+        "aura.storyTimeout": {
           "type": "number",
           "default": 60000,
-          "description": "Timeout in milliseconds for workflow operations like creation (default: 1 minute)"
+          "description": "Timeout in milliseconds for story operations like creation (default: 1 minute)"
         },
         "aura.indexingTimeout": {
           "type": "number",

@@ -1,9 +1,9 @@
 import * as vscode from 'vscode';
-import { AuraApiService, Workflow } from '../services/auraApiService';
+import { AuraApiService, Story } from '../services/auraApiService';
 
-export class WorkflowTreeProvider implements vscode.TreeDataProvider<WorkflowTreeItem> {
-    private _onDidChangeTreeData: vscode.EventEmitter<WorkflowTreeItem | undefined | null | void> = new vscode.EventEmitter<WorkflowTreeItem | undefined | null | void>();
-    readonly onDidChangeTreeData: vscode.Event<WorkflowTreeItem | undefined | null | void> = this._onDidChangeTreeData.event;
+export class StoryTreeProvider implements vscode.TreeDataProvider<StoryTreeItem> {
+    private _onDidChangeTreeData: vscode.EventEmitter<StoryTreeItem | undefined | null | void> = new vscode.EventEmitter<StoryTreeItem | undefined | null | void>();
+    readonly onDidChangeTreeData: vscode.Event<StoryTreeItem | undefined | null | void> = this._onDidChangeTreeData.event;
 
     constructor(private apiService: AuraApiService) {}
 
@@ -11,58 +11,58 @@ export class WorkflowTreeProvider implements vscode.TreeDataProvider<WorkflowTre
         this._onDidChangeTreeData.fire();
     }
 
-    getTreeItem(element: WorkflowTreeItem): vscode.TreeItem {
+    getTreeItem(element: StoryTreeItem): vscode.TreeItem {
         return element;
     }
 
-    async getChildren(element?: WorkflowTreeItem): Promise<WorkflowTreeItem[]> {
+    async getChildren(element?: StoryTreeItem): Promise<StoryTreeItem[]> {
         try {
             if (!element) {
-                // Root level: show workflows
+                // Root level: show stories
                 return this.getRootItems();
             }
 
-            if (element.contextValue === 'workflow' && element.workflow) {
-                // Show steps under workflow
-                return this.getWorkflowChildren(element.workflow);
+            if (element.contextValue === 'story' && element.story) {
+                // Show steps under story
+                return this.getStoryChildren(element.story);
             }
 
             return [];
         } catch (error) {
-            console.error('Error getting workflow tree children:', error);
-            return [new WorkflowTreeItem('Error loading data', vscode.TreeItemCollapsibleState.None, 'error')];
+            console.error('Error getting story tree children:', error);
+            return [new StoryTreeItem('Error loading data', vscode.TreeItemCollapsibleState.None, 'error')];
         }
     }
 
-    private async getRootItems(): Promise<WorkflowTreeItem[]> {
-        const items: WorkflowTreeItem[] = [];
+    private async getRootItems(): Promise<StoryTreeItem[]> {
+        const items: StoryTreeItem[] = [];
 
         try {
-            // Get all workflows
+            // Get all stories
             const baseUrl = this.apiService.getBaseUrl();
-            console.log(`[Aura] Fetching workflows from ${baseUrl}`);
+            console.log(`[Aura] Fetching stories from ${baseUrl}`);
 
-            // Filter workflows by current workspace
+            // Filter stories by current workspace
             const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-            const workflows = await this.apiService.getWorkflows(undefined, workspacePath);            if (workflows.length === 0) {
-                items.push(new WorkflowTreeItem(
-                    'No workflows yet',
+            const stories = await this.apiService.getStories(undefined, workspacePath);            if (stories.length === 0) {
+                items.push(new StoryTreeItem(
+                    'No stories yet',
                     vscode.TreeItemCollapsibleState.None,
                     'empty'
                 ));
-                items[0].description = 'Create one with Aura: Create Workflow';
+                items[0].description = 'Create one with Aura: Create Story';
             } else {
-                for (const workflow of workflows) {
-                    const item = this.createWorkflowItem(workflow);
+                for (const story of stories) {
+                    const item = this.createStoryItem(story);
                     items.push(item);
                 }
             }
         } catch (error) {
             const baseUrl = this.apiService.getBaseUrl();
-            console.error(`[Aura] Failed to fetch workflows from ${baseUrl}:`, error);
+            console.error(`[Aura] Failed to fetch stories from ${baseUrl}:`, error);
             
             const errorMessage = error instanceof Error ? error.message : String(error);
-            const item = new WorkflowTreeItem(
+            const item = new StoryTreeItem(
                 'Unable to connect to Aura API',
                 vscode.TreeItemCollapsibleState.None,
                 'offline'
@@ -74,69 +74,69 @@ export class WorkflowTreeProvider implements vscode.TreeDataProvider<WorkflowTre
         return items;
     }
 
-    private createWorkflowItem(workflow: Workflow): WorkflowTreeItem {
-        const hasSteps = workflow.steps && workflow.steps.length > 0;
+    private createStoryItem(story: Story): StoryTreeItem {
+        const hasSteps = story.steps && story.steps.length > 0;
         const collapsible = hasSteps
             ? vscode.TreeItemCollapsibleState.Expanded
             : vscode.TreeItemCollapsibleState.Collapsed;
 
-        const item = new WorkflowTreeItem(
-            workflow.title,
+        const item = new StoryTreeItem(
+            story.title,
             collapsible,
-            'workflow'
+            'story'
         );
 
-        item.workflow = workflow;
-        item.workflowId = workflow.id;
+        item.story = story;
+        item.storyId = story.id;
 
         // Show wave progress in description when executing
-        if (workflow.status === 'Executing' && workflow.waveCount > 0) {
-            item.description = `Wave ${workflow.currentWave}/${workflow.waveCount}`;
-        } else if (workflow.status === 'GatePending') {
-            item.description = `Gate pending (Wave ${workflow.currentWave})`;
-        } else if (workflow.status === 'GateFailed') {
-            item.description = `Gate failed (Wave ${workflow.currentWave})`;
+        if (story.status === 'Executing' && story.waveCount > 0) {
+            item.description = `Wave ${story.currentWave}/${story.waveCount}`;
+        } else if (story.status === 'GatePending') {
+            item.description = `Gate pending (Wave ${story.currentWave})`;
+        } else if (story.status === 'GateFailed') {
+            item.description = `Gate failed (Wave ${story.currentWave})`;
         } else {
-            item.description = workflow.status;
+            item.description = story.status;
         }
 
-        item.iconPath = this.getStatusIcon(workflow.status);
-        item.tooltip = this.getWorkflowTooltip(workflow);
+        item.iconPath = this.getStatusIcon(story.status);
+        item.tooltip = this.getStoryTooltip(story);
 
         // Click opens worktree in new window
         item.command = {
             command: 'aura.openStoryWorktree',
             title: 'Open Worktree',
-            arguments: [workflow.worktreePath]
+            arguments: [story.worktreePath]
         };
 
         return item;
     }
 
-    private getWorkflowChildren(workflow: Workflow): WorkflowTreeItem[] {
-        const items: WorkflowTreeItem[] = [];
+    private getStoryChildren(story: Story): StoryTreeItem[] {
+        const items: StoryTreeItem[] = [];
 
         // Add issue link if exists
-        if (workflow.issueUrl && workflow.issueNumber) {
-            const issueItem = new WorkflowTreeItem(
-                `Issue #${workflow.issueNumber}`,
+        if (story.issueUrl && story.issueNumber) {
+            const issueItem = new StoryTreeItem(
+                `Issue #${story.issueNumber}`,
                 vscode.TreeItemCollapsibleState.None,
                 'issue'
             );
             issueItem.iconPath = new vscode.ThemeIcon('github');
-            issueItem.tooltip = workflow.issueUrl;
+            issueItem.tooltip = story.issueUrl;
             issueItem.command = {
                 command: 'vscode.open',
                 title: 'Open Issue',
-                arguments: [vscode.Uri.parse(workflow.issueUrl)]
+                arguments: [vscode.Uri.parse(story.issueUrl)]
             };
             items.push(issueItem);
         }
 
         // Add branch if exists
-        if (workflow.gitBranch) {
-            const branchItem = new WorkflowTreeItem(
-                `Branch: ${workflow.gitBranch}`,
+        if (story.gitBranch) {
+            const branchItem = new StoryTreeItem(
+                `Branch: ${story.gitBranch}`,
                 vscode.TreeItemCollapsibleState.None,
                 'info'
             );
@@ -145,28 +145,28 @@ export class WorkflowTreeProvider implements vscode.TreeDataProvider<WorkflowTre
         }
 
         // Add worktree path if exists (with action to open)
-        if (workflow.worktreePath) {
-            const worktreeItem = new WorkflowTreeItem(
+        if (story.worktreePath) {
+            const worktreeItem = new StoryTreeItem(
                 `Worktree`,
                 vscode.TreeItemCollapsibleState.None,
                 'worktree'
             );
             worktreeItem.iconPath = new vscode.ThemeIcon('folder-opened');
-            worktreeItem.tooltip = `Open in new window: ${workflow.worktreePath}`;
-            worktreeItem.workflowId = workflow.id;
+            worktreeItem.tooltip = `Open in new window: ${story.worktreePath}`;
+            worktreeItem.storyId = story.id;
             worktreeItem.command = {
                 command: 'aura.openStoryWorktree',
                 title: 'Open Worktree',
-                arguments: [workflow.worktreePath]
+                arguments: [story.worktreePath]
             };
             items.push(worktreeItem);
         }
 
         // Add steps grouped by wave
-        if (workflow.steps && workflow.steps.length > 0) {
+        if (story.steps && story.steps.length > 0) {
             // Group steps by wave
-            const waveGroups = new Map<number, typeof workflow.steps>();
-            for (const step of workflow.steps) {
+            const waveGroups = new Map<number, typeof story.steps>();
+            for (const step of story.steps) {
                 const wave = step.wave || 1;
                 if (!waveGroups.has(wave)) {
                     waveGroups.set(wave, []);
@@ -181,26 +181,26 @@ export class WorkflowTreeProvider implements vscode.TreeDataProvider<WorkflowTre
 
                 // Add wave header if there are multiple waves
                 if (sortedWaves.length > 1) {
-                    const waveStatus = this.getWaveStatus(waveSteps, wave, workflow.currentWave);
-                    const waveItem = new WorkflowTreeItem(
+                    const waveStatus = this.getWaveStatus(waveSteps, wave, story.currentWave);
+                    const waveItem = new StoryTreeItem(
                         `Wave ${wave}`,
                         vscode.TreeItemCollapsibleState.None,
                         'wave'
                     );
                     waveItem.description = waveStatus;
-                    waveItem.iconPath = this.getWaveIcon(waveSteps, wave, workflow.currentWave);
+                    waveItem.iconPath = this.getWaveIcon(waveSteps, wave, story.currentWave);
                     items.push(waveItem);
                 }
 
                 // Add steps in this wave
                 for (const step of waveSteps.sort((a, b) => a.order - b.order)) {
-                    const stepItem = new WorkflowTreeItem(
+                    const stepItem = new StoryTreeItem(
                         `${step.order}. ${step.name}`,
                         vscode.TreeItemCollapsibleState.None,
                         'step'
                     );
                     stepItem.step = step;
-                    stepItem.workflowId = workflow.id;
+                    stepItem.storyId = story.id;
                     stepItem.description = step.capability;
                     stepItem.iconPath = this.getStepIcon(step.status);
                     stepItem.tooltip = `${step.name}\nWave: ${step.wave}\nCapability: ${step.capability}\nStatus: ${step.status}`;
@@ -210,7 +210,7 @@ export class WorkflowTreeProvider implements vscode.TreeDataProvider<WorkflowTre
                         stepItem.command = {
                             command: 'aura.executeStep',
                             title: 'Execute Step',
-                            arguments: [workflow.id, step.id]
+                            arguments: [story.id, step.id]
                         };
                     }
 
@@ -305,32 +305,32 @@ export class WorkflowTreeProvider implements vscode.TreeDataProvider<WorkflowTre
         }
     }
 
-    private getWorkflowTooltip(workflow: Workflow): string {
-        let tooltip = `${workflow.title}\n`;
-        if (workflow.description) {
-            tooltip += `\n${workflow.description}\n`;
+    private getStoryTooltip(story: Story): string {
+        let tooltip = `${story.title}\n`;
+        if (story.description) {
+            tooltip += `\n${story.description}\n`;
         }
-        tooltip += `\nStatus: ${workflow.status}`;
-        if (workflow.issueUrl) {
-            tooltip += `\nIssue: ${workflow.issueUrl}`;
+        tooltip += `\nStatus: ${story.status}`;
+        if (story.issueUrl) {
+            tooltip += `\nIssue: ${story.issueUrl}`;
         }
-        if (workflow.repositoryPath) {
-            tooltip += `\nRepository: ${workflow.repositoryPath}`;
+        if (story.repositoryPath) {
+            tooltip += `\nRepository: ${story.repositoryPath}`;
         }
-        if (workflow.gitBranch) {
-            tooltip += `\nBranch: ${workflow.gitBranch}`;
+        if (story.gitBranch) {
+            tooltip += `\nBranch: ${story.gitBranch}`;
         }
-        if (workflow.worktreePath) {
-            tooltip += `\nWorktree: ${workflow.worktreePath}`;
+        if (story.worktreePath) {
+            tooltip += `\nWorktree: ${story.worktreePath}`;
         }
         return tooltip;
     }
 }
 
-export class WorkflowTreeItem extends vscode.TreeItem {
-    workflow?: Workflow;
+export class StoryTreeItem extends vscode.TreeItem {
+    story?: Story;
     step?: { id: string; order: number; wave: number; name: string; capability: string; status: string };
-    workflowId?: string;
+    storyId?: string;
 
     constructor(
         public readonly label: string,
