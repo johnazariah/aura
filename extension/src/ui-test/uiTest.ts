@@ -108,18 +108,18 @@ describe('Aura Extension UI Tests', function () {
         }
     });
 
-    it('should show Workflows view', async function () {
+    it('should show Stories view', async function () {
         const sideBar = new SideBarView();
         const content = sideBar.getContent();
 
         try {
-            const workflowSection = await content.getSection('Workflows');
-            await workflowSection.expand();
+            const storySection = await content.getSection('Stories');
+            await storySection.expand();
             await driver.sleep(500);
-            await takeScreenshot('04-workflows');
+            await takeScreenshot('04-stories');
 
-            const items = await workflowSection.getVisibleItems();
-            console.log('Workflow items:');
+            const items = await storySection.getVisibleItems();
+            console.log('Story items:');
             for (const item of items) {
                 if (item instanceof TreeItem) {
                     const label = await item.getLabel();
@@ -127,7 +127,7 @@ describe('Aura Extension UI Tests', function () {
                 }
             }
         } catch (e) {
-            console.log('Workflows section not found or empty');
+            console.log('Stories section not found or empty');
         }
     });
 
@@ -154,7 +154,7 @@ describe('Aura Extension UI Tests', function () {
         }
     });
 
-    it('should trigger Create Workflow command', async function () {
+    it('should trigger Create Story command', async function () {
         const workbench = new Workbench();
 
         // Open command palette
@@ -162,9 +162,9 @@ describe('Aura Extension UI Tests', function () {
         await driver.sleep(500);
 
         const input = await InputBox.create();
-        await input.setText('Aura: Create Workflow');
+        await input.setText('Aura: Create Story');
         await driver.sleep(500);
-        await takeScreenshot('06-command-palette-create-workflow');
+        await takeScreenshot('06-command-palette-create-story');
 
         // Press Escape to close without executing
         await input.cancel();

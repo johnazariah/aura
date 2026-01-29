@@ -819,7 +819,7 @@ export class AuraApiService {
         }
     }
 
-    async addWorkflowStep(storyId: string, name: string, capability: string, description?: string): Promise<StoryStep> {
+    async addStoryStep(storyId: string, name: string, capability: string, description?: string): Promise<StoryStep> {
         const response = await this.httpClient.post(
             `${this.getBaseUrl()}/api/developer/stories/${storyId}/steps`,
             { name, capability, description }
@@ -827,27 +827,27 @@ export class AuraApiService {
         return response.data;
     }
 
-    async removeWorkflowStep(storyId: string, stepId: string): Promise<void> {
+    async removeStoryStep(storyId: string, stepId: string): Promise<void> {
         await this.httpClient.delete(
             `${this.getBaseUrl()}/api/developer/stories/${storyId}/steps/${stepId}`
         );
     }
 
-    async completeWorkflow(storyId: string): Promise<Story> {
+    async completeStory(storyId: string): Promise<Story> {
         const response = await this.httpClient.post(
             `${this.getBaseUrl()}/api/developer/stories/${storyId}/complete`
         );
         return response.data;
     }
 
-    async cancelWorkflow(storyId: string): Promise<Story> {
+    async cancelStory(storyId: string): Promise<Story> {
         const response = await this.httpClient.post(
             `${this.getBaseUrl()}/api/developer/stories/${storyId}/cancel`
         );
         return response.data;
     }
 
-    async sendWorkflowChat(storyId: string, message: string): Promise<StoryChatResponse> {
+    async sendStoryChat(storyId: string, message: string): Promise<StoryChatResponse> {
         const response = await this.httpClient.post(
             `${this.getBaseUrl()}/api/developer/stories/${storyId}/chat`,
             { message },
@@ -914,7 +914,7 @@ export class AuraApiService {
         return response.data;
     }
 
-    async finalizeWorkflow(storyId: string, options: {
+    async finalizeStory(storyId: string, options: {
         commitMessage?: string;
         createPullRequest?: boolean;
         prTitle?: string;

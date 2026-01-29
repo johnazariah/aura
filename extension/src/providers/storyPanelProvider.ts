@@ -1007,7 +1007,7 @@ export class StoryPanelProvider {
     private async handleChat(storyId: string, text: string, panel: vscode.WebviewPanel): Promise<void> {
         panel.webview.postMessage({ type: 'chatLoading' });
         try {
-            const response = await this.apiService.sendWorkflowChat(storyId, text);
+            const response = await this.apiService.sendStoryChat(storyId, text);
             panel.webview.postMessage({
                 type: 'chatResponse',
                 response: response.response,
@@ -1024,7 +1024,7 @@ export class StoryPanelProvider {
 
     private async handleComplete(storyId: string, panel: vscode.WebviewPanel): Promise<void> {
         try {
-            await this.apiService.completeWorkflow(storyId);
+            await this.apiService.completeStory(storyId);
             await this.refreshPanel(storyId);
             vscode.window.showInformationMessage('Story completed!');
         } catch (error) {
@@ -1040,7 +1040,7 @@ export class StoryPanelProvider {
         );
         if (confirm) {
             try {
-                await this.apiService.cancelWorkflow(storyId);
+                await this.apiService.cancelStory(storyId);
                 await this.refreshPanel(storyId);
             } catch (error) {
                 vscode.window.showErrorMessage('Failed to cancel Story');
@@ -1052,7 +1052,7 @@ export class StoryPanelProvider {
         try {
             panel.webview.postMessage({ type: 'loading', action: 'finalize' });
             
-            const result = await this.apiService.finalizeWorkflow(storyId, {
+            const result = await this.apiService.finalizeStory(storyId, {
                 commitMessage: message.commitMessage,
                 createPullRequest: message.createPullRequest ?? true,
                 prTitle: message.prTitle,
@@ -1206,8 +1206,8 @@ export class StoryPanelProvider {
             panel.webview.postMessage({ type: 'loading', action: 'reassign', stepId });
             await this.apiService.reassignStep(storyId, stepId, agentId);
             // Refresh the Story to show updated step
-            const updatedWorkflow = await this.apiService.getStory(storyId);
-            panel.webview.postMessage({ type: 'refresh', Story: updatedWorkflow });
+            const updatedStory = await this.apiService.getStory(storyId);
+            panel.webview.postMessage({ type: 'refresh', Story: updatedStory });
             panel.webview.postMessage({ type: 'loadingDone' });
             vscode.window.showInformationMessage(`Step reassigned to ${agentId}`);
         } catch (error) {
@@ -1221,8 +1221,8 @@ export class StoryPanelProvider {
             panel.webview.postMessage({ type: 'loading', action: 'updateDescription', stepId });
             await this.apiService.updateStepDescription(storyId, stepId, description);
             // Refresh the Story to show updated step
-            const updatedWorkflow = await this.apiService.getStory(storyId);
-            panel.webview.postMessage({ type: 'refresh', Story: updatedWorkflow });
+            const updatedStory = await this.apiService.getStory(storyId);
+            panel.webview.postMessage({ type: 'refresh', Story: updatedStory });
             panel.webview.postMessage({ type: 'loadingDone' });
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Failed to update description';
@@ -2574,7 +2574,7 @@ export class StoryPanelProvider {
             <div class="spinner"></div>
             <span>Thinking...</span>
         </div>
-        <div id="chatResponse" class="chat-response" ${Story.chatHistory ? '' : 'style="display: none;"'}>${this.renderWorkflowChatHistory(Story)}</div>
+        <div id="chatResponse" class="chat-response" ${Story.chatHistory ? '' : 'style="display: none;"'}>${this.renderStoryChatHistory(Story)}</div>
     </div>
 
     <h3>Timeline</h3>
@@ -4027,7 +4027,7 @@ export class StoryPanelProvider {
         }
     }
 
-    private renderWorkflowChatHistory(Story: Story): string {
+    private renderStoryChatHistory(Story: Story): string {
         if (!Story.chatHistory) {
             return '';
         }

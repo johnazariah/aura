@@ -269,12 +269,12 @@ export async function activate(context: vscode.ExtensionContext) {
         await createStoryFromIssue();
     });
 
-    const refreshFromIssueCommand = vscode.commands.registerCommand('aura.refreshFromIssue', async (workflowId?: string) => {
-        await refreshFromIssue(workflowId);
+    const refreshFromIssueCommand = vscode.commands.registerCommand('aura.refreshFromIssue', async (storyId?: string) => {
+        await refreshFromIssue(storyId);
     });
 
-    const postUpdateToIssueCommand = vscode.commands.registerCommand('aura.postUpdateToIssue', async (workflowId?: string) => {
-        await postUpdateToIssue(workflowId);
+    const postUpdateToIssueCommand = vscode.commands.registerCommand('aura.postUpdateToIssue', async (storyId?: string) => {
+        await postUpdateToIssue(storyId);
     });
 
     const openStoryWorktreeCommand = vscode.commands.registerCommand('aura.openStoryWorktree', async (worktreePath?: string) => {
@@ -1287,14 +1287,14 @@ function getCheatSheetHtml(): string {
     <h2>Keyboard Shortcuts</h2>
     <table>
         <tr><th>Action</th><th>Windows/Linux</th><th>macOS</th></tr>
-        <tr><td>New Workflow</td><td class="shortcut">Ctrl+Shift+W</td><td class="shortcut">Cmd+Shift+W</td></tr>
+        <tr><td>New Story</td><td class="shortcut">Ctrl+Shift+W</td><td class="shortcut">Cmd+Shift+W</td></tr>
         <tr><td>Open Chat</td><td class="shortcut">Ctrl+Shift+A</td><td class="shortcut">Cmd+Shift+A</td></tr>
         <tr><td>Execute Agent</td><td class="shortcut">Ctrl+Shift+E</td><td class="shortcut">Cmd+Shift+E</td></tr>
         <tr><td>Index Workspace</td><td class="shortcut">Ctrl+Alt+I</td><td class="shortcut">Cmd+Alt+I</td></tr>
         <tr><td>Show Help</td><td class="shortcut">Ctrl+Shift+/</td><td class="shortcut">Cmd+Shift+/</td></tr>
     </table>
 
-    <h2>Workflow Tips</h2>
+    <h2>Story Tips</h2>
     <table>
         <tr><th>Task</th><th>Example Prompt</th></tr>
         <tr><td>New endpoint</td><td><code>Create POST /api/products endpoint following OrderController patterns</code></td></tr>
