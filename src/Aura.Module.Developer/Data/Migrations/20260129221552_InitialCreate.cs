@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace Aura.Module.Developer.Migrations
+namespace Aura.Module.Developer.Data.Migrations
 {
     /// <inheritdoc />
     public partial class InitialCreate : Migration
@@ -12,7 +12,7 @@ namespace Aura.Module.Developer.Migrations
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.CreateTable(
-                name: "workflows",
+                name: "stories",
                 columns: table => new
                 {
                     id = table.Column<Guid>(type: "uuid", nullable: false),
@@ -34,25 +34,32 @@ namespace Aura.Module.Developer.Migrations
                     issue_owner = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true),
                     issue_repo = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true),
                     automation_mode = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
-                    Source = table.Column<int>(type: "integer", nullable: false),
-                    SourceGuardianId = table.Column<string>(type: "text", nullable: true),
+                    source = table.Column<int>(type: "integer", nullable: false),
+                    source_guardian_id = table.Column<string>(type: "text", nullable: true),
                     pattern_name = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
                     pattern_language = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: true),
-                    Priority = table.Column<int>(type: "integer", nullable: false),
-                    SuggestedCapability = table.Column<string>(type: "text", nullable: true),
-                    chat_history = table.Column<string>(type: "jsonb", nullable: true)
+                    priority = table.Column<int>(type: "integer", nullable: false),
+                    suggested_capability = table.Column<string>(type: "text", nullable: true),
+                    chat_history = table.Column<string>(type: "jsonb", nullable: true),
+                    verification_passed = table.Column<bool>(type: "boolean", nullable: true),
+                    verification_result = table.Column<string>(type: "text", nullable: true),
+                    current_wave = table.Column<int>(type: "integer", nullable: false),
+                    gate_mode = table.Column<int>(type: "integer", nullable: false),
+                    gate_result = table.Column<string>(type: "text", nullable: true),
+                    max_parallelism = table.Column<int>(type: "integer", nullable: false),
+                    preferred_executor = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: true)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_workflows", x => x.id);
+                    table.PrimaryKey("PK_stories", x => x.id);
                 });
 
             migrationBuilder.CreateTable(
-                name: "workflow_steps",
+                name: "story_steps",
                 columns: table => new
                 {
                     id = table.Column<Guid>(type: "uuid", nullable: false),
-                    workflow_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    story_id = table.Column<Guid>(type: "uuid", nullable: false),
                     order = table.Column<int>(type: "integer", nullable: false),
                     name = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false),
                     capability = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
@@ -71,53 +78,55 @@ namespace Aura.Module.Developer.Migrations
                     skip_reason = table.Column<string>(type: "text", nullable: true),
                     chat_history = table.Column<string>(type: "jsonb", nullable: true),
                     needs_rework = table.Column<bool>(type: "boolean", nullable: false),
-                    previous_output = table.Column<string>(type: "jsonb", nullable: true)
+                    previous_output = table.Column<string>(type: "jsonb", nullable: true),
+                    wave = table.Column<int>(type: "integer", nullable: false),
+                    executor_override = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: true)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_workflow_steps", x => x.id);
+                    table.PrimaryKey("PK_story_steps", x => x.id);
                     table.ForeignKey(
-                        name: "FK_workflow_steps_workflows_workflow_id",
-                        column: x => x.workflow_id,
-                        principalTable: "workflows",
+                        name: "FK_story_steps_stories_story_id",
+                        column: x => x.story_id,
+                        principalTable: "stories",
                         principalColumn: "id",
                         onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateIndex(
-                name: "IX_workflow_steps_status",
-                table: "workflow_steps",
-                column: "status");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_workflow_steps_workflow_id_order",
-                table: "workflow_steps",
-                columns: new[] { "workflow_id", "order" });
-
-            migrationBuilder.CreateIndex(
-                name: "IX_workflows_created_at",
-                table: "workflows",
+                name: "IX_stories_created_at",
+                table: "stories",
                 column: "created_at");
 
             migrationBuilder.CreateIndex(
-                name: "IX_workflows_issue_url",
-                table: "workflows",
+                name: "IX_stories_issue_url",
+                table: "stories",
                 column: "issue_url");
 
             migrationBuilder.CreateIndex(
-                name: "IX_workflows_status",
-                table: "workflows",
+                name: "IX_stories_status",
+                table: "stories",
                 column: "status");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_story_steps_status",
+                table: "story_steps",
+                column: "status");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_story_steps_story_id_order",
+                table: "story_steps",
+                columns: new[] { "story_id", "order" });
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(
-                name: "workflow_steps");
+                name: "story_steps");
 
             migrationBuilder.DropTable(
-                name: "workflows");
+                name: "stories");
         }
     }
 }

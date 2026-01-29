@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Aura.Module.Developer.Data.Migrations
 {
     [DbContext(typeof(DeveloperDbContext))]
-    [Migration("20260125224432_RemoveLegacyOrchestration")]
-    partial class RemoveLegacyOrchestration
+    [Migration("20260129221552_InitialCreate")]
+    partial class InitialCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -55,24 +55,24 @@ namespace Aura.Module.Developer.Data.Migrations
                         .HasColumnName("created_at");
 
                     b.Property<int>("CurrentWave")
-                        .HasColumnType("integer");
+                        .HasColumnType("integer")
+                        .HasColumnName("current_wave");
 
                     b.Property<string>("Description")
                         .HasColumnType("text")
                         .HasColumnName("description");
-
-                    b.Property<int>("DispatchTarget")
-                        .HasColumnType("integer");
 
                     b.Property<string>("ExecutionPlan")
                         .HasColumnType("jsonb")
                         .HasColumnName("execution_plan");
 
                     b.Property<int>("GateMode")
-                        .HasColumnType("integer");
+                        .HasColumnType("integer")
+                        .HasColumnName("gate_mode");
 
                     b.Property<string>("GateResult")
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .HasColumnName("gate_result");
 
                     b.Property<string>("GitBranch")
                         .HasMaxLength(500)
@@ -104,7 +104,8 @@ namespace Aura.Module.Developer.Data.Migrations
                         .HasColumnName("issue_url");
 
                     b.Property<int>("MaxParallelism")
-                        .HasColumnType("integer");
+                        .HasColumnType("integer")
+                        .HasColumnName("max_parallelism");
 
                     b.Property<string>("PatternLanguage")
                         .HasMaxLength(50)
@@ -116,8 +117,14 @@ namespace Aura.Module.Developer.Data.Migrations
                         .HasColumnType("character varying(100)")
                         .HasColumnName("pattern_name");
 
+                    b.Property<string>("PreferredExecutor")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("preferred_executor");
+
                     b.Property<int>("Priority")
-                        .HasColumnType("integer");
+                        .HasColumnType("integer")
+                        .HasColumnName("priority");
 
                     b.Property<string>("PullRequestUrl")
                         .HasMaxLength(1000)
@@ -130,10 +137,12 @@ namespace Aura.Module.Developer.Data.Migrations
                         .HasColumnName("repository_path");
 
                     b.Property<int>("Source")
-                        .HasColumnType("integer");
+                        .HasColumnType("integer")
+                        .HasColumnName("source");
 
                     b.Property<string>("SourceGuardianId")
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .HasColumnName("source_guardian_id");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -142,7 +151,8 @@ namespace Aura.Module.Developer.Data.Migrations
                         .HasColumnName("status");
 
                     b.Property<string>("SuggestedCapability")
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .HasColumnName("suggested_capability");
 
                     b.Property<string>("Title")
                         .IsRequired()
@@ -155,10 +165,12 @@ namespace Aura.Module.Developer.Data.Migrations
                         .HasColumnName("updated_at");
 
                     b.Property<bool?>("VerificationPassed")
-                        .HasColumnType("boolean");
+                        .HasColumnType("boolean")
+                        .HasColumnName("verification_passed");
 
                     b.Property<string>("VerificationResult")
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .HasColumnName("verification_result");
 
                     b.Property<string>("WorktreePath")
                         .HasMaxLength(1000)
@@ -173,7 +185,7 @@ namespace Aura.Module.Developer.Data.Migrations
 
                     b.HasIndex("Status");
 
-                    b.ToTable("workflows", (string)null);
+                    b.ToTable("stories", (string)null);
                 });
 
             modelBuilder.Entity("Aura.Module.Developer.Data.Entities.StoryStep", b =>
@@ -222,6 +234,11 @@ namespace Aura.Module.Developer.Data.Migrations
                         .HasColumnType("text")
                         .HasColumnName("error");
 
+                    b.Property<string>("ExecutorOverride")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("executor_override");
+
                     b.Property<string>("Input")
                         .HasColumnType("jsonb")
                         .HasColumnName("input");
@@ -269,10 +286,11 @@ namespace Aura.Module.Developer.Data.Migrations
 
                     b.Property<Guid>("StoryId")
                         .HasColumnType("uuid")
-                        .HasColumnName("workflow_id");
+                        .HasColumnName("story_id");
 
                     b.Property<int>("Wave")
-                        .HasColumnType("integer");
+                        .HasColumnType("integer")
+                        .HasColumnName("wave");
 
                     b.HasKey("Id");
 
@@ -280,7 +298,7 @@ namespace Aura.Module.Developer.Data.Migrations
 
                     b.HasIndex("StoryId", "Order");
 
-                    b.ToTable("workflow_steps", (string)null);
+                    b.ToTable("story_steps", (string)null);
                 });
 
             modelBuilder.Entity("Aura.Module.Developer.Data.Entities.StoryStep", b =>

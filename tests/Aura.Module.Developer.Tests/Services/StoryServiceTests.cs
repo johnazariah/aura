@@ -160,7 +160,7 @@ public class StoryServiceTests : IDisposable
         var result = await _sut.CreateAsync("Persisted Workflow");
 
         // Assert
-        var fromDb = await _db.Workflows.FindAsync(result.Id);
+        var fromDb = await _db.Stories.FindAsync(result.Id);
         fromDb.Should().NotBeNull();
         fromDb!.Title.Should().Be("Persisted Workflow");
     }
@@ -247,7 +247,7 @@ public class StoryServiceTests : IDisposable
         await _sut.DeleteAsync(id);
 
         // Assert
-        var fromDb = await _db.Workflows.FindAsync(id);
+        var fromDb = await _db.Stories.FindAsync(id);
         fromDb.Should().BeNull();
     }
 
@@ -266,7 +266,7 @@ public class StoryServiceTests : IDisposable
         await _sut.UpdateAsync(workflow);
 
         // Assert
-        var fromDb = await _db.Workflows.FindAsync(workflow.Id);
+        var fromDb = await _db.Stories.FindAsync(workflow.Id);
         fromDb!.Title.Should().Be("Updated Title");
     }
 
@@ -283,7 +283,7 @@ public class StoryServiceTests : IDisposable
         await _sut.UpdateAsync(workflow);
 
         // Assert
-        var fromDb = await _db.Workflows.FindAsync(workflow.Id);
+        var fromDb = await _db.Stories.FindAsync(workflow.Id);
         fromDb!.UpdatedAt.Should().BeOnOrAfter(originalUpdatedAt);
     }
 
@@ -374,7 +374,7 @@ public class StoryServiceTests : IDisposable
         await _sut.RemoveStepAsync(workflow.Id, step.Id);
 
         // Assert
-        var fromDb = await _db.WorkflowSteps.FindAsync(step.Id);
+        var fromDb = await _db.StorySteps.FindAsync(step.Id);
         fromDb.Should().BeNull();
     }
 

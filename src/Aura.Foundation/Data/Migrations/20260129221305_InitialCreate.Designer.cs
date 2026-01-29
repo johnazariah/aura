@@ -13,7 +13,7 @@ using Pgvector;
 namespace Aura.Foundation.Data.Migrations
 {
     [DbContext(typeof(AuraDbContext))]
-    [Migration("20260108055950_InitialCreate")]
+    [Migration("20260129221305_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -472,6 +472,65 @@ namespace Aura.Foundation.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("rag_chunks", (string)null);
+                });
+
+            modelBuilder.Entity("Aura.Foundation.Data.Entities.Workspace", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("id");
+
+                    b.Property<string>("CanonicalPath")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)")
+                        .HasColumnName("canonical_path");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("DefaultBranch")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("default_branch");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasColumnType("text")
+                        .HasColumnName("error_message");
+
+                    b.Property<string>("GitRemoteUrl")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)")
+                        .HasColumnName("git_remote_url");
+
+                    b.Property<DateTimeOffset>("LastAccessedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_accessed_at");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CanonicalPath")
+                        .IsUnique();
+
+                    b.HasIndex("LastAccessedAt");
+
+                    b.HasIndex("Status");
+
+                    b.ToTable("workspaces", (string)null);
                 });
 
             modelBuilder.Entity("Aura.Foundation.Data.Entities.AgentExecution", b =>

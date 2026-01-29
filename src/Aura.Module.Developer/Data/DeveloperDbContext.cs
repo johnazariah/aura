@@ -18,11 +18,11 @@ using Microsoft.EntityFrameworkCore;
 public sealed class DeveloperDbContext(DbContextOptions<DeveloperDbContext> options) : DbContext(options)
 {
 
-    /// <summary>Gets the workflows.</summary>
-    public DbSet<Story> Workflows => Set<Story>();
+    /// <summary>Gets the stories.</summary>
+    public DbSet<Story> Stories => Set<Story>();
 
-    /// <summary>Gets the workflow steps.</summary>
-    public DbSet<StoryStep> WorkflowSteps => Set<StoryStep>();
+    /// <summary>Gets the story steps.</summary>
+    public DbSet<StoryStep> StorySteps => Set<StoryStep>();
 
     /// <inheritdoc/>
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -35,10 +35,10 @@ public sealed class DeveloperDbContext(DbContextOptions<DeveloperDbContext> opti
 
     private static void ConfigureDeveloperEntities(ModelBuilder modelBuilder)
     {
-        // Workflow configuration
+        // Story configuration
         modelBuilder.Entity<Story>(entity =>
         {
-            entity.ToTable("workflows");
+            entity.ToTable("stories");
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Id).HasColumnName("id");
             entity.Property(e => e.Title).HasColumnName("title").HasMaxLength(1000);
@@ -72,18 +72,34 @@ public sealed class DeveloperDbContext(DbContextOptions<DeveloperDbContext> opti
             // Chat
             entity.Property(e => e.ChatHistory).HasColumnName("chat_history").HasColumnType("jsonb");
 
+            // Source
+            entity.Property(e => e.Source).HasColumnName("source");
+            entity.Property(e => e.SourceGuardianId).HasColumnName("source_guardian_id");
+            entity.Property(e => e.Priority).HasColumnName("priority");
+            entity.Property(e => e.SuggestedCapability).HasColumnName("suggested_capability");
+
+            // Verification
+            entity.Property(e => e.VerificationPassed).HasColumnName("verification_passed");
+            entity.Property(e => e.VerificationResult).HasColumnName("verification_result");
+
+            // Orchestration
+            entity.Property(e => e.CurrentWave).HasColumnName("current_wave");
+            entity.Property(e => e.GateMode).HasColumnName("gate_mode");
+            entity.Property(e => e.GateResult).HasColumnName("gate_result");
+            entity.Property(e => e.MaxParallelism).HasColumnName("max_parallelism");
+
             entity.HasIndex(e => e.Status);
             entity.HasIndex(e => e.CreatedAt);
             entity.HasIndex(e => e.IssueUrl);
         });
 
-        // WorkflowStep configuration
+        // StoryStep configuration
         modelBuilder.Entity<StoryStep>(entity =>
         {
-            entity.ToTable("workflow_steps");
+            entity.ToTable("story_steps");
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Id).HasColumnName("id");
-            entity.Property(e => e.StoryId).HasColumnName("workflow_id");
+            entity.Property(e => e.StoryId).HasColumnName("story_id");
             entity.Property(e => e.Order).HasColumnName("order");
             entity.Property(e => e.Name).HasColumnName("name").HasMaxLength(500);
             entity.Property(e => e.Capability).HasColumnName("capability").HasMaxLength(100);
@@ -108,6 +124,9 @@ public sealed class DeveloperDbContext(DbContextOptions<DeveloperDbContext> opti
 
             // Executor override
             entity.Property(e => e.ExecutorOverride).HasColumnName("executor_override").HasMaxLength(50);
+
+            // Orchestration
+            entity.Property(e => e.Wave).HasColumnName("wave");
 
             entity.HasOne(e => e.Story)
                 .WithMany(w => w.Steps)

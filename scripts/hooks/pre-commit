@@ -80,6 +80,8 @@ fi
 # 2. Normalize CRLF to LF (auto-fix) - MUST run before dotnet format
 # =============================================================================
 
+# Fix CRLF in working directory files that are staged
+# dotnet format checks working directory, not staged content
 CRLF_FIXED=0
 
 for file in $STAGED_FILES; do
@@ -91,9 +93,10 @@ for file in $STAGED_FILES; do
                 ;;
         esac
         
-        # Check if file has CRLF line endings - fix silently
-        if git show ":$file" 2>/dev/null | grep -q $'\r'; then
-            sed -i 's/\r$//' "$file"
+        # Check if working directory file has CRLF line endings
+        if grep -q $'\r' "$file" 2>/dev/null; then
+            # Use tr for reliable CRLF removal (available in all Git Bash)
+            tr -d '\r' < "$file" > "$file.tmp" && mv "$file.tmp" "$file"
             git add "$file"
             CRLF_FIXED=$((CRLF_FIXED + 1))
         fi

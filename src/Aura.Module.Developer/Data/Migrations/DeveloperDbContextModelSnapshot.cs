@@ -3,20 +3,17 @@ using System;
 using Aura.Module.Developer.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
-namespace Aura.Module.Developer.Migrations
+namespace Aura.Module.Developer.Data.Migrations
 {
     [DbContext(typeof(DeveloperDbContext))]
-    [Migration("20260119085440_AddWorkflowVerification")]
-    partial class AddWorkflowVerification
+    partial class DeveloperDbContextModelSnapshot : ModelSnapshot
     {
-        /// <inheritdoc />
-        protected override void BuildTargetModel(ModelBuilder modelBuilder)
+        protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -25,7 +22,7 @@ namespace Aura.Module.Developer.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("Aura.Module.Developer.Data.Entities.Workflow", b =>
+            modelBuilder.Entity("Aura.Module.Developer.Data.Entities.Story", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -54,6 +51,10 @@ namespace Aura.Module.Developer.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
+                    b.Property<int>("CurrentWave")
+                        .HasColumnType("integer")
+                        .HasColumnName("current_wave");
+
                     b.Property<string>("Description")
                         .HasColumnType("text")
                         .HasColumnName("description");
@@ -61,6 +62,14 @@ namespace Aura.Module.Developer.Migrations
                     b.Property<string>("ExecutionPlan")
                         .HasColumnType("jsonb")
                         .HasColumnName("execution_plan");
+
+                    b.Property<int>("GateMode")
+                        .HasColumnType("integer")
+                        .HasColumnName("gate_mode");
+
+                    b.Property<string>("GateResult")
+                        .HasColumnType("text")
+                        .HasColumnName("gate_result");
 
                     b.Property<string>("GitBranch")
                         .HasMaxLength(500)
@@ -91,6 +100,10 @@ namespace Aura.Module.Developer.Migrations
                         .HasColumnType("character varying(1000)")
                         .HasColumnName("issue_url");
 
+                    b.Property<int>("MaxParallelism")
+                        .HasColumnType("integer")
+                        .HasColumnName("max_parallelism");
+
                     b.Property<string>("PatternLanguage")
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)")
@@ -101,8 +114,14 @@ namespace Aura.Module.Developer.Migrations
                         .HasColumnType("character varying(100)")
                         .HasColumnName("pattern_name");
 
+                    b.Property<string>("PreferredExecutor")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("preferred_executor");
+
                     b.Property<int>("Priority")
-                        .HasColumnType("integer");
+                        .HasColumnType("integer")
+                        .HasColumnName("priority");
 
                     b.Property<string>("PullRequestUrl")
                         .HasMaxLength(1000)
@@ -115,10 +134,12 @@ namespace Aura.Module.Developer.Migrations
                         .HasColumnName("repository_path");
 
                     b.Property<int>("Source")
-                        .HasColumnType("integer");
+                        .HasColumnType("integer")
+                        .HasColumnName("source");
 
                     b.Property<string>("SourceGuardianId")
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .HasColumnName("source_guardian_id");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -127,7 +148,8 @@ namespace Aura.Module.Developer.Migrations
                         .HasColumnName("status");
 
                     b.Property<string>("SuggestedCapability")
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .HasColumnName("suggested_capability");
 
                     b.Property<string>("Title")
                         .IsRequired()
@@ -140,10 +162,12 @@ namespace Aura.Module.Developer.Migrations
                         .HasColumnName("updated_at");
 
                     b.Property<bool?>("VerificationPassed")
-                        .HasColumnType("boolean");
+                        .HasColumnType("boolean")
+                        .HasColumnName("verification_passed");
 
                     b.Property<string>("VerificationResult")
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .HasColumnName("verification_result");
 
                     b.Property<string>("WorktreePath")
                         .HasMaxLength(1000)
@@ -158,10 +182,10 @@ namespace Aura.Module.Developer.Migrations
 
                     b.HasIndex("Status");
 
-                    b.ToTable("workflows", (string)null);
+                    b.ToTable("stories", (string)null);
                 });
 
-            modelBuilder.Entity("Aura.Module.Developer.Data.Entities.WorkflowStep", b =>
+            modelBuilder.Entity("Aura.Module.Developer.Data.Entities.StoryStep", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -206,6 +230,11 @@ namespace Aura.Module.Developer.Migrations
                     b.Property<string>("Error")
                         .HasColumnType("text")
                         .HasColumnName("error");
+
+                    b.Property<string>("ExecutorOverride")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("executor_override");
 
                     b.Property<string>("Input")
                         .HasColumnType("jsonb")
@@ -252,31 +281,35 @@ namespace Aura.Module.Developer.Migrations
                         .HasColumnType("character varying(20)")
                         .HasColumnName("status");
 
-                    b.Property<Guid>("WorkflowId")
+                    b.Property<Guid>("StoryId")
                         .HasColumnType("uuid")
-                        .HasColumnName("workflow_id");
+                        .HasColumnName("story_id");
+
+                    b.Property<int>("Wave")
+                        .HasColumnType("integer")
+                        .HasColumnName("wave");
 
                     b.HasKey("Id");
 
                     b.HasIndex("Status");
 
-                    b.HasIndex("WorkflowId", "Order");
+                    b.HasIndex("StoryId", "Order");
 
-                    b.ToTable("workflow_steps", (string)null);
+                    b.ToTable("story_steps", (string)null);
                 });
 
-            modelBuilder.Entity("Aura.Module.Developer.Data.Entities.WorkflowStep", b =>
+            modelBuilder.Entity("Aura.Module.Developer.Data.Entities.StoryStep", b =>
                 {
-                    b.HasOne("Aura.Module.Developer.Data.Entities.Workflow", "Workflow")
+                    b.HasOne("Aura.Module.Developer.Data.Entities.Story", "Story")
                         .WithMany("Steps")
-                        .HasForeignKey("WorkflowId")
+                        .HasForeignKey("StoryId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("Workflow");
+                    b.Navigation("Story");
                 });
 
-            modelBuilder.Entity("Aura.Module.Developer.Data.Entities.Workflow", b =>
+            modelBuilder.Entity("Aura.Module.Developer.Data.Entities.Story", b =>
                 {
                     b.Navigation("Steps");
                 });
