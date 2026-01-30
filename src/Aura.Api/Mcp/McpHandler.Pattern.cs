@@ -15,16 +15,17 @@ using Microsoft.Extensions.Logging;
 using RefactoringParameterInfo = Aura.Module.Developer.Services.ParameterInfo;
 
 namespace Aura.Api.Mcp;
+
 public sealed partial class McpHandler
 {
     // =========================================================================
     // aura_pattern - Load operational patterns for complex tasks
     // =========================================================================
     /// <summary>
-        /// aura_pattern - Load operational patterns for complex multi-step tasks.
-        /// Patterns are dynamically discovered from the patterns/ folder.
-        /// </summary>
-        private Task<object> PatternAsync(JsonElement? args, CancellationToken ct)
+    /// aura_pattern - Load operational patterns for complex multi-step tasks.
+    /// Patterns are dynamically discovered from the patterns/ folder.
+    /// </summary>
+    private Task<object> PatternAsync(JsonElement? args, CancellationToken ct)
     {
         var operation = args?.GetProperty("operation").GetString() ?? throw new ArgumentException("operation is required");
         return operation switch
@@ -207,10 +208,10 @@ public sealed partial class McpHandler
     }
 
     /// <summary>
-        /// Loads pattern content with optional language overlay.
-        /// Returns merged base + overlay if both exist, or just the pattern if no overlay.
-        /// </summary>
-        private static string? LoadPatternContent(string patternName, string? language)
+    /// Loads pattern content with optional language overlay.
+    /// Returns merged base + overlay if both exist, or just the pattern if no overlay.
+    /// </summary>
+    private static string? LoadPatternContent(string patternName, string? language)
     {
         var patternsDir = GetPatternsDirectory();
         var basePatternPath = Path.Combine(patternsDir, $"{patternName}.md");

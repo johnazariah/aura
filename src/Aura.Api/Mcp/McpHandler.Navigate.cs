@@ -15,13 +15,14 @@ using Microsoft.Extensions.Logging;
 using RefactoringParameterInfo = Aura.Module.Developer.Services.ParameterInfo;
 
 namespace Aura.Api.Mcp;
+
 public sealed partial class McpHandler
 {
     /// <summary>
-        /// aura_navigate - Find code elements and relationships.
-        /// Routes to: callers, implementations, derived_types, usages, by_attribute, extension_methods, by_return_type, references, definition.
-        /// </summary>
-        private async Task<object> NavigateAsync(JsonElement? args, CancellationToken ct)
+    /// aura_navigate - Find code elements and relationships.
+    /// Routes to: callers, implementations, derived_types, usages, by_attribute, extension_methods, by_return_type, references, definition.
+    /// </summary>
+    private async Task<object> NavigateAsync(JsonElement? args, CancellationToken ct)
     {
         var operation = args?.GetProperty("operation").GetString() ?? throw new ArgumentException("operation is required");
         return operation switch
@@ -40,9 +41,9 @@ public sealed partial class McpHandler
     }
 
     /// <summary>
-        /// Find references - auto-detects language from filePath.
-        /// </summary>
-        private async Task<object> FindReferencesAsync(JsonElement? args, CancellationToken ct)
+    /// Find references - auto-detects language from filePath.
+    /// </summary>
+    private async Task<object> FindReferencesAsync(JsonElement? args, CancellationToken ct)
     {
         // Check if filePath is provided and ends with .py
         if (args.HasValue && args.Value.TryGetProperty("filePath", out var filePathEl))
@@ -59,9 +60,9 @@ public sealed partial class McpHandler
     }
 
     /// <summary>
-        /// Find definition - auto-detects language from filePath.
-        /// </summary>
-        private async Task<object> FindDefinitionAsync(JsonElement? args, CancellationToken ct)
+    /// Find definition - auto-detects language from filePath.
+    /// </summary>
+    private async Task<object> FindDefinitionAsync(JsonElement? args, CancellationToken ct)
     {
         // Check if this is a Python request (has filePath ending in .py)
         if (args.HasValue && args.Value.TryGetProperty("filePath", out var filePathEl))
@@ -95,9 +96,9 @@ public sealed partial class McpHandler
     }
 
     /// <summary>
-        /// Find C# symbol definition using Roslyn and code graph.
-        /// </summary>
-        private async Task<object> FindCSharpDefinitionAsync(JsonElement? args, CancellationToken ct)
+    /// Find C# symbol definition using Roslyn and code graph.
+    /// </summary>
+    private async Task<object> FindCSharpDefinitionAsync(JsonElement? args, CancellationToken ct)
     {
         string? symbolName = null;
         string? solutionPath = null;

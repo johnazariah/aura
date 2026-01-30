@@ -15,6 +15,7 @@ using Microsoft.Extensions.Logging;
 using RefactoringParameterInfo = Aura.Module.Developer.Services.ParameterInfo;
 
 namespace Aura.Api.Mcp;
+
 public sealed partial class McpHandler
 {
     // =========================================================================

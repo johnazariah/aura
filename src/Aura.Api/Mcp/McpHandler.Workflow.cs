@@ -15,13 +15,14 @@ using Microsoft.Extensions.Logging;
 using RefactoringParameterInfo = Aura.Module.Developer.Services.ParameterInfo;
 
 namespace Aura.Api.Mcp;
+
 public sealed partial class McpHandler
 {
     /// <summary>
-        /// aura_workflow - Manage development workflows.
-        /// Routes to: list, get, create, enrich, update_step, complete.
-        /// </summary>
-        private async Task<object> WorkflowAsync(JsonElement? args, CancellationToken ct)
+    /// aura_workflow - Manage development workflows.
+    /// Routes to: list, get, create, enrich, update_step, complete.
+    /// </summary>
+    private async Task<object> WorkflowAsync(JsonElement? args, CancellationToken ct)
     {
         var operation = args?.GetProperty("operation").GetString() ?? throw new ArgumentException("operation is required");
         return operation switch
@@ -452,9 +453,9 @@ public sealed partial class McpHandler
     }
 
     /// <summary>
-        /// Complete a workflow/story: validates all steps are done, squash merges commits, pushes branch, creates draft PR.
-        /// </summary>
-        private async Task<object> CompleteStoryAsync(JsonElement? args, CancellationToken ct)
+    /// Complete a workflow/story: validates all steps are done, squash merges commits, pushes branch, creates draft PR.
+    /// </summary>
+    private async Task<object> CompleteStoryAsync(JsonElement? args, CancellationToken ct)
     {
         var storyIdStr = args?.GetProperty("storyId").GetString() ?? "";
         if (!Guid.TryParse(storyIdStr, out var storyId))

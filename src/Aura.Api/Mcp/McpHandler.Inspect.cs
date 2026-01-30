@@ -15,13 +15,14 @@ using Microsoft.Extensions.Logging;
 using RefactoringParameterInfo = Aura.Module.Developer.Services.ParameterInfo;
 
 namespace Aura.Api.Mcp;
+
 public sealed partial class McpHandler
 {
     /// <summary>
-        /// aura_inspect - Examine code structure.
-        /// Routes to: type_members, list_types.
-        /// </summary>
-        private async Task<object> InspectAsync(JsonElement? args, CancellationToken ct)
+    /// aura_inspect - Examine code structure.
+    /// Routes to: type_members, list_types.
+    /// </summary>
+    private async Task<object> InspectAsync(JsonElement? args, CancellationToken ct)
     {
         var operation = args?.GetProperty("operation").GetString() ?? throw new ArgumentException("operation is required");
         return operation switch

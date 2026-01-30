@@ -15,13 +15,14 @@ using Microsoft.Extensions.Logging;
 using RefactoringParameterInfo = Aura.Module.Developer.Services.ParameterInfo;
 
 namespace Aura.Api.Mcp;
+
 public sealed partial class McpHandler
 {
     /// <summary>
-        /// aura_generate - Create new code elements.
-        /// Routes to: implement_interface, constructor, property, method, tests.
-        /// </summary>
-        private async Task<object> GenerateAsync(JsonElement? args, CancellationToken ct)
+    /// aura_generate - Create new code elements.
+    /// Routes to: implement_interface, constructor, property, method, tests.
+    /// </summary>
+    private async Task<object> GenerateAsync(JsonElement? args, CancellationToken ct)
     {
         var operation = args?.GetProperty("operation").GetString() ?? throw new ArgumentException("operation is required");
         return operation switch
@@ -343,9 +344,9 @@ public sealed partial class McpHandler
     }
 
     /// <summary>
-        /// aura_generate(operation: "tests") - Generate tests for a target.
-        /// </summary>
-        private async Task<object> GenerateTestsAsync(JsonElement? args, CancellationToken ct)
+    /// aura_generate(operation: "tests") - Generate tests for a target.
+    /// </summary>
+    private async Task<object> GenerateTestsAsync(JsonElement? args, CancellationToken ct)
     {
         var target = args?.TryGetProperty("target", out var targetEl) == true ? targetEl.GetString() ?? throw new ArgumentException("target is required for tests operation") : args?.TryGetProperty("className", out var classEl) == true ? classEl.GetString() ?? throw new ArgumentException("target or className is required") : throw new ArgumentException("target is required for tests operation");
         var solutionPath = args?.GetProperty("solutionPath").GetString() ?? throw new ArgumentException("solutionPath is required");

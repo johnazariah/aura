@@ -15,14 +15,15 @@ using Microsoft.Extensions.Logging;
 using RefactoringParameterInfo = Aura.Module.Developer.Services.ParameterInfo;
 
 namespace Aura.Api.Mcp;
+
 public sealed partial class McpHandler
 {
     /// <summary>
-        /// aura_refactor - Transform existing code.
-        /// Routes to: rename, change_signature, extract_interface, extract_method, extract_variable, safe_delete.
-        /// Auto-detects language from filePath extension.
-        /// </summary>
-        private async Task<object> RefactorAsync(JsonElement? args, CancellationToken ct)
+    /// aura_refactor - Transform existing code.
+    /// Routes to: rename, change_signature, extract_interface, extract_method, extract_variable, safe_delete.
+    /// Auto-detects language from filePath extension.
+    /// </summary>
+    private async Task<object> RefactorAsync(JsonElement? args, CancellationToken ct)
     {
         var operation = args?.GetProperty("operation").GetString() ?? throw new ArgumentException("operation is required");
         // Detect language from filePath if provided

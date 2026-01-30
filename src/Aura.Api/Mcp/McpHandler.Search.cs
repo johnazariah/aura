@@ -15,15 +15,16 @@ using Microsoft.Extensions.Logging;
 using RefactoringParameterInfo = Aura.Module.Developer.Services.ParameterInfo;
 
 namespace Aura.Api.Mcp;
+
 public sealed partial class McpHandler
 {
     // =========================================================================
     // Phase 7: Meta-Tool Routers (8 consolidated tools)
     // =========================================================================
     /// <summary>
-        /// aura_search - Semantic and structural code search (was aura_search_code).
-        /// </summary>
-        private async Task<object> SearchAsync(JsonElement? args, CancellationToken ct)
+    /// aura_search - Semantic and structural code search (was aura_search_code).
+    /// </summary>
+    private async Task<object> SearchAsync(JsonElement? args, CancellationToken ct)
     {
         // Delegates to existing SearchCodeAsync logic
         return await SearchCodeAsync(args, ct);
@@ -33,10 +34,10 @@ public sealed partial class McpHandler
     // Existing Tool Implementations (used by meta-tool routers)
     // =========================================================================
     /// <summary>
-        /// Resolves a workspacePath (which may be a worktree) to the main repository path.
-        /// This ensures RAG queries use the indexed base repository, not the worktree.
-        /// </summary>
-        private async Task<string?> ResolveToMainRepositoryAsync(string? workspacePath, CancellationToken ct)
+    /// Resolves a workspacePath (which may be a worktree) to the main repository path.
+    /// This ensures RAG queries use the indexed base repository, not the worktree.
+    /// </summary>
+    private async Task<string?> ResolveToMainRepositoryAsync(string? workspacePath, CancellationToken ct)
     {
         if (string.IsNullOrEmpty(workspacePath))
             return null;
@@ -162,10 +163,10 @@ public sealed partial class McpHandler
     }
 
     /// <summary>
-        /// Extracts potential symbol names from a search query.
-        /// Identifies words that look like code identifiers (PascalCase, camelCase, contain underscores, etc.)
-        /// </summary>
-        private static List<string> ExtractSymbolCandidates(string query)
+    /// Extracts potential symbol names from a search query.
+    /// Identifies words that look like code identifiers (PascalCase, camelCase, contain underscores, etc.)
+    /// </summary>
+    private static List<string> ExtractSymbolCandidates(string query)
     {
         if (string.IsNullOrWhiteSpace(query))
             return new List<string>();
@@ -195,9 +196,9 @@ public sealed partial class McpHandler
     }
 
     /// <summary>
-        /// Checks if a token looks like a code identifier.
-        /// </summary>
-        private static bool LooksLikeIdentifier(string token)
+    /// Checks if a token looks like a code identifier.
+    /// </summary>
+    private static bool LooksLikeIdentifier(string token)
     {
         if (string.IsNullOrEmpty(token))
             return false;
@@ -216,9 +217,9 @@ public sealed partial class McpHandler
     }
 
     /// <summary>
-        /// Checks if a word is a common English word that's unlikely to be a symbol name.
-        /// </summary>
-        private static bool IsCommonWord(string word)
+    /// Checks if a word is a common English word that's unlikely to be a symbol name.
+    /// </summary>
+    private static bool IsCommonWord(string word)
     {
         // Common words to filter out
         return word switch

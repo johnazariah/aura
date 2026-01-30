@@ -15,16 +15,17 @@ using Microsoft.Extensions.Logging;
 using RefactoringParameterInfo = Aura.Module.Developer.Services.ParameterInfo;
 
 namespace Aura.Api.Mcp;
+
 public sealed partial class McpHandler
 {
     // =========================================================================
     // aura_edit - Surgical text editing
     // =========================================================================
     /// <summary>
-        /// Surgical text editing: insert, replace, or delete lines in any file.
-        /// Uses 1-based line numbers. All writes normalize to LF line endings.
-        /// </summary>
-        private async Task<object> EditAsync(JsonElement? args, CancellationToken ct)
+    /// Surgical text editing: insert, replace, or delete lines in any file.
+    /// Uses 1-based line numbers. All writes normalize to LF line endings.
+    /// </summary>
+    private async Task<object> EditAsync(JsonElement? args, CancellationToken ct)
     {
         var operation = args?.GetProperty("operation").GetString() ?? throw new ArgumentException("operation is required");
         var filePath = args?.GetProperty("filePath").GetString() ?? throw new ArgumentException("filePath is required");
@@ -200,9 +201,9 @@ public sealed partial class McpHandler
     }
 
     /// <summary>
-        /// Normalizes content to LF line endings and ensures a trailing newline.
-        /// </summary>
-        private static string NormalizeLineEndings(string content)
+    /// Normalizes content to LF line endings and ensures a trailing newline.
+    /// </summary>
+    private static string NormalizeLineEndings(string content)
     {
         // Replace any CRLF with LF
         content = content.Replace("\r\n", "\n").Replace("\r", "\n");
