@@ -329,9 +329,11 @@ export class AuraApiService {
     }
 
     async getIndexHealth(workspacePath: string): Promise<IndexHealthResponse> {
-        const response = await this.httpClient.get(`${this.getBaseUrl()}/api/index/health`, {
-            params: { workspacePath }
-        });
+        const workspace = await this.getWorkspace(workspacePath);
+        const response = await this.httpClient.get(
+            `${this.getBaseUrl()}/api/workspaces/${workspace.id}/index`,
+            { timeout: 5000 }
+        );
         return response.data;
     }
 
@@ -557,73 +559,100 @@ export class AuraApiService {
     // =====================
 
     /**
-     * Get code graph statistics, optionally filtered by repository.
+     * Get code graph statistics for a workspace.
      */
     async getCodeGraphStats(repositoryPath?: string): Promise<{
         totalNodes: number;
         totalEdges: number;
         nodesByType: Record<string, number>;
         edgesByType: Record<string, number>;
-        repositoryPath?: string;
+        workspaceId?: string;
     }> {
-        const params = repositoryPath ? { repositoryPath } : {};
-        const response = await this.httpClient.get(
-            `${this.getBaseUrl()}/api/graph/stats`,
-            { params, timeout: 5000 }
-        );
-        return response.data;
+        if (!repositoryPath) {
+            return { totalNodes: 0, totalEdges: 0, nodesByType: {}, edgesByType: {} };
+        }
+        try {
+            const workspace = await this.getWorkspace(repositoryPath);
+            const response = await this.httpClient.get(
+                `${this.getBaseUrl()}/api/workspaces/${workspace.id}/graph`,
+                { timeout: 5000 }
+            );
+            return response.data;
+        } catch {
+            return { totalNodes: 0, totalEdges: 0, nodesByType: {}, edgesByType: {} };
+        }
     }
 
     /**
      * Find implementations of an interface or abstract class.
      */
     async findImplementations(interfaceName: string, repositoryPath?: string): Promise<CodeGraphNode[]> {
-        const params = repositoryPath ? { repositoryPath } : {};
-        const response = await this.httpClient.get(
-            `${this.getBaseUrl()}/api/graph/implementations/${encodeURIComponent(interfaceName)}`,
-            { params, timeout: 10000 }
-        );
-        return response.data.implementations || [];
+        if (!repositoryPath) return [];
+        try {
+            const workspace = await this.getWorkspace(repositoryPath);
+            const response = await this.httpClient.get(
+                `${this.getBaseUrl()}/api/workspaces/${workspace.id}/graph/implementations/${encodeURIComponent(interfaceName)}`,
+                { timeout: 10000 }
+            );
+            return response.data.implementations || [];
+        } catch {
+            return [];
+        }
     }
 
     /**
      * Find callers of a method.
      */
     async findCallers(methodName: string, containingType?: string, repositoryPath?: string): Promise<CodeGraphNode[]> {
-        const params: Record<string, string> = {};
-        if (containingType) params.containingType = containingType;
-        if (repositoryPath) params.repositoryPath = repositoryPath;
-        const response = await this.httpClient.get(
-            `${this.getBaseUrl()}/api/graph/callers/${encodeURIComponent(methodName)}`,
-            { params, timeout: 10000 }
-        );
-        return response.data.callers || [];
+        if (!repositoryPath) return [];
+        try {
+            const workspace = await this.getWorkspace(repositoryPath);
+            const params: Record<string, string> = {};
+            if (containingType) params.containingType = containingType;
+            const response = await this.httpClient.get(
+                `${this.getBaseUrl()}/api/workspaces/${workspace.id}/graph/callers/${encodeURIComponent(methodName)}`,
+                { params, timeout: 10000 }
+            );
+            return response.data.callers || [];
+        } catch {
+            return [];
+        }
     }
 
     /**
      * Get members of a type (methods, properties, fields).
      */
     async getTypeMembers(typeName: string, repositoryPath?: string): Promise<CodeGraphNode[]> {
-        const params = repositoryPath ? { repositoryPath } : {};
-        const response = await this.httpClient.get(
-            `${this.getBaseUrl()}/api/graph/members/${encodeURIComponent(typeName)}`,
-            { params, timeout: 10000 }
-        );
-        return response.data.members || [];
+        if (!repositoryPath) return [];
+        try {
+            const workspace = await this.getWorkspace(repositoryPath);
+            const response = await this.httpClient.get(
+                `${this.getBaseUrl()}/api/workspaces/${workspace.id}/graph/members/${encodeURIComponent(typeName)}`,
+                { timeout: 10000 }
+            );
+            return response.data.members || [];
+        } catch {
+            return [];
+        }
     }
 
     /**
-     * Find nodes by name (fuzzy search).
+     * Find symbols by name.
      */
     async findNodes(name: string, nodeType?: string, repositoryPath?: string): Promise<CodeGraphNode[]> {
-        const params: Record<string, string> = {};
-        if (nodeType) params.nodeType = nodeType;
-        if (repositoryPath) params.repositoryPath = repositoryPath;
-        const response = await this.httpClient.get(
-            `${this.getBaseUrl()}/api/graph/find/${encodeURIComponent(name)}`,
-            { params, timeout: 10000 }
-        );
-        return response.data.nodes || [];
+        if (!repositoryPath) return [];
+        try {
+            const workspace = await this.getWorkspace(repositoryPath);
+            const params: Record<string, string> = {};
+            if (nodeType) params.nodeType = nodeType;
+            const response = await this.httpClient.get(
+                `${this.getBaseUrl()}/api/workspaces/${workspace.id}/graph/symbols/${encodeURIComponent(name)}`,
+                { params, timeout: 10000 }
+            );
+            return response.data.symbols || [];
+        } catch {
+            return [];
+        }
     }
 
     // =====================
@@ -1071,7 +1100,7 @@ export class AuraApiService {
             throw new Error('Workspace not found. Please onboard the workspace first.');
         }
         const response = await this.httpClient.post(
-            `${this.getBaseUrl()}/api/workspaces/${workspace.id}/reindex`,
+            `${this.getBaseUrl()}/api/workspaces/${workspace.id}/index`,
             {},
             { timeout: 30000 }
         );
