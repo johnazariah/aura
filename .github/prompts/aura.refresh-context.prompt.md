@@ -34,13 +34,13 @@ For file locations and debugging: `.project/reference/architecture-quick-referen
 
 1. **NEVER implement without a spec** - All changes require documented requirements
 2. **Design before coding** - Seek approval before implementing
-3. **User controls the server** - Never run `Start-Api.ps1`; ask user to restart if needed
+3. **User controls the service** - Aura runs as a Windows Service; ask user to restart if needed
 4. **Document all decisions** - Update STATUS.md after significant changes
 
 ## 6. Development Commands
 
 ```powershell
-# Test API (user must have server running)
+# Test API (Aura service must be running)
 curl http://localhost:5300/health
 
 # Build extension after changes
@@ -48,6 +48,9 @@ curl http://localhost:5300/health
 
 # Run tests
 .\scripts\Run-UnitTests.ps1
+
+# Update local install after code changes (run as Administrator)
+.\scripts\Update-LocalInstall.ps1
 ```
 
 ---

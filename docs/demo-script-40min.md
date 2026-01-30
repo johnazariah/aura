@@ -8,8 +8,8 @@
 ## Pre-Demo Checklist (5 min before)
 
 ```powershell
-# 1. Start API (if not running)
-.\scripts\Start-Api.ps1
+# 1. Ensure Aura service is running (check system tray or Windows Services)
+# If not installed, run as Administrator: .\scripts\Update-LocalInstall.ps1
 
 # 2. Verify health
 curl http://localhost:5300/health
@@ -255,8 +255,8 @@ curl -s "http://localhost:5300/api/tools" | ConvertFrom-Json |
 # Check API health
 curl http://localhost:5300/health
 
-# Restart if needed
-.\scripts\Start-Api.ps1
+# Restart service if needed (Windows Services → AuraService → Restart)
+# Or run as Administrator: Restart-Service AuraService
 
 # List workflows
 curl "http://localhost:5300/api/developer/workflows"

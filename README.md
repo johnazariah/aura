@@ -211,7 +211,7 @@ dotnet run --project src/Aura.AppHost
 
 ### First Run
 
-1. Start Aura services: `.\scripts\Start-Api.ps1`
+1. Ensure Aura service is running (check system tray or Windows Services)
 2. Open VS Code with the extension installed
 3. Open a folder with code you want to index
 4. Run command: "Aura: Index Workspace"

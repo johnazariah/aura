@@ -126,15 +126,20 @@ See [spec/24-llm-providers.md](spec/24-llm-providers.md) for Azure/OpenAI config
 
 ### Running the System
 
+Aura runs as a Windows Service. For development:
+
 ```powershell
-# Start API (includes PostgreSQL + Ollama via Aspire)
-.\scripts\Start-Api.ps1
+# Test API (Aura service must be running)
+curl http://localhost:5300/health
 
 # Build extension
 .\scripts\Build-Extension.ps1
 
 # Run tests
 .\scripts\Run-UnitTests.ps1
+
+# Update local install after code changes (run as Administrator)
+.\scripts\Update-LocalInstall.ps1
 ```
 
 ## Project Structure
@@ -328,7 +333,6 @@ See spec: [features/completed/agentic-execution-v2.md](features/completed/agenti
 
 | Item | Priority | Notes |
 |------|----------|-------|
-| **pgvector for Windows** | **High** | Need pre-built Windows x64 binaries for PostgreSQL 16. Without it, vector search (RAG) is disabled. See `installers/pgsql-extensions/README.md` |
 | Dependency Graph edges | Low | Import relationships in code graph |
 | Azure AD for LLM | Future | Currently API key only |
 | Cost tracking | Future | For cloud LLM usage |

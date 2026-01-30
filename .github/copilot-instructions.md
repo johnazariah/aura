@@ -17,7 +17,7 @@ When encountering issues, fix them properly in the product—don't apply quick w
 
 1. **NEVER implement without a spec** - All changes require documented requirements and context
 2. **Design before coding** - Seek approval before implementing; prefer planning over spontaneous coding
-3. **User controls the server** - Never start/stop the API server; user runs `Start-Api` manually
+3. **User controls the service** - Aura runs as a Windows Service; ask user to restart service or run `Update-LocalInstall.ps1` if needed
 4. **Document all decisions** - Update `.project/STATUS.md` after significant changes
 5. **Complete features properly** - Follow the ceremony in `.github/prompts/aura.complete-feature.prompt.md`
 6. **Product-first mindset** - Fix issues for all users, not just the current environment
@@ -62,7 +62,7 @@ Aura is a **local-first, privacy-safe AI foundation** for knowledge work. The De
 ### What You CAN Do
 
 ```powershell
-# Test API (server must be running)
+# Test API (Aura service must be running)
 curl http://localhost:5300/health
 curl http://localhost:5300/api/developer/workflows
 
@@ -80,10 +80,8 @@ dotnet build
 ### What You Must NOT Do
 
 ```powershell
-# NEVER run these - user controls the server
-.\scripts\Start-Api.ps1
-dotnet run --project src/Aura.AppHost
-.\scripts\Update-LocalInstall.ps1  # Requires elevation - ask user to run
+# NEVER run these - require elevation, ask user to run
+.\scripts\Update-LocalInstall.ps1  # Rebuilds and deploys to C:\Program Files\Aura
 ```
 
 ### Production Environment
@@ -106,7 +104,7 @@ This rebuilds and deploys to `C:\Program Files\Aura`. After changes:
 2. **Propose** - Describe planned changes and get approval
 3. **Implement** - Make code changes
 4. **Build** - If extension changed → `Build-Extension.ps1`
-5. **Ask for restart** - If server code changed → ask user to run `Start-Api`
+5. **Ask for update** - If server code changed → ask user to run `Update-LocalInstall.ps1` as Administrator
 6. **Test** - Use curl to verify
 7. **Document** - Update STATUS.md if needed
 

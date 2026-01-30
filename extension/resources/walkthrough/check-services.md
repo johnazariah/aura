@@ -11,7 +11,7 @@ The main backend that provides AI capabilities.
 
 **Starting the API:**
 - **Installed version**: The AuraService should start automatically. Check Windows Services or use the Aura system tray app.
-- **Development**: Run `Start-Api` in PowerShell from the repo folder.
+- **Development**: Run `Update-LocalInstall.ps1` as Administrator to rebuild and deploy.
 
 ## 2. Ollama (or Cloud LLM)
 Provides the AI models for code generation and chat.
