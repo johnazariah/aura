@@ -93,7 +93,7 @@ public static class HealthEndpoints
 
     private static async Task<IResult> GetLlmHealth(ILlmProviderRegistry registry)
     {
-        var provider = registry.GetProvider("ollama") ?? registry.GetDefaultProvider();
+        var provider = registry.GetProvider(LlmProviders.Ollama) ?? registry.GetDefaultProvider();
         if (provider is null)
         {
             return Results.Ok(new { healthy = false, details = "No LLM provider configured" });

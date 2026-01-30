@@ -616,21 +616,14 @@ public sealed class BackgroundIndexer : BackgroundService, IBackgroundIndexer
     {
         _logger.LogDebug("Using ingester {AgentId} for {FilePath}", ingester.AgentId, filePath);
 
-        var context = new AgentContext(
-            Prompt: "Parse this file and extract semantic chunks",
-            Properties: new Dictionary<string, object>
-            {
-                ["filePath"] = filePath,
-                ["content"] = content,
-                ["language"] = extension,
-                ["extension"] = extension,
-            });
+        var ingesterContext = new IngesterContext(filePath, content, extension);
+        var context = ingesterContext.ToAgentContext();
 
         try
         {
             var output = await ingester.ExecuteAsync(context, cancellationToken);
 
-            if (output.Artifacts.TryGetValue("chunks", out var chunksJson))
+            if (output.Artifacts.TryGetValue(Agents.ArtifactKeys.Chunks, out var chunksJson))
             {
                 var chunks = JsonSerializer.Deserialize<List<SemanticChunk>>(chunksJson);
                 if (chunks is not null)

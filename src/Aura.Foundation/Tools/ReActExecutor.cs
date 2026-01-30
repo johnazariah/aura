@@ -610,7 +610,7 @@ public partial class ReActExecutor(IToolRegistry toolRegistry, ILogger<ReActExec
         }
 
         // Handle file modification tools
-        if (toolId is "file.write" or "file.modify")
+        if (toolId is BuiltInToolIds.FileWrite or BuiltInToolIds.FileModify)
         {
             // Only track if the operation succeeded
             if (observation.StartsWith("Error:", StringComparison.OrdinalIgnoreCase))
@@ -1001,12 +1001,12 @@ public partial class ReActExecutor(IToolRegistry toolRegistry, ILogger<ReActExec
         // Map common LLM mistakes to correct tool names
         return action.ToLowerInvariant() switch
         {
-            "modify" => "file.modify",
-            "write" => "file.write",
-            "read" => "file.read",
-            "list" => "file.list",
-            "exists" => "file.exists",
-            "delete" => "file.delete",
+            "modify" => BuiltInToolIds.FileModify,
+            "write" => BuiltInToolIds.FileWrite,
+            "read" => BuiltInToolIds.FileRead,
+            "list" => BuiltInToolIds.FileList,
+            "exists" => BuiltInToolIds.FileExists,
+            "delete" => BuiltInToolIds.FileDelete,
             "review" or "validate" or "check" => "finish",  // These should just finish
             _ => action // Keep original if no mapping
         };

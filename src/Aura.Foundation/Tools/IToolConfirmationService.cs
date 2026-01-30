@@ -39,10 +39,10 @@ public sealed class ToolConfirmationOptions
     public int MaxIterations { get; set; } = 10;
 
     /// <summary>Tools that are auto-approved (no user confirmation needed).</summary>
-    public List<string> AutoApproveTools { get; set; } = ["file.read", "graph.query"];
+    public List<string> AutoApproveTools { get; set; } = [BuiltInToolIds.FileRead, BuiltInToolIds.GraphQuery];
 
     /// <summary>Tools that always require approval.</summary>
-    public List<string> RequireApprovalTools { get; set; } = ["file.write", "file.delete", "git.commit"];
+    public List<string> RequireApprovalTools { get; set; } = [BuiltInToolIds.FileWrite, BuiltInToolIds.FileDelete, BuiltInToolIds.GitCommit];
 }
 
 /// <summary>

@@ -719,11 +719,11 @@ public sealed partial class McpHandler
                         operation = new
                         {
                             type = "string",
-                            description = "Documentation operation type",
+                            description = "Documentation operation type: 'search' (default), 'list', or 'get'",
                             @enum = new[] { "search", "list", "get" }
                         },
-                        query = new { type = "string", description = "The documentation search query (for search operation)" },
-                        id = new { type = "string", description = "Document ID to retrieve (for get operation)" },
+                        query = new { type = "string", description = "The documentation search query (required for search operation)" },
+                        id = new { type = "string", description = "Document ID to retrieve (required for get operation)" },
                         category = new { type = "string", description = "Filter by category (for list operation)" },
                         tags = new
                         {
@@ -732,7 +732,7 @@ public sealed partial class McpHandler
                             description = "Filter by tags (for list operation)"
                         }
                     },
-                    required = new[] { "query" }
+                    required = Array.Empty<string>() // No required fields - depends on operation
                 }
             },
         };

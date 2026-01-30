@@ -558,47 +558,47 @@ public sealed class RagService : IRagService
             var chunk = chunks[i];
             var metadata = new Dictionary<string, string>
             {
-                ["chunkType"] = chunk.ChunkType,
+                [ChunkMetadataKeys.ChunkType] = chunk.ChunkType,
             };
 
             if (chunk.Title is not null)
             {
-                metadata["title"] = chunk.Title;
+                metadata[ChunkMetadataKeys.Title] = chunk.Title;
             }
 
             if (chunk.Language is not null)
             {
-                metadata["language"] = chunk.Language;
+                metadata[ChunkMetadataKeys.Language] = chunk.Language;
             }
 
             if (chunk.StartLine.HasValue)
             {
-                metadata["startLine"] = chunk.StartLine.Value.ToString();
+                metadata[ChunkMetadataKeys.StartLine] = chunk.StartLine.Value.ToString();
             }
 
             if (chunk.EndLine.HasValue)
             {
-                metadata["endLine"] = chunk.EndLine.Value.ToString();
+                metadata[ChunkMetadataKeys.EndLine] = chunk.EndLine.Value.ToString();
             }
 
             if (chunk.SymbolName is not null)
             {
-                metadata["symbolName"] = chunk.SymbolName;
+                metadata[ChunkMetadataKeys.SymbolName] = chunk.SymbolName;
             }
 
             if (chunk.FullyQualifiedName is not null)
             {
-                metadata["fullyQualifiedName"] = chunk.FullyQualifiedName;
+                metadata[ChunkMetadataKeys.FullyQualifiedName] = chunk.FullyQualifiedName;
             }
 
             if (chunk.Signature is not null)
             {
-                metadata["signature"] = chunk.Signature;
+                metadata[ChunkMetadataKeys.Signature] = chunk.Signature;
             }
 
             if (chunk.ParentSymbol is not null)
             {
-                metadata["parentSymbol"] = chunk.ParentSymbol;
+                metadata[ChunkMetadataKeys.ParentSymbol] = chunk.ParentSymbol;
             }
 
             // Merge any additional metadata from the chunk
@@ -725,13 +725,13 @@ public sealed class RagService : IRagService
                 relativePath = relativePath[(normalizedPath.Length + 1)..];
             }
 
-            var chunkType = metadata?.GetValueOrDefault("chunkType") ?? "unknown";
+            var chunkType = metadata?.GetValueOrDefault(ChunkMetadataKeys.ChunkType) ?? "unknown";
 
             // Filter by pattern in symbol name if pattern is specified
             if (!string.IsNullOrEmpty(pattern) && pattern != ".")
             {
-                var symbolName = metadata?.GetValueOrDefault("symbolName");
-                var title = metadata?.GetValueOrDefault("title");
+                var symbolName = metadata?.GetValueOrDefault(ChunkMetadataKeys.SymbolName);
+                var title = metadata?.GetValueOrDefault(ChunkMetadataKeys.Title);
                 var pathMatches = relativePath.Contains(pattern, StringComparison.OrdinalIgnoreCase);
                 var symbolMatches = symbolName?.Contains(pattern, StringComparison.OrdinalIgnoreCase) == true;
                 var titleMatches = title?.Contains(pattern, StringComparison.OrdinalIgnoreCase) == true;
@@ -744,14 +744,14 @@ public sealed class RagService : IRagService
 
             var treeChunk = new TreeChunk(relativePath, chunkType, chunk.Content)
             {
-                SymbolName = metadata?.GetValueOrDefault("symbolName"),
-                FullyQualifiedName = metadata?.GetValueOrDefault("fullyQualifiedName"),
-                Signature = metadata?.GetValueOrDefault("signature"),
-                ParentSymbol = metadata?.GetValueOrDefault("parentSymbol"),
-                Language = metadata?.GetValueOrDefault("language"),
-                StartLine = metadata?.TryGetValue("startLine", out var sl) == true && int.TryParse(sl, out var startLine) ? startLine : null,
-                EndLine = metadata?.TryGetValue("endLine", out var el) == true && int.TryParse(el, out var endLine) ? endLine : null,
-                Title = metadata?.GetValueOrDefault("title"),
+                SymbolName = metadata?.GetValueOrDefault(ChunkMetadataKeys.SymbolName),
+                FullyQualifiedName = metadata?.GetValueOrDefault(ChunkMetadataKeys.FullyQualifiedName),
+                Signature = metadata?.GetValueOrDefault(ChunkMetadataKeys.Signature),
+                ParentSymbol = metadata?.GetValueOrDefault(ChunkMetadataKeys.ParentSymbol),
+                Language = metadata?.GetValueOrDefault(ChunkMetadataKeys.Language),
+                StartLine = metadata?.TryGetValue(ChunkMetadataKeys.StartLine, out var sl) == true && int.TryParse(sl, out var startLine) ? startLine : null,
+                EndLine = metadata?.TryGetValue(ChunkMetadataKeys.EndLine, out var el) == true && int.TryParse(el, out var endLine) ? endLine : null,
+                Title = metadata?.GetValueOrDefault(ChunkMetadataKeys.Title),
             };
 
             results.Add(treeChunk);

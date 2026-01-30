@@ -520,29 +520,3 @@ public class McpHandlerTypeScriptTests
 
     #endregion
 }
-
-/// <summary>
-/// JSON-RPC response structure for test deserialization.
-/// </summary>
-public class JsonRpcResponse
-{
-    public string? Jsonrpc { get; set; }
-
-    public object? Id { get; set; }
-
-    public object? Result { get; set; }
-
-    public JsonRpcError? Error { get; set; }
-}
-
-/// <summary>
-/// JSON-RPC error structure.
-/// </summary>
-public class JsonRpcError
-{
-    public int Code { get; set; }
-
-    public string Message { get; set; } = string.Empty;
-
-    public object? Data { get; set; }
-}

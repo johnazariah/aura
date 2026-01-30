@@ -426,8 +426,8 @@ public class McpHandlerTests
 
         // Assert
         toolNames.Should().Contain("aura_docs");
-        toolNames.Should().Contain("aura_workspaces");
-        toolNames.Should().HaveCount(17); // All registered tools including aura_docs, aura_docs_list, aura_docs_get, aura_workspaces
+        toolNames.Should().Contain("aura_workspace");
+        toolNames.Should().HaveCount(13); // Consolidated tools: search, navigate, inspect, refactor, generate, validate, workflow, workspace, pattern, edit, tree, architect, docs
     }
 
     [Fact]
@@ -543,8 +543,8 @@ public class McpHandlerTests
             id = 100,
             @params = new
             {
-                name = "aura_docs_list",
-                arguments = new { }
+                name = "aura_docs",
+                arguments = new { operation = "list" }
             }
         };
 
@@ -594,8 +594,8 @@ public class McpHandlerTests
             id = 101,
             @params = new
             {
-                name = "aura_docs_list",
-                arguments = new { category = "reference" }
+                name = "aura_docs",
+                arguments = new { operation = "list", category = "reference" }
             }
         };
 
@@ -647,8 +647,8 @@ public class McpHandlerTests
             id = 102,
             @params = new
             {
-                name = "aura_docs_list",
-                arguments = new { tags = new[] { "beginner" } }
+                name = "aura_docs",
+                arguments = new { operation = "list", tags = new[] { "beginner" } }
             }
         };
 
@@ -700,9 +700,10 @@ public class McpHandlerTests
             id = 103,
             @params = new
             {
-                name = "aura_docs_list",
+                name = "aura_docs",
                 arguments = new
                 {
+                    operation = "list",
                     category = "guides",
                     tags = new[] { "beginner" }
                 }
@@ -743,8 +744,8 @@ public class McpHandlerTests
             id = 104,
             @params = new
             {
-                name = "aura_docs_list",
-                arguments = new { tags = Array.Empty<string>() }
+                name = "aura_docs",
+                arguments = new { operation = "list", tags = Array.Empty<string>() }
             }
         };
 
@@ -780,8 +781,8 @@ public class McpHandlerTests
             id = 105,
             @params = new
             {
-                name = "aura_docs_get",
-                arguments = new { id = "quick-start" }
+                name = "aura_docs",
+                arguments = new { operation = "get", id = "quick-start" }
             }
         };
 
@@ -826,8 +827,8 @@ public class McpHandlerTests
             id = 106,
             @params = new
             {
-                name = "aura_docs_get",
-                arguments = new { id = "non-existent" }
+                name = "aura_docs",
+                arguments = new { operation = "get", id = "non-existent" }
             }
         };
 
@@ -857,8 +858,8 @@ public class McpHandlerTests
             id = 107,
             @params = new
             {
-                name = "aura_docs_get",
-                arguments = new { }
+                name = "aura_docs",
+                arguments = new { operation = "get" }
             }
         };
 
@@ -889,8 +890,8 @@ public class McpHandlerTests
             id = 108,
             @params = new
             {
-                name = "aura_docs_get",
-                arguments = new { id = string.Empty }
+                name = "aura_docs",
+                arguments = new { operation = "get", id = string.Empty }
             }
         };
 
@@ -928,8 +929,8 @@ public class McpHandlerTests
             id = 109,
             @params = new
             {
-                name = "aura_docs_list",
-                arguments = new { tags = new[] { "tag1", "tag2", "tag3" } }
+                name = "aura_docs",
+                arguments = new { operation = "list", tags = new[] { "tag1", "tag2", "tag3" } }
             }
         };
 

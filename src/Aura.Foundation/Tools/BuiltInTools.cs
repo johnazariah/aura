@@ -26,7 +26,7 @@ public static class BuiltInTools
         // file.read - Read file contents with optional line range
         registry.RegisterTool(new ToolDefinition
         {
-            ToolId = "file.read",
+            ToolId = BuiltInToolIds.FileRead,
             Name = "Read File",
             Description = "Read the contents of a file. Supports optional line range selection.",
             InputSchema = """
@@ -116,7 +116,7 @@ public static class BuiltInTools
         // file.write - Write content to a file with overwrite protection
         registry.RegisterTool(new ToolDefinition
         {
-            ToolId = "file.write",
+            ToolId = BuiltInToolIds.FileWrite,
             Name = "Write File",
             Description = "Write content to a file. Creates parent directories if needed.",
             InputSchema = """
@@ -166,7 +166,7 @@ public static class BuiltInTools
         // file.modify - Find and replace text in a file
         registry.RegisterTool(new ToolDefinition
         {
-            ToolId = "file.modify",
+            ToolId = BuiltInToolIds.FileModify,
             Name = "Modify File",
             Description = "Modify a file by replacing text. Use for targeted edits to existing files. CRITICAL: The newText MUST have the EXACT same indentation as the oldText - count the leading spaces and replicate them on every line of your replacement.",
             InputSchema = """
@@ -234,7 +234,7 @@ public static class BuiltInTools
         // file.list - List directory contents
         registry.RegisterTool(new ToolDefinition
         {
-            ToolId = "file.list",
+            ToolId = BuiltInToolIds.FileList,
             Name = "List Files",
             Description = "List files and directories in a path. Returns names with / suffix for directories.",
             InputSchema = """
@@ -316,7 +316,7 @@ public static class BuiltInTools
         // file.exists - Check if a file or directory exists
         registry.RegisterTool(new ToolDefinition
         {
-            ToolId = "file.exists",
+            ToolId = BuiltInToolIds.FileExists,
             Name = "Check File Exists",
             Description = "Check if a file or directory exists at the given path.",
             InputSchema = """
@@ -357,7 +357,7 @@ public static class BuiltInTools
         // search.grep - Search for text in files
         registry.RegisterTool(new ToolDefinition
         {
-            ToolId = "search.grep",
+            ToolId = BuiltInToolIds.SearchGrep,
             Name = "Search Files",
             Description = "Search for a pattern in files. Returns matching lines with file paths and line numbers.",
             InputSchema = """
@@ -455,7 +455,7 @@ public static class BuiltInTools
         // file.delete - Delete a file
         registry.RegisterTool(new ToolDefinition
         {
-            ToolId = "file.delete",
+            ToolId = BuiltInToolIds.FileDelete,
             Name = "Delete File",
             Description = "Delete a file. Does not delete directories.",
             InputSchema = """
@@ -491,7 +491,7 @@ public static class BuiltInTools
         // shell.execute - Run a shell command
         registry.RegisterTool(new ToolDefinition
         {
-            ToolId = "shell.execute",
+            ToolId = BuiltInToolIds.ShellExecute,
             Name = "Execute Shell Command",
             Description = """
                 Execute a shell command and return the output. Use for builds, tests, git, file operations, and other system tasks.

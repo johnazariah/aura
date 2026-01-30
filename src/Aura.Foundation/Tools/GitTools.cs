@@ -21,7 +21,7 @@ public static class GitTools
         // git.status - Get repository status
         registry.RegisterTool(new ToolDefinition
         {
-            ToolId = "git.status",
+            ToolId = BuiltInToolIds.GitStatus,
             Name = "Git Status",
             Description = "Get the current status of the git repository including branch, modified files, and staged changes.",
             InputSchema = """
@@ -87,7 +87,7 @@ public static class GitTools
         // git.commit - Stage all changes and commit
         registry.RegisterTool(new ToolDefinition
         {
-            ToolId = "git.commit",
+            ToolId = BuiltInToolIds.GitCommit,
             Name = "Git Commit",
             Description = "Stage all changes and create a commit with the specified message.",
             InputSchema = """
@@ -130,7 +130,7 @@ public static class GitTools
         // git.branch - Get current branch or create a new one
         registry.RegisterTool(new ToolDefinition
         {
-            ToolId = "git.branch",
+            ToolId = BuiltInToolIds.GitBranch,
             Name = "Git Branch",
             Description = "Get the current branch name, or create and checkout a new branch.",
             InputSchema = """
@@ -182,7 +182,7 @@ public static class GitTools
         // git.checkout - Switch to an existing branch
         registry.RegisterTool(new ToolDefinition
         {
-            ToolId = "git.checkout",
+            ToolId = BuiltInToolIds.GitCheckout,
             Name = "Git Checkout",
             Description = "Switch to an existing branch.",
             InputSchema = """
@@ -219,7 +219,7 @@ public static class GitTools
         // git.push - Push current branch to remote
         registry.RegisterTool(new ToolDefinition
         {
-            ToolId = "git.push",
+            ToolId = BuiltInToolIds.GitPush,
             Name = "Git Push",
             Description = "Push the current branch to the remote repository.",
             InputSchema = """
@@ -256,7 +256,7 @@ public static class GitTools
         // git.pull - Pull latest changes from remote
         registry.RegisterTool(new ToolDefinition
         {
-            ToolId = "git.pull",
+            ToolId = BuiltInToolIds.GitPull,
             Name = "Git Pull",
             Description = "Pull the latest changes from the remote repository.",
             InputSchema = """
