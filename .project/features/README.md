@@ -78,6 +78,7 @@ features/
 | [RFC 7807 Problem Details](completed/rfc7807-problem-details.md) | Standardized HTTP error responses | 2026-01-24 |
 | [Hierarchical Code Exploration](completed/aura-tree-hierarchical-exploration.md) | aura_tree and aura_get_node MCP tools | 2026-01-24 |
 | [Bundled Documentation](completed/aura-docs-bundled-documentation.md) | aura_docs_list and aura_docs_get MCP tools | 2026-01-27 |
+| [Database Schema Cleanup](completed/database-schema-cleanup.md) | Consistent snake_case naming, squashed migrations | 2026-01-30 |
 | [Test Generation](completed/test-generation.md) | Automated C# test generation via aura_generate | 2026-01-28 |
 | [Service Account](completed/service-account-for-aura.md) | Dedicated AuraService user for Windows service | 2026-01-28 |
 | [Worktree Index Detection](completed/worktree-index-detection.md) | Extension detects parent repo index for worktrees | 2026-01-28 |
