@@ -66,6 +66,21 @@ public sealed partial class McpHandler
             limit = limitEl.GetInt32();
         }
 
+        // Check for multi-workspace search
+        if (args.HasValue && args.Value.TryGetProperty("workspaces", out var workspacesEl))
+        {
+            var workspaceRefs = workspacesEl.EnumerateArray()
+                .Select(e => e.GetString() ?? string.Empty)
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .ToList();
+
+            if (workspaceRefs.Count > 0)
+            {
+                return await SearchMultiWorkspaceAsync(query, workspaceRefs, limit, ct);
+            }
+        }
+
+        // Single workspace search (existing behavior)
         // Parse workspacePath and detect if it's a worktree
         string? sourcePathPrefix = null;
         DetectedWorktree? worktreeInfo = null;
@@ -152,14 +167,54 @@ public sealed partial class McpHandler
             line = n.LineNumber,
             score = 1.0, // Perfect match
             contentType = "Code",
-            isExactMatch = true
+            isExactMatch = true,
+            workspace = (string?)null
         }).ToList();
         var ragResults = await _ragService.QueryAsync(query, options, ct);
-        var semanticResults = ragResults.Select(r => new { content = r.Text, filePath = TranslatePathIfWorktree(r.SourcePath, worktreeInfo), line = (int?)null, score = r.Score, contentType = r.ContentType.ToString(), isExactMatch = false });
+        var semanticResults = ragResults.Select(r => new { content = r.Text, filePath = TranslatePathIfWorktree(r.SourcePath, worktreeInfo), line = (int?)null, score = r.Score, contentType = r.ContentType.ToString(), isExactMatch = false, workspace = (string?)null });
         // Combine: exact matches first, then semantic results (deduplicated)
         var exactFilePaths = exactMatchResults.Select(e => e.filePath).ToHashSet();
         var combinedResults = exactMatchResults.Concat(semanticResults.Where(s => !exactFilePaths.Contains(s.filePath))).Take(limit);
         return combinedResults;
+    }
+
+    /// <summary>
+    /// Searches across multiple workspaces using the workspace registry.
+    /// </summary>
+    private async Task<object> SearchMultiWorkspaceAsync(
+        string query,
+        IReadOnlyList<string> workspaceRefs,
+        int limit,
+        CancellationToken ct)
+    {
+        // Resolve workspace references to IDs
+        var workspaceIds = _workspaceRegistryService.ResolveWorkspaceIds(workspaceRefs);
+
+        if (workspaceIds.Count == 0)
+        {
+            return new
+            {
+                error = "No matching workspaces found for the provided references",
+                workspaceRefs
+            };
+        }
+
+        _logger.LogDebug("Multi-workspace search: query={Query}, workspaces={Workspaces}",
+            query, string.Join(",", workspaceIds));
+
+        // Query across all workspaces
+        var results = await _ragService.QueryMultiAsync(query, workspaceIds, limit, ct);
+
+        return results.Select(r => new
+        {
+            workspace = r.WorkspaceId,
+            content = r.Text,
+            filePath = r.SourcePath,
+            line = (int?)null,
+            score = r.Score,
+            contentType = r.ContentType.ToString(),
+            isExactMatch = false
+        });
     }
 
     /// <summary>

@@ -49,3 +49,34 @@ public sealed record RagStats(
     /// </summary>
     public IReadOnlyDictionary<RagContentType, int>? ByContentType { get; init; }
 }
+
+/// <summary>
+/// Result from a multi-workspace RAG query.
+/// </summary>
+/// <param name="WorkspaceId">The workspace ID this result belongs to.</param>
+/// <param name="ContentId">The content ID this chunk belongs to.</param>
+/// <param name="ChunkIndex">The index of this chunk within the content.</param>
+/// <param name="Text">The chunk text.</param>
+/// <param name="Score">Relevance score (0.0 to 1.0, higher is more relevant).</param>
+public sealed record MultiWorkspaceRagResult(
+    string WorkspaceId,
+    string ContentId,
+    int ChunkIndex,
+    string Text,
+    double Score)
+{
+    /// <summary>
+    /// Gets the source file path (if applicable).
+    /// </summary>
+    public string? SourcePath { get; init; }
+
+    /// <summary>
+    /// Gets the content type.
+    /// </summary>
+    public RagContentType ContentType { get; init; }
+
+    /// <summary>
+    /// Gets additional metadata.
+    /// </summary>
+    public IReadOnlyDictionary<string, string>? Metadata { get; init; }
+}

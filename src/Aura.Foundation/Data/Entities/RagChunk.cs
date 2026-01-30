@@ -43,6 +43,12 @@ public sealed class RagChunk
     public string? SourcePath { get; set; }
 
     /// <summary>
+    /// Gets or sets the workspace ID this chunk belongs to.
+    /// This is the 16-char hex hash of the normalized workspace path.
+    /// </summary>
+    public string? WorkspaceId { get; set; }
+
+    /// <summary>
     /// Gets or sets the embedding vector.
     /// </summary>
     public Vector? Embedding { get; set; }

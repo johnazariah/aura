@@ -199,6 +199,9 @@ public static class ServiceCollectionExtensions
         // Incremental indexer (background service for file watching)
         services.AddSingleton<IncrementalIndexer>();
 
+        // Workspace registry for multi-workspace queries
+        services.AddSingleton<IWorkspaceRegistryService, WorkspaceRegistryService>();
+
         return services;
     }
 

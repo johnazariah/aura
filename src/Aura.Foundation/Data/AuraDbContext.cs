@@ -177,12 +177,14 @@ public class AuraDbContext : DbContext
             entity.Property(e => e.Content).HasColumnName("content").IsRequired();
             entity.Property(e => e.ContentType).HasColumnName("content_type").HasConversion<string>().HasMaxLength(50);
             entity.Property(e => e.SourcePath).HasColumnName("source_path").HasMaxLength(1000);
+            entity.Property(e => e.WorkspaceId).HasColumnName("workspace_id").HasMaxLength(16);
             entity.Property(e => e.Embedding).HasColumnName("embedding").HasColumnType("vector(768)");
             entity.Property(e => e.MetadataJson).HasColumnName("metadata").HasColumnType("jsonb");
             entity.Property(e => e.CreatedAt).HasColumnName("created_at");
 
             entity.HasIndex(e => e.ContentId);
             entity.HasIndex(e => new { e.ContentId, e.ChunkIndex }).IsUnique();
+            entity.HasIndex(e => e.WorkspaceId);
         });
 
         // CodeNode configuration for graph RAG

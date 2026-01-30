@@ -35,6 +35,7 @@ public class McpHandlerTests
     private readonly ITreeBuilderService _treeBuilderService;
     private readonly IAuraDocsTool _auraDocsTool;
     private readonly IDocsService _docsService;
+    private readonly IWorkspaceRegistryService _workspaceRegistryService;
     private readonly McpHandler _handler;
 
     public McpHandlerTests()
@@ -52,6 +53,7 @@ public class McpHandlerTests
         _treeBuilderService = Substitute.For<ITreeBuilderService>();
         _auraDocsTool = Substitute.For<IAuraDocsTool>();
         _docsService = Substitute.For<IDocsService>();
+        _workspaceRegistryService = Substitute.For<IWorkspaceRegistryService>();
 
         _handler = new McpHandler(
             _ragService,
@@ -67,6 +69,7 @@ public class McpHandlerTests
             _treeBuilderService,
             _auraDocsTool,
             _docsService,
+            _workspaceRegistryService,
             NullLogger<McpHandler>.Instance);
     }
 
@@ -423,7 +426,8 @@ public class McpHandlerTests
 
         // Assert
         toolNames.Should().Contain("aura_docs");
-        toolNames.Should().HaveCount(16); // All registered tools including aura_docs, aura_docs_list, aura_docs_get
+        toolNames.Should().Contain("aura_workspaces");
+        toolNames.Should().HaveCount(17); // All registered tools including aura_docs, aura_docs_list, aura_docs_get, aura_workspaces
     }
 
     [Fact]

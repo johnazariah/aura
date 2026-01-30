@@ -21,6 +21,12 @@ public sealed record RagContent(
     public string? SourcePath { get; init; }
 
     /// <summary>
+    /// Gets or sets the workspace ID this content belongs to.
+    /// This is the 16-char hex hash of the normalized workspace path.
+    /// </summary>
+    public string? WorkspaceId { get; init; }
+
+    /// <summary>
     /// Gets or sets additional metadata for the content.
     /// </summary>
     public IReadOnlyDictionary<string, string>? Metadata { get; init; }

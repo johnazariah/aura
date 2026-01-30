@@ -49,6 +49,7 @@ public sealed partial class McpHandler
     private readonly ITreeBuilderService _treeBuilderService;
     private readonly IAuraDocsTool _auraDocsTool;
     private readonly IDocsService _docsService;
+    private readonly IWorkspaceRegistryService _workspaceRegistryService;
     private readonly ILogger<McpHandler> _logger;
 
     private readonly Dictionary<string, Func<JsonElement?, CancellationToken, Task<object>>> _tools;
@@ -70,6 +71,7 @@ public sealed partial class McpHandler
         ITreeBuilderService treeBuilderService,
         IAuraDocsTool auraDocsTool,
         IDocsService docsService,
+        IWorkspaceRegistryService workspaceRegistryService,
         ILogger<McpHandler> logger)
     {
         _ragService = ragService;
@@ -85,6 +87,7 @@ public sealed partial class McpHandler
         _treeBuilderService = treeBuilderService;
         _auraDocsTool = auraDocsTool;
         _docsService = docsService;
+        _workspaceRegistryService = workspaceRegistryService;
         _logger = logger;
 
         // Phase 7: Consolidated meta-tools (28 tools → 11 tools)
@@ -106,6 +109,7 @@ public sealed partial class McpHandler
             ["aura_docs"] = DocsAsync,
             ["aura_docs_list"] = DocsListAsync,
             ["aura_docs_get"] = DocsGetAsync,
+            ["aura_workspaces"] = WorkspacesAsync,
         };
     }
 
@@ -192,6 +196,12 @@ public sealed partial class McpHandler
                     {
                         query = new { type = "string", description = "The search query (concept, symbol name, or keyword)" },
                         workspacePath = new { type = "string", description = "Path to the current workspace or worktree. Used to filter results to the correct repository." },
+                        workspaces = new
+                        {
+                            type = "array",
+                            items = new { type = "string" },
+                            description = "Workspace IDs or aliases to search. Use ['*'] for all registered workspaces. If not specified, uses workspacePath."
+                        },
                         limit = new { type = "integer", description = "Maximum results (default 10)" },
                         contentType = new
                         {
@@ -717,6 +727,38 @@ public sealed partial class McpHandler
                         query = new { type = "string", description = "The documentation search query (concept, term, or question)" }
                     },
                     required = new[] { "query" }
+                }
+            },
+
+            // =================================================================
+            // aura_workspaces - Workspace registry management
+            // =================================================================
+            new McpToolDefinition
+            {
+                Name = "aura_workspaces",
+                Description = "List, add, or remove workspaces from the multi-workspace registry. Enables cross-workspace search. (CRUD)",
+                InputSchema = new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        operation = new
+                        {
+                            type = "string",
+                            description = "Registry operation type",
+                            @enum = new[] { "list", "add", "remove", "set_default" }
+                        },
+                        path = new { type = "string", description = "Workspace path (for add)" },
+                        id = new { type = "string", description = "Workspace ID (for remove/set_default)" },
+                        alias = new { type = "string", description = "Short alias (for add)" },
+                        tags = new
+                        {
+                            type = "array",
+                            items = new { type = "string" },
+                            description = "Tags for categorization (for add)"
+                        }
+                    },
+                    required = new[] { "operation" }
                 }
             },
         };

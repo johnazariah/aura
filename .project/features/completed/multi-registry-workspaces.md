@@ -1,6 +1,7 @@
 # Feature: Multi-Registry - Query Multiple Workspaces
 
-**Status:** 📋 Ready for Development
+**Status:** ✅ Complete
+**Completed:** 2026-01-30
 **Priority:** Medium
 **Type:** Feature
 **Estimated Effort:** 6 hours
@@ -266,23 +267,27 @@ Agent: aura_tree(pattern="AuthService", workspaces=["*"])
 
 | File | Change |
 |------|--------|
-| `src/Aura.Foundation/Services/IWorkspaceRegistryService.cs` | New interface |
-| `src/Aura.Foundation/Services/WorkspaceRegistryService.cs` | New implementation |
+| `src/Aura.Foundation/Rag/IWorkspaceRegistryService.cs` | New interface |
+| `src/Aura.Foundation/Rag/WorkspaceRegistryService.cs` | New implementation |
 | `src/Aura.Foundation/Data/Entities/RagChunk.cs` | Add WorkspaceId column |
-| `src/Aura.Foundation/Rag/IRagService.cs` | Add SearchMultiAsync |
+| `src/Aura.Foundation/Rag/IRagService.cs` | Add QueryMultiAsync |
 | `src/Aura.Foundation/Rag/RagService.cs` | Implement multi-search |
-| `src/Aura.Api/Mcp/McpHandler.cs` | Add aura_workspaces, extend existing tools |
+| `src/Aura.Foundation/Rag/RagResult.cs` | Add MultiWorkspaceRagResult |
+| `src/Aura.Foundation/Rag/RagContent.cs` | Add WorkspaceId property |
+| `src/Aura.Api/Mcp/McpHandler.cs` | Add aura_workspaces tool registration |
+| `src/Aura.Api/Mcp/McpHandler.Search.cs` | Multi-workspace search support |
+| `src/Aura.Api/Mcp/McpHandler.Workspaces.cs` | New partial class for workspace operations |
 | EF Migration | Add workspace_id column |
 
 ## Acceptance Criteria
 
-- [ ] Workspace registry persists across sessions
-- [ ] `aura_workspaces list` shows all registered workspaces
-- [ ] `aura_workspaces add` registers new workspace
-- [ ] `aura_search` with `workspaces` parameter searches multiple
-- [ ] `workspaces=["*"]` searches all registered workspaces
-- [ ] Results include workspace ID for disambiguation
-- [ ] Performance: parallel queries, < 500ms for 3 workspaces
+- [x] Workspace registry persists across sessions (JSON in %APPDATA%/aura/workspaces.json)
+- [x] `aura_workspaces list` shows all registered workspaces
+- [x] `aura_workspaces add` registers new workspace
+- [x] `aura_search` with `workspaces` parameter searches multiple
+- [x] `workspaces=["*"]` searches all registered workspaces
+- [x] Results include workspace ID for disambiguation
+- [ ] Performance: parallel queries, < 500ms for 3 workspaces (not tested)
 
 ## Migration Path
 

@@ -90,6 +90,7 @@ public sealed class RagService : IRagService
                 Content = chunks[i],
                 ContentType = content.ContentType,
                 SourcePath = content.SourcePath is not null ? PathNormalizer.Normalize(content.SourcePath) : null,
+                WorkspaceId = content.WorkspaceId,
                 Embedding = new Vector(embeddings[i]),
                 MetadataJson = metadataJson,
                 CreatedAt = DateTimeOffset.UtcNow,
@@ -167,6 +168,7 @@ public sealed class RagService : IRagService
                 Content = content.Text,
                 ContentType = content.ContentType,
                 SourcePath = content.SourcePath is not null ? PathNormalizer.Normalize(content.SourcePath) : null,
+                WorkspaceId = content.WorkspaceId,
                 Embedding = new Vector(embeddings[i]),
                 MetadataJson = metadataJson,
                 CreatedAt = DateTimeOffset.UtcNow,
@@ -379,6 +381,72 @@ public sealed class RagService : IRagService
 
         _logger.LogDebug("RAG query returned {Count} results", finalResults.Count);
         return finalResults;
+    }
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<MultiWorkspaceRagResult>> QueryMultiAsync(
+        string query,
+        IReadOnlyList<string> workspaceIds,
+        int limit = 20,
+        CancellationToken cancellationToken = default)
+    {
+        if (workspaceIds.Count == 0)
+        {
+            return [];
+        }
+
+        _logger.LogDebug("Multi-workspace RAG query: {Query}, workspaces={Workspaces}, limit={Limit}",
+            query, string.Join(",", workspaceIds), limit);
+
+        // Generate embedding for query
+        var queryEmbedding = await _embeddingProvider.GenerateEmbeddingAsync(
+            _options.EmbeddingModel,
+            query,
+            cancellationToken).ConfigureAwait(false);
+
+        var queryVector = new Vector(queryEmbedding);
+        var minScore = _options.MinRelevanceScore;
+
+        // Query chunks filtered by workspace IDs
+        var results = await _dbContext.RagChunks
+            .Where(c => c.Embedding != null && c.WorkspaceId != null && workspaceIds.Contains(c.WorkspaceId))
+            .OrderBy(c => c.Embedding!.CosineDistance(queryVector))
+            .Take(limit * 2) // Get extra to filter by score
+            .Select(c => new
+            {
+                c.WorkspaceId,
+                c.ContentId,
+                c.ChunkIndex,
+                c.Content,
+                c.ContentType,
+                c.SourcePath,
+                c.MetadataJson,
+                Distance = c.Embedding!.CosineDistance(queryVector),
+            })
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        // Convert distance to similarity score and filter
+        var ragResults = results
+            .Select(r => new MultiWorkspaceRagResult(
+                r.WorkspaceId!,
+                r.ContentId,
+                r.ChunkIndex,
+                r.Content,
+                1.0 - r.Distance) // Convert cosine distance to similarity
+            {
+                ContentType = r.ContentType,
+                SourcePath = r.SourcePath,
+                Metadata = ParseMetadata(r.MetadataJson),
+            })
+            .Where(r => r.Score >= minScore)
+            .Take(limit)
+            .ToList();
+
+        _logger.LogDebug("Multi-workspace query returned {Count} results across {WorkspaceCount} workspaces",
+            ragResults.Count, ragResults.Select(r => r.WorkspaceId).Distinct().Count());
+
+        return ragResults;
     }
 
     /// <inheritdoc/>

@@ -67,6 +67,20 @@ public interface IRagService
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Queries the index across multiple workspaces for semantically similar content.
+    /// </summary>
+    /// <param name="query">The query text.</param>
+    /// <param name="workspaceIds">The workspace IDs to search.</param>
+    /// <param name="limit">Maximum results to return.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Ranked list of matching chunks with workspace information.</returns>
+    Task<IReadOnlyList<MultiWorkspaceRagResult>> QueryMultiAsync(
+        string query,
+        IReadOnlyList<string> workspaceIds,
+        int limit = 20,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Gets statistics about the index.
     /// </summary>
     /// <param name="cancellationToken">Cancellation token.</param>
