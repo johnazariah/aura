@@ -1,4 +1,4 @@
-// <copyright file="WorkflowVerificationService.cs" company="Aura">
+// <copyright file="StoryVerificationService.cs" company="Aura">
 // Copyright (c) Aura. All rights reserved.
 // </copyright>
 

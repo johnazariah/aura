@@ -15,20 +15,20 @@ namespace Aura.Module.Developer.Tests.Guardians;
 
 public class GuardianExecutorTests
 {
-    private readonly IStoryService _workflowService;
+    private readonly IStoryService _storyService;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly FakeTimeProvider _timeProvider;
     private readonly GuardianExecutor _sut;
 
     public GuardianExecutorTests()
     {
-        _workflowService = Substitute.For<IStoryService>();
+        _storyService = Substitute.For<IStoryService>();
         _timeProvider = new FakeTimeProvider(DateTimeOffset.UtcNow);
 
         // Create a mock scope factory that returns the workflow service
         var scope = Substitute.For<IServiceScope>();
         var serviceProvider = Substitute.For<IServiceProvider>();
-        serviceProvider.GetService(typeof(IStoryService)).Returns(_workflowService);
+        serviceProvider.GetService(typeof(IStoryService)).Returns(_storyService);
         scope.ServiceProvider.Returns(serviceProvider);
         _scopeFactory = Substitute.For<IServiceScopeFactory>();
         _scopeFactory.CreateScope().Returns(scope);

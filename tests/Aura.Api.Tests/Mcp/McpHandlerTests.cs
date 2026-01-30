@@ -24,7 +24,7 @@ public class McpHandlerTests
 {
     private readonly IRagService _ragService;
     private readonly ICodeGraphService _graphService;
-    private readonly IStoryService _workflowService;
+    private readonly IStoryService _storyService;
     private readonly IGitHubService _gitHubService;
     private readonly IRoslynWorkspaceService _roslynService;
     private readonly IRoslynRefactoringService _refactoringService;
@@ -42,7 +42,7 @@ public class McpHandlerTests
     {
         _ragService = Substitute.For<IRagService>();
         _graphService = Substitute.For<ICodeGraphService>();
-        _workflowService = Substitute.For<IStoryService>();
+        _storyService = Substitute.For<IStoryService>();
         _gitHubService = Substitute.For<IGitHubService>();
         _roslynService = Substitute.For<IRoslynWorkspaceService>();
         _refactoringService = Substitute.For<IRoslynRefactoringService>();
@@ -58,7 +58,7 @@ public class McpHandlerTests
         _handler = new McpHandler(
             _ragService,
             _graphService,
-            _workflowService,
+            _storyService,
             _gitHubService,
             _roslynService,
             _refactoringService,

@@ -41,7 +41,7 @@ public sealed partial class McpHandler
     private async Task<object> ListStoriesAsync(JsonElement? args, CancellationToken ct)
     {
         // List active workflows (stories) - exclude completed/cancelled
-        var workflows = await _workflowService.ListAsync(ct: ct);
+        var workflows = await _storyService.ListAsync(ct: ct);
         return workflows.Where(w => w.Status != StoryStatus.Completed && w.Status != StoryStatus.Cancelled).Select(w => new { id = w.Id, title = w.Title, status = w.Status.ToString(), gitBranch = w.GitBranch, worktreePath = w.WorktreePath, repositoryPath = w.RepositoryPath, issueUrl = w.IssueUrl, issueNumber = w.IssueNumber, stepCount = w.Steps.Count, completedSteps = w.Steps.Count(s => s.Status == StepStatus.Completed), createdAt = w.CreatedAt });
     }
 
@@ -56,7 +56,7 @@ public sealed partial class McpHandler
             };
         }
 
-        var workflow = await _workflowService.GetByIdWithStepsAsync(storyId, ct);
+        var workflow = await _storyService.GetByIdWithStepsAsync(storyId, ct);
         if (workflow is null)
         {
             return new
@@ -110,7 +110,7 @@ public sealed partial class McpHandler
 
         var normalizedPath = Path.GetFullPath(workspacePath);
         // First try exact match on worktree path
-        var workflow = await _workflowService.GetByWorktreePathAsync(normalizedPath, ct);
+        var workflow = await _storyService.GetByWorktreePathAsync(normalizedPath, ct);
         // If not found, check if this is a worktree and try parent repo path
         if (workflow is null)
         {
@@ -118,7 +118,7 @@ public sealed partial class McpHandler
             if (worktreeInfo?.IsWorktree == true)
             {
                 // Try the main repo path instead
-                workflow = await _workflowService.GetByWorktreePathAsync(worktreeInfo.Value.MainRepoPath, ct);
+                workflow = await _storyService.GetByWorktreePathAsync(worktreeInfo.Value.MainRepoPath, ct);
             }
         }
 
@@ -205,7 +205,7 @@ public sealed partial class McpHandler
             // Fetch issue from GitHub
             var issue = await _gitHubService.GetIssueAsync(parsed.Value.Owner, parsed.Value.Repo, parsed.Value.Number, ct);
             // Create workflow/story
-            var workflow = await _workflowService.CreateAsync(issue.Title, issue.Body, repositoryPath, AutomationMode.Assisted, // MCP-created workflows default to assisted mode
+            var workflow = await _storyService.CreateAsync(issue.Title, issue.Body, repositoryPath, AutomationMode.Assisted, // MCP-created workflows default to assisted mode
  issueUrl, ct);
             // Post a comment to the issue that work has started
             var branch = workflow.GitBranch ?? "unknown";
@@ -243,7 +243,7 @@ public sealed partial class McpHandler
             };
         }
 
-        var workflow = await _workflowService.GetByIdWithStepsAsync(storyId, ct);
+        var workflow = await _storyService.GetByIdWithStepsAsync(storyId, ct);
         if (workflow is null)
         {
             return new
@@ -290,7 +290,7 @@ public sealed partial class McpHandler
             {
                 workflow.PatternName = patternName;
                 workflow.PatternLanguage = patternLanguage;
-                await _workflowService.UpdateAsync(workflow, ct);
+                await _storyService.UpdateAsync(workflow, ct);
             }
 
             // Return pattern content - agent should parse steps and call enrich again with steps array
@@ -330,7 +330,7 @@ public sealed partial class McpHandler
                 continue; // Skip invalid steps
             }
 
-            var step = await _workflowService.AddStepAsync(storyId, name, capability, description, input, ct: ct);
+            var step = await _storyService.AddStepAsync(storyId, name, capability, description, input, ct: ct);
             addedSteps.Add(new { id = step.Id, name = step.Name, capability = step.Capability, description = step.Description, order = step.Order, status = step.Status.ToString() });
         }
 
@@ -338,7 +338,7 @@ public sealed partial class McpHandler
         if (!string.IsNullOrWhiteSpace(patternName) && workflow.PatternName != patternName)
         {
             workflow.PatternName = patternName;
-            await _workflowService.UpdateAsync(workflow, ct);
+            await _storyService.UpdateAsync(workflow, ct);
         }
 
         return new
@@ -380,7 +380,7 @@ public sealed partial class McpHandler
             };
         }
 
-        var workflow = await _workflowService.GetByIdWithStepsAsync(storyId, ct);
+        var workflow = await _storyService.GetByIdWithStepsAsync(storyId, ct);
         if (workflow is null)
         {
             return new
@@ -418,20 +418,20 @@ public sealed partial class McpHandler
                 step.Status = StepStatus.Completed;
                 step.Output = output;
                 step.CompletedAt = DateTimeOffset.UtcNow;
-                await _workflowService.UpdateStepAsync(step, ct);
+                await _storyService.UpdateStepAsync(step, ct);
                 updatedStep = step;
                 break;
             case "failed":
                 step.Status = StepStatus.Failed;
                 step.Error = error ?? "Step marked as failed";
-                await _workflowService.UpdateStepAsync(step, ct);
+                await _storyService.UpdateStepAsync(step, ct);
                 updatedStep = step;
                 break;
             case "skipped":
-                updatedStep = await _workflowService.SkipStepAsync(storyId, stepId, skipReason, ct);
+                updatedStep = await _storyService.SkipStepAsync(storyId, stepId, skipReason, ct);
                 break;
             case "pending":
-                updatedStep = await _workflowService.ResetStepAsync(storyId, stepId, ct);
+                updatedStep = await _storyService.ResetStepAsync(storyId, stepId, ct);
                 break;
             default:
                 return new
@@ -475,7 +475,7 @@ public sealed partial class McpHandler
 
         try
         {
-            var workflow = await _workflowService.CompleteAsync(storyId, githubToken, ct);
+            var workflow = await _storyService.CompleteAsync(storyId, githubToken, ct);
             return new
             {
                 storyId = workflow.Id,

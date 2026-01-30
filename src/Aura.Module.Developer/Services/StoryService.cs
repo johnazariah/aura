@@ -1,4 +1,4 @@
-// <copyright file="WorkflowService.cs" company="Aura">
+// <copyright file="StoryService.cs" company="Aura">
 // Copyright (c) Aura. All rights reserved.
 // </copyright>
 
@@ -1142,7 +1142,7 @@ public sealed partial class StoryService(
     {
         // Azure OpenAI and OpenAI have full schema enforcement
         var providerId = provider.ProviderId.ToLowerInvariant();
-        return providerId is "azureopenai" or "openai";
+        return providerId is LlmProviders.AzureOpenAI or LlmProviders.OpenAI;
     }
 
     /// <summary>
