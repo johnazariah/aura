@@ -144,13 +144,29 @@ public sealed class GitHubCopilotDispatcher : IGitHubCopilotDispatcher, IStepExe
             // Build the prompt for copilot
             var prompt = BuildPrompt(step, completedSteps);
 
+            // Write MCP config to temp file (Copilot CLI requires file path with @ prefix)
+            var mcpConfigPath = Path.Combine(Path.GetTempPath(), "aura-mcp-config.json");
+            const string mcpConfig = """
+                {
+                  "mcpServers": {
+                    "aura": {
+                      "type": "http",
+                      "url": "http://localhost:5300/mcp",
+                      "tools": ["*"]
+                    }
+                  }
+                }
+                """;
+            await File.WriteAllTextAsync(mcpConfigPath, mcpConfig, ct);
+
             // Run copilot CLI in YOLO mode (auto-accept all tool calls)
             // --yolo: Allow all tools, paths, and URLs without confirmation
             // --no-ask-user: Work autonomously without asking questions
             // --add-dir: Grant access to the worktree directory
+            // --additional-mcp-config: Connect to Aura MCP server for aura_search, aura_generate, etc.
             // -s: Silent mode - output only the agent response
             // -p: Non-interactive mode with prompt
-            var args = $"-p \"{EscapeArgument(prompt)}\" --yolo --no-ask-user --add-dir \"{worktreePath}\" -s";
+            var args = $"-p \"{EscapeArgument(prompt)}\" --yolo --no-ask-user --add-dir \"{worktreePath}\" --additional-mcp-config \"@{mcpConfigPath}\" -s";
 
             var (exitCode, output) = await RunCommandAsync(_copilotPath!, args, worktreePath, githubToken, ct);
 

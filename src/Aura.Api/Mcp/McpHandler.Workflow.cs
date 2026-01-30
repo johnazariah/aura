@@ -205,8 +205,14 @@ public sealed partial class McpHandler
             // Fetch issue from GitHub
             var issue = await _gitHubService.GetIssueAsync(parsed.Value.Owner, parsed.Value.Repo, parsed.Value.Number, ct);
             // Create workflow/story
-            var workflow = await _storyService.CreateAsync(issue.Title, issue.Body, repositoryPath, AutomationMode.Assisted, // MCP-created workflows default to assisted mode
- issueUrl, ct);
+            var workflow = await _storyService.CreateAsync(
+                issue.Title,
+                issue.Body,
+                repositoryPath,
+                AutomationMode.Assisted, // MCP-created workflows default to assisted mode
+                issueUrl,
+                preferredExecutor: null,
+                ct);
             // Post a comment to the issue that work has started
             var branch = workflow.GitBranch ?? "unknown";
             await _gitHubService.PostCommentAsync(parsed.Value.Owner, parsed.Value.Repo, parsed.Value.Number, $"Started work in branch `{branch}`", ct);

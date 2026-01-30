@@ -70,6 +70,7 @@ public sealed partial class StoryService(
         string? repositoryPath = null,
         AutomationMode automationMode = AutomationMode.Assisted,
         string? issueUrl = null,
+        string? preferredExecutor = null,
         CancellationToken ct = default)
     {
         // Create a branch name from the title
@@ -91,6 +92,7 @@ public sealed partial class StoryService(
             GitBranch = branchName,
             Status = StoryStatus.Created,
             AutomationMode = automationMode,
+            PreferredExecutor = preferredExecutor,
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow,
         };
@@ -183,6 +185,7 @@ public sealed partial class StoryService(
             request.RepositoryPath,
             AutomationMode.Assisted,
             issueUrl: null,
+            preferredExecutor: null,
             ct);
 
         // Set guardian-specific fields

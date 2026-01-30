@@ -95,6 +95,7 @@ public static class DeveloperEndpoints
                 request.RepositoryPath,
                 automationMode,
                 request.IssueUrl,
+                request.PreferredExecutor,
                 ct);
 
             return Results.Created($"/api/developer/stories/{story.Id}", new
@@ -1100,6 +1101,7 @@ public static class DeveloperEndpoints
                 request.RepositoryPath,
                 AutomationMode.Assisted, // Issue-based workflows default to assisted mode
                 request.IssueUrl,
+                preferredExecutor: null,
                 ct);
 
             // Post a comment to the issue that work has started
