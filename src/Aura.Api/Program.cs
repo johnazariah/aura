@@ -152,11 +152,13 @@ app.MapMcpEndpoints();
 app.MapAgentEndpoints();
 app.MapConversationEndpoints();
 app.MapRagEndpoints();
-app.MapCodeGraphEndpoints();
 app.MapIndexEndpoints();
 app.MapToolEndpoints();
 app.MapGitEndpoints();
 app.MapWorkspaceEndpoints();
+app.MapWorkspaceIndexEndpoints();
+app.MapWorkspaceGraphEndpoints();
+app.MapWorkspaceSearchEndpoints();
 app.MapDeveloperEndpoints();
 app.MapGuardianEndpoints();
 

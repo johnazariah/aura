@@ -25,7 +25,6 @@ public static class WorkspaceEndpoints
         app.MapGet("/api/workspaces", ListWorkspaces);
         app.MapGet("/api/workspaces/{idOrPath}", GetWorkspace);
         app.MapPost("/api/workspaces", CreateWorkspace);
-        app.MapPost("/api/workspaces/{id}/reindex", ReindexWorkspace);
         app.MapDelete("/api/workspaces/{id}", DeleteWorkspace);
 
         return app;
@@ -230,41 +229,6 @@ public static class WorkspaceEndpoints
             isNew = true,
             jobId,
             message = jobId.HasValue ? "Workspace created and indexing started" : "Workspace created"
-        });
-    }
-
-    private static async Task<IResult> ReindexWorkspace(
-        string id,
-        AuraDbContext db,
-        IBackgroundIndexer backgroundIndexer,
-        CancellationToken ct)
-    {
-        if (!WorkspaceIdGenerator.IsValidId(id))
-        {
-            return Results.BadRequest(new { error = "Invalid workspace ID format" });
-        }
-
-        var workspace = await db.Workspaces.FindAsync([id], ct);
-        if (workspace is null)
-        {
-            return Results.NotFound(new { error = $"Workspace not found: {id}" });
-        }
-
-        var options = new RagIndexOptions { Recursive = true };
-        var (jobId, isNew) = backgroundIndexer.QueueDirectory(workspace.CanonicalPath, options);
-
-        workspace.Status = WorkspaceStatus.Indexing;
-        workspace.LastAccessedAt = DateTimeOffset.UtcNow;
-        await db.SaveChangesAsync(ct);
-
-        return Results.Accepted($"/api/index/jobs/{jobId}", new
-        {
-            id = workspace.Id,
-            path = workspace.CanonicalPath,
-            status = "indexing",
-            jobId,
-            isNewJob = isNew,
-            message = isNew ? "Re-indexing started" : "Indexing already in progress"
         });
     }
 

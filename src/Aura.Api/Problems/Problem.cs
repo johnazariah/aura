@@ -86,6 +86,15 @@ public static class Problem
             $"No story found for path: {path}",
             context);
 
+    /// <summary>Creates a workspace not found response.</summary>
+    public static IResult WorkspaceNotFound(string idOrPath, HttpContext context) =>
+        CreateProblem(
+            ProblemTypes.WorkspaceNotFound,
+            "Workspace Not Found",
+            404,
+            $"Workspace '{idOrPath}' not found.",
+            context);
+
     // =========================================================================
     // Bad Request (400)
     // =========================================================================
