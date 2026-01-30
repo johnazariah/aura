@@ -6,6 +6,7 @@ namespace Aura.Foundation.Tests.Agents;
 
 using System.IO.Abstractions.TestingHelpers;
 using Aura.Foundation.Agents;
+using Aura.Foundation.Llm;
 using FluentAssertions;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
@@ -75,7 +76,7 @@ public class MarkdownAgentLoaderTests
         definition!.AgentId.Should().Be("test-agent");
         definition.Name.Should().Be("Test Agent");
         definition.Description.Should().Be("A test agent for unit testing.");
-        definition.Provider.Should().Be("ollama");
+        definition.Provider.Should().Be(LlmProviders.Ollama);
         definition.Model.Should().Be("qwen2.5-coder:7b");
         definition.Temperature.Should().Be(0.5);
     }
@@ -570,7 +571,7 @@ public class MarkdownAgentLoaderTests
             AgentId: "test-agent",
             Name: "Test Agent",
             Description: "Test description",
-            Provider: "ollama",
+            Provider: LlmProviders.Ollama,
             Model: "llama3:8b",
             Temperature: 0.8,
             SystemPrompt: "You are a test agent.",
@@ -586,7 +587,7 @@ public class MarkdownAgentLoaderTests
         // Assert
         metadata.Name.Should().Be("Test Agent");
         metadata.Description.Should().Be("Test description");
-        metadata.Provider.Should().Be("ollama");
+        metadata.Provider.Should().Be(LlmProviders.Ollama);
         metadata.Model.Should().Be("llama3:8b");
         metadata.Temperature.Should().Be(0.8);
         metadata.Capabilities.Should().BeEquivalentTo(["coding", "testing"]);

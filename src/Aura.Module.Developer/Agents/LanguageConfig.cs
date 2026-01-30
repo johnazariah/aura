@@ -4,6 +4,8 @@
 
 namespace Aura.Module.Developer.Agents;
 
+using Aura.Foundation.Llm;
+
 /// <summary>
 /// Configuration for a language specialist agent loaded from YAML.
 /// </summary>
@@ -52,7 +54,7 @@ public sealed record LanguageMetadata
 public sealed record AgentConfig
 {
     /// <summary>Gets the LLM provider.</summary>
-    public string Provider { get; init; } = "ollama";
+    public string Provider { get; init; } = LlmProviders.Ollama;
 
     /// <summary>Gets the model to use.</summary>
     public string? Model { get; init; }

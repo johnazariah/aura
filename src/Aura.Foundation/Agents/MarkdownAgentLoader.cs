@@ -76,18 +76,18 @@ public sealed partial class MarkdownAgentLoader(
 
             // Parse metadata
             var metadata = ParseMetadata(metadataSection);
-            var name = metadata.GetValueOrDefault("name", agentId);
-            var description = metadata.GetValueOrDefault("description", string.Empty);
-            var provider = metadata.GetValueOrDefault("provider", AgentDefinition.DefaultProvider);
-            var model = metadata.TryGetValue("model", out var m) ? m : AgentDefinition.DefaultModel;
-            var temperatureStr = metadata.GetValueOrDefault("temperature", AgentDefinition.DefaultTemperature.ToString(CultureInfo.InvariantCulture));
-            var priorityStr = metadata.GetValueOrDefault("priority", AgentDefinition.DefaultPriority.ToString(CultureInfo.InvariantCulture));
+            var name = metadata.GetValueOrDefault(AgentMetadataKeys.Name, agentId);
+            var description = metadata.GetValueOrDefault(AgentMetadataKeys.Description, string.Empty);
+            var provider = metadata.GetValueOrDefault(AgentMetadataKeys.Provider, AgentDefinition.DefaultProvider);
+            var model = metadata.TryGetValue(AgentMetadataKeys.Model, out var m) ? m : AgentDefinition.DefaultModel;
+            var temperatureStr = metadata.GetValueOrDefault(AgentMetadataKeys.Temperature, AgentDefinition.DefaultTemperature.ToString(CultureInfo.InvariantCulture));
+            var priorityStr = metadata.GetValueOrDefault(AgentMetadataKeys.Priority, AgentDefinition.DefaultPriority.ToString(CultureInfo.InvariantCulture));
 
             // Parse reflection settings
-            var reflectionStr = metadata.GetValueOrDefault("reflection", "false");
+            var reflectionStr = metadata.GetValueOrDefault(AgentMetadataKeys.Reflection, "false");
             var reflection = reflectionStr.Equals("true", StringComparison.OrdinalIgnoreCase);
-            var reflectionPrompt = metadata.TryGetValue("reflectionprompt", out var rp) ? rp : null;
-            var reflectionModel = metadata.TryGetValue("reflectionmodel", out var rm) ? rm : null;
+            var reflectionPrompt = metadata.TryGetValue(AgentMetadataKeys.ReflectionPrompt, out var rp) ? rp : null;
+            var reflectionModel = metadata.TryGetValue(AgentMetadataKeys.ReflectionModel, out var rm) ? rm : null;
 
             if (!double.TryParse(temperatureStr, NumberStyles.Float, CultureInfo.InvariantCulture, out var temperature))
             {

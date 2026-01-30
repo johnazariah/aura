@@ -48,7 +48,7 @@ public sealed class AzureOpenAiProvider : ILlmProvider
     }
 
     /// <inheritdoc/>
-    public string ProviderId => "azureopenai";
+    public string ProviderId => LlmProviders.AzureOpenAI;
 
     /// <inheritdoc/>
     public bool SupportsStreaming => true;
@@ -120,7 +120,7 @@ public sealed class AzureOpenAiProvider : ILlmProvider
         catch (RequestFailedException ex) when (ex.Status == 401 || ex.Status == 403)
         {
             _logger.LogError(ex, "Azure OpenAI authentication failed");
-            throw LlmException.Unavailable("azureopenai");
+            throw LlmException.Unavailable(LlmProviders.AzureOpenAI);
         }
         catch (RequestFailedException ex) when (ex.Status == 404)
         {
@@ -251,7 +251,7 @@ public sealed class AzureOpenAiProvider : ILlmProvider
         catch (RequestFailedException ex) when (ex.Status == 401 || ex.Status == 403)
         {
             _logger.LogError(ex, "Azure OpenAI authentication failed");
-            throw LlmException.Unavailable("azureopenai");
+            throw LlmException.Unavailable(LlmProviders.AzureOpenAI);
         }
         catch (RequestFailedException ex)
         {
@@ -390,7 +390,7 @@ public sealed class AzureOpenAiProvider : ILlmProvider
         catch (RequestFailedException ex) when (ex.Status == 401 || ex.Status == 403)
         {
             _logger.LogError(ex, "Azure OpenAI authentication failed");
-            throw LlmException.Unavailable("azureopenai");
+            throw LlmException.Unavailable(LlmProviders.AzureOpenAI);
         }
         catch (RequestFailedException ex) when (ex.Status == 404)
         {

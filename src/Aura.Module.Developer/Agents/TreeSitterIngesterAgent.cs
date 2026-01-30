@@ -117,13 +117,10 @@ public sealed partial class TreeSitterIngesterAgent(ILogger<TreeSitterIngesterAg
         AgentContext context,
         CancellationToken cancellationToken = default)
     {
-        var filePath = context.Properties.GetValueOrDefault("filePath") as string
-            ?? throw new ArgumentException("filePath property is required");
-        var content = context.Properties.GetValueOrDefault("content") as string
-            ?? context.Prompt
-            ?? throw new ArgumentException("content property or prompt is required");
-
-        var extension = Path.GetExtension(filePath).TrimStart('.').ToLowerInvariant();
+        var ingesterContext = context.GetRequiredIngesterContext();
+        var filePath = ingesterContext.FilePath;
+        var content = ingesterContext.Content;
+        var extension = ingesterContext.Extension;
 
         if (!SupportedLanguages.TryGetValue(extension, out var config))
         {
@@ -145,9 +142,9 @@ public sealed partial class TreeSitterIngesterAgent(ILogger<TreeSitterIngesterAg
                 $"Extracted {chunks.Count} semantic chunks using TreeSitter ({config.LanguageName})",
                 new Dictionary<string, string>
                 {
-                    ["chunks"] = JsonSerializer.Serialize(chunks),
-                    ["language"] = config.LanguageName,
-                    ["parser"] = "treesitter",
+                    [Aura.Foundation.Agents.ArtifactKeys.Chunks] = JsonSerializer.Serialize(chunks),
+                    [Aura.Foundation.Agents.ArtifactKeys.Language] = config.LanguageName,
+                    [Aura.Foundation.Agents.ArtifactKeys.Parser] = "treesitter",
                 }));
         }
         catch (NotSupportedException)

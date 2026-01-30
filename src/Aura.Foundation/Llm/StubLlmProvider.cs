@@ -25,7 +25,7 @@ public sealed class StubLlmProvider(ILogger<StubLlmProvider> logger) : ILlmProvi
         ];
 
     /// <inheritdoc/>
-    public string ProviderId => "stub";
+    public string ProviderId => LlmProviders.Stub;
 
     /// <inheritdoc/>
     public Task<LlmResponse> GenerateAsync(

@@ -41,9 +41,11 @@ public sealed class FallbackIngesterAgent(ILogger<FallbackIngesterAgent>? logger
         AgentContext context,
         CancellationToken cancellationToken = default)
     {
-        var filePath = context.Properties.GetValueOrDefault("filePath") as string ?? "unknown";
-        var content = context.Properties.GetValueOrDefault("content") as string ?? context.Prompt ?? string.Empty;
-        var extension = Path.GetExtension(filePath).TrimStart('.');
+        var ingesterContext = context.GetIngesterContext()
+            ?? new IngesterContext("unknown", context.Prompt ?? string.Empty);
+        var filePath = ingesterContext.FilePath;
+        var content = ingesterContext.Content;
+        var extension = ingesterContext.Extension;
 
         _logger?.LogDebug("Using fallback ingester for {FilePath} (no specialized parser for .{Extension})",
             filePath, extension);
@@ -77,9 +79,9 @@ public sealed class FallbackIngesterAgent(ILogger<FallbackIngesterAgent>? logger
             Content: $"⚠️ No specialized parser for .{extension}. Indexed as plain text (1 chunk, {lineCount} lines).",
             Artifacts: new Dictionary<string, string>
             {
-                ["chunks"] = JsonSerializer.Serialize(chunks),
-                ["language"] = extension,
-                ["parser"] = "fallback",
+                [ArtifactKeys.Chunks] = JsonSerializer.Serialize(chunks),
+                [ArtifactKeys.Language] = extension,
+                [ArtifactKeys.Parser] = "fallback",
                 ["fallback"] = "true",
             });
 

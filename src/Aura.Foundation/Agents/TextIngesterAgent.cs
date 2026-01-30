@@ -42,9 +42,11 @@ public sealed partial class TextIngesterAgent(ILogger<TextIngesterAgent>? logger
         AgentContext context,
         CancellationToken cancellationToken = default)
     {
-        var filePath = context.Properties.GetValueOrDefault("filePath") as string ?? "unknown";
-        var content = context.Properties.GetValueOrDefault("content") as string ?? context.Prompt ?? string.Empty;
-        var extension = Path.GetExtension(filePath).TrimStart('.').ToLowerInvariant();
+        var ingesterContext = context.GetIngesterContext()
+            ?? new IngesterContext("unknown", context.Prompt ?? string.Empty);
+        var filePath = ingesterContext.FilePath;
+        var content = ingesterContext.Content;
+        var extension = ingesterContext.Extension;
 
         _logger?.LogDebug("Chunking text file: {FilePath}", filePath);
 
@@ -60,9 +62,9 @@ public sealed partial class TextIngesterAgent(ILogger<TextIngesterAgent>? logger
             Content: $"Created {chunks.Count} text chunks from {Path.GetFileName(filePath)}",
             Artifacts: new Dictionary<string, string>
             {
-                ["chunks"] = JsonSerializer.Serialize(chunks),
-                ["language"] = extension,
-                ["parser"] = "text",
+                [ArtifactKeys.Chunks] = JsonSerializer.Serialize(chunks),
+                [ArtifactKeys.Language] = extension,
+                [ArtifactKeys.Parser] = "text",
             });
 
         return Task.FromResult(output);

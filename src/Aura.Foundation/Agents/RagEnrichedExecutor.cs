@@ -135,12 +135,12 @@ public sealed class RagEnrichedExecutor(
     private static readonly HashSet<string> SafeToolIds =
     [
         // File exploration (read-only)
-        "file.read",
-        "file.list",
-        "file.exists",
+        Tools.BuiltInToolIds.FileRead,
+        Tools.BuiltInToolIds.FileList,
+        Tools.BuiltInToolIds.FileExists,
 
         // Search
-        "search.grep",
+        Tools.BuiltInToolIds.SearchGrep,
 
         // Code Graph exploration
         "graph.find_implementations",
@@ -156,7 +156,7 @@ public sealed class RagEnrichedExecutor(
         "roslyn.get_project_references",
 
         // Git status (read-only)
-        "git.status",
+        Tools.BuiltInToolIds.GitStatus,
     ];
 
     /// <inheritdoc/>

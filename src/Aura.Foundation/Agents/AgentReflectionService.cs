@@ -60,7 +60,7 @@ public sealed class AgentReflectionService : IAgentReflectionService
             var renderedPrompt = _promptRegistry.Render(promptName, new { task, response });
 
             // Get the provider
-            var providerName = agentMetadata.Provider ?? "ollama";
+            var providerName = agentMetadata.Provider ?? LlmProviders.Ollama;
             if (!_providerRegistry.TryGetProvider(providerName, out var provider) || provider is null)
             {
                 provider = _providerRegistry.GetDefaultProvider();

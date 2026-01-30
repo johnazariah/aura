@@ -4,7 +4,6 @@
 
 namespace Aura.Module.Developer.Agents;
 
-using System.Text.Json;
 using Aura.Foundation.Agents;
 using Aura.Foundation.Rag;
 using Microsoft.CodeAnalysis;
@@ -45,10 +44,9 @@ public sealed class CSharpIngesterAgent(ILogger<CSharpIngesterAgent> logger) : I
         AgentContext context,
         CancellationToken cancellationToken = default)
     {
-        var filePath = context.Properties.GetValueOrDefault("filePath") as string
-            ?? throw new ArgumentException("filePath is required");
-        var content = context.Properties.GetValueOrDefault("content") as string
-            ?? throw new ArgumentException("content is required");
+        var ingesterContext = context.GetRequiredIngesterContext();
+        var filePath = ingesterContext.FilePath;
+        var content = ingesterContext.Content;
 
         _logger.LogDebug("Parsing C# file with Roslyn: {FilePath}", filePath);
 
@@ -62,9 +60,9 @@ public sealed class CSharpIngesterAgent(ILogger<CSharpIngesterAgent> logger) : I
                 Content: $"Extracted {chunks.Count} semantic chunks from {Path.GetFileName(filePath)}",
                 Artifacts: new Dictionary<string, string>
                 {
-                    ["chunks"] = JsonSerializer.Serialize(chunks),
-                    ["language"] = "csharp",
-                    ["parser"] = "roslyn",
+                    [Aura.Foundation.Agents.ArtifactKeys.Chunks] = System.Text.Json.JsonSerializer.Serialize(chunks),
+                    [Aura.Foundation.Agents.ArtifactKeys.Language] = "csharp",
+                    [Aura.Foundation.Agents.ArtifactKeys.Parser] = "roslyn",
                 });
 
             return Task.FromResult(output);

@@ -23,7 +23,7 @@ public class StubLlmProviderTests
     public void ProviderId_ReturnsStub()
     {
         // Assert
-        _sut.ProviderId.Should().Be("stub");
+        _sut.ProviderId.Should().Be(LlmProviders.Stub);
     }
 
     [Fact]

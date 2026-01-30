@@ -36,7 +36,7 @@ public class OllamaProviderTests
         var sut = CreateProvider();
 
         // Assert
-        sut.ProviderId.Should().Be("ollama");
+        sut.ProviderId.Should().Be(LlmProviders.Ollama);
     }
 
     [Fact]

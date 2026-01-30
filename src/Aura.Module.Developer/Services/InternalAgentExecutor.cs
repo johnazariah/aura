@@ -252,7 +252,11 @@ public sealed class InternalAgentExecutor : IStepExecutor
     private List<ToolDefinition> GetToolsForAgent(IAgent agent)
     {
         // Get tools from agent metadata or use defaults
-        var toolNames = agent.Metadata.Tools?.ToList() ?? ["file.read", "file.write", "file.list"];
+        var toolNames = agent.Metadata.Tools?.ToList() ?? [
+            Aura.Foundation.Tools.BuiltInToolIds.FileRead,
+            Aura.Foundation.Tools.BuiltInToolIds.FileWrite,
+            Aura.Foundation.Tools.BuiltInToolIds.FileList,
+        ];
 
         return toolNames
             .Select(name => _toolRegistry.GetTool(name))

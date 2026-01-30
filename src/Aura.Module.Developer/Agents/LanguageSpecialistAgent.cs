@@ -160,7 +160,14 @@ public sealed class LanguageSpecialistAgent : IAgent
         var tools = new List<ToolDefinition>();
 
         // Always include core file tools
-        var fileTools = new[] { "file.read", "file.write", "file.modify", "file.list", "file.exists" };
+        var fileTools = new[]
+        {
+            Aura.Foundation.Tools.BuiltInToolIds.FileRead,
+            Aura.Foundation.Tools.BuiltInToolIds.FileWrite,
+            Aura.Foundation.Tools.BuiltInToolIds.FileModify,
+            Aura.Foundation.Tools.BuiltInToolIds.FileList,
+            Aura.Foundation.Tools.BuiltInToolIds.FileExists,
+        };
         foreach (var toolId in fileTools)
         {
             var tool = _toolRegistry.GetTool(toolId);

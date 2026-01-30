@@ -40,7 +40,7 @@ public sealed class OpenAiProvider : ILlmProvider
     }
 
     /// <inheritdoc/>
-    public string ProviderId => "openai";
+    public string ProviderId => LlmProviders.OpenAI;
 
     /// <inheritdoc/>
     public bool SupportsStreaming => true;
@@ -105,7 +105,7 @@ public sealed class OpenAiProvider : ILlmProvider
         catch (ClientResultException ex) when (ex.Status == 401 || ex.Status == 403)
         {
             _logger.LogError(ex, "OpenAI authentication failed");
-            throw LlmException.Unavailable("openai");
+            throw LlmException.Unavailable(LlmProviders.OpenAI);
         }
         catch (ClientResultException ex) when (ex.Status == 404)
         {
@@ -410,7 +410,7 @@ public sealed class OpenAiProvider : ILlmProvider
         catch (ClientResultException ex) when (ex.Status == 401 || ex.Status == 403)
         {
             _logger.LogError(ex, "OpenAI authentication failed");
-            throw LlmException.Unavailable("openai");
+            throw LlmException.Unavailable(LlmProviders.OpenAI);
         }
         catch (ClientResultException ex) when (ex.Status == 404)
         {

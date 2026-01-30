@@ -36,7 +36,7 @@ public sealed class OllamaProvider(
     };
 
     /// <inheritdoc/>
-    public string ProviderId => "ollama";
+    public string ProviderId => LlmProviders.Ollama;
 
     /// <inheritdoc/>
     public bool SupportsStreaming => true;
@@ -123,7 +123,7 @@ public sealed class OllamaProvider(
         catch (HttpRequestException ex)
         {
             _logger.LogError(ex, "Ollama connection failed");
-            throw LlmException.Unavailable("ollama");
+            throw LlmException.Unavailable(LlmProviders.Ollama);
         }
         catch (Exception ex)
         {
@@ -189,7 +189,7 @@ public sealed class OllamaProvider(
         catch (HttpRequestException ex)
         {
             _logger.LogError(ex, "Ollama connection failed");
-            throw LlmException.Unavailable("ollama");
+            throw LlmException.Unavailable(LlmProviders.Ollama);
         }
         catch (Exception ex)
         {
@@ -280,7 +280,7 @@ public sealed class OllamaProvider(
         catch (HttpRequestException ex)
         {
             _logger.LogError(ex, "Ollama connection failed");
-            throw LlmException.Unavailable("ollama");
+            throw LlmException.Unavailable(LlmProviders.Ollama);
         }
         catch (Exception ex)
         {
@@ -514,7 +514,7 @@ public sealed class OllamaProvider(
         catch (HttpRequestException ex)
         {
             _logger.LogError(ex, "Ollama connection failed");
-            throw LlmException.Unavailable("ollama");
+            throw LlmException.Unavailable(LlmProviders.Ollama);
         }
         catch (Exception ex)
         {
@@ -565,7 +565,7 @@ public sealed class OllamaProvider(
         catch (HttpRequestException ex)
         {
             _logger.LogError(ex, "Ollama connection failed for embeddings");
-            throw LlmException.Unavailable("ollama");
+            throw LlmException.Unavailable(LlmProviders.Ollama);
         }
         catch (Exception ex)
         {
@@ -628,7 +628,7 @@ public sealed class OllamaProvider(
         catch (HttpRequestException ex)
         {
             _logger.LogError(ex, "Ollama connection failed for batch embeddings");
-            throw LlmException.Unavailable("ollama");
+            throw LlmException.Unavailable(LlmProviders.Ollama);
         }
         catch (Exception ex)
         {

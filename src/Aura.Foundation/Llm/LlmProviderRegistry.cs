@@ -67,7 +67,7 @@ public sealed class LlmOptions
     /// <summary>
     /// Gets or sets the default provider ID.
     /// </summary>
-    public string DefaultProvider { get; set; } = "azureopenai";
+    public string DefaultProvider { get; set; } = LlmProviders.AzureOpenAI;
 
     /// <summary>
     /// Gets or sets the default model. Null means use provider's configured default.

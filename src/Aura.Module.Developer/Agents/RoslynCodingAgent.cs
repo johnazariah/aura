@@ -59,11 +59,11 @@ public sealed class RoslynCodingAgent(
             "aura.refactor",     // Rename, change signature, extract interface, safe delete
             "aura.validate",     // Get compilation/test commands
             // File operations (for non-C# files only)
-            "file.read",
-            "file.modify",
-            "file.write",
-            "file.list",
-            "file.exists",
+            Aura.Foundation.Tools.BuiltInToolIds.FileRead,
+            Aura.Foundation.Tools.BuiltInToolIds.FileModify,
+            Aura.Foundation.Tools.BuiltInToolIds.FileWrite,
+            Aura.Foundation.Tools.BuiltInToolIds.FileList,
+            Aura.Foundation.Tools.BuiltInToolIds.FileExists,
             // Roslyn-powered tools
             "roslyn.validate_compilation",
             "roslyn.list_projects",
@@ -75,8 +75,8 @@ public sealed class RoslynCodingAgent(
             // Code graph tools
             "graph.get_type_members",
             // Git operations
-            "git.commit",
-            "git.status",
+            Aura.Foundation.Tools.BuiltInToolIds.GitCommit,
+            Aura.Foundation.Tools.BuiltInToolIds.GitStatus,
             // Test tools
             "dotnet.run_tests",
         ],
