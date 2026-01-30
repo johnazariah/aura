@@ -122,6 +122,12 @@ public record WorkspaceIndexingOptions(
     IReadOnlyList<string>? IncludePatterns = null,
     IReadOnlyList<string>? ExcludePatterns = null);
 
+/// <summary>Request to search within a workspace.</summary>
+public record WorkspaceSearchRequest(
+    string Query,
+    int? TopK = null,
+    double? MinScore = null);
+
 // =============================================================================
 // Developer Module Requests
 // =============================================================================
