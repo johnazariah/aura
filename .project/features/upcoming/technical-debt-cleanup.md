@@ -124,14 +124,8 @@ extension/src/
 
 ## 5. Dead Code Removal
 
+**Status:** ✅ Complete (2026-01-29)
 **Effort:** 1 day | **Priority:** Low
-
-### Guardian System
-
-Partially implemented, not actively used:
-
-- [ ] Complete implementation, or
-- [ ] Remove infrastructure: `GuardianExecutor`, `GuardianScheduler`, YAML files
 
 ### ✅ StoryTask Entity (Complete)
 
@@ -140,6 +134,17 @@ Already deleted as part of Unified Wave Orchestration (2026-01-29).
 ### ✅ Dispatch Target Abstraction (Complete)
 
 Already deleted - using Copilot CLI only (2026-01-29).
+
+### Guardian System (Defer to post-1.0)
+
+Infrastructure is complete and working (~800 lines, well-tested):
+- `GuardianScheduler` runs cron-based checks
+- `GuardianExecutor` creates Stories from violations
+- YAML definitions for CI, coverage, docs monitoring
+- API endpoints at `/api/guardians`
+
+**Decision:** Keep. Just needs real detection implementations (GitHub webhooks, coverage parsing).
+Not hurting anything and will be useful for repository health automation.
 
 ---
 
