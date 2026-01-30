@@ -83,6 +83,11 @@ builder.Services.AddDbContext<AuraDbContext>(options =>
     options.UseNpgsql(connectionString, o => o.UseVector())
            .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning)));
 
+// Add DbContextFactory for singleton services that need database access
+builder.Services.AddDbContextFactory<AuraDbContext>(options =>
+    options.UseNpgsql(connectionString, o => o.UseVector())
+           .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning)));
+
 // Add Aura Foundation services
 builder.Services.AddAuraFoundation(builder.Configuration);
 
