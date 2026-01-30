@@ -150,28 +150,22 @@ Not hurting anything and will be useful for repository health automation.
 
 ## 6. API Inconsistencies
 
+**Status:** ✅ Complete (2026-01-30)
 **Effort:** 2 days | **Priority:** Medium
 
-### Path Parameter vs Query Parameter
+Completed as part of [API Harmonization](../completed/api-review-harmonization.md).
 
-Some endpoints use path params, some use query:
+### Changes Made
 
-```
-DELETE /api/workspace?path=...     ← query
-DELETE /api/code-graph/{path}      ← path (but URL-encoded)
-GET /api/rag/stats                 ← no path needed
-```
-
-**Fix:** Standardize on path params with proper encoding.
-
-### Overlapping Endpoints
-
-| Endpoint | Overlaps With |
-|----------|---------------|
-| `DELETE /api/rag` | `DELETE /api/workspace?path=` |
-| `POST /api/rag/index` | `POST /api/workspace/onboard` |
-
-**Fix:** See [API Harmonization](upcoming/api-review-harmonization.md) for consolidation plan.
+1. **Workspace-scoped endpoints**: All graph and index operations now use `/api/workspaces/{id}/...` hierarchy
+2. **Removed old endpoints**: Deleted `CodeGraphEndpoints.cs`, simplified `IndexEndpoints.cs`
+3. **Consistent path handling**: All workspace endpoints accept ID or URL-encoded path
+4. **New endpoint structure**:
+   - `GET/POST/DELETE /api/workspaces/{id}/index` - Index management
+   - `GET/DELETE /api/workspaces/{id}/graph` - Graph management
+   - `POST /api/workspaces/{id}/search` - Workspace-scoped search
+5. **Extension updated**: All API calls now use new endpoints
+6. **API reference doc**: Created `docs/mcp-tools/api-reference.md`
 
 ---
 

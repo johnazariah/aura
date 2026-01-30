@@ -84,6 +84,7 @@ features/
 | [Coding Agent Validation](completed/coding-agent-v2-mcp-validation.md) | code.validate tool + enforced validation loops | 2026-01-28 |
 | [Orchestrator Parallel Dispatch](completed/orchestrator-parallel-dispatch.md) | Parallel task dispatch to Copilot CLI agents | 2026-01-28 |
 | [Unified Wave Orchestration](completed/unified-wave-orchestration.md) | Simplify story execution: one entity, one status, one dispatch path | 2026-01-29 |
+| [API Harmonization](completed/api-review-harmonization.md) | Unified workspace-scoped REST API | 2026-01-30 |
 
 ## Upcoming Features
 
