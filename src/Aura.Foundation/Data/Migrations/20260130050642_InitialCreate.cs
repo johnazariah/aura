@@ -82,6 +82,7 @@ namespace Aura.Foundation.Data.Migrations
                     content = table.Column<string>(type: "text", nullable: false),
                     content_type = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
                     source_path = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true),
+                    workspace_id = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: true),
                     embedding = table.Column<Vector>(type: "vector(768)", nullable: true),
                     metadata = table.Column<string>(type: "jsonb", nullable: true),
                     created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
@@ -341,6 +342,11 @@ namespace Aura.Foundation.Data.Migrations
                 table: "rag_chunks",
                 columns: new[] { "content_id", "chunk_index" },
                 unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_rag_chunks_workspace_id",
+                table: "rag_chunks",
+                column: "workspace_id");
 
             migrationBuilder.CreateIndex(
                 name: "IX_workspaces_canonical_path",

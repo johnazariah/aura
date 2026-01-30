@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Aura.Module.Developer.Data.Migrations
 {
     [DbContext(typeof(DeveloperDbContext))]
-    [Migration("20260129221552_InitialCreate")]
+    [Migration("20260130050710_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />

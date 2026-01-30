@@ -13,7 +13,7 @@ using Pgvector;
 namespace Aura.Foundation.Data.Migrations
 {
     [DbContext(typeof(AuraDbContext))]
-    [Migration("20260129221305_InitialCreate")]
+    [Migration("20260130050642_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -464,9 +464,16 @@ namespace Aura.Foundation.Data.Migrations
                         .HasColumnType("character varying(1000)")
                         .HasColumnName("source_path");
 
+                    b.Property<string>("WorkspaceId")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("workspace_id");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ContentId");
+
+                    b.HasIndex("WorkspaceId");
 
                     b.HasIndex("ContentId", "ChunkIndex")
                         .IsUnique();
