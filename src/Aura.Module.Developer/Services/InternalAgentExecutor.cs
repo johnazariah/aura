@@ -95,7 +95,7 @@ public sealed class InternalAgentExecutor : IStepExecutor
         try
         {
             // Build the prompt
-            var prompt = BuildPrompt(step, priorSteps);
+            var prompt = BuildPrompt(step, story, priorSteps);
 
             // Get tools for the agent
             var tools = GetToolsForAgent(agent);
@@ -219,7 +219,7 @@ public sealed class InternalAgentExecutor : IStepExecutor
             failed);
     }
 
-    private string BuildPrompt(StoryStep step, IReadOnlyList<StoryStep>? priorSteps)
+    private string BuildPrompt(StoryStep step, Story story, IReadOnlyList<StoryStep>? priorSteps)
     {
         try
         {
@@ -228,10 +228,32 @@ public sealed class InternalAgentExecutor : IStepExecutor
                 .Select(s => new { title = s.Name, output = s.Output })
                 .ToList();
 
+            // Extract analysis summary from analyzed context JSON
+            string? analysisText = null;
+            if (!string.IsNullOrEmpty(story.AnalyzedContext))
+            {
+                try
+                {
+                    using var doc = System.Text.Json.JsonDocument.Parse(story.AnalyzedContext);
+                    if (doc.RootElement.TryGetProperty("analysis", out var analysisProp))
+                    {
+                        analysisText = analysisProp.GetString();
+                    }
+                }
+                catch
+                {
+                    // If JSON parsing fails, use the raw context
+                    analysisText = story.AnalyzedContext;
+                }
+            }
+
             return _promptRegistry.Render("step-execute", new
             {
-                title = step.Name,
-                description = step.Description ?? step.Name,
+                stepName = step.Name,
+                stepDescription = step.Description ?? step.Name,
+                issueTitle = story.Title,
+                analysis = analysisText,
+                revisionFeedback = step.NeedsRework ? step.PreviousOutput : null,
                 dependencyOutputs = dependencyOutputs?.Count > 0 ? dependencyOutputs : null,
             });
         }
