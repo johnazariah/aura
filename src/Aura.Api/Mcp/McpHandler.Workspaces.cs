@@ -5,27 +5,8 @@ namespace Aura.Api.Mcp;
 public sealed partial class McpHandler
 {
     // =========================================================================
-    // aura_workspaces - Workspace registry management for multi-workspace queries
+    // Workspace registry operations (used by aura_workspace tool)
     // =========================================================================
-
-    /// <summary>
-    /// aura_workspaces - Manage the workspace registry.
-    /// Supports: list, add, remove, set_default.
-    /// </summary>
-    private Task<object> WorkspacesAsync(JsonElement? args, CancellationToken ct)
-    {
-        var operation = args?.GetProperty("operation").GetString()
-            ?? throw new ArgumentException("operation is required");
-
-        return operation switch
-        {
-            "list" => Task.FromResult(ListWorkspacesOperation()),
-            "add" => Task.FromResult(AddWorkspaceOperation(args)),
-            "remove" => Task.FromResult(RemoveWorkspaceOperation(args)),
-            "set_default" => Task.FromResult(SetDefaultWorkspaceOperation(args)),
-            _ => throw new ArgumentException($"Unknown workspaces operation: {operation}")
-        };
-    }
 
     private object ListWorkspacesOperation()
     {

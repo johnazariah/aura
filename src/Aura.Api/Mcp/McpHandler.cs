@@ -38,7 +38,7 @@ public sealed partial class McpHandler
 
     private readonly IRagService _ragService;
     private readonly ICodeGraphService _graphService;
-    private readonly IStoryService _workflowService;
+    private readonly IStoryService _storyService;
     private readonly IGitHubService _gitHubService;
     private readonly IRoslynWorkspaceService _roslynService;
     private readonly IRoslynRefactoringService _refactoringService;
@@ -76,7 +76,7 @@ public sealed partial class McpHandler
     {
         _ragService = ragService;
         _graphService = graphService;
-        _workflowService = workflowService;
+        _storyService = workflowService;
         _gitHubService = gitHubService;
         _roslynService = roslynService;
         _refactoringService = refactoringService;
@@ -93,23 +93,19 @@ public sealed partial class McpHandler
         // Phase 7: Consolidated meta-tools (28 tools → 11 tools)
         _tools = new Dictionary<string, Func<JsonElement?, CancellationToken, Task<object>>>
         {
-            ["aura_search"] = SearchAsync,
-            ["aura_navigate"] = NavigateAsync,
-            ["aura_inspect"] = InspectAsync,
-            ["aura_refactor"] = RefactorAsync,
+            ["aura_architect"] = ArchitectAsync,
+            ["aura_docs"] = DocsAsync,
+            ["aura_edit"] = EditAsync,
             ["aura_generate"] = GenerateAsync,
+            ["aura_inspect"] = InspectAsync,
+            ["aura_navigate"] = NavigateAsync,
+            ["aura_pattern"] = PatternAsync,
+            ["aura_refactor"] = RefactorAsync,
+            ["aura_search"] = SearchAsync,
+            ["aura_tree"] = TreeAsync,
             ["aura_validate"] = ValidateAsync,
             ["aura_workflow"] = WorkflowAsync,
-            ["aura_architect"] = ArchitectAsync,
             ["aura_workspace"] = WorkspaceAsync,
-            ["aura_pattern"] = PatternAsync,
-            ["aura_edit"] = EditAsync,
-            ["aura_tree"] = TreeAsync,
-            ["aura_get_node"] = GetNodeAsync,
-            ["aura_docs"] = DocsAsync,
-            ["aura_docs_list"] = DocsListAsync,
-            ["aura_docs_get"] = DocsGetAsync,
-            ["aura_workspaces"] = WorkspacesAsync,
         };
     }
 
@@ -590,12 +586,12 @@ public sealed partial class McpHandler
             },
 
             // =================================================================
-            // aura_workspace - Workspace and worktree management
+            // aura_workspace - Unified workspace management
             // =================================================================
             new McpToolDefinition
             {
                 Name = "aura_workspace",
-                Description = "Manage workspace state: detect git worktrees, invalidate cached workspaces, check status. (Read/Write)",
+                Description = "Manage workspaces: registry CRUD, worktree detection, cache invalidation. (Read/Write)",
                 InputSchema = new
                 {
                     type = "object",
@@ -605,11 +601,19 @@ public sealed partial class McpHandler
                         {
                             type = "string",
                             description = "Workspace operation type",
-                            @enum = new[] { "detect_worktree", "invalidate_cache", "status" }
+                            @enum = new[] { "list", "add", "remove", "set_default", "detect_worktree", "invalidate_cache", "status" }
                         },
-                        path = new { type = "string", description = "Path to workspace, solution, or worktree" }
+                        path = new { type = "string", description = "Workspace path (for add, detect_worktree, invalidate_cache, status)" },
+                        id = new { type = "string", description = "Workspace ID (for remove, set_default)" },
+                        alias = new { type = "string", description = "Short alias (for add)" },
+                        tags = new
+                        {
+                            type = "array",
+                            items = new { type = "string" },
+                            description = "Tags for categorization (for add)"
+                        }
                     },
-                    required = new[] { "operation", "path" }
+                    required = new[] { "operation" }
                 }
             },
 
@@ -673,47 +677,35 @@ public sealed partial class McpHandler
             new McpToolDefinition
             {
                 Name = "aura_tree",
-                Description = "Get a hierarchical tree view of the codebase structure. Returns files, types, and members organized in a navigable tree. Use maxDepth to control detail level. (Read)",
+                Description = "Explore codebase hierarchically: list files/types/members, or get full source for a node. (Read)",
                 InputSchema = new
                 {
                     type = "object",
                     properties = new
                     {
+                        operation = new
+                        {
+                            type = "string",
+                            description = "Tree operation: 'explore' for hierarchical view, 'get_node' for source retrieval",
+                            @enum = new[] { "explore", "get_node" }
+                        },
                         workspacePath = new { type = "string", description = "Path to the workspace root" },
-                        pattern = new { type = "string", description = "Filter pattern for file paths or symbol names (default: '.' for all)" },
-                        maxDepth = new { type = "integer", description = "Maximum tree depth: 1=files, 2=files+types, 3=files+types+members (default: 2)" },
+                        pattern = new { type = "string", description = "Filter pattern for file paths or symbol names (for explore, default: '.')" },
+                        maxDepth = new { type = "integer", description = "Maximum tree depth: 1=files, 2=+types, 3=+members (for explore, default: 2)" },
                         detail = new
                         {
                             type = "string",
-                            description = "Level of detail in output",
+                            description = "Level of detail in output (for explore)",
                             @enum = new[] { "min", "max" }
-                        }
+                        },
+                        nodeId = new { type = "string", description = "Node ID from explore results (for get_node)" }
                     },
                     required = new[] { "workspacePath" }
                 }
             },
 
             // =================================================================
-            // aura_get_node - Retrieve full content for a tree node
-            // =================================================================
-            new McpToolDefinition
-            {
-                Name = "aura_get_node",
-                Description = "Retrieve complete source code for a node found via aura_tree. Use the node_id from aura_tree results. (Read)",
-                InputSchema = new
-                {
-                    type = "object",
-                    properties = new
-                    {
-                        workspacePath = new { type = "string", description = "Path to the workspace root" },
-                        nodeId = new { type = "string", description = "Node ID from aura_tree (e.g., 'class:src/Services/OrderService.cs:OrderService')" }
-                    },
-                    required = new[] { "workspacePath", "nodeId" }
-                }
-            },
-
-            // =================================================================
-            // aura_docs - Search documentation
+            // aura_docs - Documentation operations
             // =================================================================
             new McpToolDefinition
             {
@@ -724,41 +716,23 @@ public sealed partial class McpHandler
                     type = "object",
                     properties = new
                     {
-                        query = new { type = "string", description = "The documentation search query (concept, term, or question)" }
-                    },
-                    required = new[] { "query" }
-                }
-            },
-
-            // =================================================================
-            // aura_workspaces - Workspace registry management
-            // =================================================================
-            new McpToolDefinition
-            {
-                Name = "aura_workspaces",
-                Description = "List, add, or remove workspaces from the multi-workspace registry. Enables cross-workspace search. (CRUD)",
-                InputSchema = new
-                {
-                    type = "object",
-                    properties = new
-                    {
                         operation = new
                         {
                             type = "string",
-                            description = "Registry operation type",
-                            @enum = new[] { "list", "add", "remove", "set_default" }
+                            description = "Documentation operation type",
+                            @enum = new[] { "search", "list", "get" }
                         },
-                        path = new { type = "string", description = "Workspace path (for add)" },
-                        id = new { type = "string", description = "Workspace ID (for remove/set_default)" },
-                        alias = new { type = "string", description = "Short alias (for add)" },
+                        query = new { type = "string", description = "The documentation search query (for search operation)" },
+                        id = new { type = "string", description = "Document ID to retrieve (for get operation)" },
+                        category = new { type = "string", description = "Filter by category (for list operation)" },
                         tags = new
                         {
                             type = "array",
                             items = new { type = "string" },
-                            description = "Tags for categorization (for add)"
+                            description = "Filter by tags (for list operation)"
                         }
                     },
-                    required = new[] { "operation" }
+                    required = new[] { "query" }
                 }
             },
         };
@@ -850,23 +824,33 @@ public sealed partial class McpHandler
     }
 
     /// <summary>
-    /// aura_workspace - Workspace and worktree management.
-    /// Supports: detect_worktree, invalidate_cache, status.
+    /// aura_workspace - Unified workspace management.
+    /// Supports: list, add, remove, set_default, detect_worktree, invalidate_cache, status.
     /// </summary>
     private Task<object> WorkspaceAsync(JsonElement? args, CancellationToken ct)
     {
         var operation = args?.GetProperty("operation").GetString()
             ?? throw new ArgumentException("operation is required");
-        var path = args?.GetProperty("path").GetString()
-            ?? throw new ArgumentException("path is required");
 
         return operation switch
         {
-            "detect_worktree" => Task.FromResult(DetectWorktreeOperation(path)),
-            "invalidate_cache" => Task.FromResult(InvalidateCacheOperation(path)),
-            "status" => Task.FromResult(WorkspaceStatusOperation(path)),
+            // Registry operations (from former aura_workspaces)
+            "list" => Task.FromResult(ListWorkspacesOperation()),
+            "add" => Task.FromResult(AddWorkspaceOperation(args)),
+            "remove" => Task.FromResult(RemoveWorkspaceOperation(args)),
+            "set_default" => Task.FromResult(SetDefaultWorkspaceOperation(args)),
+            // Worktree operations (require path)
+            "detect_worktree" => Task.FromResult(DetectWorktreeOperation(GetRequiredPath(args))),
+            "invalidate_cache" => Task.FromResult(InvalidateCacheOperation(GetRequiredPath(args))),
+            "status" => Task.FromResult(WorkspaceStatusOperation(GetRequiredPath(args))),
             _ => throw new ArgumentException($"Unknown workspace operation: {operation}")
         };
+    }
+
+    private static string GetRequiredPath(JsonElement? args)
+    {
+        return args?.GetProperty("path").GetString()
+            ?? throw new ArgumentException("path is required for this operation");
     }
 
     private object DetectWorktreeOperation(string path)
@@ -1004,7 +988,7 @@ public sealed partial class McpHandler
     }
 
     // =========================================================================
-    // aura_tree - Hierarchical code exploration
+    // aura_tree - Hierarchical code exploration with get_node
     // =========================================================================
 
     private async Task<object> TreeAsync(JsonElement? args, CancellationToken ct)
@@ -1012,12 +996,26 @@ public sealed partial class McpHandler
         var workspacePath = args?.GetProperty("workspacePath").GetString()
             ?? throw new ArgumentException("workspacePath is required");
 
+        var operation = args?.TryGetProperty("operation", out var opEl) == true
+            ? opEl.GetString() ?? "explore"
+            : "explore";
+
+        return operation switch
+        {
+            "explore" => await TreeExploreAsync(args, workspacePath, ct),
+            "get_node" => await TreeGetNodeAsync(args, workspacePath, ct),
+            _ => throw new ArgumentException($"Unknown tree operation: {operation}")
+        };
+    }
+
+    private async Task<object> TreeExploreAsync(JsonElement? args, string workspacePath, CancellationToken ct)
+    {
         var pattern = args?.TryGetProperty("pattern", out var p) == true ? p.GetString() : ".";
         var maxDepth = args?.TryGetProperty("maxDepth", out var d) == true ? d.GetInt32() : 2;
         var detailStr = args?.TryGetProperty("detail", out var det) == true ? det.GetString() : "min";
         var detail = detailStr == "max" ? TreeDetail.Max : TreeDetail.Min;
 
-        _logger.LogDebug("aura_tree: workspacePath={Path}, pattern={Pattern}, maxDepth={MaxDepth}, detail={Detail}",
+        _logger.LogDebug("aura_tree(explore): workspacePath={Path}, pattern={Pattern}, maxDepth={MaxDepth}, detail={Detail}",
             workspacePath, pattern, maxDepth, detailStr);
 
         var chunks = await _ragService.GetChunksForTreeAsync(workspacePath, pattern, ct);
@@ -1033,15 +1031,12 @@ public sealed partial class McpHandler
         };
     }
 
-    private async Task<object> GetNodeAsync(JsonElement? args, CancellationToken ct)
+    private async Task<object> TreeGetNodeAsync(JsonElement? args, string workspacePath, CancellationToken ct)
     {
-        var workspacePath = args?.GetProperty("workspacePath").GetString()
-            ?? throw new ArgumentException("workspacePath is required");
-
         var nodeId = args?.GetProperty("nodeId").GetString()
-            ?? throw new ArgumentException("nodeId is required");
+            ?? throw new ArgumentException("nodeId is required for get_node operation");
 
-        _logger.LogDebug("aura_get_node: workspacePath={Path}, nodeId={NodeId}", workspacePath, nodeId);
+        _logger.LogDebug("aura_tree(get_node): workspacePath={Path}, nodeId={NodeId}", workspacePath, nodeId);
 
         var chunks = await _ragService.GetChunksForTreeAsync(workspacePath, null, ct);
 
@@ -1071,22 +1066,34 @@ public sealed partial class McpHandler
     }
 
     /// <summary>
-    /// aura_docs - Perform semantic search over Aura documentation.
+    /// aura_docs - Documentation operations: search, list, get.
     /// </summary>
     private async Task<object> DocsAsync(JsonElement? args, CancellationToken ct)
     {
-        var query = args?.GetProperty("query").GetString()
-            ?? throw new ArgumentException("query is required");
+        var operation = args?.TryGetProperty("operation", out var opEl) == true
+            ? opEl.GetString() ?? "search"
+            : "search";
 
-        _logger.LogDebug("aura_docs: query={Query}", query);
+        return operation switch
+        {
+            "search" => await DocsSearchAsync(args, ct),
+            "list" => DocsListInternal(args),
+            "get" => DocsGetInternal(args),
+            _ => throw new ArgumentException($"Unknown docs operation: {operation}")
+        };
+    }
+
+    private async Task<object> DocsSearchAsync(JsonElement? args, CancellationToken ct)
+    {
+        var query = args?.GetProperty("query").GetString()
+            ?? throw new ArgumentException("query is required for search operation");
+
+        _logger.LogDebug("aura_docs(search): query={Query}", query);
 
         return await _auraDocsTool.SearchDocumentationAsync(query, ct);
     }
 
-    /// <summary>
-    /// aura_docs_list - List documents with optional filtering by category and tags.
-    /// </summary>
-    private Task<object> DocsListAsync(JsonElement? args, CancellationToken ct)
+    private object DocsListInternal(JsonElement? args)
     {
         string? category = null;
         IReadOnlyList<string>? tags = null;
@@ -1107,11 +1114,11 @@ public sealed partial class McpHandler
             }
         }
 
-        _logger.LogDebug("aura_docs_list: category={Category}, tags={Tags}", category, tags);
+        _logger.LogDebug("aura_docs(list): category={Category}, tags={Tags}", category, tags);
 
         var docs = _docsService.ListDocuments(category, tags);
 
-        return Task.FromResult<object>(new
+        return new
         {
             count = docs.Count,
             docs = docs.Select(d => new
@@ -1122,18 +1129,15 @@ public sealed partial class McpHandler
                 category = d.Category,
                 tags = d.Tags
             })
-        });
+        };
     }
 
-    /// <summary>
-    /// aura_docs_get - Retrieve the full content of a document by its identifier.
-    /// </summary>
-    private Task<object> DocsGetAsync(JsonElement? args, CancellationToken ct)
+    private object DocsGetInternal(JsonElement? args)
     {
         var id = args?.GetProperty("id").GetString()
-            ?? throw new ArgumentException("id is required");
+            ?? throw new ArgumentException("id is required for get operation");
 
-        _logger.LogDebug("aura_docs_get: id={Id}", id);
+        _logger.LogDebug("aura_docs(get): id={Id}", id);
 
         var doc = _docsService.GetDocument(id);
 
@@ -1142,7 +1146,7 @@ public sealed partial class McpHandler
             throw new KeyNotFoundException($"Document with ID '{id}' not found");
         }
 
-        return Task.FromResult<object>(new
+        return new
         {
             id = doc.Id,
             title = doc.Title,
@@ -1150,7 +1154,7 @@ public sealed partial class McpHandler
             tags = doc.Tags,
             content = doc.Content,
             last_updated = doc.LastUpdated
-        });
+        };
     }
 
     private static object SerializeTreeNode(TreeNode node)
