@@ -171,4 +171,38 @@ public sealed partial class McpHandler
             description = result.Description
         };
     }
+
+    private async Task<object> TypeScriptFindReferencesAsync(JsonElement? args, CancellationToken ct)
+    {
+        var projectPath = args?.GetProperty("projectPath").GetString() ?? "";
+        var filePath = args?.GetProperty("filePath").GetString() ?? "";
+        var offset = args?.GetProperty("offset").GetInt32() ?? 0;
+        var result = await _typeScriptRefactoringService.FindReferencesAsync(new TypeScriptFindReferencesRequest { ProjectPath = projectPath, FilePath = filePath, Offset = offset }, ct);
+        return new
+        {
+            success = result.Success,
+            error = result.Error,
+            count = result.Count,
+            references = result.References?.Select(r => new { filePath = r.File, line = r.Line, column = r.Column, text = r.Text })
+        };
+    }
+
+    private async Task<object> TypeScriptFindDefinitionAsync(JsonElement? args, CancellationToken ct)
+    {
+        var projectPath = args?.GetProperty("projectPath").GetString() ?? "";
+        var filePath = args?.GetProperty("filePath").GetString() ?? "";
+        var offset = args?.GetProperty("offset").GetInt32() ?? 0;
+        var result = await _typeScriptRefactoringService.FindDefinitionAsync(new TypeScriptFindDefinitionRequest { ProjectPath = projectPath, FilePath = filePath, Offset = offset }, ct);
+        return new
+        {
+            success = result.Success,
+            error = result.Error,
+            found = result.Found,
+            filePath = result.FilePath,
+            line = result.Line,
+            column = result.Column,
+            offset = result.Offset,
+            message = result.Message
+        };
+    }
 }
