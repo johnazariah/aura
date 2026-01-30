@@ -108,32 +108,17 @@ extension/src/
 
 ## 4. Database Schema Cleanup
 
+**Status:** ✅ Complete (2026-01-29)
 **Effort:** 1 day | **Priority:** High (do before production)
 
-### Column Naming
+### Completed
 
-Mix of PascalCase and snake_case:
-
-| Current | Should Be |
-|---------|-----------|
-| `CurrentWave` | `current_wave` |
-| `GitBranch` | `git_branch` |
-| `OrchestratorStatus` | (delete) |
-
-### Migration Cleanup
-
-Since we have zero production users:
-
-1. Delete all existing migrations
-2. Create single clean `InitialCreate` migration per context
-3. Document the final schema
-
-### Table Naming
-
-| Current | Should Be |
-|---------|-----------|
-| `workflows` | `stories` |
-| `workflow_steps` | `story_steps` |
+- [x] Tables renamed: `workflows` → `stories`, `workflow_steps` → `story_steps`
+- [x] Column naming standardized to snake_case (`current_wave`, `git_branch`, etc.)
+- [x] Deleted `OrchestratorStatus` column
+- [x] Squashed migrations into single `InitialCreate` per context
+  - `Aura.Foundation/Data/Migrations/20260129221305_InitialCreate.cs`
+  - `Aura.Module.Developer/Data/Migrations/20260129221552_InitialCreate.cs`
 
 ---
 
