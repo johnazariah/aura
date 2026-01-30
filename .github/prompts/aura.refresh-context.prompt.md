@@ -55,4 +55,15 @@ curl http://localhost:5300/health
 
 ---
 
+## 7. Current Phase: Agent Quality Testing
+
+**We are in an intensive testing phase.** Stories will be run through Aura to generate code.
+
+- ❌ **Do NOT fix generated code directly**
+- ✅ **Fix Aura itself** - improve agents, prompts, tools, patterns
+
+When agents produce bad code, fix the root cause in Aura so re-running produces correct results.
+
+---
+
 After reading STATUS.md, confirm your understanding with the user before proceeding.

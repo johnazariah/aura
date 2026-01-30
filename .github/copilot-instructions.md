@@ -13,6 +13,24 @@
 
 When encountering issues, fix them properly in the product—don't apply quick workarounds that only help the current developer.
 
+## Current Phase: Agent Quality Testing
+
+**We are in an intensive testing phase.** Stories will be run through Aura to generate code. Your job is:
+
+- ❌ **NOT** to fix the generated code directly
+- ✅ **FIX AURA ITSELF** - improve agents, prompts, tools, and patterns so future code generation is correct
+
+When agents produce incorrect, inefficient, or useless code:
+1. Identify the root cause (wrong prompt? missing context? bad tool output?)
+2. Fix the underlying Aura component (agent definition, prompt template, MCP tool, pattern)
+3. The goal is that re-running the same story produces correct code without manual intervention
+
+This means changes to:
+- `agents/*.md` - Agent behavior and instructions
+- `prompts/*.prompt` - Handlebars templates
+- `patterns/*.md` - Step-by-step operational patterns
+- `src/Aura.*/` - Tool implementations, services, APIs
+
 ## Core Principles
 
 1. **NEVER implement without a spec** - All changes require documented requirements and context
