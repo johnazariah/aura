@@ -4,6 +4,8 @@
 
 namespace Aura.Foundation.Agents;
 
+using Aura.Foundation.Llm;
+
 /// <summary>
 /// Parsed agent definition from a markdown file.
 /// </summary>
@@ -42,7 +44,7 @@ public sealed record AgentDefinition(
     /// <summary>
     /// Gets the default provider.
     /// </summary>
-    public const string DefaultProvider = "ollama";
+    public const string DefaultProvider = LlmProviders.Ollama;
 
     /// <summary>
     /// Gets the default model. Null means use provider's configured default.

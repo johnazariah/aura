@@ -78,7 +78,7 @@ builder.Host.UseSerilog((context, services, configuration) =>
 builder.AddServiceDefaults();
 
 // Add PostgreSQL with EF Core
-var connectionString = builder.Configuration.GetConnectionString("auradb");
+var connectionString = builder.Configuration.GetConnectionString(ResourceNames.AuraDb);
 builder.Services.AddDbContext<AuraDbContext>(options =>
     options.UseNpgsql(connectionString, o => o.UseVector())
            .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning)));

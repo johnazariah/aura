@@ -120,7 +120,7 @@ public class AuraApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
             // Configure LLM to use stub provider as default
             services.Configure<LlmOptions>(options =>
             {
-                options.DefaultProvider = "stub";
+                options.DefaultProvider = LlmProviders.Stub;
             });
         });
     }

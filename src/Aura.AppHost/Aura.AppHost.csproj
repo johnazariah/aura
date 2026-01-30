@@ -14,6 +14,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Aura.Api\Aura.Api.csproj" />
+    <ProjectReference Include="..\Aura.Foundation\Aura.Foundation.csproj" IsAspireProjectResource="false" />
   </ItemGroup>
 
 </Project>

@@ -36,8 +36,8 @@ public class ConfigurableAgentTests
             NoEscape = true,
         });
 
-        _provider.ProviderId.Returns("ollama");
-        _providerRegistry.TryGetProvider("ollama", out Arg.Any<ILlmProvider?>())
+        _provider.ProviderId.Returns(LlmProviders.Ollama);
+        _providerRegistry.TryGetProvider(LlmProviders.Ollama, out Arg.Any<ILlmProvider?>())
             .Returns(callInfo =>
             {
                 callInfo[1] = _provider;
@@ -69,7 +69,7 @@ public class ConfigurableAgentTests
         // Assert
         metadata.Name.Should().Be("Test Agent");
         metadata.Description.Should().Be("Test");
-        metadata.Provider.Should().Be("ollama");
+        metadata.Provider.Should().Be(LlmProviders.Ollama);
     }
 
     [Fact]
@@ -384,7 +384,7 @@ public class ConfigurableAgentTests
         string agentId,
         string name = "Test Agent",
         string description = "Test description",
-        string provider = "ollama",
+        string provider = LlmProviders.Ollama,
         string model = "qwen2.5-coder:7b",
         double temperature = 0.7,
         string systemPrompt = "You are a test agent.")

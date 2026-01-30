@@ -203,7 +203,7 @@ public class AgentReflectionServiceTests
         string? reflectionPrompt = null,
         string? reflectionModel = null,
         string? model = null,
-        string? provider = "ollama")
+        string? provider = LlmProviders.Ollama)
     {
         return new AgentMetadata(
             Name: "Test Agent",

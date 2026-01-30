@@ -17,7 +17,7 @@ public class LlmProviderRegistryTests
 
     public LlmProviderRegistryTests()
     {
-        var options = Options.Create(new LlmOptions { DefaultProvider = "ollama" });
+        var options = Options.Create(new LlmOptions { DefaultProvider = LlmProviders.Ollama });
         _sut = new LlmProviderRegistry(options, NullLogger<LlmProviderRegistry>.Instance);
     }
 
@@ -55,11 +55,11 @@ public class LlmProviderRegistryTests
     public void GetProvider_ExistingProvider_ReturnsProvider()
     {
         // Arrange
-        var provider = CreateMockProvider("ollama");
+        var provider = CreateMockProvider(LlmProviders.Ollama);
         _sut.Register(provider);
 
         // Act
-        var result = _sut.GetProvider("ollama");
+        var result = _sut.GetProvider(LlmProviders.Ollama);
 
         // Assert
         result.Should().Be(provider);
@@ -79,11 +79,11 @@ public class LlmProviderRegistryTests
     public void GetProvider_CaseInsensitive_ReturnsProvider()
     {
         // Arrange
-        var provider = CreateMockProvider("Ollama");
+        var provider = CreateMockProvider(LlmProviders.Ollama.ToUpperInvariant());
         _sut.Register(provider);
 
         // Act
-        var result = _sut.GetProvider("OLLAMA");
+        var result = _sut.GetProvider(LlmProviders.Ollama.ToLowerInvariant());
 
         // Assert
         result.Should().Be(provider);
@@ -102,8 +102,8 @@ public class LlmProviderRegistryTests
     [Fact]
     public void GetDefaultProvider_ReturnsConfiguredDefault()
     {
-        // Arrange - the registry is configured with DefaultProvider = "ollama" in constructor
-        var ollamaProvider = CreateMockProvider("ollama");
+        // Arrange - the registry is configured with DefaultProvider = LlmProviders.Ollama in constructor
+        var ollamaProvider = CreateMockProvider(LlmProviders.Ollama);
         var otherProvider = CreateMockProvider("other");
         _sut.Register(otherProvider);  // Register a different one first
         _sut.Register(ollamaProvider); // Then register the default

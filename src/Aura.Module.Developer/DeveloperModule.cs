@@ -4,6 +4,7 @@
 
 namespace Aura.Module.Developer;
 
+using Aura.Foundation;
 using Aura.Foundation.Agents;
 using Aura.Foundation.Modules;
 using Aura.Foundation.Rag;
@@ -46,7 +47,7 @@ public sealed class DeveloperModule : IAuraModule
         services.Configure<Guardians.GuardianOptions>(config.GetSection(Guardians.GuardianOptions.Section));
 
         // Get connection string from configuration (shared with Foundation)
-        var connectionString = config.GetConnectionString("auradb");
+        var connectionString = config.GetConnectionString(ResourceNames.AuraDb);
 
         // Register DeveloperDbContext (uses same database as Foundation)
         services.AddDbContext<DeveloperDbContext>(options =>
