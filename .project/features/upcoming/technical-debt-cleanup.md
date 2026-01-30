@@ -53,29 +53,36 @@ Standardized on "Story" terminology throughout the extension:
 
 ## 3. Large Files to Split
 
+**Status:** ✅ Partial (2026-01-30) - Major files split using move_members_to_partial
 **Effort:** 2-3 days | **Priority:** Medium
 
-### McpHandler.cs (~4700 lines)
+### ✅ McpHandler.cs (4700→1071 lines)
 
-Split into tool classes:
+Split into 11 partial files:
+- McpHandler.cs - core routing and tool definitions
+- McpHandler.Edit.cs, McpHandler.Generate.cs, McpHandler.Inspect.cs
+- McpHandler.Languages.cs, McpHandler.Navigate.cs, McpHandler.Pattern.cs
+- McpHandler.Refactor.cs, McpHandler.Search.cs, McpHandler.Validate.cs
+- McpHandler.Workflow.cs
 
-```
-src/Aura.Api/Mcp/
-├── McpHandler.cs           # Routing only (~200 lines)
-├── Tools/
-│   ├── SearchTool.cs       # aura_search
-│   ├── NavigateTool.cs     # aura_navigate
-│   ├── InspectTool.cs      # aura_inspect
-│   ├── RefactorTool.cs     # aura_refactor
-│   ├── GenerateTool.cs     # aura_generate
-│   ├── ValidateTool.cs     # aura_validate
-│   ├── WorkflowTool.cs     # aura_workflow
-│   ├── PatternTool.cs      # aura_pattern
-│   ├── WorkspaceTool.cs    # aura_workspace
-│   ├── EditTool.cs         # aura_edit
-│   ├── TreeTool.cs         # aura_tree, aura_get_node
-│   └── DocsTool.cs         # aura_docs
-```
+### ✅ StoryService.cs (2734→1449 lines)
+
+Split into 4 partial files:
+- StoryService.cs - CRUD, lifecycle management
+- StoryService.Planning.cs (276 lines) - AnalyzeAsync, PlanAsync, DecomposeAsync
+- StoryService.Execution.cs (543 lines) - RunAsync, ExecuteStepAsync, ExecuteAllStepsAsync
+- StoryService.Chat.cs (282 lines) - ChatAsync, ChatWithStepAsync, RAG context
+
+### ✅ RoslynRefactoringService.cs (2584→1115 lines)
+
+Split into 5 partial files:
+- RoslynRefactoringService.cs - core helpers, validation, symbol lookup
+- RoslynRefactoringService.Rename.cs (211 lines) - rename, blast radius analysis
+- RoslynRefactoringService.Generate.cs (539 lines) - constructor, property, method, type creation
+- RoslynRefactoringService.Interface.cs (252 lines) - interface extraction/implementation
+- RoslynRefactoringService.Move.cs (358 lines) - move type, move members to partial
+
+### Remaining (defer to post-1.0)
 
 ### DeveloperEndpoints.cs (~1300 lines)
 
