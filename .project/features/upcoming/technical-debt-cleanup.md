@@ -12,25 +12,18 @@ This document catalogs technical debt discovered during codebase analysis. Since
 
 ## 1. Story/Workflow Execution Complexity
 
+**Status:** ✅ Complete (2026-01-29)
 **Effort:** 5 days | **Priority:** Critical
 
-See [Unified Wave Orchestration](unified-wave-orchestration.md) for detailed spec.
+See [Unified Wave Orchestration](../completed/unified-wave-orchestration.md) for details.
 
-### Summary
+### Completed
 
-| Delete | Reason |
-|--------|--------|
-| `StoryTask` record | Duplicate of StoryStep |
-| `StoryTaskStatus` enum | Merged into StepStatus |
-| `DispatchTarget.InternalAgents` | Maintain one execution path |
-| `TasksJson` column | Steps are source of truth |
-| "Effective status" logic in extension | API is authoritative |
-
-### Files Affected
-- `src/Aura.Module.Developer/Data/Entities/StoryTask.cs` (delete)
-- `src/Aura.Module.Developer/Data/Entities/Story.cs` (simplify)
-- `src/Aura.Module.Developer/Services/GitHubCopilotDispatcher.cs` (use steps)
-- `extension/src/services/auraApiService.ts` (remove effective status)
+- [x] Removed `StoryTask` abstraction (use `StoryStep` directly)
+- [x] Removed `InternalAgentsDispatcher` (use Copilot CLI only)
+- [x] Removed `DispatchTarget` enum (no longer needed)
+- [x] Extension shows wave progress and groups steps by wave
+- [x] Steps updated in-place during dispatch
 
 ---
 
@@ -155,19 +148,13 @@ Partially implemented, not actively used:
 - [ ] Complete implementation, or
 - [ ] Remove infrastructure: `GuardianExecutor`, `GuardianScheduler`, YAML files
 
-### StoryTask Entity
+### ✅ StoryTask Entity (Complete)
 
-If unified wave orchestration proceeds:
+Already deleted as part of Unified Wave Orchestration (2026-01-29).
 
-- [ ] Delete `StoryTask.cs`
-- [ ] Delete `StoryTaskStatus` enum
+### ✅ Dispatch Target Abstraction (Complete)
 
-### Dispatch Target Abstraction
-
-If we standardize on Copilot CLI:
-
-- [ ] Remove `DispatchTarget.InternalAgents`
-- [ ] Simplify dispatcher to single path
+Already deleted - using Copilot CLI only (2026-01-29).
 
 ---
 
