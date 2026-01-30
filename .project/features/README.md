@@ -88,30 +88,21 @@ features/
 | [API Harmonization](completed/api-review-harmonization.md) | Unified workspace-scoped REST API | 2026-01-30 |
 | [Multi-Registry Workspaces](completed/multi-registry-workspaces.md) | Query multiple workspaces via aura_workspaces | 2026-01-30 |
 | [Technical Debt Cleanup](completed/technical-debt-cleanup.md) | Pre-1.0 cleanup: schema, naming, file splits, dead code | 2026-01-30 |
+| [ReAct Post-Code Validation](completed/react-post-code-validation.md) | Automatic build validation before agent finish | 2026-01-30 |
+| [TypeScript Refactoring](completed/typescript-refactoring.md) | aura_refactor/navigate for TS/JS via ts-morph | 2026-01-30 |
 
 ## Upcoming Features
-
-### Critical (Pre-1.0)
-
-| Feature | Description |
-|---------|-------------|
-| [Technical Debt Cleanup](upcoming/technical-debt-cleanup.md) | Catalog of debt items with execution order |
-| [Database Schema Cleanup](upcoming/database-schema-cleanup.md) | Flatten migrations, normalize naming |
 
 ### High Priority
 
 | Feature | Description |
 |---------|-------------|
-| [Pattern Catalog](upcoming/pattern-catalog.md) | 15+ patterns: refactoring, code generation, quality, architecture |
 
-### Medium Priority (User Experience)
+### Medium Priority
 
 | Feature | Description |
 |---------|-------------|
-| [Multi-Language Refactoring](upcoming/multi-language-refactoring.md) | TypeScript (ts-morph), Go/Rust/Java (LSP) support |
-| [Multi-Workspace](upcoming/multi-workspace.md) | Multiple workspace support |
 | [macOS CI & Distribution](upcoming/macos-ci-and-distribution.md) | CI builds, Homebrew cask, menu bar app (needs self-hosted runner) |
-| [API Harmonization](upcoming/api-review-harmonization.md) | Consistent REST API design |
 
 ### Lower Priority (Advanced)
 
@@ -119,6 +110,8 @@ features/
 |---------|-------------|
 | [Condensed Export](upcoming/condensed-export.md) | Export indexed context |
 | [Internationalization](upcoming/internationalization.md) | Multi-language UI support |
+| [Layered Fleet Architecture](upcoming/layered-fleet-architecture.md) | Multi-tier fleet with local/team/cloud layers |
+| [Stringly-Typed Cleanup](upcoming/tech-debt-stringly-typed-code.md) | Replace magic strings with strongly-typed patterns |
 
 ### Unplanned (Backlog)
 
@@ -126,6 +119,7 @@ features/
 |---------|-------------|
 | [Quick Actions Bar](unplanned/quick-actions-bar.md) | Build/Test/Commit/PR buttons for workflow chat |
 | [Indexing Epic](unplanned/indexing-epic.md) | Future indexing enhancements (smart content, boolean queries, etc.) |
+| [LSP Refactoring Framework](unplanned/lsp-refactoring-framework.md) | Generic LSP for Go/Rust/Java refactoring |
 
 ## See Also
 

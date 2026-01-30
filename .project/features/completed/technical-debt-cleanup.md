@@ -40,8 +40,8 @@ Standardized on "Story" terminology throughout the extension:
 - [x] Rename API service types: `Workflow` → `Story`, `WorkflowStep` → `StoryStep`
 - [x] Rename API service methods: `createWorkflow` → `createStory`, `sendWorkflowChat` → `sendStoryChat`, etc.
 - [x] Update UI strings in extension.ts, learn-more.md, uiTest.ts
-- [ ] Update copyright headers in C# files (deferred - low priority)
-- [ ] Rename internal C# variables `_workflowService` → `_storyService` (deferred - internal only)
+- [x] Rename internal C# variables `_workflowService` → `_storyService`
+- [x] Update copyright headers in C# files
 
 ---
 
