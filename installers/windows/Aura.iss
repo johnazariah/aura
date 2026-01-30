@@ -338,6 +338,8 @@ begin
 end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  ResultCode: Integer;
 begin
   Result := '';
   NeedsRestart := False;
@@ -348,7 +350,7 @@ begin
   
   // Also delete the AuraService if it exists (we'll recreate it with correct settings)
   // This ensures service account changes are applied on upgrade
-  Exec('sc.exe', 'delete AuraService', '', SW_HIDE, ewWaitUntilTerminated, 0);
+  Exec('sc.exe', 'delete AuraService', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   
   // Give Windows time to release file handles
   Sleep(1000);
