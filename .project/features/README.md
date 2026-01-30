@@ -87,6 +87,7 @@ features/
 | [Unified Wave Orchestration](completed/unified-wave-orchestration.md) | Simplify story execution: one entity, one status, one dispatch path | 2026-01-29 |
 | [API Harmonization](completed/api-review-harmonization.md) | Unified workspace-scoped REST API | 2026-01-30 |
 | [Multi-Registry Workspaces](completed/multi-registry-workspaces.md) | Query multiple workspaces via aura_workspaces | 2026-01-30 |
+| [Technical Debt Cleanup](completed/technical-debt-cleanup.md) | Pre-1.0 cleanup: schema, naming, file splits, dead code | 2026-01-30 |
 
 ## Upcoming Features
 
