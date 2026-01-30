@@ -96,6 +96,7 @@ try {
     Copy-Item "installers/windows/install-extension.ps1" "$OutputDir/win-x64/scripts/"
     Copy-Item "scripts/Create-ServiceAccount.ps1" "$OutputDir/win-x64/scripts/"
     Copy-Item "scripts/Get-ServiceAccountCredential.ps1" "$OutputDir/win-x64/scripts/"
+    Copy-Item "scripts/Install-AuraService.ps1" "$OutputDir/win-x64/scripts/"
 
     # Download and bundle PostgreSQL
     Write-Host "`nPreparing PostgreSQL..." -ForegroundColor Green
