@@ -11,6 +11,7 @@ using Aura.Api.Middleware;
 using Aura.Foundation;
 using Aura.Foundation.Data;
 using Aura.Module.Developer;
+using Aura.Module.Researcher;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -95,6 +96,10 @@ builder.Services.AddAuraFoundation(builder.Configuration);
 var developerModule = new DeveloperModule();
 developerModule.ConfigureServices(builder.Services, builder.Configuration);
 
+// Add Researcher Module
+var researcherModule = new ResearcherModule();
+researcherModule.ConfigureServices(builder.Services, builder.Configuration);
+
 // Add MCP handler for GitHub Copilot integration
 builder.Services.AddScoped<McpHandler>();
 builder.Services.AddSingleton<Aura.Api.Mcp.Tools.IAuraDocsTool, Aura.Api.Mcp.Tools.AuraDocsTool>();
@@ -132,6 +137,10 @@ if (!app.Environment.IsEnvironment("Testing"))
     var developerDb = scope.ServiceProvider.GetRequiredService<Aura.Module.Developer.Data.DeveloperDbContext>();
     await ApplyMigrationsAsync(developerDb, "Developer", logger);
 
+    // Apply Researcher module migrations
+    var researcherDb = scope.ServiceProvider.GetRequiredService<Aura.Module.Researcher.Data.ResearcherDbContext>();
+    await ApplyMigrationsAsync(researcherDb, "Researcher", logger);
+
     // Register Developer Module tools with the tool registry
     var toolRegistry = scope.ServiceProvider.GetRequiredService<Aura.Foundation.Tools.IToolRegistry>();
     developerModule.RegisterTools(toolRegistry, scope.ServiceProvider);
@@ -166,6 +175,7 @@ app.MapWorkspaceGraphEndpoints();
 app.MapWorkspaceSearchEndpoints();
 app.MapDeveloperEndpoints();
 app.MapGuardianEndpoints();
+app.MapResearcherEndpoints();
 
 await app.RunAsync();
 

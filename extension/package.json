@@ -54,6 +54,11 @@
           "when": "aura.workspaceOnboarded"
         },
         {
+          "id": "aura.research",
+          "name": "Research Library",
+          "icon": "$(book)"
+        },
+        {
           "id": "aura.agents",
           "name": "Agents",
           "icon": "$(hubot)"
@@ -220,6 +225,36 @@
         "command": "aura.showCurrentStory",
         "title": "Aura: Show Current Story",
         "icon": "$(tasklist)"
+      },
+      {
+        "command": "aura.refreshResearch",
+        "title": "Refresh Research Library",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "aura.importPaper",
+        "title": "Aura: Import Paper",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "aura.searchResearch",
+        "title": "Aura: Search Research Library",
+        "icon": "$(search)"
+      },
+      {
+        "command": "aura.openSource",
+        "title": "Open Source",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "aura.deleteSource",
+        "title": "Delete Source",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "aura.convertToMarkdown",
+        "title": "Convert to Markdown",
+        "icon": "$(markdown)"
       }
     ],
     "menus": {
@@ -237,6 +272,16 @@
         {
           "command": "aura.createStory",
           "when": "view == aura.stories",
+          "group": "navigation"
+        },
+        {
+          "command": "aura.refreshResearch",
+          "when": "view == aura.research",
+          "group": "navigation"
+        },
+        {
+          "command": "aura.importPaper",
+          "when": "view == aura.research",
           "group": "navigation"
         },
         {
@@ -280,6 +325,21 @@
           "command": "aura.deleteStory",
           "when": "view == aura.stories && viewItem == story",
           "group": "inline"
+        },
+        {
+          "command": "aura.openSource",
+          "when": "view == aura.research && viewItem == source",
+          "group": "inline"
+        },
+        {
+          "command": "aura.convertToMarkdown",
+          "when": "view == aura.research && viewItem == source",
+          "group": "navigation"
+        },
+        {
+          "command": "aura.deleteSource",
+          "when": "view == aura.research && viewItem == source",
+          "group": "navigation"
         }
       ]
     },

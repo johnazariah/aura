@@ -5,6 +5,7 @@ import { ChatWindowProvider } from './providers/chatWindowProvider';
 import { StoryTreeProvider } from './providers/storyTreeProvider';
 import { StoryPanelProvider } from './providers/storyPanelProvider';
 import { WelcomeViewProvider } from './providers/welcomeViewProvider';
+import { ResearchTreeProvider } from './providers/researchTreeProvider';
 import { HealthCheckService } from './services/healthCheckService';
 import { AuraApiService, AgentInfo } from './services/auraApiService';
 import { gitService } from './services/gitService';
@@ -16,6 +17,7 @@ let logService: LogService;
 let statusTreeProvider: StatusTreeProvider;
 let agentTreeProvider: AgentTreeProvider;
 let storyTreeProvider: StoryTreeProvider;
+let researchTreeProvider: ResearchTreeProvider;
 let welcomeViewProvider: WelcomeViewProvider;
 let chatWindowProvider: ChatWindowProvider;
 let storyPanelProvider: StoryPanelProvider;
@@ -45,6 +47,7 @@ export async function activate(context: vscode.ExtensionContext) {
     statusTreeProvider = new StatusTreeProvider(healthCheckService);
     agentTreeProvider = new AgentTreeProvider(auraApiService);
     storyTreeProvider = new StoryTreeProvider(auraApiService);
+    researchTreeProvider = new ResearchTreeProvider(auraApiService);
     welcomeViewProvider = new WelcomeViewProvider(auraApiService);
     chatWindowProvider = new ChatWindowProvider(context.extensionUri, auraApiService);
     storyPanelProvider = new StoryPanelProvider(context.extensionUri, auraApiService);
@@ -62,6 +65,11 @@ export async function activate(context: vscode.ExtensionContext) {
 
     const storyView = vscode.window.createTreeView('aura.stories', {
         treeDataProvider: storyTreeProvider,
+        showCollapseAll: true
+    });
+
+    const researchView = vscode.window.createTreeView('aura.research', {
+        treeDataProvider: researchTreeProvider,
         showCollapseAll: true
     });
 
@@ -199,6 +207,131 @@ export async function activate(context: vscode.ExtensionContext) {
         await deleteStory(item);
     });
 
+    // Research commands
+    const refreshResearchCommand = vscode.commands.registerCommand('aura.refreshResearch', async () => {
+        researchTreeProvider.refresh();
+    });
+
+    const importPaperCommand = vscode.commands.registerCommand('aura.importPaper', async () => {
+        const url = await vscode.window.showInputBox({
+            prompt: 'Enter paper URL (arXiv, Semantic Scholar, or webpage)',
+            placeHolder: 'https://arxiv.org/abs/2301.00000',
+            validateInput: (value) => {
+                if (!value) return 'URL is required';
+                try {
+                    new URL(value);
+                    return undefined;
+                } catch {
+                    return 'Please enter a valid URL';
+                }
+            }
+        });
+
+        if (!url) return;
+
+        try {
+            await vscode.window.withProgress({
+                location: vscode.ProgressLocation.Notification,
+                title: 'Importing paper...',
+                cancellable: false
+            }, async () => {
+                await auraApiService.importResearchSource(url);
+                researchTreeProvider.refresh();
+                vscode.window.showInformationMessage('Paper imported successfully');
+            });
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Unknown error';
+            vscode.window.showErrorMessage(`Failed to import paper: ${message}`);
+        }
+    });
+
+    const searchResearchCommand = vscode.commands.registerCommand('aura.searchResearch', async () => {
+        const query = await vscode.window.showInputBox({
+            prompt: 'Search your research library',
+            placeHolder: 'Enter search terms...'
+        });
+
+        if (!query) return;
+
+        try {
+            const results = await auraApiService.searchResearch(query);
+            if (results.length === 0) {
+                vscode.window.showInformationMessage('No results found');
+                return;
+            }
+
+            const items = results.map(r => ({
+                label: r.sourceTitle,
+                description: r.excerptText.substring(0, 100) + '...',
+                detail: `Score: ${r.score.toFixed(2)}`,
+                sourceId: r.sourceId
+            }));
+
+            const selected = await vscode.window.showQuickPick(items, {
+                placeHolder: `Found ${results.length} results`
+            });
+
+            if (selected) {
+                // TODO: Open the source or show details
+                vscode.window.showInformationMessage(`Selected: ${selected.label}`);
+            }
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Unknown error';
+            vscode.window.showErrorMessage(`Search failed: ${message}`);
+        }
+    });
+
+    const openSourceCommand = vscode.commands.registerCommand('aura.openSource', async (item?: any) => {
+        if (item?.source?.sourceUrl) {
+            vscode.env.openExternal(vscode.Uri.parse(item.source.sourceUrl));
+        }
+    });
+
+    const deleteSourceCommand = vscode.commands.registerCommand('aura.deleteSource', async (item?: any) => {
+        if (!item?.source?.id) return;
+
+        const confirm = await vscode.window.showWarningMessage(
+            `Delete "${item.source.title}"?`,
+            { modal: true },
+            'Delete'
+        );
+
+        if (confirm === 'Delete') {
+            try {
+                await auraApiService.deleteResearchSource(item.source.id);
+                researchTreeProvider.refresh();
+                vscode.window.showInformationMessage('Source deleted');
+            } catch (error) {
+                const message = error instanceof Error ? error.message : 'Unknown error';
+                vscode.window.showErrorMessage(`Failed to delete: ${message}`);
+            }
+        }
+    });
+
+    const convertToMarkdownCommand = vscode.commands.registerCommand('aura.convertToMarkdown', async (item?: any) => {
+        if (!item?.source?.id) return;
+
+        try {
+            await vscode.window.withProgress({
+                location: vscode.ProgressLocation.Notification,
+                title: 'Converting to Markdown...',
+                cancellable: false
+            }, async () => {
+                const result = await auraApiService.convertPdfToMarkdown(item.source.id);
+                
+                // Open the markdown in a new document
+                const doc = await vscode.workspace.openTextDocument({
+                    content: result.markdown,
+                    language: 'markdown'
+                });
+                await vscode.window.showTextDocument(doc);
+            });
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Unknown error';
+            vscode.window.showErrorMessage(`Conversion failed: ${message}`);
+        }
+    });
+
     // Help commands
     const showHelpCommand = vscode.commands.registerCommand('aura.showHelp', async () => {
         const items: vscode.QuickPickItem[] = [
@@ -333,6 +466,7 @@ export async function activate(context: vscode.ExtensionContext) {
         statusView,
         welcomeView,
         storyView,
+        researchView,
         agentView,
         statusBarItem,
         refreshCommand,
@@ -353,6 +487,12 @@ export async function activate(context: vscode.ExtensionContext) {
         executeStepCommand,
         refreshStoriesCommand,
         deleteStoryCommand,
+        refreshResearchCommand,
+        importPaperCommand,
+        searchResearchCommand,
+        openSourceCommand,
+        deleteSourceCommand,
+        convertToMarkdownCommand,
         showHelpCommand,
         openDocsCommand,
         showCheatSheetCommand,

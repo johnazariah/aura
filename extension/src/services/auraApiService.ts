@@ -1164,6 +1164,113 @@ export class AuraApiService {
         );
         return response.data;
     }
+
+    // =====================
+    // Researcher Module APIs
+    // =====================
+
+    /**
+     * Get all research sources in the library.
+     */
+    async getResearchSources(): Promise<ResearchSource[]> {
+        const response = await this.httpClient.get(`${this.getBaseUrl()}/api/researcher/sources`);
+        return response.data;
+    }
+
+    /**
+     * Get a specific research source by ID.
+     */
+    async getResearchSource(id: string): Promise<ResearchSource> {
+        const response = await this.httpClient.get(`${this.getBaseUrl()}/api/researcher/sources/${id}`);
+        return response.data;
+    }
+
+    /**
+     * Import a paper or webpage into the research library.
+     */
+    async importResearchSource(url: string): Promise<ResearchSource> {
+        const response = await this.httpClient.post(
+            `${this.getBaseUrl()}/api/researcher/sources/import`,
+            { url },
+            { timeout: 60000 }
+        );
+        return response.data;
+    }
+
+    /**
+     * Delete a research source.
+     */
+    async deleteResearchSource(id: string): Promise<void> {
+        await this.httpClient.delete(`${this.getBaseUrl()}/api/researcher/sources/${id}`);
+    }
+
+    /**
+     * Get all concepts extracted from sources.
+     */
+    async getResearchConcepts(): Promise<ResearchConcept[]> {
+        const response = await this.httpClient.get(`${this.getBaseUrl()}/api/researcher/concepts`);
+        return response.data;
+    }
+
+    /**
+     * Search the research library.
+     */
+    async searchResearch(query: string): Promise<ResearchSearchResult[]> {
+        const response = await this.httpClient.get(`${this.getBaseUrl()}/api/researcher/search`, {
+            params: { query }
+        });
+        return response.data;
+    }
+
+    /**
+     * Convert a PDF to markdown.
+     */
+    async convertPdfToMarkdown(sourceId: string): Promise<{ markdown: string }> {
+        const response = await this.httpClient.post(
+            `${this.getBaseUrl()}/api/researcher/sources/${sourceId}/convert`,
+            {},
+            { timeout: 120000 }
+        );
+        return response.data;
+    }
+
+    /**
+     * Get the markdown content for a source.
+     */
+    async getSourceMarkdown(sourceId: string): Promise<{ markdown: string }> {
+        const response = await this.httpClient.get(
+            `${this.getBaseUrl()}/api/researcher/sources/${sourceId}/markdown`
+        );
+        return response.data;
+    }
+}
+
+// Research module types
+export interface ResearchSource {
+    id: string;
+    type: 'arxiv' | 'semanticScholar' | 'webpage' | 'pdf' | 'manual';
+    title: string;
+    authors?: string;
+    abstract?: string;
+    sourceUrl?: string;
+    localPath?: string;
+    status: 'pending' | 'fetching' | 'ready' | 'error';
+    createdAt: string;
+    importedAt?: string;
+}
+
+export interface ResearchConcept {
+    id: string;
+    name: string;
+    definition?: string;
+    excerptCount: number;
+}
+
+export interface ResearchSearchResult {
+    sourceId: string;
+    sourceTitle: string;
+    excerptText: string;
+    score: number;
 }
 
 export interface WorkspaceInfo {
