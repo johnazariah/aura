@@ -1,15 +1,24 @@
 # Aura Project Status
 
-> **Last Updated**: 2026-01-29
+> **Last Updated**: 2026-02-02
 > **Current Release**: v1.3.1
 > **Branch**: main
 > **Overall Status**: ✅ Production Ready
 
 ## Quick Summary
 
-Aura is a **local-first, privacy-safe AI foundation** for knowledge work. The Developer Module is production-ready with MCP integration for GitHub Copilot, Roslyn refactoring tools, pattern-driven workflows, and multi-language support.
+Aura is a **local-first, privacy-safe AI foundation** for knowledge work. The Developer Module is production-ready with MCP integration for GitHub Copilot, Roslyn refactoring tools, pattern-driven workflows, and multi-language support. The Researcher Module provides academic paper management and research workflows.
 
 ## Recent Changes
+
+- **2026-02-02**: Researcher Module - Academic paper and research management
+  - Entities: Source, Excerpt, Concept, ConceptLink, Synthesis
+  - Fetchers: ArxivFetcher, SemanticScholarFetcher, WebPageFetcher
+  - Services: LibraryService, PdfExtractor, PdfToMarkdownService
+  - API endpoints for source CRUD, import, excerpts, concepts, search
+  - VS Code extension: Research Library view with import/search commands
+  - Agents: research-agent.md, reading-assistant-agent.md
+  - 29 unit tests passing
 
 - **2026-01-29**: Unified Wave Orchestration - Simplified story execution model
   - Removed `StoryTask` abstraction (use `StoryStep` directly)
@@ -24,10 +33,11 @@ Aura is a **local-first, privacy-safe AI foundation** for knowledge work. The De
 |-----------|--------|-----------|
 | **Aura.Foundation** | ✅ Complete | `src/Aura.Foundation/` |
 | **Aura.Module.Developer** | ✅ Complete | `src/Aura.Module.Developer/` |
+| **Aura.Module.Researcher** | ✅ Complete | `src/Aura.Module.Researcher/` |
 | **Aura.Api** | ✅ Complete | `src/Aura.Api/Program.cs` |
 | **Aura.AppHost** | ✅ Complete | `src/Aura.AppHost/` |
 | **VS Code Extension** | ✅ Complete | `extension/src/` |
-| **Tests** | ✅ 754 passing | `tests/` |
+| **Tests** | ✅ 783 passing | `tests/` |
 
 ## Feature Inventory
 
