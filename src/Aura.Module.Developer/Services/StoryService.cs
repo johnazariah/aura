@@ -468,30 +468,12 @@ public sealed partial class StoryService(
             // Handle GatePending from previous wave
             if (story.Status == StoryStatus.GatePending)
             {
-                yield return StoryProgressEvent.GateStarted(storyId, currentWave - 1);
-
-                var gateResult = await _qualityGateService.RunFullGateAsync(story.WorktreePath, currentWave - 1, ct);
-
-                if (!gateResult.Passed)
-                {
-                    if (gateResult.WasCancelled)
-                    {
-                        _logger.LogWarning("Quality gate was cancelled after wave {Wave}", currentWave - 1);
-                        yield return StoryProgressEvent.GateFailed(storyId, currentWave - 1, gateResult);
-                        yield break;
-                    }
-
-                    story.Status = StoryStatus.GateFailed;
-                    story.GateResult = JsonSerializer.Serialize(new { gateResult.Passed, gateResult.Error, gateResult.BuildOutput, gateResult.TestOutput });
-                    story.UpdatedAt = DateTimeOffset.UtcNow;
-                    await _db.SaveChangesAsync(ct);
-
-                    yield return StoryProgressEvent.GateFailed(storyId, currentWave - 1, gateResult);
-                    yield break;
-                }
-
-                yield return StoryProgressEvent.GatePassed(storyId, currentWave - 1, gateResult);
-                story.GateResult = null;
+                // Skip quality gate for intermediate waves
+                // Intermediate waves may have partial implementations that don't compile
+                // (e.g., wave 1 updates interfaces, wave 2 updates implementations)
+                // The quality gate will run after the final wave completes
+                _logger.LogInformation("Proceeding past gate for wave {Wave}/{TotalWaves} - will validate after final wave", currentWave - 1, waveCount);
+                // Proceed to execute the current wave (no gate check needed)
             }
 
             // Get pending steps for this wave
@@ -591,6 +573,7 @@ public sealed partial class StoryService(
             // Move to next wave with gate check
             if (currentWave < waveCount)
             {
+                _logger.LogInformation("Skipping quality gate for intermediate wave {Wave}/{TotalWaves} - will validate after final wave", currentWave, waveCount);
                 story.Status = StoryStatus.GatePending;
                 story.CurrentWave = currentWave + 1;
                 story.UpdatedAt = DateTimeOffset.UtcNow;
@@ -600,7 +583,35 @@ public sealed partial class StoryService(
             currentWave++;
         }
 
-        // All waves complete - ready for finalization
+        // All waves complete - run quality gate before marking ready
+        _logger.LogInformation("All waves complete, running final quality gate");
+        yield return StoryProgressEvent.GateStarted(storyId, waveCount);
+
+        var gateResult = await _qualityGateService.RunFullGateAsync(story.WorktreePath, waveCount, ct);
+        if (!gateResult.Passed)
+        {
+            if (gateResult.WasCancelled)
+            {
+                _logger.LogWarning("Quality gate was cancelled after final wave {Wave}. Story remains pending for retry.", waveCount);
+                story.Status = StoryStatus.GatePending;
+                story.UpdatedAt = DateTimeOffset.UtcNow;
+                await _db.SaveChangesAsync(ct);
+                yield return StoryProgressEvent.GateFailed(storyId, waveCount, gateResult);
+                yield break;
+            }
+
+            _logger.LogWarning("Quality gate failed after final wave {Wave}: {Error}", waveCount, gateResult.Error);
+            story.Status = StoryStatus.GateFailed;
+            story.GateResult = JsonSerializer.Serialize(new { gateResult.Passed, gateResult.Error, gateResult.BuildOutput, gateResult.TestOutput });
+            story.UpdatedAt = DateTimeOffset.UtcNow;
+            await _db.SaveChangesAsync(ct);
+            yield return StoryProgressEvent.GateFailed(storyId, waveCount, gateResult);
+            yield break;
+        }
+
+        yield return StoryProgressEvent.GatePassed(storyId, waveCount, gateResult);
+
+        // Quality gate passed - ready for finalization
         story.Status = StoryStatus.ReadyToComplete;
         story.UpdatedAt = DateTimeOffset.UtcNow;
         await _db.SaveChangesAsync(ct);
@@ -1455,6 +1466,7 @@ public sealed partial class StoryService(
         public required string Capability { get; init; }
         public string? Language { get; init; }
         public string? Description { get; init; }
+        public int Wave { get; init; } = 1;
     }
 
     /// <summary>

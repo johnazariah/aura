@@ -1,0 +1,53 @@
+name: add-product-api-endpoint
+description: Add Product model and service methods (Level 3 - Multi-file changes)
+language: csharp
+repository: fixtures/repos/csharp-webapi
+timeoutSeconds: 600
+
+story:
+  title: Add Product Model and Service Method
+  description: |
+    Add a Product model and extend the existing UserService with a product-related method.
+    This tests multi-file changes without requiring full service layer creation.
+    
+    Requirements:
+    
+    1. Create Product model in src/Models/Product.cs:
+       - int Id
+       - string Name
+       - decimal Price
+       - string? Description
+       - Follow the same pattern as User model (XML documentation)
+    
+    2. Add a method to UserService that references Product:
+       - Method: GetRecommendedProducts(int userId) returning Task<IReadOnlyList<Product>>
+       - Implementation: return empty list for now
+       - This tests cross-type references between files
+    
+    The agent should:
+    1. Read existing User model to understand the pattern
+    2. Create Product model following the same conventions
+    3. Add the new method to UserService
+
+expectations:
+  - type: compiles
+    description: All files should compile without errors
+
+  - type: file_exists
+    description: Product model created
+    path: src/Models/Product.cs
+
+  - type: file_contains
+    description: Product model has Price property
+    path: src/Models/Product.cs
+    pattern: 'decimal\s+Price'
+
+  - type: file_contains
+    description: UserService has new method
+    path: src/Services/UserService.cs
+    pattern: 'GetRecommendedProducts'
+
+tags:
+  - calibration
+  - multi-file
+  - level-3

@@ -10,8 +10,10 @@ using FluentAssertions;
 using Aura.Module.Developer.Agents;
 using Aura.Foundation.Agents;
 using Aura.Foundation.Llm;
-using Aura.Foundation.Tools;
+using Aura.Foundation.Prompts;
+using Aura.Module.Developer.Services;
 using Microsoft.Extensions.Logging;
+using System.IO.Abstractions;
 using System.Linq;
 
 namespace Aura.Module.Developer.Agents.Tests;
@@ -20,8 +22,9 @@ public class DeveloperAgentProviderTests
 {
     private readonly ILoggerFactory _loggerFactory;
     private readonly ILlmProviderRegistry _llmRegistry;
-    private readonly IReActExecutor _reactExecutor;
-    private readonly IToolRegistry _toolRegistry;
+    private readonly IRoslynRefactoringService _refactoringService;
+    private readonly IRoslynWorkspaceService _workspaceService;
+    private readonly IFileSystem _fileSystem;
     private readonly DeveloperAgentProvider _sut;
 
     public DeveloperAgentProviderTests()
@@ -29,9 +32,17 @@ public class DeveloperAgentProviderTests
         _loggerFactory = Substitute.For<ILoggerFactory>();
         _loggerFactory.CreateLogger(Arg.Any<string>()).Returns(Substitute.For<ILogger>());
         _llmRegistry = Substitute.For<ILlmProviderRegistry>();
-        _reactExecutor = Substitute.For<IReActExecutor>();
-        _toolRegistry = Substitute.For<IToolRegistry>();
-        _sut = new DeveloperAgentProvider(_loggerFactory, _llmRegistry, _reactExecutor, _toolRegistry);
+        _refactoringService = Substitute.For<IRoslynRefactoringService>();
+        _workspaceService = Substitute.For<IRoslynWorkspaceService>();
+        _fileSystem = Substitute.For<IFileSystem>();
+        var promptRegistry = Substitute.For<IPromptRegistry>();
+        _sut = new DeveloperAgentProvider(
+            _loggerFactory,
+            _llmRegistry,
+            _refactoringService,
+            _workspaceService,
+            promptRegistry,
+            _fileSystem);
     }
 
     [Fact]

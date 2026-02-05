@@ -1,0 +1,44 @@
+name: create-record-dto
+description: Create a record DTO type (Level 2 - Tests record creation)
+language: csharp
+repository: fixtures/repos/csharp-webapi
+timeoutSeconds: 300
+
+story:
+  title: Create UserSummary Record
+  description: |
+    Create a record type for returning user summary data.
+    
+    Create `src/Models/UserSummary.cs` with:
+    - Record `UserSummary` with properties: int Id, string Name, string Email
+    - Use positional record syntax: `record UserSummary(int Id, string Name, string Email)`
+    - Add XML documentation
+
+expectations:
+  - type: compiles
+    description: Record should compile
+
+  - type: file_exists
+    description: Record file created
+    path: src/Models/UserSummary.cs
+
+  - type: file_contains
+    description: Uses record syntax
+    path: src/Models/UserSummary.cs
+    pattern: 'record UserSummary'
+
+  - type: file_contains
+    description: Has Id parameter
+    path: src/Models/UserSummary.cs
+    pattern: 'int Id'
+
+  - type: file_contains
+    description: Has Email parameter
+    path: src/Models/UserSummary.cs
+    pattern: 'string Email'
+
+tags:
+  - calibration
+  - record
+  - dto
+  - level-2

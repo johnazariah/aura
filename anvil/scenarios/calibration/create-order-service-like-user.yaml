@@ -1,0 +1,104 @@
+name: create-order-service-like-user
+description: Create OrderService following the existing UserService pattern (Level 5 - Pattern-following)
+language: csharp
+repository: fixtures/repos/csharp-webapi
+timeoutSeconds: 900
+
+story:
+  title: Create OrderService Following UserService Pattern
+  description: |
+    Create a complete Order management feature by studying and replicating the existing User pattern.
+    
+    The agent must analyze the existing User* files to understand:
+    - Model structure with properties and XML documentation
+    - Repository interface with async CRUD methods
+    - Repository implementation with in-memory storage
+    - Service interface that wraps repository operations
+    - Service implementation with constructor injection
+    - Controller with standard REST endpoints
+    
+    Then create the equivalent Order components:
+    
+    1. Order model (src/Models/Order.cs):
+       - int Id
+       - int UserId (foreign key to User)
+       - DateTime OrderDate
+       - decimal TotalAmount
+       - string Status (Pending, Processing, Completed, Cancelled)
+    
+    2. IOrderRepository (src/Repositories/IOrderRepository.cs):
+       - Same pattern as IUserRepository
+       - Additional: Task<IReadOnlyList<Order>> GetByUserIdAsync(int userId)
+    
+    3. InMemoryOrderRepository (src/Repositories/InMemoryOrderRepository.cs):
+       - Same implementation pattern as InMemoryUserRepository
+    
+    4. IOrderService (src/Services/IOrderService.cs):
+       - GetOrderAsync(int id)
+       - GetAllOrdersAsync()
+       - GetOrdersByUserAsync(int userId)
+       - CreateOrderAsync(int userId, decimal totalAmount)
+       - UpdateOrderStatusAsync(int orderId, string status)
+    
+    5. OrderService (src/Services/OrderService.cs):
+       - Same dependency injection pattern as UserService
+    
+    6. OrdersController (src/Controllers/OrdersController.cs):
+       - Same API pattern as UsersController
+       - Include endpoint to get orders by user
+    
+    The agent MUST first analyze the existing User* pattern before creating Order* files.
+
+expectations:
+  - type: compiles
+    description: All Order components should compile
+
+  - type: file_exists
+    description: Order model created
+    path: src/Models/Order.cs
+
+  - type: file_exists
+    description: Order repository interface created
+    path: src/Repositories/IOrderRepository.cs
+
+  - type: file_exists
+    description: Order repository implementation created
+    path: src/Repositories/InMemoryOrderRepository.cs
+
+  - type: file_exists
+    description: Order service interface created
+    path: src/Services/IOrderService.cs
+
+  - type: file_exists
+    description: Order service implementation created
+    path: src/Services/OrderService.cs
+
+  - type: file_exists
+    description: Orders controller created
+    path: src/Controllers/OrdersController.cs
+
+  - type: file_contains
+    description: Order model follows User model pattern with XML docs
+    path: src/Models/Order.cs
+    pattern: '/// <summary>'
+
+  - type: file_contains
+    description: OrderService uses constructor injection like UserService
+    path: src/Services/OrderService.cs
+    pattern: 'private readonly IOrderRepository'
+
+  - type: file_contains
+    description: Controller has proper API attributes
+    path: src/Controllers/OrdersController.cs
+    pattern: '\[ApiController\]'
+
+  - type: file_contains
+    description: Service has user-specific order lookup
+    path: src/Services/IOrderService.cs
+    pattern: 'GetOrdersByUser'
+
+tags:
+  - calibration
+  - pattern-following
+  - multi-file
+  - level-5

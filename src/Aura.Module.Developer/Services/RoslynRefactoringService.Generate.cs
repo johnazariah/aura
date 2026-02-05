@@ -131,11 +131,22 @@ public sealed partial class RoslynRefactoringService
 
         try
         {
+            // Clear cache to ensure fresh view of the codebase (external changes may have occurred)
+            _workspaceService.InvalidateCache(request.SolutionPath);
+
             var solution = await _workspaceService.GetSolutionAsync(request.SolutionPath, ct);
             var typeSymbol = await FindTypeAsync(solution, request.ClassName, ct);
             if (typeSymbol is null)
             {
                 return RefactoringResult.Failed($"Type '{request.ClassName}' not found");
+            }
+
+            // Check if property/field already exists (idempotency)
+            var existingMember = typeSymbol.GetMembers(request.PropertyName).FirstOrDefault();
+            if (existingMember != null)
+            {
+                _logger.LogInformation("{Kind} {Name} already exists in {Class}, skipping", memberKind, request.PropertyName, request.ClassName);
+                return RefactoringResult.Succeeded($"{memberKind} '{request.PropertyName}' already exists in '{request.ClassName}'");
             }
 
             var typeDecl = typeSymbol.DeclaringSyntaxReferences.FirstOrDefault();
@@ -274,11 +285,46 @@ public sealed partial class RoslynRefactoringService
 
         try
         {
+            // Clear cache to ensure fresh view of the codebase (external changes may have occurred)
+            _workspaceService.InvalidateCache(request.SolutionPath);
+
             var solution = await _workspaceService.GetSolutionAsync(request.SolutionPath, ct);
             var classSymbol = await FindTypeAsync(solution, request.ClassName, ct);
             if (classSymbol is null)
             {
                 return RefactoringResult.Failed($"Class '{request.ClassName}' not found");
+            }
+
+            // Check if method with same signature already exists (idempotency)
+            var requestParamTypes = request.Parameters?.Select(p => p.Type).ToList() ?? [];
+            var existingMethod = classSymbol.GetMembers(request.MethodName)
+                .OfType<IMethodSymbol>()
+                .FirstOrDefault(m =>
+                {
+                    // Match by parameter count first
+                    if (m.Parameters.Length != requestParamTypes.Count)
+                        return false;
+
+                    // Match each parameter type
+                    for (int i = 0; i < m.Parameters.Length; i++)
+                    {
+                        var existingType = m.Parameters[i].Type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
+                        var requestType = requestParamTypes[i];
+
+                        // Normalize array syntax (int[] vs System.Int32[])
+                        if (!TypesMatch(existingType, requestType))
+                            return false;
+                    }
+
+                    return true;
+                });
+            if (existingMethod != null)
+            {
+                var signature = requestParamTypes.Count > 0
+                    ? $"{request.MethodName}({string.Join(", ", requestParamTypes)})"
+                    : $"{request.MethodName}()";
+                _logger.LogInformation("Method {Method} already exists in {Class}, skipping", signature, request.ClassName);
+                return RefactoringResult.Succeeded($"Method '{signature}' already exists in '{request.ClassName}'");
             }
 
             var classDecl = classSymbol.DeclaringSyntaxReferences.FirstOrDefault();
@@ -287,11 +333,14 @@ public sealed partial class RoslynRefactoringService
                 return RefactoringResult.Failed("Could not find class declaration");
             }
 
-            var classNode = await classDecl.GetSyntaxAsync(ct) as ClassDeclarationSyntax;
-            if (classNode is null)
+            var typeNode = await classDecl.GetSyntaxAsync(ct) as TypeDeclarationSyntax;
+            if (typeNode is null)
             {
-                return RefactoringResult.Failed("Could not parse class declaration");
+                return RefactoringResult.Failed("Could not parse type declaration");
             }
+
+            // Check if this is an interface
+            var isInterface = typeNode is InterfaceDeclarationSyntax;
 
             var document = solution.GetDocument(classDecl.SyntaxTree);
             if (document is null)
@@ -306,60 +355,65 @@ public sealed partial class RoslynRefactoringService
             }
 
             // Determine test attribute: use caller-specified, or auto-detect from class
+            // (not applicable for interfaces)
             string? testFramework = null;
-            if (!string.IsNullOrEmpty(request.TestAttribute))
+            if (!isInterface)
             {
-                // Caller specified the attribute directly (e.g., "Fact", "Test", "TestMethod")
-                testFramework = TestFrameworkConstants.InferFrameworkFromAttribute(request.TestAttribute);
-                if (testFramework == FrameworkXUnit && !request.TestAttribute.Equals("fact", StringComparison.OrdinalIgnoreCase) && !request.TestAttribute.Equals("theory", StringComparison.OrdinalIgnoreCase))
+                if (!string.IsNullOrEmpty(request.TestAttribute))
                 {
-                    // Unknown attribute, use as-is
-                    testFramework = request.TestAttribute;
+                    // Caller specified the attribute directly (e.g., "Fact", "Test", "TestMethod")
+                    testFramework = TestFrameworkConstants.InferFrameworkFromAttribute(request.TestAttribute);
+                    if (testFramework == FrameworkXUnit && !request.TestAttribute.Equals("fact", StringComparison.OrdinalIgnoreCase) && !request.TestAttribute.Equals("theory", StringComparison.OrdinalIgnoreCase))
+                    {
+                        // Unknown attribute, use as-is
+                        testFramework = request.TestAttribute;
+                    }
+                }
+                else if (typeNode is ClassDeclarationSyntax classNode)
+                {
+                    // Auto-detect if this is a test class
+                    testFramework = TestFrameworkConstants.DetectFrameworkFromAttributes(classNode);
                 }
             }
-            else
-            {
-                // Auto-detect if this is a test class
-                testFramework = TestFrameworkConstants.DetectFrameworkFromAttributes(classNode);
-            }
 
-            // Build modifiers
-            var modifiers = new List<SyntaxToken>
+            // Build modifiers (interfaces don't use explicit modifiers)
+            var modifiers = new List<SyntaxToken>();
+            if (!isInterface)
             {
-                SyntaxFactory.Token(request.AccessModifier switch
+                modifiers.Add(SyntaxFactory.Token(request.AccessModifier switch
                 {
                     "private" => SyntaxKind.PrivateKeyword,
                     "protected" => SyntaxKind.ProtectedKeyword,
                     "internal" => SyntaxKind.InternalKeyword,
                     _ => SyntaxKind.PublicKeyword
-                })
-            };
-            if (request.IsStatic)
-            {
-                modifiers.Add(SyntaxFactory.Token(SyntaxKind.StaticKeyword));
-            }
-
-            // Add method modifiers (virtual, override, abstract, sealed, new)
-            if (!string.IsNullOrEmpty(request.MethodModifier))
-            {
-                var methodModKind = request.MethodModifier.ToLowerInvariant() switch
+                }));
+                if (request.IsStatic)
                 {
-                    "virtual" => SyntaxKind.VirtualKeyword,
-                    "override" => SyntaxKind.OverrideKeyword,
-                    "abstract" => SyntaxKind.AbstractKeyword,
-                    "sealed" => SyntaxKind.SealedKeyword,
-                    "new" => SyntaxKind.NewKeyword,
-                    _ => SyntaxKind.None
-                };
-                if (methodModKind != SyntaxKind.None)
-                {
-                    modifiers.Add(SyntaxFactory.Token(methodModKind));
+                    modifiers.Add(SyntaxFactory.Token(SyntaxKind.StaticKeyword));
                 }
-            }
 
-            if (request.IsAsync)
-            {
-                modifiers.Add(SyntaxFactory.Token(SyntaxKind.AsyncKeyword));
+                // Add method modifiers (virtual, override, abstract, sealed, new)
+                if (!string.IsNullOrEmpty(request.MethodModifier))
+                {
+                    var methodModKind = request.MethodModifier.ToLowerInvariant() switch
+                    {
+                        "virtual" => SyntaxKind.VirtualKeyword,
+                        "override" => SyntaxKind.OverrideKeyword,
+                        "abstract" => SyntaxKind.AbstractKeyword,
+                        "sealed" => SyntaxKind.SealedKeyword,
+                        "new" => SyntaxKind.NewKeyword,
+                        _ => SyntaxKind.None
+                    };
+                    if (methodModKind != SyntaxKind.None)
+                    {
+                        modifiers.Add(SyntaxFactory.Token(methodModKind));
+                    }
+                }
+
+                if (request.IsAsync)
+                {
+                    modifiers.Add(SyntaxFactory.Token(SyntaxKind.AsyncKeyword));
+                }
             }
 
             // Build parameters
@@ -383,7 +437,8 @@ public sealed partial class RoslynRefactoringService
             var isAbstract = request.MethodModifier?.Equals("abstract", StringComparison.OrdinalIgnoreCase) == true;
             // Build body (unless abstract)
             BlockSyntax? methodBody = null;
-            if (!isAbstract)
+            // Interfaces and abstract methods have no body
+            if (!isAbstract && !isInterface)
             {
                 if (!string.IsNullOrWhiteSpace(request.Body))
                 {
@@ -432,8 +487,8 @@ public sealed partial class RoslynRefactoringService
                 }
             }
 
-            // Abstract methods have no body, just a semicolon
-            if (isAbstract)
+            // Abstract methods and interface methods have no body, just a semicolon
+            if (isAbstract || isInterface)
             {
                 method = method.WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken));
             }
@@ -476,8 +531,8 @@ public sealed partial class RoslynRefactoringService
                 method = method.WithLeadingTrivia(leadingTrivia);
             }
 
-            var newClassNode = classNode.AddMembers(method);
-            var newRoot = root.ReplaceNode(classNode, newClassNode);
+            var newTypeNode = typeNode.AddMembers(method);
+            var newRoot = root.ReplaceNode(typeNode, newTypeNode);
             var formattedRoot = Formatter.Format(newRoot, document.Project.Solution.Workspace);
             if (request.Preview)
             {
@@ -518,9 +573,11 @@ public sealed partial class RoslynRefactoringService
             return RefactoringResult.Failed($"Solution file not found: {request.SolutionPath}");
         }
 
+        // Create directory if it doesn't exist (common for new features)
         if (!Directory.Exists(request.TargetDirectory))
         {
-            return RefactoringResult.Failed($"Target directory not found: {request.TargetDirectory}");
+            _logger.LogInformation("Creating directory: {Directory}", request.TargetDirectory);
+            Directory.CreateDirectory(request.TargetDirectory);
         }
 
         try
@@ -535,11 +592,27 @@ public sealed partial class RoslynRefactoringService
 
             // Infer namespace from project and directory structure
             var targetNamespace = request.Namespace ?? InferNamespace(project, request.TargetDirectory);
+
+            // Check if type already exists in the solution (idempotency)
+            var existingType = await FindTypeAsync(solution, request.TypeName, ct);
+            if (existingType != null)
+            {
+                var existingNamespace = existingType.ContainingNamespace?.ToDisplayString();
+                if (existingNamespace == targetNamespace)
+                {
+                    _logger.LogInformation("{Kind} {Type} already exists in namespace {Namespace}, skipping",
+                        request.TypeKind, request.TypeName, targetNamespace);
+                    return RefactoringResult.Succeeded(
+                        $"{request.TypeKind} '{request.TypeName}' already exists in namespace '{targetNamespace}'");
+                }
+            }
+
             // Build the type file
             var targetPath = Path.Combine(request.TargetDirectory, $"{request.TypeName}.cs");
             if (File.Exists(targetPath))
             {
-                return RefactoringResult.Failed($"File already exists: {targetPath}");
+                _logger.LogInformation("File already exists: {Path}, skipping", targetPath);
+                return RefactoringResult.Succeeded($"File already exists: {targetPath}");
             }
 
             // Generate the type declaration
@@ -601,5 +674,65 @@ public sealed partial class RoslynRefactoringService
             _logger.LogError(ex, "Failed to create type");
             return RefactoringResult.Failed($"Failed to create type: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// Check if two type names match, handling common variations like "int[]" vs "Int32[]".
+    /// </summary>
+    private static bool TypesMatch(string existingType, string requestType)
+    {
+        // Direct match
+        if (existingType.Equals(requestType, StringComparison.Ordinal))
+            return true;
+
+        // Normalize common aliases
+        var normalizedExisting = NormalizeTypeName(existingType);
+        var normalizedRequest = NormalizeTypeName(requestType);
+
+        return normalizedExisting.Equals(normalizedRequest, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Normalize type names by expanding C# aliases to their CLR names.
+    /// </summary>
+    private static string NormalizeTypeName(string typeName)
+    {
+        // Handle array/nullable suffix
+        var suffix = "";
+        var baseName = typeName;
+
+        if (typeName.EndsWith("[]", StringComparison.Ordinal))
+        {
+            suffix = "[]";
+            baseName = typeName[..^2];
+        }
+        else if (typeName.EndsWith("?", StringComparison.Ordinal))
+        {
+            suffix = "?";
+            baseName = typeName[..^1];
+        }
+
+        // Map C# aliases to CLR types
+        var normalized = baseName switch
+        {
+            "int" => "Int32",
+            "uint" => "UInt32",
+            "long" => "Int64",
+            "ulong" => "UInt64",
+            "short" => "Int16",
+            "ushort" => "UInt16",
+            "byte" => "Byte",
+            "sbyte" => "SByte",
+            "float" => "Single",
+            "double" => "Double",
+            "decimal" => "Decimal",
+            "bool" => "Boolean",
+            "char" => "Char",
+            "string" => "String",
+            "object" => "Object",
+            _ => baseName
+        };
+
+        return normalized + suffix;
     }
 }

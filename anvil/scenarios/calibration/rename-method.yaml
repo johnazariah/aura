@@ -1,0 +1,46 @@
+name: rename-method
+description: Rename a method and update all references (Level 3 - Tests rename refactoring)
+language: csharp
+repository: fixtures/repos/csharp-webapi
+timeoutSeconds: 300
+
+story:
+  title: Rename GetUserAsync to FindUserByIdAsync
+  description: |
+    Rename the `GetUserAsync` method in `IUserService` and its implementations
+    to `FindUserByIdAsync` for better clarity.
+    
+    This should update:
+    - The method declaration in IUserService
+    - The implementation in UserService
+    - Any call sites in UsersController
+
+expectations:
+  - type: compiles
+    description: Project should compile after rename
+
+  - type: file_contains
+    description: Interface has new name
+    path: src/Services/IUserService.cs
+    pattern: 'FindUserByIdAsync'
+
+  - type: file_not_contains
+    description: Interface no longer has old name
+    path: src/Services/IUserService.cs
+    pattern: 'GetUserAsync'
+
+  - type: file_contains
+    description: Implementation has new name
+    path: src/Services/UserService.cs
+    pattern: 'FindUserByIdAsync'
+
+  - type: file_contains
+    description: Controller uses new name
+    path: src/Controllers/UsersController.cs
+    pattern: 'FindUserByIdAsync'
+
+tags:
+  - calibration
+  - rename
+  - refactoring
+  - level-3

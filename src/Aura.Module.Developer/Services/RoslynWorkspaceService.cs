@@ -62,6 +62,18 @@ public sealed class RoslynWorkspaceService : IRoslynWorkspaceService, IDisposabl
             throw new FileNotFoundException($"Solution file not found: {normalizedPath}");
         }
 
+        // Auto-detect if this is a .csproj file and use OpenProjectAsync instead
+        var isProjectFile = normalizedPath.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase) ||
+                           normalizedPath.EndsWith(".vbproj", StringComparison.OrdinalIgnoreCase) ||
+                           normalizedPath.EndsWith(".fsproj", StringComparison.OrdinalIgnoreCase);
+
+        if (isProjectFile)
+        {
+            _logger.LogDebug("Detected project file, using OpenProjectAsync: {Path}", normalizedPath);
+            var project = await GetProjectAsync(normalizedPath, ct);
+            return project.Solution;
+        }
+
         // Detect if we're in a worktree - each worktree gets its own workspace
         // to ensure we see the worktree's file contents, not cached/stale data
         var worktreeInfo = GitWorktreeDetector.Detect(normalizedPath);

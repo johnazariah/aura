@@ -1,0 +1,22 @@
+name: find-service-implementation
+description: Find and display a service implementation (calibration for semantic lookup)
+language: csharp
+repository: fixtures/repos/csharp-webapi
+timeoutSeconds: 300
+
+story:
+  title: Find UserService Implementation
+  description: |
+    Find the UserService class and describe its methods and dependencies.
+    
+    This is a simple lookup task - the agent should use semantic search
+    to locate the class quickly without extensive file exploration.
+
+expectations:
+  - type: compiles
+    description: Story should complete without build errors
+
+tags:
+  - calibration
+  - semantic-search
+  - easy

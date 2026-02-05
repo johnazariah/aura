@@ -1,0 +1,30 @@
+name: hello-world-internal
+description: Create a simple Hello World console application (using internal executor)
+language: csharp
+repository: fixtures/repos/csharp-console
+timeoutSeconds: 600
+executor: internal
+
+story:
+  title: Create Hello World Console App
+  description: |
+    Create a simple C# console application that prints "Hello, World!" to the console.
+    
+    Requirements:
+    - Create a new console application project
+    - The program should print "Hello, World!" when run
+
+expectations:
+  - type: compiles
+    description: The generated code should compile without errors
+
+  # Note: Simple creation tasks may not require semantic tools
+  # This threshold is intentionally low - the metric is more meaningful
+  # for discovery/modification tasks
+  - type: index_usage
+    description: Agent should prefer semantic tools over file fishing
+    min_aura_tool_ratio: 0.4
+
+tags:
+  - test
+  - internal

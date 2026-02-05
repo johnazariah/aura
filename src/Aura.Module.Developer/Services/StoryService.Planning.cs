@@ -178,6 +178,7 @@ public sealed partial class StoryService
                     Id = Guid.NewGuid(),
                     StoryId = workflowId,
                     Order = order++,
+                    Wave = step.Wave,
                     Name = step.Name,
                     Capability = step.Capability,
                     Language = step.Language,

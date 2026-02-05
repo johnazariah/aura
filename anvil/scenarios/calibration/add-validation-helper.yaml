@@ -1,0 +1,44 @@
+name: add-validation-helper
+description: Add a static validation helper method (Level 2 - Different pattern than service/controller)
+language: csharp
+repository: fixtures/repos/csharp-webapi
+timeoutSeconds: 300
+
+story:
+  title: Add Email Validation Helper
+  description: |
+    Add a static helper method to validate email addresses.
+    
+    Create a new static class `ValidationHelpers` in `src/Helpers/ValidationHelpers.cs` with:
+    - A static method `IsValidEmail(string email)` that returns bool
+    - Use regex pattern: ^[^@\s]+@[^@\s]+\.[^@\s]+$
+    - Handle null/empty input gracefully (return false)
+    - Add XML documentation
+
+expectations:
+  - type: compiles
+    description: Validation helper should compile
+
+  - type: file_exists
+    description: Helper class created
+    path: src/Helpers/ValidationHelpers.cs
+
+  - type: file_contains
+    description: Has static class
+    path: src/Helpers/ValidationHelpers.cs
+    pattern: 'public static class ValidationHelpers'
+
+  - type: file_contains
+    description: Has IsValidEmail method
+    path: src/Helpers/ValidationHelpers.cs
+    pattern: 'public static bool IsValidEmail'
+
+  - type: file_contains
+    description: Has regex pattern
+    path: src/Helpers/ValidationHelpers.cs
+    pattern: '@.*\.'
+
+tags:
+  - calibration
+  - static-class
+  - level-2

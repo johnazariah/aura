@@ -51,11 +51,18 @@ GOOD (focused):
 
 ```json
 [
-  {"name": "Analyze source code", "capability": "review", "language": "csharp", "description": "Review the C# source files"},
-  {"name": "Write unit tests", "capability": "testing", "language": "csharp", "description": "Create xUnit tests"},
-  {"name": "Run and validate tests", "capability": "testing", "language": "csharp", "description": "Execute tests and verify"}
+  {"name": "Analyze source code", "capability": "review", "language": "csharp", "wave": 1, "description": "Review the C# source files"},
+  {"name": "Write unit tests", "capability": "testing", "language": "csharp", "wave": 2, "description": "Create xUnit tests"},
+  {"name": "Run and validate tests", "capability": "testing", "language": "csharp", "wave": 3, "description": "Execute tests and verify"}
 ]
 ```
+
+### For Pattern-Following Tasks (creating new components like existing ones)
+- Wave 1: Analyze existing patterns (understand the model)
+- Wave 1: Create interfaces/models (foundation types)
+- Wave 2: Create implementations (services, repositories)
+- Wave 3: Create integration points (controllers, endpoints)
+- Wave 3: Write unit tests
 
 ### For Documentation Tasks
 - Step 1: Analyze (what exists, what's missing)
@@ -94,14 +101,44 @@ Detect the primary language from the Analysis Context above (look for file exten
 
 **IMPORTANT**: If the codebase uses a specific language, include `language` on ALL coding/testing steps. This ensures the correct language-specialist agent is assigned.
 
+## Wave Assignment (for Parallel Execution)
+
+Steps in the SAME wave run in PARALLEL. Steps in LATER waves wait for earlier waves to complete.
+
+**Wave Assignment Rules:**
+- **Wave 1**: Steps that have NO dependencies (can run immediately)
+  - Creating interfaces/base types
+  - Analysis/review steps
+  - Independent file creation
+- **Wave 2**: Steps that DEPEND on Wave 1 outputs
+  - Implementations that need interfaces from Wave 1
+  - Tests that need classes from Wave 1
+- **Wave 3**: Steps that DEPEND on Wave 2 outputs
+  - Controllers/endpoints that need services from Wave 2
+  - Integration between components
+
+**Example Wave Assignment:**
+```json
+[
+  {"name": "Create IOrderService", "capability": "coding", "language": "csharp", "wave": 1, "description": "Create interface"},
+  {"name": "Create Order model", "capability": "coding", "language": "csharp", "wave": 1, "description": "Create model class"},
+  {"name": "Implement OrderService", "capability": "coding", "language": "csharp", "wave": 2, "description": "Implement the interface"},
+  {"name": "Create OrdersController", "capability": "coding", "language": "csharp", "wave": 3, "description": "Create REST controller"}
+]
+```
+
 ## Output Format
 
 Return a JSON array with 3-6 steps. Each step:
 - name: Short actionable name (string, required)
 - capability: One of: coding, testing, review, documentation, fixing (required)
 - language: Programming language detected from context (REQUIRED for coding/testing steps - e.g., "csharp", "python", "typescript")
+- wave: Execution wave number 1-3 (required) - Steps in same wave run in parallel, later waves wait
 - description: What this step produces/accomplishes (optional)
 
-**FINAL CHECK before responding**: Did you include `"language": "csharp"` (or the detected language) on every coding and testing step? If not, add it now.
+**FINAL CHECK before responding**: 
+1. Did you include `"language": "csharp"` (or the detected language) on every coding and testing step?
+2. Did you assign proper `"wave"` values so dependent steps run AFTER their dependencies?
 
 Return ONLY a valid JSON array, no markdown code blocks or other text.
+

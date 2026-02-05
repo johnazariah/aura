@@ -97,59 +97,57 @@ public sealed class InternalAgentExecutor : IStepExecutor
             // Build the prompt
             var prompt = BuildPrompt(step, story, priorSteps);
 
-            // Get tools for the agent
-            var tools = GetToolsForAgent(agent);
+            // Execute using the agent's own execution strategy
+            var context = new AgentContext(
+                Prompt: prompt,
+                WorkspacePath: worktreePath);
 
-            // Get the LLM provider
-            var provider = agent.Metadata.Provider is not null
-                ? _llmProviderRegistry.GetProvider(agent.Metadata.Provider)
-                : _llmProviderRegistry.GetDefaultProvider();
+            var output = await agent.ExecuteAsync(context, ct);
 
-            if (provider is null)
-            {
-                step.Status = StepStatus.Failed;
-                step.Error = "No LLM provider available";
-                step.CompletedAt = DateTimeOffset.UtcNow;
-                return;
-            }
+            // Check for success
+            var success = output.Artifacts.TryGetValue("success", out var successValue)
+                ? successValue == "true"
+                : !output.Artifacts.ContainsKey("error");
 
-            // Execute with ReAct loop
-            var reactOptions = new ReActOptions
-            {
-                WorkingDirectory = worktreePath,
-                MaxSteps = 20,
-                Temperature = agent.Metadata.Temperature,
-                RequireConfirmation = false,
-            };
-
-            var result = await _reactExecutor.ExecuteAsync(
-                prompt,
-                tools,
-                provider,
-                reactOptions,
-                ct);
-
-            if (result.Success)
+            if (success)
             {
                 step.Status = StepStatus.Completed;
                 step.Output = JsonSerializer.Serialize(new
                 {
-                    content = result.FinalAnswer,
-                    steps = result.Steps.Count,
-                    tokensUsed = result.TotalTokensUsed,
+                    content = output.Content,
+                    toolCalls = output.ToolCalls.Select(tc => new
+                    {
+                        toolName = tc.ToolName,
+                        input = tc.Arguments,
+                        output = tc.Result
+                    }).ToList(),
+                    tokensUsed = output.TokensUsed,
                 });
                 step.CompletedAt = DateTimeOffset.UtcNow;
 
                 _logger.LogInformation(
-                    "[{WorktreeName}] Step {StepId} completed with {Steps} ReAct steps",
+                    "[{WorktreeName}] Step {StepId} completed with {ToolCalls} tool calls",
                     Path.GetFileName(worktreePath),
                     step.Id,
-                    result.Steps.Count);
+                    output.ToolCalls.Count);
             }
             else
             {
                 step.Status = StepStatus.Failed;
-                step.Error = result.Error ?? "Unknown error during execution";
+                step.Error = output.Artifacts.TryGetValue("error", out var error)
+                    ? error
+                    : "Unknown error during execution";
+                step.Output = JsonSerializer.Serialize(new
+                {
+                    content = output.Content,
+                    toolCalls = output.ToolCalls.Select(tc => new
+                    {
+                        toolName = tc.ToolName,
+                        input = tc.Arguments,
+                        output = tc.Result
+                    }).ToList(),
+                    tokensUsed = output.TokensUsed,
+                });
                 step.CompletedAt = DateTimeOffset.UtcNow;
 
                 _logger.LogWarning(

@@ -4,9 +4,11 @@
 
 namespace Aura.Module.Developer.Agents;
 
+using System.IO.Abstractions;
 using Aura.Foundation.Agents;
 using Aura.Foundation.Llm;
-using Aura.Foundation.Tools;
+using Aura.Foundation.Prompts;
+using Aura.Module.Developer.Services;
 using Microsoft.Extensions.Logging;
 
 /// <summary>
@@ -17,18 +19,24 @@ using Microsoft.Extensions.Logging;
 /// </remarks>
 /// <param name="loggerFactory">Logger factory.</param>
 /// <param name="llmRegistry">LLM provider registry.</param>
-/// <param name="reactExecutor">ReAct executor for agentic workflows.</param>
-/// <param name="toolRegistry">Tool registry for accessing tools.</param>
+/// <param name="refactoringService">Roslyn refactoring service.</param>
+/// <param name="workspaceService">Roslyn workspace service.</param>
+/// <param name="promptRegistry">Prompt template registry.</param>
+/// <param name="fileSystem">File system abstraction.</param>
 public sealed class DeveloperAgentProvider(
     ILoggerFactory loggerFactory,
     ILlmProviderRegistry llmRegistry,
-    IReActExecutor reactExecutor,
-    IToolRegistry toolRegistry) : IHardcodedAgentProvider
+    IRoslynRefactoringService refactoringService,
+    IRoslynWorkspaceService workspaceService,
+    IPromptRegistry promptRegistry,
+    IFileSystem fileSystem) : IHardcodedAgentProvider
 {
     private readonly ILoggerFactory _loggerFactory = loggerFactory;
     private readonly ILlmProviderRegistry _llmRegistry = llmRegistry;
-    private readonly IReActExecutor _reactExecutor = reactExecutor;
-    private readonly IToolRegistry _toolRegistry = toolRegistry;
+    private readonly IRoslynRefactoringService _refactoringService = refactoringService;
+    private readonly IRoslynWorkspaceService _workspaceService = workspaceService;
+    private readonly IPromptRegistry _promptRegistry = promptRegistry;
+    private readonly IFileSystem _fileSystem = fileSystem;
 
     /// <inheritdoc/>
     public IEnumerable<IAgent> GetAgents()
@@ -46,12 +54,14 @@ public sealed class DeveloperAgentProvider(
 
         // === Specialist Coding Agents (Priority 10) ===
 
-        // C# - Sophisticated Roslyn coding agent with agentic tool use
-        // Uses Roslyn compiler APIs for semantic analysis - cannot be config-based
+        // C# - Deterministic Roslyn coding agent that calls Roslyn services directly
+        // Uses LLM to extract operations, then executes via Roslyn - guarantees semantic tool usage
         yield return new RoslynCodingAgent(
-            _reactExecutor,
-            _toolRegistry,
+            _refactoringService,
+            _workspaceService,
             _llmRegistry,
+            _promptRegistry,
+            _fileSystem,
             _loggerFactory.CreateLogger<RoslynCodingAgent>());
 
         // Note: F#, Python, TypeScript, Go, Rust now use config-based agents

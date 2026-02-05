@@ -1,0 +1,33 @@
+name: hello-world
+description: Create a simple Hello World console application
+language: csharp
+repository: fixtures/repos/csharp-console
+timeoutSeconds: 300
+
+story:
+  title: Create Hello World Console App
+  description: |
+    Create a simple C# console application that prints "Hello, World!" to the console.
+    
+    Requirements:
+    - Create a new console application project
+    - The program should print "Hello, World!" when run
+    - Include basic error handling
+
+expectations:
+  - type: compiles
+    description: The generated code should compile without errors
+  
+  - type: file_exists
+    description: Program.cs should exist
+    path: HelloWorld/Program.cs
+  
+  - type: file_contains
+    description: Should print Hello World
+    path: HelloWorld/Program.cs
+    pattern: 'Hello.*World'
+
+tags:
+  - beginner
+  - console
+  - csharp

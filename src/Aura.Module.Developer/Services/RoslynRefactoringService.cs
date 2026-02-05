@@ -186,6 +186,24 @@ public sealed partial class RoslynRefactoringService : IRoslynRefactoringService
             var references = await SymbolFinder.FindReferencesAsync(methodSymbol, solution, ct);
             var modifiedFiles = new List<string>();
 
+            // If this is an interface method, find implementations BEFORE we modify the interface
+            // (after modification, they won't match as implementations anymore due to signature change)
+            var implementationsToUpdate = new List<(IMethodSymbol Symbol, SyntaxReference DeclRef)>();
+            if (methodSymbol.ContainingType.TypeKind == TypeKind.Interface)
+            {
+                var implementations = await SymbolFinder.FindImplementationsAsync(methodSymbol, solution, cancellationToken: ct);
+                _logger.LogInformation("Found {Count} implementations of {Method} BEFORE modification", implementations.Count(), request.MethodName);
+
+                foreach (var implSymbol in implementations.OfType<IMethodSymbol>())
+                {
+                    var implDecl = implSymbol.DeclaringSyntaxReferences.FirstOrDefault();
+                    if (implDecl != null)
+                    {
+                        implementationsToUpdate.Add((implSymbol, implDecl));
+                    }
+                }
+            }
+
             // Find the method declaration
             var methodDecl = methodSymbol.DeclaringSyntaxReferences.FirstOrDefault();
             if (methodDecl is null)
@@ -213,6 +231,7 @@ public sealed partial class RoslynRefactoringService : IRoslynRefactoringService
 
             // Build new parameter list
             var existingParams = methodNode.ParameterList.Parameters.ToList();
+            var existingParamNames = existingParams.Select(p => p.Identifier.Text).ToHashSet();
             var newParams = new List<ParameterSyntax>(existingParams);
 
             // Remove parameters
@@ -222,11 +241,33 @@ public sealed partial class RoslynRefactoringService : IRoslynRefactoringService
                     !request.RemoveParameters.Contains(p.Identifier.Text)).ToList();
             }
 
-            // Add parameters
+            // Build set of existing parameter types for type-based duplicate detection
+            var existingParamTypes = existingParams
+                .Select(p => p.Type?.ToString().Trim())
+                .Where(t => t != null)
+                .ToHashSet();
+
+            // Add parameters (skip if already exists by name OR by type for special types like CancellationToken)
             if (request.AddParameters?.Count > 0)
             {
                 foreach (var param in request.AddParameters)
                 {
+                    // Skip if parameter with same name already exists
+                    if (existingParamNames.Contains(param.Name))
+                    {
+                        _logger.LogInformation("Parameter {Name} already exists in {Method}, skipping", param.Name, request.MethodName);
+                        continue;
+                    }
+
+                    // Skip if a parameter of the same type already exists (for types like CancellationToken where only one makes sense)
+                    var normalizedType = param.Type.Trim();
+                    if (normalizedType is "CancellationToken" or "System.Threading.CancellationToken" &&
+                        existingParamTypes.Any(t => t is "CancellationToken" or "System.Threading.CancellationToken"))
+                    {
+                        _logger.LogInformation("A CancellationToken parameter already exists in {Method}, skipping {Name}", request.MethodName, param.Name);
+                        continue;
+                    }
+
                     var paramSyntax = SyntaxFactory.Parameter(SyntaxFactory.Identifier(param.Name))
                         .WithType(SyntaxFactory.ParseTypeName(param.Type));
 
@@ -238,7 +279,20 @@ public sealed partial class RoslynRefactoringService : IRoslynRefactoringService
                     }
 
                     newParams.Add(paramSyntax);
+                    // Track added type for subsequent params in same request
+                    existingParamTypes.Add(normalizedType);
                 }
+            }
+
+            // If no changes were made (all params already exist), return early
+            if (newParams.Count == existingParams.Count &&
+                newParams.Select(p => p.Identifier.Text).SequenceEqual(existingParams.Select(p => p.Identifier.Text)))
+            {
+                return new RefactoringResult
+                {
+                    Success = true,
+                    Message = $"No changes needed - parameters already exist in {request.ContainingType}.{request.MethodName}"
+                };
             }
 
             // Create new parameter list
@@ -271,6 +325,121 @@ public sealed partial class RoslynRefactoringService : IRoslynRefactoringService
                     await File.WriteAllTextAsync(document.FilePath, formattedRoot.ToFullString(), ct);
                 }
                 modifiedFiles.Add(document.FilePath);
+            }
+
+            // Update implementations that we found BEFORE modifying the interface
+            if (implementationsToUpdate.Count > 0)
+            {
+                _logger.LogInformation("Updating {Count} implementations of interface method", implementationsToUpdate.Count);
+
+                // Reload solution to pick up interface changes
+                _workspaceService.ClearCache();
+                solution = await _workspaceService.GetSolutionAsync(request.SolutionPath, ct);
+
+                foreach (var (implSymbol, implDeclRef) in implementationsToUpdate)
+                {
+                    // Re-find the method node in the new solution
+                    var implDoc = solution.GetDocument(implDeclRef.SyntaxTree);
+                    if (implDoc?.FilePath is null)
+                    {
+                        continue;
+                    }
+
+                    // Skip if we've already modified this file (possible with multiple methods)
+                    if (modifiedFiles.Contains(implDoc.FilePath))
+                    {
+                        // Need to reload the document from disk since we modified it
+                        _workspaceService.ClearCache();
+                        solution = await _workspaceService.GetSolutionAsync(request.SolutionPath, ct);
+                        implDoc = solution.GetDocument(implDeclRef.SyntaxTree);
+                        if (implDoc is null)
+                        {
+                            continue;
+                        }
+                    }
+
+                    var implRoot = await implDoc.GetSyntaxRootAsync(ct);
+                    if (implRoot is null)
+                    {
+                        continue;
+                    }
+
+                    // Find the method by name in the class
+                    var implTypeSymbol = implSymbol.ContainingType;
+                    var implMethodNode = implRoot.DescendantNodes()
+                        .OfType<MethodDeclarationSyntax>()
+                        .FirstOrDefault(m => m.Identifier.Text == implSymbol.Name);
+
+                    if (implMethodNode is null)
+                    {
+                        _logger.LogWarning("Could not find method {Method} in {Type} after reload", implSymbol.Name, implTypeSymbol.Name);
+                        continue;
+                    }
+
+                    // Build new parameter list for implementation
+                    var implExistingParams = implMethodNode.ParameterList.Parameters.ToList();
+                    var implExistingParamNames = implExistingParams.Select(p => p.Identifier.Text).ToHashSet();
+                    var implExistingParamTypes = implExistingParams.Select(p => p.Type?.ToString().Trim()).Where(t => t != null).ToHashSet();
+                    var implNewParams = new List<ParameterSyntax>(implExistingParams);
+
+                    // Add parameters (skip if already exists)
+                    if (request.AddParameters?.Count > 0)
+                    {
+                        foreach (var param in request.AddParameters)
+                        {
+                            if (implExistingParamNames.Contains(param.Name))
+                            {
+                                _logger.LogInformation("Parameter {Name} already exists in {Type}.{Method}, skipping",
+                                    param.Name, implTypeSymbol.Name, implSymbol.Name);
+                                continue;
+                            }
+
+                            // Skip if same type already exists (CancellationToken)
+                            var normalizedType = param.Type.Trim();
+                            if (normalizedType is "CancellationToken" or "System.Threading.CancellationToken" &&
+                                implExistingParamTypes.Any(t => t is "CancellationToken" or "System.Threading.CancellationToken"))
+                            {
+                                _logger.LogInformation("A CancellationToken parameter already exists in {Type}.{Method}, skipping",
+                                    implTypeSymbol.Name, implSymbol.Name);
+                                continue;
+                            }
+
+                            var paramSyntax = SyntaxFactory.Parameter(SyntaxFactory.Identifier(param.Name))
+                                .WithType(SyntaxFactory.ParseTypeName(param.Type));
+
+                            // Note: implementations typically don't have default values
+                            implNewParams.Add(paramSyntax);
+                        }
+                    }
+
+                    // Remove parameters
+                    if (request.RemoveParameters?.Count > 0)
+                    {
+                        implNewParams = implNewParams.Where(p =>
+                            !request.RemoveParameters.Contains(p.Identifier.Text)).ToList();
+                    }
+
+                    // Skip if no changes needed
+                    if (implNewParams.Count == implExistingParams.Count &&
+                        implNewParams.Select(p => p.Identifier.Text).SequenceEqual(implExistingParams.Select(p => p.Identifier.Text)))
+                    {
+                        continue;
+                    }
+
+                    var implNewParamList = SyntaxFactory.ParameterList(SyntaxFactory.SeparatedList(implNewParams));
+                    var implNewMethodNode = implMethodNode.WithParameterList(implNewParamList);
+                    var implNewRoot = implRoot.ReplaceNode(implMethodNode, implNewMethodNode);
+                    var implFormattedRoot = Formatter.Format(implNewRoot, implDoc.Project.Solution.Workspace);
+
+                    using (await AcquireFileLockAsync(implDoc.FilePath!, ct))
+                    {
+                        await File.WriteAllTextAsync(implDoc.FilePath!, implFormattedRoot.ToFullString(), ct);
+                    }
+
+                    modifiedFiles.Add(implDoc.FilePath!);
+                    _logger.LogInformation("Updated implementation: {Type}.{Method}",
+                        implTypeSymbol.Name, implSymbol.Name);
+                }
             }
 
             // Update call sites with default values
@@ -707,15 +876,26 @@ public sealed partial class RoslynRefactoringService : IRoslynRefactoringService
             targetDir.Length > projectDir.Length)
         {
             var relativePath = targetDir[(projectDir.Length + 1)..];
-            var subNamespace = relativePath.Replace(Path.DirectorySeparatorChar, '.');
 
+            // Skip common source directory names that shouldn't be in namespaces
+            var parts = relativePath.Split(Path.DirectorySeparatorChar);
+            var filteredParts = parts.Where(p =>
+                !p.Equals("src", StringComparison.OrdinalIgnoreCase) &&
+                !p.Equals("source", StringComparison.OrdinalIgnoreCase) &&
+                !p.Equals("lib", StringComparison.OrdinalIgnoreCase)).ToArray();
+
+            if (filteredParts.Length == 0)
+            {
+                return rootNamespace;
+            }
+
+            var subNamespace = string.Join(".", filteredParts);
             return $"{rootNamespace}.{subNamespace}";
         }
-
         return rootNamespace;
     }
 
-    private static TypeDeclarationSyntax? GenerateTypeDeclaration(CreateTypeRequest request)
+    private static BaseTypeDeclarationSyntax? GenerateTypeDeclaration(CreateTypeRequest request)
     {
         // Build modifiers
         var modifiers = new List<SyntaxToken>();
@@ -793,7 +973,7 @@ public sealed partial class RoslynRefactoringService : IRoslynRefactoringService
         }
 
         // Generate the type based on kind
-        TypeDeclarationSyntax? typeDecl = request.TypeKind.ToLowerInvariant() switch
+        BaseTypeDeclarationSyntax? typeDecl = request.TypeKind.ToLowerInvariant() switch
         {
             "class" => CreateClassDeclaration(request.TypeName, modifiers, baseList, primaryConstructorParams, typeParameterList, constraintClauses),
 
@@ -807,36 +987,51 @@ public sealed partial class RoslynRefactoringService : IRoslynRefactoringService
 
             "struct" => CreateStructDeclaration(request.TypeName, modifiers, baseList, typeParameterList, constraintClauses),
 
-            "enum" => null, // Enums are handled separately below
+            "enum" => CreateEnumDeclaration(request.TypeName, modifiers, request.EnumMembers, leadingTrivia),
 
             _ => null
         };
 
-        // Handle enum specially (it doesn't have a base list in the same way)
-        if (request.TypeKind.Equals("enum", StringComparison.OrdinalIgnoreCase))
+        // Add attributes if provided (only for TypeDeclarationSyntax)
+        if (typeDecl is TypeDeclarationSyntax typeDeclSyntax && request.Attributes?.Count > 0)
         {
-            var enumDecl = SyntaxFactory.EnumDeclaration(request.TypeName)
-                .WithModifiers(SyntaxFactory.TokenList(modifiers))
-                .WithOpenBraceToken(SyntaxFactory.Token(SyntaxKind.OpenBraceToken))
-                .WithCloseBraceToken(SyntaxFactory.Token(SyntaxKind.CloseBraceToken));
-
-            if (leadingTrivia != default)
-            {
-                enumDecl = enumDecl.WithLeadingTrivia(leadingTrivia);
-            }
-
-            // EnumDeclaration is not a TypeDeclarationSyntax, so we need to cast
-            // Actually, EnumDeclarationSyntax is a BaseTypeDeclarationSyntax, not TypeDeclarationSyntax
-            // We need to handle this differently
-            return null; // For now, skip enums - they need different handling
+            typeDecl = typeDeclSyntax.WithAttributeLists(BuildAttributeListSyntax(request.Attributes));
         }
 
-        if (typeDecl != null && leadingTrivia != default)
+        // Add leading trivia (only for TypeDeclarationSyntax - enums handle this in CreateEnumDeclaration)
+        if (typeDecl is TypeDeclarationSyntax typeDeclForTrivia && leadingTrivia != default)
         {
-            typeDecl = typeDecl.WithLeadingTrivia(leadingTrivia);
+            typeDecl = typeDeclForTrivia.WithLeadingTrivia(leadingTrivia);
         }
 
         return typeDecl;
+    }
+
+    private static EnumDeclarationSyntax CreateEnumDeclaration(
+        string typeName,
+        List<SyntaxToken> modifiers,
+        IReadOnlyList<string>? enumMembers,
+        SyntaxTriviaList leadingTrivia)
+    {
+        var members = new List<EnumMemberDeclarationSyntax>();
+        if (enumMembers != null)
+        {
+            foreach (var member in enumMembers)
+            {
+                members.Add(SyntaxFactory.EnumMemberDeclaration(member));
+            }
+        }
+
+        var enumDecl = SyntaxFactory.EnumDeclaration(typeName)
+            .WithModifiers(SyntaxFactory.TokenList(modifiers))
+            .WithMembers(SyntaxFactory.SeparatedList(members));
+
+        if (leadingTrivia != default)
+        {
+            enumDecl = enumDecl.WithLeadingTrivia(leadingTrivia);
+        }
+
+        return enumDecl;
     }
 
     // =========================================================================

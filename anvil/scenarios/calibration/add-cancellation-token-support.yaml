@@ -1,0 +1,66 @@
+name: add-cancellation-token-support
+description: Add CancellationToken to all async service methods (Level 4 - Cross-cutting change)
+language: csharp
+repository: fixtures/repos/csharp-webapi
+timeoutSeconds: 600
+
+story:
+  title: Add CancellationToken Support to Services
+  description: |
+    Add CancellationToken parameter to all async methods in the service layer for proper request cancellation support.
+    
+    Requirements:
+    
+    1. Update IUserService interface:
+       - Add optional CancellationToken parameter to all async methods
+       - Example: Task<User?> GetUserAsync(int id, CancellationToken cancellationToken = default)
+    
+    2. Update UserService implementation:
+       - Accept CancellationToken in all async methods
+       - Pass the token to repository calls
+    
+    3. Update IUserRepository interface:
+       - Add CancellationToken parameter to all async methods
+    
+    4. Update InMemoryUserRepository:
+       - Accept CancellationToken in all async methods
+       - Use token.ThrowIfCancellationRequested() at start of methods
+    
+    5. Update UsersController:
+       - Accept CancellationToken in action methods (ASP.NET Core injects this automatically)
+       - Pass to service calls
+    
+    The agent should:
+    1. Find all async methods in the service/repository layers
+    2. Add CancellationToken parameter consistently
+    3. Ensure signatures match between interfaces and implementations
+
+expectations:
+  - type: compiles
+    description: Code should compile after adding CancellationToken parameters
+
+  - type: file_contains
+    description: IUserService has CancellationToken
+    path: src/Services/IUserService.cs
+    pattern: 'CancellationToken\s+(cancellationToken|ct)'
+
+  - type: file_contains
+    description: UserService has CancellationToken
+    path: src/Services/UserService.cs
+    pattern: 'CancellationToken\s+(cancellationToken|ct)'
+
+  - type: file_contains
+    description: IUserRepository has CancellationToken
+    path: src/Repositories/IUserRepository.cs
+    pattern: 'CancellationToken\s+(cancellationToken|ct)'
+
+  - type: file_contains
+    description: Controller passes CancellationToken
+    path: src/Controllers/UsersController.cs
+    pattern: '(cancellationToken|ct)'
+
+tags:
+  - calibration
+  - cross-cutting
+  - refactoring
+  - level-4

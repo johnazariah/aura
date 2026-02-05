@@ -1,0 +1,54 @@
+name: add-middleware
+description: Create ASP.NET Core middleware (Level 3 - Tests middleware pattern)
+language: csharp
+repository: fixtures/repos/csharp-webapi
+timeoutSeconds: 300
+
+story:
+  title: Add Request Logging Middleware
+  description: |
+    Create a middleware component that logs incoming requests.
+    
+    Create `src/Middleware/RequestLoggingMiddleware.cs` with:
+    - Class `RequestLoggingMiddleware` with RequestDelegate dependency
+    - Constructor that takes `RequestDelegate next` and `ILogger<RequestLoggingMiddleware> logger`
+    - `InvokeAsync(HttpContext context)` method that:
+      - Logs the request method and path
+      - Calls `await _next(context)`
+      - Logs the response status code
+    
+    Also create `src/Middleware/RequestLoggingMiddlewareExtensions.cs` with:
+    - Extension method `UseRequestLogging(this IApplicationBuilder app)`
+
+expectations:
+  - type: compiles
+    description: Middleware should compile
+
+  - type: file_exists
+    description: Middleware class created
+    path: src/Middleware/RequestLoggingMiddleware.cs
+
+  - type: file_exists
+    description: Extension class created
+    path: src/Middleware/RequestLoggingMiddlewareExtensions.cs
+
+  - type: file_contains
+    description: Has InvokeAsync method
+    path: src/Middleware/RequestLoggingMiddleware.cs
+    pattern: 'InvokeAsync'
+
+  - type: file_contains
+    description: Has RequestDelegate
+    path: src/Middleware/RequestLoggingMiddleware.cs
+    pattern: 'RequestDelegate'
+
+  - type: file_contains
+    description: Has extension method
+    path: src/Middleware/RequestLoggingMiddlewareExtensions.cs
+    pattern: 'UseRequestLogging'
+
+tags:
+  - calibration
+  - middleware
+  - aspnetcore
+  - level-3

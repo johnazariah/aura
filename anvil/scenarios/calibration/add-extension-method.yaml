@@ -1,0 +1,45 @@
+name: add-extension-method
+description: Create an extension method class (Level 2 - Tests extension methods)
+language: csharp
+repository: fixtures/repos/csharp-webapi
+timeoutSeconds: 300
+
+story:
+  title: Add String Extensions
+  description: |
+    Create extension methods for string operations.
+    
+    Create `src/Extensions/StringExtensions.cs` with:
+    - A static class `StringExtensions`
+    - Extension method `string Truncate(this string value, int maxLength)` 
+      that returns the first maxLength characters, adding "..." if truncated
+    - Handle null/empty strings gracefully
+    - Add XML documentation
+
+expectations:
+  - type: compiles
+    description: Extension class should compile
+
+  - type: file_exists
+    description: Extension file created
+    path: src/Extensions/StringExtensions.cs
+
+  - type: file_contains
+    description: Has static class
+    path: src/Extensions/StringExtensions.cs
+    pattern: 'public static class StringExtensions'
+
+  - type: file_contains
+    description: Has this keyword for extension
+    path: src/Extensions/StringExtensions.cs
+    pattern: 'this string'
+
+  - type: file_contains
+    description: Has Truncate method
+    path: src/Extensions/StringExtensions.cs
+    pattern: 'Truncate'
+
+tags:
+  - calibration
+  - extension-method
+  - level-2
