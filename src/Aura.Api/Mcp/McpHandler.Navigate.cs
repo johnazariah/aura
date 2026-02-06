@@ -24,7 +24,7 @@ public sealed partial class McpHandler
     /// </summary>
     private async Task<object> NavigateAsync(JsonElement? args, CancellationToken ct)
     {
-        var operation = args?.GetProperty("operation").GetString() ?? throw new ArgumentException("operation is required");
+        var operation = args.GetRequiredString("operation");
         return operation switch
         {
             "callers" => await FindCallersAsync(args, ct),
@@ -236,7 +236,7 @@ public sealed partial class McpHandler
             return await TypeScriptFindImplementationsAsync(args, ct);
         }
 
-        var typeName = args?.GetProperty("symbolName").GetString() ?? "";
+        var typeName = args.GetStringOrDefault("symbolName");
         var worktreeInfo = DetectWorktreeFromArgs(args);
         var results = await _graphService.FindImplementationsAsync(typeName, cancellationToken: ct);
         return results.Select(n => new { name = n.Name, fullName = n.FullName, kind = n.NodeType.ToString(), filePath = TranslatePathIfWorktree(n.FilePath, worktreeInfo), line = n.LineNumber });
@@ -244,7 +244,7 @@ public sealed partial class McpHandler
 
     private async Task<object> FindDerivedTypesFromNavigate(JsonElement? args, CancellationToken ct)
     {
-        var baseClassName = args?.GetProperty("symbolName").GetString() ?? "";
+        var baseClassName = args.GetStringOrDefault("symbolName");
         var worktreeInfo = DetectWorktreeFromArgs(args);
         var results = await _graphService.FindDerivedTypesAsync(baseClassName, cancellationToken: ct);
         return results.Select(n => new { name = n.Name, fullName = n.FullName, kind = n.NodeType.ToString(), filePath = TranslatePathIfWorktree(n.FilePath, worktreeInfo), line = n.LineNumber });
@@ -270,7 +270,7 @@ public sealed partial class McpHandler
 
     private async Task<object> FindImplementationsAsync(JsonElement? args, CancellationToken ct)
     {
-        var typeName = args?.GetProperty("typeName").GetString() ?? "";
+        var typeName = args.GetStringOrDefault("typeName");
         var worktreeInfo = DetectWorktreeFromArgs(args);
         var results = await _graphService.FindImplementationsAsync(typeName, cancellationToken: ct);
         return results.Select(n => new { name = n.Name, fullName = n.FullName, kind = n.NodeType.ToString(), filePath = TranslatePathIfWorktree(n.FilePath, worktreeInfo), line = n.LineNumber });
@@ -288,7 +288,7 @@ public sealed partial class McpHandler
             return await TypeScriptFindCallersAsync(args, ct);
         }
 
-        var methodName = args?.GetProperty("methodName").GetString() ?? "";
+        var methodName = args.GetStringOrDefault("methodName");
         string? containingType = null;
         if (args.HasValue && args.Value.TryGetProperty("containingType", out var typeEl))
         {
@@ -302,7 +302,7 @@ public sealed partial class McpHandler
 
     private async Task<object> FindDerivedTypesAsync(JsonElement? args, CancellationToken ct)
     {
-        var baseClassName = args?.GetProperty("baseClassName").GetString() ?? "";
+        var baseClassName = args.GetStringOrDefault("baseClassName");
         var worktreeInfo = DetectWorktreeFromArgs(args);
         var results = await _graphService.FindDerivedTypesAsync(baseClassName, cancellationToken: ct);
         return results.Select(n => new { name = n.Name, fullName = n.FullName, kind = n.NodeType.ToString(), filePath = TranslatePathIfWorktree(n.FilePath, worktreeInfo), line = n.LineNumber });
@@ -310,8 +310,8 @@ public sealed partial class McpHandler
 
     private async Task<object> FindUsagesAsync(JsonElement? args, CancellationToken ct)
     {
-        var symbolName = args?.GetProperty("symbolName").GetString() ?? "";
-        var solutionPath = args?.GetProperty("solutionPath").GetString() ?? "";
+        var symbolName = args.GetStringOrDefault("symbolName");
+        var solutionPath = args.GetStringOrDefault("solutionPath");
         string? containingType = null;
         if (args.HasValue && args.Value.TryGetProperty("containingType", out var typeEl))
         {
@@ -386,8 +386,8 @@ public sealed partial class McpHandler
 
     private async Task<object> FindByAttributeAsync(JsonElement? args, CancellationToken ct)
     {
-        var attributeName = args?.GetProperty("attributeName").GetString() ?? "";
-        var solutionPath = args?.GetProperty("solutionPath").GetString() ?? "";
+        var attributeName = args.GetStringOrDefault("attributeName");
+        var solutionPath = args.GetStringOrDefault("solutionPath");
         string? targetKind = null;
         if (args.HasValue && args.Value.TryGetProperty("targetKind", out var kindEl))
         {
@@ -515,8 +515,8 @@ public sealed partial class McpHandler
 
     private async Task<object> FindExtensionMethodsAsync(JsonElement? args, CancellationToken ct)
     {
-        var extendedTypeName = args?.GetProperty("extendedTypeName").GetString() ?? "";
-        var solutionPath = args?.GetProperty("solutionPath").GetString() ?? "";
+        var extendedTypeName = args.GetStringOrDefault("extendedTypeName");
+        var solutionPath = args.GetStringOrDefault("solutionPath");
         if (string.IsNullOrEmpty(solutionPath) || !File.Exists(solutionPath))
         {
             return new
@@ -590,8 +590,8 @@ public sealed partial class McpHandler
 
     private async Task<object> FindByReturnTypeAsync(JsonElement? args, CancellationToken ct)
     {
-        var returnTypeName = args?.GetProperty("returnTypeName").GetString() ?? "";
-        var solutionPath = args?.GetProperty("solutionPath").GetString() ?? "";
+        var returnTypeName = args.GetStringOrDefault("returnTypeName");
+        var solutionPath = args.GetStringOrDefault("solutionPath");
         if (string.IsNullOrEmpty(solutionPath) || !File.Exists(solutionPath))
         {
             return new

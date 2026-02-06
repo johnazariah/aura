@@ -25,7 +25,7 @@ public sealed partial class McpHandler
     /// </summary>
     private async Task<object> ValidateAsync(JsonElement? args, CancellationToken ct)
     {
-        var operation = args?.GetProperty("operation").GetString() ?? throw new ArgumentException("operation is required");
+        var operation = args.GetRequiredString("operation");
 
         // For validate, detection is simpler: solutionPath → C#, projectPath (without solutionPath) → TypeScript
         var language = DetectLanguageForValidation(args);
@@ -197,11 +197,16 @@ public sealed partial class McpHandler
 
     private async Task<object> RunTestsAsync(JsonElement? args, CancellationToken ct)
     {
-        var projectPath = args?.GetProperty("projectPath").GetString() ?? "";
+        string projectPath = "";
         string? filter = null;
         var timeoutSeconds = 120;
         if (args.HasValue)
         {
+            // Accept projectPath or solutionPath for C# test runs
+            if (args.Value.TryGetProperty("projectPath", out var ppEl))
+                projectPath = ppEl.GetString() ?? "";
+            if (string.IsNullOrEmpty(projectPath) && args.Value.TryGetProperty("solutionPath", out var solEl))
+                projectPath = solEl.GetString() ?? "";
             if (args.Value.TryGetProperty("filter", out var filterEl))
                 filter = filterEl.GetString();
             if (args.Value.TryGetProperty("timeoutSeconds", out var timeoutEl))

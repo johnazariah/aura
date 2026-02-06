@@ -23,10 +23,10 @@ public sealed partial class McpHandler
     // =========================================================================
     private async Task<object> PythonRenameAsync(JsonElement? args, CancellationToken ct)
     {
-        var projectPath = args?.GetProperty("projectPath").GetString() ?? "";
-        var filePath = args?.GetProperty("filePath").GetString() ?? "";
-        var offset = args?.GetProperty("offset").GetInt32() ?? 0;
-        var newName = args?.GetProperty("newName").GetString() ?? "";
+        var projectPath = args.GetStringOrDefault("projectPath");
+        var filePath = args.GetStringOrDefault("filePath");
+        var offset = args.GetInt32OrDefault("offset");
+        var newName = args.GetStringOrDefault("newName");
         var preview = args.HasValue && args.Value.TryGetProperty("preview", out var prevEl) && prevEl.GetBoolean();
         var result = await _pythonRefactoringService.RenameSymbolAsync(new PythonRenameRequest { ProjectPath = projectPath, FilePath = filePath, Offset = offset, NewName = newName, Preview = preview }, ct);
         return new
@@ -42,11 +42,11 @@ public sealed partial class McpHandler
 
     private async Task<object> PythonExtractMethodAsync(JsonElement? args, CancellationToken ct)
     {
-        var projectPath = args?.GetProperty("projectPath").GetString() ?? "";
-        var filePath = args?.GetProperty("filePath").GetString() ?? "";
-        var startOffset = args?.GetProperty("startOffset").GetInt32() ?? 0;
-        var endOffset = args?.GetProperty("endOffset").GetInt32() ?? 0;
-        var newName = args?.GetProperty("newName").GetString() ?? "";
+        var projectPath = args.GetStringOrDefault("projectPath");
+        var filePath = args.GetStringOrDefault("filePath");
+        var startOffset = args.GetInt32OrDefault("startOffset");
+        var endOffset = args.GetInt32OrDefault("endOffset");
+        var newName = args.GetStringOrDefault("newName");
         var preview = args.HasValue && args.Value.TryGetProperty("preview", out var prevEl) && prevEl.GetBoolean();
         var result = await _pythonRefactoringService.ExtractMethodAsync(new PythonExtractMethodRequest { ProjectPath = projectPath, FilePath = filePath, StartOffset = startOffset, EndOffset = endOffset, NewName = newName, Preview = preview }, ct);
         return new
@@ -62,11 +62,11 @@ public sealed partial class McpHandler
 
     private async Task<object> PythonExtractVariableAsync(JsonElement? args, CancellationToken ct)
     {
-        var projectPath = args?.GetProperty("projectPath").GetString() ?? "";
-        var filePath = args?.GetProperty("filePath").GetString() ?? "";
-        var startOffset = args?.GetProperty("startOffset").GetInt32() ?? 0;
-        var endOffset = args?.GetProperty("endOffset").GetInt32() ?? 0;
-        var newName = args?.GetProperty("newName").GetString() ?? "";
+        var projectPath = args.GetStringOrDefault("projectPath");
+        var filePath = args.GetStringOrDefault("filePath");
+        var startOffset = args.GetInt32OrDefault("startOffset");
+        var endOffset = args.GetInt32OrDefault("endOffset");
+        var newName = args.GetStringOrDefault("newName");
         var preview = args.HasValue && args.Value.TryGetProperty("preview", out var prevEl) && prevEl.GetBoolean();
         var result = await _pythonRefactoringService.ExtractVariableAsync(new PythonExtractVariableRequest { ProjectPath = projectPath, FilePath = filePath, StartOffset = startOffset, EndOffset = endOffset, NewName = newName, Preview = preview }, ct);
         return new
@@ -82,9 +82,9 @@ public sealed partial class McpHandler
 
     private async Task<object> PythonFindReferencesAsync(JsonElement? args, CancellationToken ct)
     {
-        var projectPath = args?.GetProperty("projectPath").GetString() ?? "";
-        var filePath = args?.GetProperty("filePath").GetString() ?? "";
-        var offset = args?.GetProperty("offset").GetInt32() ?? 0;
+        var projectPath = args.GetStringOrDefault("projectPath");
+        var filePath = args.GetStringOrDefault("filePath");
+        var offset = args.GetInt32OrDefault("offset");
         var result = await _pythonRefactoringService.FindReferencesAsync(new PythonFindReferencesRequest { ProjectPath = projectPath, FilePath = filePath, Offset = offset }, ct);
         return new
         {
@@ -97,9 +97,9 @@ public sealed partial class McpHandler
 
     private async Task<object> PythonFindDefinitionAsync(JsonElement? args, CancellationToken ct)
     {
-        var projectPath = args?.GetProperty("projectPath").GetString() ?? "";
-        var filePath = args?.GetProperty("filePath").GetString() ?? "";
-        var offset = args?.GetProperty("offset").GetInt32() ?? 0;
+        var projectPath = args.GetStringOrDefault("projectPath");
+        var filePath = args.GetStringOrDefault("filePath");
+        var offset = args.GetInt32OrDefault("offset");
         var result = await _pythonRefactoringService.FindDefinitionAsync(new PythonFindDefinitionRequest { ProjectPath = projectPath, FilePath = filePath, Offset = offset }, ct);
         return new
         {
@@ -118,10 +118,10 @@ public sealed partial class McpHandler
     // =========================================================================
     private async Task<object> TypeScriptRenameAsync(JsonElement? args, CancellationToken ct)
     {
-        var projectPath = args?.GetProperty("projectPath").GetString() ?? "";
-        var filePath = args?.GetProperty("filePath").GetString() ?? "";
-        var offset = args?.GetProperty("offset").GetInt32() ?? 0;
-        var newName = args?.GetProperty("newName").GetString() ?? "";
+        var projectPath = args.GetStringOrDefault("projectPath");
+        var filePath = args.GetStringOrDefault("filePath");
+        var offset = args.GetInt32OrDefault("offset");
+        var newName = args.GetStringOrDefault("newName");
         var preview = args.HasValue && args.Value.TryGetProperty("preview", out var prevEl) && prevEl.GetBoolean();
         var result = await _typeScriptService.RenameSymbolAsync(new TypeScriptRenameRequest { ProjectPath = projectPath, FilePath = filePath, Offset = offset, NewName = newName, Preview = preview }, ct);
         return new
@@ -136,11 +136,11 @@ public sealed partial class McpHandler
 
     private async Task<object> TypeScriptExtractFunctionAsync(JsonElement? args, CancellationToken ct)
     {
-        var projectPath = args?.GetProperty("projectPath").GetString() ?? "";
-        var filePath = args?.GetProperty("filePath").GetString() ?? "";
-        var startOffset = args?.GetProperty("startOffset").GetInt32() ?? 0;
-        var endOffset = args?.GetProperty("endOffset").GetInt32() ?? 0;
-        var newName = args?.GetProperty("newName").GetString() ?? "";
+        var projectPath = args.GetStringOrDefault("projectPath");
+        var filePath = args.GetStringOrDefault("filePath");
+        var startOffset = args.GetInt32OrDefault("startOffset");
+        var endOffset = args.GetInt32OrDefault("endOffset");
+        var newName = args.GetStringOrDefault("newName");
         var preview = args.HasValue && args.Value.TryGetProperty("preview", out var prevEl) && prevEl.GetBoolean();
         var result = await _typeScriptService.ExtractFunctionAsync(new TypeScriptExtractFunctionRequest { ProjectPath = projectPath, FilePath = filePath, StartOffset = startOffset, EndOffset = endOffset, NewName = newName, Preview = preview }, ct);
         return new
@@ -155,11 +155,11 @@ public sealed partial class McpHandler
 
     private async Task<object> TypeScriptExtractVariableAsync(JsonElement? args, CancellationToken ct)
     {
-        var projectPath = args?.GetProperty("projectPath").GetString() ?? "";
-        var filePath = args?.GetProperty("filePath").GetString() ?? "";
-        var startOffset = args?.GetProperty("startOffset").GetInt32() ?? 0;
-        var endOffset = args?.GetProperty("endOffset").GetInt32() ?? 0;
-        var newName = args?.GetProperty("newName").GetString() ?? "";
+        var projectPath = args.GetStringOrDefault("projectPath");
+        var filePath = args.GetStringOrDefault("filePath");
+        var startOffset = args.GetInt32OrDefault("startOffset");
+        var endOffset = args.GetInt32OrDefault("endOffset");
+        var newName = args.GetStringOrDefault("newName");
         var preview = args.HasValue && args.Value.TryGetProperty("preview", out var prevEl) && prevEl.GetBoolean();
         var result = await _typeScriptService.ExtractVariableAsync(new TypeScriptExtractVariableRequest { ProjectPath = projectPath, FilePath = filePath, StartOffset = startOffset, EndOffset = endOffset, NewName = newName, Preview = preview }, ct);
         return new
@@ -174,9 +174,9 @@ public sealed partial class McpHandler
 
     private async Task<object> TypeScriptFindReferencesAsync(JsonElement? args, CancellationToken ct)
     {
-        var projectPath = args?.GetProperty("projectPath").GetString() ?? "";
-        var filePath = args?.GetProperty("filePath").GetString() ?? "";
-        var offset = args?.GetProperty("offset").GetInt32() ?? 0;
+        var projectPath = args.GetStringOrDefault("projectPath");
+        var filePath = args.GetStringOrDefault("filePath");
+        var offset = args.GetInt32OrDefault("offset");
         var result = await _typeScriptService.FindReferencesAsync(new TypeScriptFindReferencesRequest { ProjectPath = projectPath, FilePath = filePath, Offset = offset }, ct);
         return new
         {
@@ -189,9 +189,9 @@ public sealed partial class McpHandler
 
     private async Task<object> TypeScriptFindDefinitionAsync(JsonElement? args, CancellationToken ct)
     {
-        var projectPath = args?.GetProperty("projectPath").GetString() ?? "";
-        var filePath = args?.GetProperty("filePath").GetString() ?? "";
-        var offset = args?.GetProperty("offset").GetInt32() ?? 0;
+        var projectPath = args.GetStringOrDefault("projectPath");
+        var filePath = args.GetStringOrDefault("filePath");
+        var offset = args.GetInt32OrDefault("offset");
         var result = await _typeScriptService.FindDefinitionAsync(new TypeScriptFindDefinitionRequest { ProjectPath = projectPath, FilePath = filePath, Offset = offset }, ct);
         return new
         {
@@ -208,8 +208,8 @@ public sealed partial class McpHandler
 
     private async Task<object> TypeScriptInspectTypeAsync(JsonElement? args, CancellationToken ct)
     {
-        var projectPath = args?.GetProperty("projectPath").GetString() ?? "";
-        var typeName = args?.GetProperty("typeName").GetString() ?? "";
+        var projectPath = args.GetStringOrDefault("projectPath");
+        var typeName = args.GetStringOrDefault("typeName");
         string? filePath = null;
         if (args.HasValue && args.Value.TryGetProperty("filePath", out var fpEl))
         {
@@ -242,7 +242,7 @@ public sealed partial class McpHandler
 
     private async Task<object> TypeScriptListTypesAsync(JsonElement? args, CancellationToken ct)
     {
-        var projectPath = args?.GetProperty("projectPath").GetString() ?? "";
+        var projectPath = args.GetStringOrDefault("projectPath");
         string? nameFilter = null;
         if (args.HasValue && args.Value.TryGetProperty("nameFilter", out var nfEl))
         {
@@ -271,9 +271,9 @@ public sealed partial class McpHandler
 
     private async Task<object> TypeScriptFindCallersAsync(JsonElement? args, CancellationToken ct)
     {
-        var projectPath = args?.GetProperty("projectPath").GetString() ?? "";
-        var filePath = args?.GetProperty("filePath").GetString() ?? "";
-        var offset = args?.GetProperty("offset").GetInt32() ?? 0;
+        var projectPath = args.GetStringOrDefault("projectPath");
+        var filePath = args.GetStringOrDefault("filePath");
+        var offset = args.GetInt32OrDefault("offset");
         var result = await _typeScriptService.FindCallersAsync(
             new TypeScriptFindCallersRequest { ProjectPath = projectPath, FilePath = filePath, Offset = offset },
             ct);
@@ -296,9 +296,9 @@ public sealed partial class McpHandler
 
     private async Task<object> TypeScriptFindImplementationsAsync(JsonElement? args, CancellationToken ct)
     {
-        var projectPath = args?.GetProperty("projectPath").GetString() ?? "";
-        var filePath = args?.GetProperty("filePath").GetString() ?? "";
-        var offset = args?.GetProperty("offset").GetInt32() ?? 0;
+        var projectPath = args.GetStringOrDefault("projectPath");
+        var filePath = args.GetStringOrDefault("filePath");
+        var offset = args.GetInt32OrDefault("offset");
         var result = await _typeScriptService.FindImplementationsAsync(
             new TypeScriptFindImplementationsRequest { ProjectPath = projectPath, FilePath = filePath, Offset = offset },
             ct);
@@ -320,7 +320,7 @@ public sealed partial class McpHandler
 
     private async Task<object> TypeScriptCheckAsync(JsonElement? args, CancellationToken ct)
     {
-        var projectPath = args?.GetProperty("projectPath").GetString() ?? "";
+        var projectPath = args.GetStringOrDefault("projectPath");
 
         if (string.IsNullOrEmpty(projectPath))
         {
@@ -356,7 +356,7 @@ public sealed partial class McpHandler
 
     private async Task<object> TypeScriptRunTestsAsync(JsonElement? args, CancellationToken ct)
     {
-        var projectPath = args?.GetProperty("projectPath").GetString() ?? "";
+        var projectPath = args.GetStringOrDefault("projectPath");
         var timeoutSeconds = 120;
 
         if (args.HasValue && args.Value.TryGetProperty("timeoutSeconds", out var timeoutEl))

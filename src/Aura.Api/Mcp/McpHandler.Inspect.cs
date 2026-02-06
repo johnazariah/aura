@@ -25,7 +25,7 @@ public sealed partial class McpHandler
     /// </summary>
     private async Task<object> InspectAsync(JsonElement? args, CancellationToken ct)
     {
-        var operation = args?.GetProperty("operation").GetString() ?? throw new ArgumentException("operation is required");
+        var operation = args.GetRequiredString("operation");
         var language = DetectLanguageFromArgs(args);
 
         return (operation, language) switch
@@ -46,7 +46,7 @@ public sealed partial class McpHandler
 
     private async Task<object> GetTypeMembersAsync(JsonElement? args, CancellationToken ct)
     {
-        var typeName = args?.GetProperty("typeName").GetString() ?? "";
+        var typeName = args.GetStringOrDefault("typeName");
         var worktreeInfo = DetectWorktreeFromArgs(args);
         // Try code graph first
         var results = await _graphService.GetTypeMembersAsync(typeName, cancellationToken: ct);

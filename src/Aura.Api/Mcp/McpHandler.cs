@@ -813,8 +813,7 @@ public sealed partial class McpHandler
     /// </summary>
     private Task<object> ArchitectAsync(JsonElement? args, CancellationToken ct)
     {
-        var operation = args?.GetProperty("operation").GetString()
-            ?? throw new ArgumentException("operation is required");
+        var operation = args.GetRequiredString("operation");
 
         return Task.FromResult<object>(new
         {
@@ -830,8 +829,7 @@ public sealed partial class McpHandler
     /// </summary>
     private Task<object> WorkspaceAsync(JsonElement? args, CancellationToken ct)
     {
-        var operation = args?.GetProperty("operation").GetString()
-            ?? throw new ArgumentException("operation is required");
+        var operation = args.GetRequiredString("operation");
 
         return operation switch
         {
@@ -850,8 +848,7 @@ public sealed partial class McpHandler
 
     private static string GetRequiredPath(JsonElement? args)
     {
-        return args?.GetProperty("path").GetString()
-            ?? throw new ArgumentException("path is required for this operation");
+        return args.GetRequiredString("path");
     }
 
     private object DetectWorktreeOperation(string path)
@@ -1043,8 +1040,7 @@ public sealed partial class McpHandler
 
     private async Task<object> TreeAsync(JsonElement? args, CancellationToken ct)
     {
-        var workspacePath = args?.GetProperty("workspacePath").GetString()
-            ?? throw new ArgumentException("workspacePath is required");
+        var workspacePath = args.GetRequiredString("workspacePath");
 
         var operation = args?.TryGetProperty("operation", out var opEl) == true
             ? opEl.GetString() ?? "explore"
@@ -1083,8 +1079,7 @@ public sealed partial class McpHandler
 
     private async Task<object> TreeGetNodeAsync(JsonElement? args, string workspacePath, CancellationToken ct)
     {
-        var nodeId = args?.GetProperty("nodeId").GetString()
-            ?? throw new ArgumentException("nodeId is required for get_node operation");
+        var nodeId = args.GetRequiredString("nodeId");
 
         _logger.LogDebug("aura_tree(get_node): workspacePath={Path}, nodeId={NodeId}", workspacePath, nodeId);
 
@@ -1135,8 +1130,7 @@ public sealed partial class McpHandler
 
     private async Task<object> DocsSearchAsync(JsonElement? args, CancellationToken ct)
     {
-        var query = args?.GetProperty("query").GetString()
-            ?? throw new ArgumentException("query is required for search operation");
+        var query = args.GetRequiredString("query");
 
         _logger.LogDebug("aura_docs(search): query={Query}", query);
 
@@ -1184,8 +1178,7 @@ public sealed partial class McpHandler
 
     private object DocsGetInternal(JsonElement? args)
     {
-        var id = args?.GetProperty("id").GetString()
-            ?? throw new ArgumentException("id is required for get operation");
+        var id = args.GetRequiredString("id");
 
         _logger.LogDebug("aura_docs(get): id={Id}", id);
 

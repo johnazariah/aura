@@ -59,7 +59,7 @@ public sealed partial class McpHandler
 
     private async Task<object> SearchCodeAsync(JsonElement? args, CancellationToken ct)
     {
-        var query = args?.GetProperty("query").GetString() ?? "";
+        var query = args.GetStringOrDefault("query");
         var limit = 10;
         if (args.HasValue && args.Value.TryGetProperty("limit", out var limitEl))
         {

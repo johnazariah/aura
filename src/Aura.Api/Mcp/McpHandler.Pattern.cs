@@ -27,7 +27,7 @@ public sealed partial class McpHandler
     /// </summary>
     private Task<object> PatternAsync(JsonElement? args, CancellationToken ct)
     {
-        var operation = args?.GetProperty("operation").GetString() ?? throw new ArgumentException("operation is required");
+        var operation = args.GetRequiredString("operation");
         return operation switch
         {
             "list" => Task.FromResult(ListPatternsOperation()),

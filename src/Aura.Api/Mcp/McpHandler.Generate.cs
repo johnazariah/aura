@@ -24,7 +24,7 @@ public sealed partial class McpHandler
     /// </summary>
     private async Task<object> GenerateAsync(JsonElement? args, CancellationToken ct)
     {
-        var operation = args?.GetProperty("operation").GetString() ?? throw new ArgumentException("operation is required");
+        var operation = args.GetRequiredString("operation");
         return operation switch
         {
             "implement_interface" => await ImplementInterfaceAsync(args, ct),
@@ -39,9 +39,9 @@ public sealed partial class McpHandler
 
     private async Task<object> ImplementInterfaceAsync(JsonElement? args, CancellationToken ct)
     {
-        var className = args?.GetProperty("className").GetString() ?? "";
-        var interfaceName = args?.GetProperty("interfaceName").GetString() ?? "";
-        var solutionPath = args?.GetProperty("solutionPath").GetString() ?? "";
+        var className = args.GetStringOrDefault("className");
+        var interfaceName = args.GetStringOrDefault("interfaceName");
+        var solutionPath = args.GetStringOrDefault("solutionPath");
         var explicitImpl = false;
         var preview = false;
         if (args.HasValue)
@@ -64,8 +64,8 @@ public sealed partial class McpHandler
 
     private async Task<object> GenerateConstructorAsync(JsonElement? args, CancellationToken ct)
     {
-        var className = args?.GetProperty("className").GetString() ?? "";
-        var solutionPath = args?.GetProperty("solutionPath").GetString() ?? "";
+        var className = args.GetStringOrDefault("className");
+        var solutionPath = args.GetStringOrDefault("solutionPath");
         List<string>? members = null;
         var preview = false;
         if (args.HasValue)
@@ -91,9 +91,9 @@ public sealed partial class McpHandler
 
     private async Task<object> ExtractInterfaceAsync(JsonElement? args, CancellationToken ct)
     {
-        var className = args?.GetProperty("className").GetString() ?? "";
-        var interfaceName = args?.GetProperty("interfaceName").GetString() ?? "";
-        var solutionPath = args?.GetProperty("solutionPath").GetString() ?? "";
+        var className = args.GetStringOrDefault("className");
+        var interfaceName = args.GetStringOrDefault("interfaceName");
+        var solutionPath = args.GetStringOrDefault("solutionPath");
         List<string>? members = null;
         var preview = false;
         if (args.HasValue)
@@ -120,10 +120,10 @@ public sealed partial class McpHandler
 
     private async Task<object> AddPropertyAsync(JsonElement? args, CancellationToken ct)
     {
-        var className = args?.GetProperty("className").GetString() ?? "";
-        var propertyName = args?.GetProperty("propertyName").GetString() ?? "";
-        var propertyType = args?.GetProperty("propertyType").GetString() ?? "";
-        var solutionPath = args?.GetProperty("solutionPath").GetString() ?? "";
+        var className = args.GetStringOrDefault("className");
+        var propertyName = args.GetStringOrDefault("propertyName");
+        var propertyType = args.GetStringOrDefault("propertyType");
+        var solutionPath = args.GetStringOrDefault("solutionPath");
         var accessModifier = "public";
         var hasGetter = true;
         var hasSetter = true;
@@ -185,10 +185,10 @@ public sealed partial class McpHandler
 
     private async Task<object> AddMethodAsync(JsonElement? args, CancellationToken ct)
     {
-        var className = args?.GetProperty("className").GetString() ?? "";
-        var methodName = args?.GetProperty("methodName").GetString() ?? "";
-        var returnType = args?.GetProperty("returnType").GetString() ?? "";
-        var solutionPath = args?.GetProperty("solutionPath").GetString() ?? "";
+        var className = args.GetStringOrDefault("className");
+        var methodName = args.GetStringOrDefault("methodName");
+        var returnType = args.GetStringOrDefault("returnType");
+        var solutionPath = args.GetStringOrDefault("solutionPath");
         List<RefactoringParameterInfo>? parameters = null;
         var accessModifier = "public";
         var isAsync = false;
@@ -203,7 +203,7 @@ public sealed partial class McpHandler
         {
             if (args.Value.TryGetProperty("parameters", out var paramsEl) && paramsEl.ValueKind == JsonValueKind.Array)
             {
-                parameters = paramsEl.EnumerateArray().Select(p => new RefactoringParameterInfo(p.GetProperty("name").GetString() ?? "", p.GetProperty("type").GetString() ?? "", p.TryGetProperty("defaultValue", out var dv) ? dv.GetString() : null)).ToList();
+                parameters = paramsEl.EnumerateArray().Select(p => new RefactoringParameterInfo(p.TryGetProperty("name", out var nm) ? nm.GetString() ?? "" : "", p.TryGetProperty("type", out var tp) ? tp.GetString() ?? "" : "", p.TryGetProperty("defaultValue", out var dv) ? dv.GetString() : null)).ToList();
             }
 
             if (args.Value.TryGetProperty("accessModifier", out var amEl))
@@ -262,10 +262,10 @@ public sealed partial class McpHandler
 
     private async Task<object> CreateTypeAsync(JsonElement? args, CancellationToken ct)
     {
-        var typeName = args?.GetProperty("typeName").GetString() ?? throw new ArgumentException("typeName is required for create_type");
-        var typeKind = args?.GetProperty("typeKind").GetString() ?? throw new ArgumentException("typeKind is required for create_type");
-        var solutionPath = args?.GetProperty("solutionPath").GetString() ?? throw new ArgumentException("solutionPath is required for create_type");
-        var targetDirectory = args?.GetProperty("targetDirectory").GetString() ?? throw new ArgumentException("targetDirectory is required for create_type");
+        var typeName = args.GetRequiredString("typeName");
+        var typeKind = args.GetRequiredString("typeKind");
+        var solutionPath = args.GetRequiredString("solutionPath");
+        var targetDirectory = args.GetRequiredString("targetDirectory");
         string? ns = null;
         string? baseClass = null;
         List<string>? interfaces = null;
@@ -349,7 +349,7 @@ public sealed partial class McpHandler
     private async Task<object> GenerateTestsAsync(JsonElement? args, CancellationToken ct)
     {
         var target = args?.TryGetProperty("target", out var targetEl) == true ? targetEl.GetString() ?? throw new ArgumentException("target is required for tests operation") : args?.TryGetProperty("className", out var classEl) == true ? classEl.GetString() ?? throw new ArgumentException("target or className is required") : throw new ArgumentException("target is required for tests operation");
-        var solutionPath = args?.GetProperty("solutionPath").GetString() ?? throw new ArgumentException("solutionPath is required");
+        var solutionPath = args.GetRequiredString("solutionPath");
         int? count = null;
         int maxTests = 20;
         var focus = TestFocus.All;

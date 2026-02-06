@@ -25,7 +25,7 @@ public sealed partial class McpHandler
     /// </summary>
     private async Task<object> RefactorAsync(JsonElement? args, CancellationToken ct)
     {
-        var operation = args?.GetProperty("operation").GetString() ?? throw new ArgumentException("operation is required");
+        var operation = args.GetRequiredString("operation");
         var language = DetectLanguageFromArgs(args);
 
         return operation switch
@@ -51,9 +51,9 @@ public sealed partial class McpHandler
     private async Task<object> ExtractInterfaceFromRefactor(JsonElement? args, CancellationToken ct)
     {
         // Map from new schema (symbolName as class name, newName as interface name) to old schema
-        var className = args?.GetProperty("symbolName").GetString() ?? throw new ArgumentException("symbolName (class name) is required for extract_interface");
-        var interfaceName = args?.GetProperty("newName").GetString() ?? throw new ArgumentException("newName (interface name) is required for extract_interface");
-        var solutionPath = args?.GetProperty("solutionPath").GetString() ?? throw new ArgumentException("solutionPath is required for extract_interface");
+        var className = args.GetRequiredString("symbolName");
+        var interfaceName = args.GetRequiredString("newName");
+        var solutionPath = args.GetRequiredString("solutionPath");
         var preview = false;
         if (args.HasValue && args.Value.TryGetProperty("preview", out var previewEl))
         {
@@ -85,9 +85,9 @@ public sealed partial class McpHandler
     // =========================================================================
     private async Task<object> RenameSymbolAsync(JsonElement? args, CancellationToken ct)
     {
-        var symbolName = args?.GetProperty("symbolName").GetString() ?? "";
-        var newName = args?.GetProperty("newName").GetString() ?? "";
-        var solutionPath = args?.GetProperty("solutionPath").GetString() ?? "";
+        var symbolName = args.GetStringOrDefault("symbolName");
+        var newName = args.GetStringOrDefault("newName");
+        var solutionPath = args.GetStringOrDefault("solutionPath");
         string? containingType = null;
         string? filePath = null;
         var preview = false;
@@ -165,9 +165,9 @@ public sealed partial class McpHandler
 
     private async Task<object> ChangeSignatureAsync(JsonElement? args, CancellationToken ct)
     {
-        var methodName = args?.GetProperty("methodName").GetString() ?? "";
-        var containingType = args?.GetProperty("containingType").GetString() ?? "";
-        var solutionPath = args?.GetProperty("solutionPath").GetString() ?? "";
+        var methodName = args.GetStringOrDefault("methodName");
+        var containingType = args.GetStringOrDefault("containingType");
+        var solutionPath = args.GetStringOrDefault("solutionPath");
         List<RefactoringParameterInfo>? addParams = null;
         List<string>? removeParams = null;
         var preview = false;
@@ -175,7 +175,7 @@ public sealed partial class McpHandler
         {
             if (args.Value.TryGetProperty("addParameters", out var addEl) && addEl.ValueKind == JsonValueKind.Array)
             {
-                addParams = addEl.EnumerateArray().Select(p => new RefactoringParameterInfo(p.GetProperty("name").GetString() ?? "", p.GetProperty("type").GetString() ?? "", p.TryGetProperty("defaultValue", out var dv) ? dv.GetString() : null)).ToList();
+                addParams = addEl.EnumerateArray().Select(p => new RefactoringParameterInfo(p.TryGetProperty("name", out var nm) ? nm.GetString() ?? "" : "", p.TryGetProperty("type", out var tp) ? tp.GetString() ?? "" : "", p.TryGetProperty("defaultValue", out var dv) ? dv.GetString() : null)).ToList();
             }
 
             if (args.Value.TryGetProperty("removeParameters", out var remEl) && remEl.ValueKind == JsonValueKind.Array)
@@ -199,8 +199,8 @@ public sealed partial class McpHandler
 
     private async Task<object> SafeDeleteAsync(JsonElement? args, CancellationToken ct)
     {
-        var symbolName = args?.GetProperty("symbolName").GetString() ?? "";
-        var solutionPath = args?.GetProperty("solutionPath").GetString() ?? "";
+        var symbolName = args.GetStringOrDefault("symbolName");
+        var solutionPath = args.GetStringOrDefault("solutionPath");
         string? containingType = null;
         var preview = false;
         if (args.HasValue)
@@ -232,8 +232,8 @@ public sealed partial class McpHandler
 
     private async Task<object> MoveTypeToFileAsync(JsonElement? args, CancellationToken ct)
     {
-        var typeName = args?.GetProperty("symbolName").GetString() ?? throw new ArgumentException("symbolName (type name) is required for move_type_to_file");
-        var solutionPath = args?.GetProperty("solutionPath").GetString() ?? throw new ArgumentException("solutionPath is required for move_type_to_file");
+        var typeName = args.GetRequiredString("symbolName");
+        var solutionPath = args.GetRequiredString("solutionPath");
         string? targetDirectory = null;
         string? targetFileName = null;
         var useGitMove = true;
@@ -264,9 +264,9 @@ public sealed partial class McpHandler
 
     private async Task<object> MoveMembersToPartialAsync(JsonElement? args, CancellationToken ct)
     {
-        var className = args?.GetProperty("className").GetString() ?? throw new ArgumentException("className is required");
-        var solutionPath = args?.GetProperty("solutionPath").GetString() ?? throw new ArgumentException("solutionPath is required");
-        var targetFileName = args?.GetProperty("targetFileName").GetString() ?? throw new ArgumentException("targetFileName is required");
+        var className = args.GetRequiredString("className");
+        var solutionPath = args.GetRequiredString("solutionPath");
+        var targetFileName = args.GetRequiredString("targetFileName");
         // memberNames can be a single string or an array
         var memberNames = new List<string>();
         if (args.HasValue && args.Value.TryGetProperty("memberNames", out var membersEl))

@@ -872,7 +872,7 @@ public class McpHandlerTests
         var response = JsonSerializer.Deserialize<JsonRpcResponse>(responseJson);
         response.Should().NotBeNull();
         response!.Error.Should().NotBeNull();
-        response.Error!.Message.Should().ContainAny("key", "dictionary");
+        response.Error!.Message.Should().Contain("required");
 
         _docsService.DidNotReceiveWithAnyArgs().GetDocument(Arg.Any<string>());
     }

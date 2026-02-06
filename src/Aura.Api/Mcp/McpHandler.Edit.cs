@@ -27,8 +27,8 @@ public sealed partial class McpHandler
     /// </summary>
     private async Task<object> EditAsync(JsonElement? args, CancellationToken ct)
     {
-        var operation = args?.GetProperty("operation").GetString() ?? throw new ArgumentException("operation is required");
-        var filePath = args?.GetProperty("filePath").GetString() ?? throw new ArgumentException("filePath is required");
+        var operation = args.GetRequiredString("operation");
+        var filePath = args.GetRequiredString("filePath");
         var preview = args?.TryGetProperty("preview", out var previewProp) == true && previewProp.GetBoolean();
         if (!File.Exists(filePath))
         {

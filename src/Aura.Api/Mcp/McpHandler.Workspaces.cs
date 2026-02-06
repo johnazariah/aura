@@ -32,17 +32,16 @@ public sealed partial class McpHandler
 
     private object AddWorkspaceOperation(JsonElement? args)
     {
-        var path = args?.GetProperty("path").GetString()
-            ?? throw new ArgumentException("path is required for add operation");
+        var path = args.GetRequiredString("path");
 
         string? alias = null;
-        if (args.Value.TryGetProperty("alias", out var aliasEl))
+        if (args?.TryGetProperty("alias", out var aliasEl) == true)
         {
             alias = aliasEl.GetString();
         }
 
         List<string>? tags = null;
-        if (args.Value.TryGetProperty("tags", out var tagsEl))
+        if (args?.TryGetProperty("tags", out var tagsEl) == true)
         {
             tags = tagsEl.EnumerateArray()
                 .Select(e => e.GetString() ?? string.Empty)
@@ -78,8 +77,7 @@ public sealed partial class McpHandler
 
     private object RemoveWorkspaceOperation(JsonElement? args)
     {
-        var id = args?.GetProperty("id").GetString()
-            ?? throw new ArgumentException("id is required for remove operation");
+        var id = args.GetRequiredString("id");
 
         var removed = _workspaceRegistryService.RemoveWorkspace(id);
 
@@ -92,8 +90,7 @@ public sealed partial class McpHandler
 
     private object SetDefaultWorkspaceOperation(JsonElement? args)
     {
-        var id = args?.GetProperty("id").GetString()
-            ?? throw new ArgumentException("id is required for set_default operation");
+        var id = args.GetRequiredString("id");
 
         var set = _workspaceRegistryService.SetDefault(id);
 

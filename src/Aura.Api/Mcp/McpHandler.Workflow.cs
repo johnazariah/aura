@@ -24,7 +24,7 @@ public sealed partial class McpHandler
     /// </summary>
     private async Task<object> WorkflowAsync(JsonElement? args, CancellationToken ct)
     {
-        var operation = args?.GetProperty("operation").GetString() ?? throw new ArgumentException("operation is required");
+        var operation = args.GetRequiredString("operation");
         return operation switch
         {
             "list" => await ListStoriesAsync(args, ct),
@@ -47,7 +47,7 @@ public sealed partial class McpHandler
 
     private async Task<object> GetStoryContextAsync(JsonElement? args, CancellationToken ct)
     {
-        var storyIdStr = args?.GetProperty("storyId").GetString() ?? "";
+        var storyIdStr = args.GetStringOrDefault("storyId");
         if (!Guid.TryParse(storyIdStr, out var storyId))
         {
             return new
@@ -98,7 +98,7 @@ public sealed partial class McpHandler
 
     private async Task<object> GetStoryByPathAsync(JsonElement? args, CancellationToken ct)
     {
-        var workspacePath = args?.GetProperty("workspacePath").GetString() ?? "";
+        var workspacePath = args.GetStringOrDefault("workspacePath");
         if (string.IsNullOrWhiteSpace(workspacePath))
         {
             return new
@@ -168,7 +168,7 @@ public sealed partial class McpHandler
 
     private async Task<object> CreateStoryFromIssueAsync(JsonElement? args, CancellationToken ct)
     {
-        var issueUrl = args?.GetProperty("issueUrl").GetString() ?? "";
+        var issueUrl = args.GetStringOrDefault("issueUrl");
         if (string.IsNullOrEmpty(issueUrl))
         {
             return new
@@ -241,7 +241,7 @@ public sealed partial class McpHandler
 
     private async Task<object> EnrichStoryAsync(JsonElement? args, CancellationToken ct)
     {
-        var storyIdStr = args?.GetProperty("storyId").GetString() ?? "";
+        var storyIdStr = args.GetStringOrDefault("storyId");
         if (!Guid.TryParse(storyIdStr, out var storyId))
         {
             return new
@@ -360,7 +360,7 @@ public sealed partial class McpHandler
 
     private async Task<object> UpdateStepAsync(JsonElement? args, CancellationToken ct)
     {
-        var storyIdStr = args?.GetProperty("storyId").GetString() ?? "";
+        var storyIdStr = args.GetStringOrDefault("storyId");
         if (!Guid.TryParse(storyIdStr, out var storyId))
         {
             return new
@@ -369,7 +369,7 @@ public sealed partial class McpHandler
             };
         }
 
-        var stepIdStr = args?.GetProperty("stepId").GetString() ?? "";
+        var stepIdStr = args.GetStringOrDefault("stepId");
         if (!Guid.TryParse(stepIdStr, out var stepId))
         {
             return new
@@ -378,7 +378,7 @@ public sealed partial class McpHandler
             };
         }
 
-        var statusStr = args?.GetProperty("status").GetString()?.ToLowerInvariant() ?? "";
+        var statusStr = args.GetStringOrDefault("status").ToLowerInvariant();
         if (string.IsNullOrEmpty(statusStr))
         {
             return new
@@ -464,7 +464,7 @@ public sealed partial class McpHandler
     /// </summary>
     private async Task<object> CompleteStoryAsync(JsonElement? args, CancellationToken ct)
     {
-        var storyIdStr = args?.GetProperty("storyId").GetString() ?? "";
+        var storyIdStr = args.GetStringOrDefault("storyId");
         if (!Guid.TryParse(storyIdStr, out var storyId))
         {
             return new
