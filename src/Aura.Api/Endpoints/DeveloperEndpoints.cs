@@ -43,6 +43,9 @@ public static class DeveloperEndpoints
         app.MapPost("/api/developer/stories/{id:guid}/finalize", FinalizeStory);
         app.MapPost("/api/developer/stories/{id:guid}/chat", ChatWithStory);
 
+        // Artifact export
+        app.MapPost("/api/developer/stories/{id:guid}/export", ExportStory);
+
         // DEPRECATED: Internal agent model endpoints - will be removed
         // These are replaced by /decompose + /run which use Copilot CLI
 #pragma warning disable CS0618 // Type or member is obsolete
@@ -743,6 +746,40 @@ public static class DeveloperEndpoints
         catch (InvalidOperationException ex)
         {
             return Problem.InvalidState(ex.Message, context);
+        }
+    }
+
+    private static async Task<IResult> ExportStory(
+        Guid id,
+        ExportStoryRequest request,
+        HttpContext context,
+        IStoryExporter exporter,
+        CancellationToken ct)
+    {
+        try
+        {
+            var exportRequest = new StoryExportRequest
+            {
+                OutputPath = request.OutputPath,
+                Format = request.Format,
+                Include = request.Include,
+            };
+
+            var result = await exporter.ExportAsync(id, exportRequest, ct);
+
+            return Results.Ok(new
+            {
+                exported = result.Exported.Select(e => new { type = e.Type, path = e.Path }),
+                warnings = result.Warnings,
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Problem.InvalidState(ex.Message, context);
+        }
+        catch (Exception ex)
+        {
+            return Problem.InternalError(ex.Message, context);
         }
     }
 

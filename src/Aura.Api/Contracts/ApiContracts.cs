@@ -200,6 +200,12 @@ public record PostUpdateRequest(string Message);
 /// <summary>Request to close the linked issue.</summary>
 public record CloseIssueRequest(string? Comment = null);
 
+/// <summary>Request to export story artifacts.</summary>
+public record ExportStoryRequest(
+    string? OutputPath = null,
+    string Format = "sdd",
+    List<string>? Include = null);
+
 /// <summary>Request to decompose a story into parallelizable tasks.</summary>
 public record DecomposeStoryRequest(
     int MaxParallelism = 4,

@@ -55,6 +55,7 @@ public sealed class DeveloperModule : IAuraModule
 
         // Register Developer Module services
         services.AddScoped<IStoryService, StoryService>();
+        services.AddScoped<IStoryExporter, StoryExporter>();
         services.AddSingleton<ITreeBuilderService, TreeBuilderService>();
 
         // Register GitHub service with typed HttpClient
