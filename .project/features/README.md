@@ -107,6 +107,7 @@ features/
 
 | Feature | Description |
 |---------|-------------|
+| [Python Inspect & Validate](upcoming/python-inspect-validate.md) | Extend aura_inspect and aura_validate to Python |
 | [macOS CI & Distribution](upcoming/macos-ci-and-distribution.md) | CI builds, Homebrew cask, menu bar app (needs self-hosted runner) |
 
 ### Lower Priority (Advanced)
