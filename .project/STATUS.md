@@ -1,6 +1,6 @@
 # Aura Project Status
 
-> **Last Updated**: 2026-02-02
+> **Last Updated**: 2026-02-06
 > **Current Release**: v1.3.1
 > **Branch**: main
 > **Overall Status**: ✅ Production Ready
@@ -10,6 +10,13 @@
 Aura is a **local-first, privacy-safe AI foundation** for knowledge work. The Developer Module is production-ready with MCP integration for GitHub Copilot, Roslyn refactoring tools, pattern-driven workflows, and multi-language support. The Researcher Module provides academic paper management and research workflows.
 
 ## Recent Changes
+
+- **2026-02-06**: Remove Internal Agent Architecture (7,093 lines deleted)
+  - Deleted RoslynCodingAgent, InternalAgentExecutor, ConversationService
+  - Removed built-in chat UI (chatPanelProvider, chatWindowProvider, agentTreeProvider)
+  - Removed 10 deprecated endpoints and 4 agent execution endpoints
+  - Copilot Chat + MCP is now the only execution path
+  - All 849 tests pass
 
 - **2026-02-02**: Researcher Module - Academic paper and research management
   - Entities: Source, Excerpt, Concept, ConceptLink, Synthesis
@@ -37,7 +44,7 @@ Aura is a **local-first, privacy-safe AI foundation** for knowledge work. The De
 | **Aura.Api** | ✅ Complete | `src/Aura.Api/Program.cs` |
 | **Aura.AppHost** | ✅ Complete | `src/Aura.AppHost/` |
 | **VS Code Extension** | ✅ Complete | `extension/src/` |
-| **Tests** | ✅ 783 passing | `tests/` |
+| **Tests** | ✅ 849 passing | `tests/` |
 
 ## Feature Inventory
 
@@ -72,10 +79,8 @@ Aura is a **local-first, privacy-safe AI foundation** for knowledge work. The De
 |---------|--------|-------|
 | Workflow Tree View | ✅ | Grouped by status, filtered by workspace |
 | Workflow Panel | ✅ | Full create/analyze/plan/execute UI |
-| Step Management | ✅ | Approve/reject/skip/chat/reassign |
-| Agent Tree View | ✅ | Hierarchical by capability |
 | Status Tree View | ✅ | Health, Ollama models, RAG stats |
-| Chat Window | ✅ | Per-agent chat panels |
+| Research Library View | ✅ | Source import, search, excerpts |
 
 ## API Reference
 

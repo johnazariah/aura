@@ -93,6 +93,7 @@ features/
 | [TypeScript Refactoring](completed/typescript-refactoring.md) | aura_refactor/navigate for TS/JS via ts-morph | 2026-01-30 |
 | [SDD Artifact Export](completed/sdd-artifact-export.md) | Export story artifacts as SDD-compatible markdown | 2026-02-06 |
 | [Stringly-Typed Cleanup](completed/tech-debt-stringly-typed-code.md) | Replace magic strings with strongly-typed patterns | 2026-02-06 |
+| [Remove Internal Agent Architecture](completed/remove-internal-agent-architecture.md) | Remove dead internal execution & chat code (7,093 lines) | 2026-02-06 |
 
 ## Upcoming Features
 
@@ -100,6 +101,7 @@ features/
 
 | Feature | Description |
 |---------|-------------|
+| [Polyglot MCP Tools](upcoming/polyglot-mcp-tools.md) | Extend aura_inspect, aura_navigate, aura_validate to TypeScript |
 
 ### Medium Priority
 
