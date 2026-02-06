@@ -45,26 +45,13 @@ public sealed partial class McpHandler
     /// </summary>
     private async Task<object> FindReferencesAsync(JsonElement? args, CancellationToken ct)
     {
-        // Check if filePath is provided and detect language
-        if (args.HasValue && args.Value.TryGetProperty("filePath", out var filePathEl))
+        var language = DetectLanguageFromArgs(args);
+        return language switch
         {
-            var filePath = filePathEl.GetString() ?? "";
-            if (filePath.EndsWith(".py", StringComparison.OrdinalIgnoreCase))
-            {
-                return await PythonFindReferencesAsync(args, ct);
-            }
-
-            if (filePath.EndsWith(".ts", StringComparison.OrdinalIgnoreCase) ||
-                filePath.EndsWith(".tsx", StringComparison.OrdinalIgnoreCase) ||
-                filePath.EndsWith(".js", StringComparison.OrdinalIgnoreCase) ||
-                filePath.EndsWith(".jsx", StringComparison.OrdinalIgnoreCase))
-            {
-                return await TypeScriptFindReferencesAsync(args, ct);
-            }
-        }
-
-        // For C#, use usages (references is an alias for usages)
-        return await FindUsagesAsync(args, ct);
+            "python" => await PythonFindReferencesAsync(args, ct),
+            "typescript" => await TypeScriptFindReferencesAsync(args, ct),
+            _ => await FindUsagesAsync(args, ct),
+        };
     }
 
     /// <summary>
@@ -72,56 +59,24 @@ public sealed partial class McpHandler
     /// </summary>
     private async Task<object> FindDefinitionAsync(JsonElement? args, CancellationToken ct)
     {
-        // Check if this is a Python or TypeScript request (has filePath)
-        if (args.HasValue && args.Value.TryGetProperty("filePath", out var filePathEl))
+        var language = DetectLanguageFromArgs(args);
+
+        if (language == "python")
         {
-            var filePath = filePathEl.GetString() ?? "";
-            if (filePath.EndsWith(".py", StringComparison.OrdinalIgnoreCase))
-            {
-                // Validate required Python parameters
-                if (!args.Value.TryGetProperty("projectPath", out _))
-                {
-                    return new
-                    {
-                        error = "projectPath is required for Python definition lookup"
-                    };
-                }
+            if (!args.HasValue || !args.Value.TryGetProperty("projectPath", out _))
+                return new { error = "projectPath is required for Python definition lookup" };
+            if (!args.Value.TryGetProperty("offset", out _))
+                return new { error = "offset is required for Python definition lookup" };
+            return await PythonFindDefinitionAsync(args, ct);
+        }
 
-                if (!args.Value.TryGetProperty("offset", out _))
-                {
-                    return new
-                    {
-                        error = "offset is required for Python definition lookup"
-                    };
-                }
-
-                return await PythonFindDefinitionAsync(args, ct);
-            }
-
-            if (filePath.EndsWith(".ts", StringComparison.OrdinalIgnoreCase) ||
-                filePath.EndsWith(".tsx", StringComparison.OrdinalIgnoreCase) ||
-                filePath.EndsWith(".js", StringComparison.OrdinalIgnoreCase) ||
-                filePath.EndsWith(".jsx", StringComparison.OrdinalIgnoreCase))
-            {
-                // Validate required TypeScript parameters
-                if (!args.Value.TryGetProperty("projectPath", out _))
-                {
-                    return new
-                    {
-                        error = "projectPath is required for TypeScript definition lookup"
-                    };
-                }
-
-                if (!args.Value.TryGetProperty("offset", out _))
-                {
-                    return new
-                    {
-                        error = "offset is required for TypeScript definition lookup"
-                    };
-                }
-
-                return await TypeScriptFindDefinitionAsync(args, ct);
-            }
+        if (language == "typescript")
+        {
+            if (!args.HasValue || !args.Value.TryGetProperty("projectPath", out _))
+                return new { error = "projectPath is required for TypeScript definition lookup" };
+            if (!args.Value.TryGetProperty("offset", out _))
+                return new { error = "offset is required for TypeScript definition lookup" };
+            return await TypeScriptFindDefinitionAsync(args, ct);
         }
 
         // For C#, find definition in code graph

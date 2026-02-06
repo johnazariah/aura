@@ -21,14 +21,19 @@ public sealed partial class McpHandler
     /// <summary>
     /// aura_inspect - Examine code structure.
     /// Routes to: type_members, list_types.
+    /// Auto-detects language from solutionPath (C#) vs projectPath (TypeScript/Python).
     /// </summary>
     private async Task<object> InspectAsync(JsonElement? args, CancellationToken ct)
     {
         var operation = args?.GetProperty("operation").GetString() ?? throw new ArgumentException("operation is required");
-        return operation switch
+        var language = DetectLanguageFromArgs(args);
+
+        return (operation, language) switch
         {
-            "type_members" => await GetTypeMembersAsync(args, ct),
-            "list_types" => await ListClassesFromInspect(args, ct),
+            ("type_members", "typescript") => new { error = "TypeScript type_members is not yet implemented. Use aura_tree with maxDepth=3 for TypeScript type exploration." },
+            ("list_types", "typescript") => new { error = "TypeScript list_types is not yet implemented. Use aura_tree with maxDepth=2 for TypeScript type listing." },
+            ("type_members", _) => await GetTypeMembersAsync(args, ct),
+            ("list_types", _) => await ListClassesFromInspect(args, ct),
             _ => throw new ArgumentException($"Unknown inspect operation: {operation}")
         };
     }

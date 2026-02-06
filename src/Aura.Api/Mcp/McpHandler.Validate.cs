@@ -21,14 +21,19 @@ public sealed partial class McpHandler
     /// <summary>
     /// aura_validate - Check code correctness.
     /// Routes to: compilation, tests.
+    /// Auto-detects language from solutionPath (C#) vs projectPath (TypeScript/Python).
     /// </summary>
     private async Task<object> ValidateAsync(JsonElement? args, CancellationToken ct)
     {
         var operation = args?.GetProperty("operation").GetString() ?? throw new ArgumentException("operation is required");
-        return operation switch
+        var language = DetectLanguageFromArgs(args);
+
+        return (operation, language) switch
         {
-            "compilation" => await ValidateCompilationAsync(args, ct),
-            "tests" => await RunTestsAsync(args, ct),
+            ("compilation", "typescript") => new { error = "TypeScript compilation validation is not yet implemented. Use run_in_terminal with 'npx tsc --noEmit' for TypeScript type checking." },
+            ("tests", "typescript") => new { error = "TypeScript test execution is not yet implemented. Use run_in_terminal with 'npx jest' or 'npx vitest' for TypeScript tests." },
+            ("compilation", _) => await ValidateCompilationAsync(args, ct),
+            ("tests", _) => await RunTestsAsync(args, ct),
             _ => throw new ArgumentException($"Unknown validate operation: {operation}")
         };
     }

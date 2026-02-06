@@ -43,7 +43,7 @@ public sealed partial class McpHandler
     private readonly IRoslynWorkspaceService _roslynService;
     private readonly IRoslynRefactoringService _refactoringService;
     private readonly IPythonRefactoringService _pythonRefactoringService;
-    private readonly ITypeScriptRefactoringService _typeScriptRefactoringService;
+    private readonly ITypeScriptLanguageService _typeScriptService;
     private readonly ITestGenerationService _testGenerationService;
     private readonly IGitWorktreeService _worktreeService;
     private readonly ITreeBuilderService _treeBuilderService;
@@ -65,7 +65,7 @@ public sealed partial class McpHandler
         IRoslynWorkspaceService roslynService,
         IRoslynRefactoringService refactoringService,
         IPythonRefactoringService pythonRefactoringService,
-        ITypeScriptRefactoringService typeScriptRefactoringService,
+        ITypeScriptLanguageService typeScriptService,
         ITestGenerationService testGenerationService,
         IGitWorktreeService worktreeService,
         ITreeBuilderService treeBuilderService,
@@ -81,7 +81,7 @@ public sealed partial class McpHandler
         _roslynService = roslynService;
         _refactoringService = refactoringService;
         _pythonRefactoringService = pythonRefactoringService;
-        _typeScriptRefactoringService = typeScriptRefactoringService;
+        _typeScriptService = typeScriptService;
         _testGenerationService = testGenerationService;
         _worktreeService = worktreeService;
         _treeBuilderService = treeBuilderService;
@@ -253,7 +253,7 @@ public sealed partial class McpHandler
             new McpToolDefinition
             {
                 Name = "aura_inspect",
-                Description = "Examine code structure: type members, class listings, project exploration. (Read)",
+                Description = "Examine code structure: type members, class listings, project exploration. Auto-detects language from solutionPath (C#) vs projectPath (TypeScript/Python). (Read)",
                 InputSchema = new
                 {
                     type = "object",
@@ -267,6 +267,7 @@ public sealed partial class McpHandler
                         },
                         typeName = new { type = "string", description = "Type name for type_members operation" },
                         solutionPath = new { type = "string", description = "Path to solution file (.sln) - enables Roslyn fallback when code graph is empty" },
+                        projectPath = new { type = "string", description = "Project root path - for TypeScript/Python operations" },
                         projectName = new { type = "string", description = "Project name for list_types operation" },
                         namespaceFilter = new { type = "string", description = "Filter by namespace (partial match)" },
                         nameFilter = new { type = "string", description = "Filter by type name (partial match)" }
@@ -471,7 +472,7 @@ public sealed partial class McpHandler
                         },
                         preview = new { type = "boolean", description = "If true, return changes without applying (default: false)" }
                     },
-                    required = new[] { "operation", "solutionPath" }
+                    required = new[] { "operation" }
                 }
             },
 
@@ -481,7 +482,7 @@ public sealed partial class McpHandler
             new McpToolDefinition
             {
                 Name = "aura_validate",
-                Description = "Validate code: check compilation, run tests. Use after code changes. (Read)",
+                Description = "Validate code: check compilation, run tests. Use after code changes. Auto-detects language from solutionPath (C#) vs projectPath (TypeScript/Python). (Read)",
                 InputSchema = new
                 {
                     type = "object",
@@ -985,6 +986,55 @@ public sealed partial class McpHandler
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Detects the programming language from MCP tool arguments.
+    /// Priority: filePath extension → solutionPath (C#) → projectPath (detect from directory).
+    /// </summary>
+    private static string DetectLanguageFromArgs(JsonElement? args)
+    {
+        if (!args.HasValue) return "csharp";
+
+        // 1. Check filePath extension
+        if (args.Value.TryGetProperty("filePath", out var fpEl))
+        {
+            var fp = fpEl.GetString() ?? "";
+            if (IsTypeScriptExtension(fp)) return "typescript";
+            if (fp.EndsWith(".py", StringComparison.OrdinalIgnoreCase)) return "python";
+        }
+
+        // 2. solutionPath → always C#
+        if (args.Value.TryGetProperty("solutionPath", out _))
+            return "csharp";
+
+        // 3. projectPath → detect from directory contents
+        if (args.Value.TryGetProperty("projectPath", out var ppEl))
+        {
+            var pp = ppEl.GetString() ?? "";
+            if (!string.IsNullOrEmpty(pp) && Directory.Exists(pp))
+            {
+                if (File.Exists(Path.Combine(pp, "tsconfig.json"))) return "typescript";
+                if (File.Exists(Path.Combine(pp, "pyproject.toml"))) return "python";
+                if (File.Exists(Path.Combine(pp, "setup.py"))) return "python";
+                if (File.Exists(Path.Combine(pp, "requirements.txt"))) return "python";
+                // package.json without tsconfig could be JS — still route to TypeScript service
+                if (File.Exists(Path.Combine(pp, "package.json"))) return "typescript";
+            }
+        }
+
+        return "csharp"; // default
+    }
+
+    /// <summary>
+    /// Checks whether a file path has a TypeScript/JavaScript extension.
+    /// </summary>
+    private static bool IsTypeScriptExtension(string filePath)
+    {
+        return filePath.EndsWith(".ts", StringComparison.OrdinalIgnoreCase) ||
+               filePath.EndsWith(".tsx", StringComparison.OrdinalIgnoreCase) ||
+               filePath.EndsWith(".js", StringComparison.OrdinalIgnoreCase) ||
+               filePath.EndsWith(".jsx", StringComparison.OrdinalIgnoreCase);
     }
 
     // =========================================================================

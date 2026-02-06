@@ -26,20 +26,7 @@ public sealed partial class McpHandler
     private async Task<object> RefactorAsync(JsonElement? args, CancellationToken ct)
     {
         var operation = args?.GetProperty("operation").GetString() ?? throw new ArgumentException("operation is required");
-        // Detect language from filePath if provided
-        var language = "csharp"; // default
-        if (args.HasValue && args.Value.TryGetProperty("filePath", out var filePathEl))
-        {
-            var filePath = filePathEl.GetString() ?? "";
-            if (filePath.EndsWith(".py", StringComparison.OrdinalIgnoreCase))
-            {
-                language = "python";
-            }
-            else if (filePath.EndsWith(".ts", StringComparison.OrdinalIgnoreCase) || filePath.EndsWith(".tsx", StringComparison.OrdinalIgnoreCase) || filePath.EndsWith(".js", StringComparison.OrdinalIgnoreCase) || filePath.EndsWith(".jsx", StringComparison.OrdinalIgnoreCase))
-            {
-                language = "typescript";
-            }
-        }
+        var language = DetectLanguageFromArgs(args);
 
         return operation switch
         {
