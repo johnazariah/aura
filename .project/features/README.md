@@ -91,6 +91,8 @@ features/
 | [Technical Debt Cleanup](completed/technical-debt-cleanup.md) | Pre-1.0 cleanup: schema, naming, file splits, dead code | 2026-01-30 |
 | [ReAct Post-Code Validation](completed/react-post-code-validation.md) | Automatic build validation before agent finish | 2026-01-30 |
 | [TypeScript Refactoring](completed/typescript-refactoring.md) | aura_refactor/navigate for TS/JS via ts-morph | 2026-01-30 |
+| [SDD Artifact Export](completed/sdd-artifact-export.md) | Export story artifacts as SDD-compatible markdown | 2026-02-06 |
+| [Stringly-Typed Cleanup](completed/tech-debt-stringly-typed-code.md) | Replace magic strings with strongly-typed patterns | 2026-02-06 |
 
 ## Upcoming Features
 
@@ -112,7 +114,6 @@ features/
 | [Condensed Export](upcoming/condensed-export.md) | Export indexed context |
 | [Internationalization](upcoming/internationalization.md) | Multi-language UI support |
 | [Layered Fleet Architecture](upcoming/layered-fleet-architecture.md) | Multi-tier fleet with local/team/cloud layers |
-| [Stringly-Typed Cleanup](upcoming/tech-debt-stringly-typed-code.md) | Replace magic strings with strongly-typed patterns |
 
 ### Unplanned (Backlog)
 
