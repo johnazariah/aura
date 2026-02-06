@@ -217,7 +217,7 @@ This script can be installed as a pre-commit hook: `.\scripts\Validate-Features.
 
 **CRITICAL**: When Aura MCP tools are available, prefer them over text manipulation (`replace_string_in_file`, `create_file`) for C# code changes. Aura tools understand code semantics; text tools don't.
 
-**Polyglot support**: `aura_navigate` and `aura_refactor` support **C#, TypeScript, and Python**. Language is auto-detected from `filePath` extension, `solutionPath` (C#), or `projectPath` (TypeScript/Python). `aura_inspect` and `aura_validate` are C#-only with graceful error messages for other languages.
+**Polyglot support**: `aura_navigate`, `aura_refactor`, `aura_inspect`, and `aura_validate` support **C# and TypeScript**. `aura_navigate` and `aura_refactor` also support **Python**. Language is auto-detected from `filePath` extension, `solutionPath` (C#), or `projectPath` (TypeScript/Python).
 
 | Task | Use This | NOT This |
 |------|----------|----------|
@@ -247,8 +247,8 @@ This script can be installed as a pre-commit hook: `.\scripts\Validate-Features.
 |------|------------|-----------------|-------------|
 | `aura_search` | Semantic code search | All | First step to understand codebase |
 | `aura_navigate` | `callers`, `implementations`, `derived_types`, `usages`, `references`, `definition`, `by_attribute` | C#, TypeScript, Python | Understanding code relationships |
-| `aura_inspect` | `type_members`, `list_types` | C# only | Exploring class structure |
-| `aura_validate` | `compilation`, `tests` | C# only | After changes to verify correctness |
+| `aura_inspect` | `type_members`, `list_types` | C#, TypeScript | Exploring class/type structure |
+| `aura_validate` | `compilation`, `tests` | C#, TypeScript | After changes to verify correctness |
 | `aura_refactor` | `rename`, `extract_method`, `extract_variable`, `extract_interface`, `change_signature`, `safe_delete`, `move_type_to_file` | C#, TypeScript, Python | Semantic code transformations |
 | `aura_generate` | `create_type`, `tests`, `implement_interface`, `constructor`, `property`, `method` | C# only | Adding new code elements |
 | `aura_pattern` | `list`, `get` | All | Load step-by-step operational patterns |

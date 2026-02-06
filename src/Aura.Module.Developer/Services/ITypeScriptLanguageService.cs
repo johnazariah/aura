@@ -98,6 +98,16 @@ public interface ITypeScriptLanguageService
     Task<TypeScriptFindImplementationsResult> FindImplementationsAsync(
         TypeScriptFindImplementationsRequest request,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Check TypeScript compilation by running type checking via ts-morph.
+    /// </summary>
+    /// <param name="request">The check request.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Compilation check result with diagnostics.</returns>
+    Task<TypeScriptCheckResult> CheckAsync(
+        TypeScriptCheckRequest request,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -521,4 +531,61 @@ public record TypeScriptImplementationLocation
 
     /// <summary>Column number (1-based).</summary>
     public required int Column { get; init; }
+}
+
+/// <summary>
+/// Request to check TypeScript compilation.
+/// </summary>
+public record TypeScriptCheckRequest
+{
+    /// <summary>Path to the project root (containing tsconfig.json).</summary>
+    public required string ProjectPath { get; init; }
+}
+
+/// <summary>
+/// Result of a TypeScript compilation check.
+/// </summary>
+public record TypeScriptCheckResult
+{
+    /// <summary>Whether the operation succeeded (script ran without error).</summary>
+    public required bool Success { get; init; }
+
+    /// <summary>Error message if the operation itself failed.</summary>
+    public string? Error { get; init; }
+
+    /// <summary>Whether compilation passed with no errors.</summary>
+    public bool CompilationSucceeded { get; init; }
+
+    /// <summary>Number of compilation errors.</summary>
+    public int ErrorCount { get; init; }
+
+    /// <summary>Number of compilation warnings.</summary>
+    public int WarningCount { get; init; }
+
+    /// <summary>List of diagnostics.</summary>
+    public IReadOnlyList<TypeScriptDiagnostic>? Diagnostics { get; init; }
+}
+
+/// <summary>
+/// A single TypeScript compilation diagnostic.
+/// </summary>
+public record TypeScriptDiagnostic
+{
+    /// <summary>File path where the diagnostic occurred.</summary>
+    public required string FilePath { get; init; }
+
+    /// <summary>Line number (1-based).</summary>
+    public required int Line { get; init; }
+
+    /// <summary>Column number (1-based).</summary>
+    public required int Column { get; init; }
+
+    /// <summary>Severity: error or warning.</summary>
+    public required string Severity { get; init; }
+
+    /// <summary>Diagnostic code (e.g., TS2304).</summary>
+    public required string Code { get; init; }
+
+    /// <summary>Human-readable diagnostic message.</summary>
+    public required string Message { get; init; }
 }

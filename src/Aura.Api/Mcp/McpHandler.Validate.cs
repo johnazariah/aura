@@ -26,16 +26,45 @@ public sealed partial class McpHandler
     private async Task<object> ValidateAsync(JsonElement? args, CancellationToken ct)
     {
         var operation = args?.GetProperty("operation").GetString() ?? throw new ArgumentException("operation is required");
-        var language = DetectLanguageFromArgs(args);
+
+        // For validate, detection is simpler: solutionPath → C#, projectPath (without solutionPath) → TypeScript
+        var language = DetectLanguageForValidation(args);
 
         return (operation, language) switch
         {
-            ("compilation", "typescript") => new { error = "TypeScript compilation validation is not yet implemented. Use run_in_terminal with 'npx tsc --noEmit' for TypeScript type checking." },
-            ("tests", "typescript") => new { error = "TypeScript test execution is not yet implemented. Use run_in_terminal with 'npx jest' or 'npx vitest' for TypeScript tests." },
+            ("compilation", "typescript") => await TypeScriptCheckAsync(args, ct),
+            ("tests", "typescript") => await TypeScriptRunTestsAsync(args, ct),
             ("compilation", _) => await ValidateCompilationAsync(args, ct),
             ("tests", _) => await RunTestsAsync(args, ct),
             _ => throw new ArgumentException($"Unknown validate operation: {operation}")
         };
+    }
+
+    /// <summary>
+    /// Detect language for validate operations. Uses explicit parameter presence:
+    /// solutionPath → C#, projectPath (without solutionPath) → TypeScript.
+    /// Falls back to general detection for ambiguous cases.
+    /// </summary>
+    private static string DetectLanguageForValidation(JsonElement? args)
+    {
+        if (!args.HasValue) return "csharp";
+
+        // solutionPath → always C#
+        if (args.Value.TryGetProperty("solutionPath", out var solEl))
+        {
+            var sol = solEl.GetString();
+            if (!string.IsNullOrEmpty(sol)) return "csharp";
+        }
+
+        // projectPath without solutionPath → TypeScript
+        // (Python validate is not yet supported)
+        if (args.Value.TryGetProperty("projectPath", out var ppEl))
+        {
+            var pp = ppEl.GetString();
+            if (!string.IsNullOrEmpty(pp)) return "typescript";
+        }
+
+        return "csharp";
     }
 
     private async Task<object> ValidateCompilationAsync(JsonElement? args, CancellationToken ct)

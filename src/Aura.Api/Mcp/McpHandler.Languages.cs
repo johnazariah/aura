@@ -317,4 +317,300 @@ public sealed partial class McpHandler
             }),
         };
     }
+
+    private async Task<object> TypeScriptCheckAsync(JsonElement? args, CancellationToken ct)
+    {
+        var projectPath = args?.GetProperty("projectPath").GetString() ?? "";
+
+        if (string.IsNullOrEmpty(projectPath))
+        {
+            return new { error = "projectPath is required for TypeScript compilation checking" };
+        }
+
+        var result = await _typeScriptService.CheckAsync(
+            new TypeScriptCheckRequest { ProjectPath = projectPath },
+            ct);
+        return new
+        {
+            success = result.Success,
+            error = result.Error,
+            compilationSucceeded = result.CompilationSucceeded,
+            errorCount = result.ErrorCount,
+            warningCount = result.WarningCount,
+            diagnostics = result.Diagnostics?.Select(d => new
+            {
+                filePath = d.FilePath,
+                line = d.Line,
+                column = d.Column,
+                severity = d.Severity,
+                code = d.Code,
+                message = d.Message,
+            }),
+            summary = result.Success
+                ? (result.CompilationSucceeded
+                    ? "TypeScript compilation succeeded"
+                    : $"TypeScript compilation failed with {result.ErrorCount} error(s) and {result.WarningCount} warning(s)")
+                : result.Error,
+        };
+    }
+
+    private async Task<object> TypeScriptRunTestsAsync(JsonElement? args, CancellationToken ct)
+    {
+        var projectPath = args?.GetProperty("projectPath").GetString() ?? "";
+        var timeoutSeconds = 120;
+
+        if (args.HasValue && args.Value.TryGetProperty("timeoutSeconds", out var timeoutEl))
+        {
+            timeoutSeconds = timeoutEl.GetInt32();
+        }
+
+        string? filter = null;
+        if (args.HasValue && args.Value.TryGetProperty("filter", out var filterEl))
+        {
+            filter = filterEl.GetString();
+        }
+
+        if (string.IsNullOrEmpty(projectPath))
+        {
+            return new { error = "projectPath is required for TypeScript test execution" };
+        }
+
+        // Detect test runner from package.json
+        var packageJsonPath = Path.Combine(projectPath, "package.json");
+        if (!File.Exists(packageJsonPath))
+        {
+            return new { error = $"package.json not found at {projectPath}" };
+        }
+
+        string runner;
+        string arguments;
+        try
+        {
+            var packageJson = await File.ReadAllTextAsync(packageJsonPath, ct);
+            var doc = JsonDocument.Parse(packageJson);
+
+            // Check devDependencies and dependencies for test runner
+            var hasVitest = HasDependency(doc, "vitest");
+            var hasJest = HasDependency(doc, "jest");
+
+            if (hasVitest)
+            {
+                runner = "vitest";
+                arguments = "npx vitest run --reporter=json";
+                if (!string.IsNullOrEmpty(filter))
+                {
+                    arguments += $" -t \"{filter}\"";
+                }
+            }
+            else if (hasJest)
+            {
+                runner = "jest";
+                arguments = "npx jest --json";
+                if (!string.IsNullOrEmpty(filter))
+                {
+                    arguments += $" -t \"{filter}\"";
+                }
+            }
+            else
+            {
+                return new { error = "No test runner detected. Install vitest or jest in your project." };
+            }
+        }
+        catch (Exception ex)
+        {
+            return new { error = $"Failed to read package.json: {ex.Message}" };
+        }
+
+        try
+        {
+            // Determine shell and shell argument based on OS
+            string shell;
+            string shellArg;
+            if (OperatingSystem.IsWindows())
+            {
+                shell = "cmd";
+                shellArg = "/c";
+            }
+            else
+            {
+                shell = "/bin/sh";
+                shellArg = "-c";
+            }
+
+            using var process = new System.Diagnostics.Process
+            {
+                StartInfo = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = shell,
+                    Arguments = $"{shellArg} \"{arguments}\"",
+                    WorkingDirectory = projectPath,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                },
+            };
+
+            var output = new System.Text.StringBuilder();
+            var error = new System.Text.StringBuilder();
+
+            process.OutputDataReceived += (s, e) =>
+            {
+                if (e.Data != null) output.AppendLine(e.Data);
+            };
+            process.ErrorDataReceived += (s, e) =>
+            {
+                if (e.Data != null) error.AppendLine(e.Data);
+            };
+
+            process.Start();
+            process.BeginOutputReadLine();
+            process.BeginErrorReadLine();
+
+            var completed = await Task.Run(() => process.WaitForExit(timeoutSeconds * 1000), ct);
+            if (!completed)
+            {
+                process.Kill();
+                return new { error = $"Test run timed out after {timeoutSeconds} seconds" };
+            }
+
+            var outputText = output.ToString();
+            var success = process.ExitCode == 0;
+
+            // Parse JSON output from test runner
+            return ParseTestRunnerOutput(runner, outputText, success, process.ExitCode, projectPath);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to run TypeScript tests for {Project}", projectPath);
+            return new { error = $"Failed to run tests: {ex.Message}" };
+        }
+    }
+
+    private static bool HasDependency(JsonDocument doc, string packageName)
+    {
+        if (doc.RootElement.TryGetProperty("devDependencies", out var devDeps) &&
+            devDeps.TryGetProperty(packageName, out _))
+        {
+            return true;
+        }
+
+        if (doc.RootElement.TryGetProperty("dependencies", out var deps) &&
+            deps.TryGetProperty(packageName, out _))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    private static object ParseTestRunnerOutput(string runner, string output, bool success, int exitCode, string projectPath)
+    {
+        try
+        {
+            // Try to extract JSON from output (test runners may prefix with non-JSON text)
+            var jsonStart = output.IndexOf('{');
+            if (jsonStart < 0)
+            {
+                // Fallback — no JSON found
+                return new
+                {
+                    projectPath,
+                    runner,
+                    success,
+                    exitCode,
+                    passed = 0,
+                    failed = 0,
+                    skipped = 0,
+                    total = 0,
+                    output = TruncateOutput(output),
+                };
+            }
+
+            var jsonText = output[jsonStart..];
+            using var doc = JsonDocument.Parse(jsonText);
+
+            if (runner == "vitest")
+            {
+                return ParseVitestOutput(doc, success, exitCode, projectPath);
+            }
+            else
+            {
+                return ParseJestOutput(doc, success, exitCode, projectPath);
+            }
+        }
+        catch (JsonException)
+        {
+            // JSON parse failed — return raw output
+            return new
+            {
+                projectPath,
+                runner,
+                success,
+                exitCode,
+                passed = 0,
+                failed = 0,
+                skipped = 0,
+                total = 0,
+                output = TruncateOutput(output),
+            };
+        }
+    }
+
+    private static object ParseVitestOutput(JsonDocument doc, bool success, int exitCode, string projectPath)
+    {
+        var root = doc.RootElement;
+        var passed = 0;
+        var failed = 0;
+        var skipped = 0;
+        var total = 0;
+
+        if (root.TryGetProperty("numPassedTests", out var p)) passed = p.GetInt32();
+        if (root.TryGetProperty("numFailedTests", out var f)) failed = f.GetInt32();
+        if (root.TryGetProperty("numPendingTests", out var s)) skipped = s.GetInt32();
+        if (root.TryGetProperty("numTotalTests", out var t)) total = t.GetInt32();
+
+        return new
+        {
+            projectPath,
+            runner = "vitest",
+            success,
+            exitCode,
+            passed,
+            failed,
+            skipped,
+            total,
+        };
+    }
+
+    private static object ParseJestOutput(JsonDocument doc, bool success, int exitCode, string projectPath)
+    {
+        var root = doc.RootElement;
+        var passed = 0;
+        var failed = 0;
+        var skipped = 0;
+        var total = 0;
+
+        if (root.TryGetProperty("numPassedTests", out var p)) passed = p.GetInt32();
+        if (root.TryGetProperty("numFailedTests", out var f)) failed = f.GetInt32();
+        if (root.TryGetProperty("numPendingTests", out var s)) skipped = s.GetInt32();
+        if (root.TryGetProperty("numTotalTests", out var t)) total = t.GetInt32();
+
+        return new
+        {
+            projectPath,
+            runner = "jest",
+            success,
+            exitCode,
+            passed,
+            failed,
+            skipped,
+            total,
+        };
+    }
+
+    private static string TruncateOutput(string output)
+    {
+        return output.Length > 10000 ? output[..10000] + "\n... (truncated)" : output;
+    }
 }

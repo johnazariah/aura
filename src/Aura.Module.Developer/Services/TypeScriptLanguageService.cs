@@ -406,6 +406,50 @@ public sealed class TypeScriptLanguageService : ITypeScriptLanguageService
         }
     }
 
+    /// <inheritdoc/>
+    public async Task<TypeScriptCheckResult> CheckAsync(
+        TypeScriptCheckRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var args = new List<string>
+        {
+            "check",
+            "--project", request.ProjectPath,
+        };
+
+        var (success, stdout, stderr) = await ExecuteNodeScriptAsync(args, cancellationToken);
+
+        if (!success)
+        {
+            return new TypeScriptCheckResult
+            {
+                Success = false,
+                Error = stderr ?? "Node.js script execution failed",
+            };
+        }
+
+        try
+        {
+            var result = JsonSerializer.Deserialize<TypeScriptCheckResult>(stdout, JsonOptions);
+            return result ?? new TypeScriptCheckResult
+            {
+                Success = false,
+                Error = "Failed to deserialize result",
+            };
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogError(ex, "Failed to parse check result: {Output}", stdout);
+            return new TypeScriptCheckResult
+            {
+                Success = false,
+                Error = $"Failed to parse result: {ex.Message}",
+            };
+        }
+    }
+
     private async Task<TypeScriptRefactoringResult> ExecuteRefactoringAsync(
         List<string> args,
         CancellationToken cancellationToken)

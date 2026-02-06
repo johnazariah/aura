@@ -995,6 +995,134 @@ public class McpHandlerTypeScriptTests
 
     #endregion
 
+    #region aura_validate - TypeScript Compilation
+
+    [Fact]
+    public async Task Validate_Compilation_WithProjectPath_RoutesToTypeScriptCheck()
+    {
+        // Arrange
+        var expectedResult = new TypeScriptCheckResult
+        {
+            Success = true,
+            CompilationSucceeded = true,
+            ErrorCount = 0,
+            WarningCount = 0,
+            Diagnostics = new List<TypeScriptDiagnostic>(),
+        };
+
+        _typeScriptService.CheckAsync(
+            Arg.Any<TypeScriptCheckRequest>(),
+            Arg.Any<CancellationToken>())
+            .Returns(expectedResult);
+
+        var request = CreateToolCallRequest("aura_validate", new
+        {
+            operation = "compilation",
+            projectPath = "/my/ts/project",
+        });
+
+        // Act
+        var responseJson = await _handler.HandleAsync(request);
+
+        // Assert
+        await _typeScriptService.Received(1).CheckAsync(
+            Arg.Is<TypeScriptCheckRequest>(r => r.ProjectPath == "/my/ts/project"),
+            Arg.Any<CancellationToken>());
+
+        var resultText = GetResultText(responseJson);
+        resultText.Should().Contain("compilationSucceeded");
+    }
+
+    [Fact]
+    public async Task Validate_Compilation_WithTypeScriptErrors_ReturnsDiagnostics()
+    {
+        // Arrange
+        var expectedResult = new TypeScriptCheckResult
+        {
+            Success = true,
+            CompilationSucceeded = false,
+            ErrorCount = 2,
+            WarningCount = 1,
+            Diagnostics = new List<TypeScriptDiagnostic>
+            {
+                new() { FilePath = "src/app.ts", Line = 10, Column = 5, Severity = "error", Code = "TS2304", Message = "Cannot find name 'foo'" },
+                new() { FilePath = "src/app.ts", Line = 20, Column = 3, Severity = "error", Code = "TS2345", Message = "Argument type mismatch" },
+                new() { FilePath = "src/utils.ts", Line = 5, Column = 1, Severity = "warning", Code = "TS6133", Message = "Declared but never used" },
+            },
+        };
+
+        _typeScriptService.CheckAsync(
+            Arg.Any<TypeScriptCheckRequest>(),
+            Arg.Any<CancellationToken>())
+            .Returns(expectedResult);
+
+        var request = CreateToolCallRequest("aura_validate", new
+        {
+            operation = "compilation",
+            projectPath = "/my/ts/project",
+        });
+
+        // Act
+        var responseJson = await _handler.HandleAsync(request);
+
+        // Assert
+        var resultText = GetResultText(responseJson);
+        resultText.Should().Contain("TS2304");
+        resultText.Should().Contain("Cannot find name");
+        resultText.Should().Contain("errorCount");
+    }
+
+    [Fact]
+    public async Task Validate_Compilation_WithSolutionPath_RoutesToCSharp_NotTypeScript()
+    {
+        // Arrange - solutionPath signals C#, not TypeScript
+        var request = CreateToolCallRequest("aura_validate", new
+        {
+            operation = "compilation",
+            solutionPath = "c:\\test\\Test.sln",
+        });
+
+        // Act
+        try
+        {
+            await _handler.HandleAsync(request);
+        }
+        catch
+        {
+            // May fail because the Roslyn service isn't set up - that's fine
+        }
+
+        // Assert - TypeScript service should NOT be called for C# compilation
+        await _typeScriptService.DidNotReceiveWithAnyArgs()
+            .CheckAsync(Arg.Any<TypeScriptCheckRequest>(), Arg.Any<CancellationToken>());
+    }
+
+    #endregion
+
+    #region aura_validate - TypeScript Tests
+
+    [Fact]
+    public async Task Validate_Tests_WithProjectPath_DetectsTypeScript()
+    {
+        // Arrange - The handler checks for projectPath to detect TypeScript
+        // but will fail because package.json doesn't exist in the test environment.
+        // We just verify it routes to TypeScript (not C#) and returns an appropriate error.
+        var request = CreateToolCallRequest("aura_validate", new
+        {
+            operation = "tests",
+            projectPath = "/nonexistent/ts/project",
+        });
+
+        // Act
+        var responseJson = await _handler.HandleAsync(request);
+
+        // Assert - Should NOT call C# dotnet test, and should return a package.json error
+        var resultText = GetResultText(responseJson);
+        resultText.Should().Contain("package.json");
+    }
+
+    #endregion
+
     #region Helper Methods
 
     private static string CreateToolCallRequest(string toolName, object arguments)

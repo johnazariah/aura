@@ -904,6 +904,76 @@ function findImplementations(projectPath, filePath, offset) {
         };
     }
 }
+function checkCompilation(projectPath) {
+    try {
+        const project = getProject(projectPath);
+        const diagnostics = [];
+        let errorCount = 0;
+        let warningCount = 0;
+        // Get pre-emit diagnostics (type errors, syntax errors, etc.)
+        const preDiags = project.getPreEmitDiagnostics();
+        for (const diag of preDiags) {
+            const sf = diag.getSourceFile();
+            // Skip diagnostics from node_modules
+            if (sf && sf.getFilePath().includes("node_modules"))
+                continue;
+            const category = diag.getCategory();
+            let severity;
+            if (category === ts_morph_1.ts.DiagnosticCategory.Error) {
+                severity = "error";
+                errorCount++;
+            }
+            else if (category === ts_morph_1.ts.DiagnosticCategory.Warning) {
+                severity = "warning";
+                warningCount++;
+            }
+            else {
+                continue; // Skip suggestions/messages
+            }
+            let filePath = "<unknown>";
+            let line = 0;
+            let column = 0;
+            if (sf) {
+                filePath = sf.getFilePath();
+                const start = diag.getStart();
+                if (start !== undefined) {
+                    const lineAndCol = sf.getLineAndColumnAtPos(start);
+                    line = lineAndCol.line;
+                    column = lineAndCol.column;
+                }
+            }
+            const code = `TS${diag.getCode()}`;
+            const message = diag.getMessageText();
+            const messageStr = typeof message === "string"
+                ? message
+                : ts_morph_1.ts.flattenDiagnosticMessageText(message.compilerObject, "\n");
+            diagnostics.push({
+                filePath,
+                line,
+                column,
+                severity,
+                code,
+                message: messageStr,
+            });
+            // Limit to 50 diagnostics
+            if (diagnostics.length >= 50)
+                break;
+        }
+        return {
+            success: true,
+            compilationSucceeded: errorCount === 0,
+            errorCount,
+            warningCount,
+            diagnostics,
+        };
+    }
+    catch (e) {
+        return {
+            success: false,
+            error: e instanceof Error ? e.message : String(e),
+        };
+    }
+}
 // CLI argument parsing
 function parseArgs() {
     const args = process.argv.slice(2);
@@ -956,6 +1026,9 @@ function main() {
         case "find-implementations":
             result = findImplementations(args.project, args.file, parseInt(args.offset, 10));
             break;
+        case "check":
+            result = checkCompilation(args.project);
+            break;
         case "help":
         default:
             console.log(`TypeScript/JavaScript Refactoring Tool
@@ -970,6 +1043,7 @@ Commands:
   find-implementations Find implementations of an interface or abstract class
   inspect-type        Inspect a type's members (properties, methods, etc.)
   list-types          List all types in a project
+  check               Check compilation (type errors, syntax errors)
 
 Options:
   --project         Path to the project root (required)
