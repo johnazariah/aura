@@ -298,14 +298,26 @@ try {
 
         $langScriptsPath = Join-Path $InstallPath "scripts"
 
-        # TypeScript: deploy compiled refactor.js
-        $tsDistSource = Join-Path $root "scripts/typescript/dist"
+        # TypeScript: deploy compiled refactor.js and node_modules
+        $tsSource = Join-Path $root "scripts/typescript"
+        $tsDistSource = Join-Path $tsSource "dist"
+        $tsNodeModules = Join-Path $tsSource "node_modules"
         if (Test-Path $tsDistSource) {
-            $tsDest = Join-Path $langScriptsPath "typescript/dist"
-            if (-not (Test-Path $tsDest)) {
-                New-Item -ItemType Directory -Path $tsDest -Force | Out-Null
+            $tsDest = Join-Path $langScriptsPath "typescript"
+            # Deploy dist/
+            $tsDistDest = Join-Path $tsDest "dist"
+            if (-not (Test-Path $tsDistDest)) {
+                New-Item -ItemType Directory -Path $tsDistDest -Force | Out-Null
             }
-            Copy-Item -Path "$tsDistSource/*" -Destination $tsDest -Force
+            Copy-Item -Path "$tsDistSource/*" -Destination $tsDistDest -Force
+            # Deploy node_modules/ (required for ts-morph etc.)
+            if (Test-Path $tsNodeModules) {
+                $nmDest = Join-Path $tsDest "node_modules"
+                if (Test-Path $nmDest) {
+                    Remove-Item $nmDest -Recurse -Force
+                }
+                Copy-Item -Path $tsNodeModules -Destination $nmDest -Recurse
+            }
             Write-Step "TypeScript tools updated"
         } else {
             Write-Warning "TypeScript dist not found at $tsDistSource - skipping"

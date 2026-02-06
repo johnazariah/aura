@@ -98,9 +98,12 @@ try {
     Copy-Item "scripts/Get-ServiceAccountCredential.ps1" "$OutputDir/win-x64/scripts/"
     Copy-Item "scripts/Install-AuraService.ps1" "$OutputDir/win-x64/scripts/"
 
-    # Copy language tool scripts
+    # Copy language tool scripts (dist + node_modules for runtime dependencies)
     New-Item -ItemType Directory -Path "$OutputDir/win-x64/scripts/typescript/dist" -Force | Out-Null
     Copy-Item "scripts/typescript/dist/*" "$OutputDir/win-x64/scripts/typescript/dist/"
+    if (Test-Path "scripts/typescript/node_modules") {
+        Copy-Item -Path "scripts/typescript/node_modules" -Destination "$OutputDir/win-x64/scripts/typescript/node_modules" -Recurse
+    }
     New-Item -ItemType Directory -Path "$OutputDir/win-x64/scripts/python" -Force | Out-Null
     Copy-Item "scripts/python/refactor.py" "$OutputDir/win-x64/scripts/python/"
     if (Test-Path "scripts/python/requirements.txt") {

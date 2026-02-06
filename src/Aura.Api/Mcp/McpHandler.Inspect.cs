@@ -151,12 +151,16 @@ public sealed partial class McpHandler
 
     private async Task<object> ListClassesAsync(JsonElement? args, CancellationToken ct)
     {
-        var solutionPath = args?.GetProperty("solutionPath").GetString() ?? "";
-        var projectName = args?.GetProperty("projectName").GetString() ?? "";
+        string solutionPath = "";
+        string projectName = "";
         string? namespaceFilter = null;
         string? nameFilter = null;
         if (args.HasValue)
         {
+            if (args.Value.TryGetProperty("solutionPath", out var solEl))
+                solutionPath = solEl.GetString() ?? "";
+            if (args.Value.TryGetProperty("projectName", out var projEl))
+                projectName = projEl.GetString() ?? "";
             if (args.Value.TryGetProperty("namespaceFilter", out var nsEl))
                 namespaceFilter = nsEl.GetString();
             if (args.Value.TryGetProperty("nameFilter", out var nameEl))
