@@ -9,11 +9,7 @@ using NSubstitute;
 using FluentAssertions;
 using Aura.Module.Developer.Agents;
 using Aura.Foundation.Agents;
-using Aura.Foundation.Llm;
-using Aura.Foundation.Prompts;
-using Aura.Module.Developer.Services;
 using Microsoft.Extensions.Logging;
-using System.IO.Abstractions;
 using System.Linq;
 
 namespace Aura.Module.Developer.Agents.Tests;
@@ -21,28 +17,13 @@ namespace Aura.Module.Developer.Agents.Tests;
 public class DeveloperAgentProviderTests
 {
     private readonly ILoggerFactory _loggerFactory;
-    private readonly ILlmProviderRegistry _llmRegistry;
-    private readonly IRoslynRefactoringService _refactoringService;
-    private readonly IRoslynWorkspaceService _workspaceService;
-    private readonly IFileSystem _fileSystem;
     private readonly DeveloperAgentProvider _sut;
 
     public DeveloperAgentProviderTests()
     {
         _loggerFactory = Substitute.For<ILoggerFactory>();
         _loggerFactory.CreateLogger(Arg.Any<string>()).Returns(Substitute.For<ILogger>());
-        _llmRegistry = Substitute.For<ILlmProviderRegistry>();
-        _refactoringService = Substitute.For<IRoslynRefactoringService>();
-        _workspaceService = Substitute.For<IRoslynWorkspaceService>();
-        _fileSystem = Substitute.For<IFileSystem>();
-        var promptRegistry = Substitute.For<IPromptRegistry>();
-        _sut = new DeveloperAgentProvider(
-            _loggerFactory,
-            _llmRegistry,
-            _refactoringService,
-            _workspaceService,
-            promptRegistry,
-            _fileSystem);
+        _sut = new DeveloperAgentProvider(_loggerFactory);
     }
 
     [Fact]
@@ -77,23 +58,13 @@ public class DeveloperAgentProviderTests
     }
 
     [Fact]
-    public void GetAgents_ReturnsRoslynCodingAgent()
+    public void GetAgents_ReturnsExactlyTwoAgents()
     {
         // Act
         var agents = _sut.GetAgents().ToList();
 
         // Assert
-        agents.Should().Contain(a => a.GetType() == typeof(RoslynCodingAgent));
-    }
-
-    [Fact]
-    public void GetAgents_ReturnsExactlyThreeAgents()
-    {
-        // Act
-        var agents = _sut.GetAgents().ToList();
-
-        // Assert
-        agents.Should().HaveCount(3);
+        agents.Should().HaveCount(2);
     }
 
     [Fact]
@@ -139,16 +110,5 @@ public class DeveloperAgentProviderTests
             ingester.Metadata.Capabilities.Should().Contain(c =>
                 c == "ingest" || c.StartsWith("ingest:"));
         }
-    }
-
-    [Fact]
-    public void GetAgents_RoslynCodingAgentHasCodingCapability()
-    {
-        // Act
-        var agents = _sut.GetAgents().ToList();
-        var roslynAgent = agents.OfType<RoslynCodingAgent>().First();
-
-        // Assert
-        roslynAgent.Metadata.Capabilities.Should().Contain("coding");
     }
 }

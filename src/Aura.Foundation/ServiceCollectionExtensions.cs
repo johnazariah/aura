@@ -6,7 +6,6 @@ namespace Aura.Foundation;
 
 using System.IO.Abstractions;
 using Aura.Foundation.Agents;
-using Aura.Foundation.Conversations;
 using Aura.Foundation.Git;
 using Aura.Foundation.Llm;
 using Aura.Foundation.Rag;
@@ -48,9 +47,6 @@ public static class ServiceCollectionExtensions
 
         // RAG services
         services.AddRagServices(configuration);
-
-        // Conversation services
-        services.AddConversationServices(configuration);
 
         // Agent services
         services.AddAgentServices(configuration);
@@ -202,20 +198,6 @@ public static class ServiceCollectionExtensions
         // Workspace registry for multi-workspace queries
         services.AddSingleton<IWorkspaceRegistryService, WorkspaceRegistryService>();
 
-        return services;
-    }
-
-    /// <summary>
-    /// Adds conversation services with RAG context persistence.
-    /// </summary>
-    /// <param name="services">The service collection.</param>
-    /// <param name="configuration">Configuration instance.</param>
-    /// <returns>The service collection for chaining.</returns>
-    public static IServiceCollection AddConversationServices(
-        this IServiceCollection services,
-        IConfiguration configuration)
-    {
-        services.AddScoped<IConversationService, ConversationService>();
         return services;
     }
 

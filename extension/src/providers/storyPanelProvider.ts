@@ -508,18 +508,6 @@ export class StoryPanelProvider {
             case 'plan':
                 await this.handlePlan(storyId, panel);
                 break;
-            case 'executeStep':
-                await this.handleExecuteStep(storyId, message.stepId, panel);
-                break;
-            case 'executeAllPending':
-                await this.handleExecuteAllPending(storyId, panel);
-                break;
-            case 'runWithStreaming':
-                await this.handleRunWithStreaming(storyId, panel);
-                break;
-            case 'chat':
-                await this.handleChat(storyId, message.text, panel);
-                break;
             case 'complete':
                 await this.handleComplete(storyId, panel);
                 break;
@@ -540,26 +528,8 @@ export class StoryPanelProvider {
             case 'openWorkspace':
                 await this.handleOpenWorkspace(message.worktreePath, message.gitBranch);
                 break;
-            case 'skipStep':
-                await this.handleSkipStep(storyId, message.stepId, panel);
-                break;
-            case 'resetStep':
-                await this.handleResetStep(storyId, message.stepId, panel);
-                break;
-            case 'stepChat':
-                await this.handleStepChat(storyId, message.stepId, message.message, panel);
-                break;
-            case 'approveStepOutput':
-                await this.handleApproveStepOutput(storyId, message.stepId, panel);
-                break;
-            case 'rejectStepOutput':
-                await this.handleRejectStepOutput(storyId, message.stepId, message.reason, panel);
-                break;
             case 'viewStepContext':
                 await this.handleViewStepContext(storyId, message.stepId, panel);
-                break;
-            case 'reassignStep':
-                await this.handleReassignStep(storyId, message.stepId, message.agentId, panel);
                 break;
             case 'updateStepDescription':
                 await this.handleUpdateStepDescription(storyId, message.stepId, message.description, panel);
@@ -908,120 +878,6 @@ export class StoryPanelProvider {
         }
     }
 
-    private async handleExecuteStep(storyId: string, stepId: string, panel: vscode.WebviewPanel): Promise<void> {
-        panel.webview.postMessage({ type: 'loading', action: 'execute', stepId });
-        try {
-            await this.apiService.executeStoryStep(storyId, stepId);
-            await this.refreshPanel(storyId);
-            panel.webview.postMessage({ type: 'success', message: 'Step executed successfully' });
-        } catch (error) {
-            panel.webview.postMessage({ type: 'error', message: 'Step execution failed' });
-            await this.refreshPanel(storyId);
-        }
-    }
-
-    private async handleExecuteAllPending(storyId: string, panel: vscode.WebviewPanel): Promise<void> {
-        try {
-            // Get fresh Story to find pending steps
-            const Story = await this.apiService.getStory(storyId);
-            const pendingSteps = (Story.steps || []).filter(s => s.status === 'Pending').sort((a, b) => a.order - b.order);
-
-            if (pendingSteps.length === 0) {
-                panel.webview.postMessage({ type: 'error', message: 'No pending steps to execute' });
-                return;
-            }
-
-            // Execute each step sequentially
-            for (let i = 0; i < pendingSteps.length; i++) {
-                const step = pendingSteps[i];
-                panel.webview.postMessage({
-                    type: 'loading',
-                    action: 'execute',
-                    stepId: step.id,
-                    message: `Executing step ${i + 1}/${pendingSteps.length}: ${step.name}`
-                });
-
-                try {
-                    await this.apiService.executeStoryStep(storyId, step.id);
-                    await this.refreshPanel(storyId);
-                } catch (stepError) {
-                    // Stop on first failure
-                    panel.webview.postMessage({
-                        type: 'error',
-                        message: `Step "${step.name}" failed. Stopping execution.`
-                    });
-                    await this.refreshPanel(storyId);
-                    return;
-                }
-            }
-
-            panel.webview.postMessage({ type: 'success', message: `All ${pendingSteps.length} steps completed!` });
-            vscode.window.showInformationMessage(`All ${pendingSteps.length} Story steps completed!`);
-        } catch (error) {
-            panel.webview.postMessage({ type: 'error', message: 'Failed to execute steps' });
-        }
-    }
-
-    private streamAbortController: AbortController | null = null;
-
-    private async handleRunWithStreaming(storyId: string, panel: vscode.WebviewPanel): Promise<void> {
-        // Cancel any existing stream
-        if (this.streamAbortController) {
-            this.streamAbortController.abort();
-        }
-        this.streamAbortController = new AbortController();
-
-        panel.webview.postMessage({ type: 'streamStart' });
-
-        try {
-            await this.apiService.streamStoryExecution(
-                storyId,
-                {
-                    onEvent: (event) => {
-                        panel.webview.postMessage({
-                            type: 'streamProgress',
-                            event
-                        });
-                    },
-                    onDone: () => {
-                        panel.webview.postMessage({ type: 'streamEnd' });
-                        // Don't auto-refresh - preserve streaming output for user review
-                    },
-                    onError: (message) => {
-                        panel.webview.postMessage({
-                            type: 'streamError',
-                            message
-                        });
-                        // Don't auto-refresh - preserve streaming output for user review
-                    }
-                },
-                this.streamAbortController
-            );
-        } catch (error) {
-            const message = error instanceof Error ? error.message : 'Streaming execution failed';
-            panel.webview.postMessage({ type: 'streamError', message });
-            // Don't auto-refresh - preserve streaming output for user review
-        }
-    }
-
-    private async handleChat(storyId: string, text: string, panel: vscode.WebviewPanel): Promise<void> {
-        panel.webview.postMessage({ type: 'chatLoading' });
-        try {
-            const response = await this.apiService.sendStoryChat(storyId, text);
-            panel.webview.postMessage({
-                type: 'chatResponse',
-                response: response.response,
-                planModified: response.planModified,
-                analysisUpdated: response.analysisUpdated
-            });
-            if (response.planModified || response.analysisUpdated) {
-                await this.refreshPanel(storyId);
-            }
-        } catch (error) {
-            panel.webview.postMessage({ type: 'chatError', message: 'Failed to send message' });
-        }
-    }
-
     private async handleComplete(storyId: string, panel: vscode.WebviewPanel): Promise<void> {
         try {
             await this.apiService.completeStory(storyId);
@@ -1119,73 +975,6 @@ export class StoryPanelProvider {
         }
     }
 
-    private async handleSkipStep(storyId: string, stepId: string, panel: vscode.WebviewPanel): Promise<void> {
-        try {
-            panel.webview.postMessage({ type: 'loading', action: 'skip', stepId });
-            await this.apiService.skipStep(storyId, stepId);
-            vscode.window.showInformationMessage('Step skipped ⏭');
-            panel.webview.postMessage({ type: 'loadingDone' });
-            await this.refreshPanel(storyId);
-        } catch (error) {
-            const message = error instanceof Error ? error.message : 'Failed to skip step';
-            panel.webview.postMessage({ type: 'error', message });
-        }
-    }
-
-    private async handleResetStep(storyId: string, stepId: string, panel: vscode.WebviewPanel): Promise<void> {
-        try {
-            panel.webview.postMessage({ type: 'loading', action: 'reset', stepId });
-            await this.apiService.resetStep(storyId, stepId);
-            vscode.window.showInformationMessage('Step reset to pending 🔄');
-            panel.webview.postMessage({ type: 'loadingDone' });
-            await this.refreshPanel(storyId);
-        } catch (error) {
-            const message = error instanceof Error ? error.message : 'Failed to reset step';
-            panel.webview.postMessage({ type: 'error', message });
-        }
-    }
-
-    private async handleStepChat(storyId: string, stepId: string, message: string, panel: vscode.WebviewPanel): Promise<void> {
-        try {
-            const response = await this.apiService.chatWithStep(storyId, stepId, message);
-            panel.webview.postMessage({
-                type: 'stepChatResponse',
-                stepId,
-                response: response.response,
-                updatedDescription: response.updatedDescription
-            });
-        } catch (error) {
-            const errMessage = error instanceof Error ? error.message : 'Failed to send message';
-            panel.webview.postMessage({ type: 'error', message: errMessage });
-        }
-    }
-
-    private async handleApproveStepOutput(storyId: string, stepId: string, panel: vscode.WebviewPanel): Promise<void> {
-        try {
-            panel.webview.postMessage({ type: 'loading', action: 'approve', stepId });
-            await this.apiService.approveStepOutput(storyId, stepId);
-            vscode.window.showInformationMessage('Output approved ✓');
-            panel.webview.postMessage({ type: 'loadingDone' });
-            await this.refreshPanel(storyId);
-        } catch (error) {
-            const message = error instanceof Error ? error.message : 'Failed to approve output';
-            panel.webview.postMessage({ type: 'error', message });
-        }
-    }
-
-    private async handleRejectStepOutput(storyId: string, stepId: string, reason: string, panel: vscode.WebviewPanel): Promise<void> {
-        try {
-            panel.webview.postMessage({ type: 'loading', action: 'reject', stepId });
-            await this.apiService.rejectStepOutput(storyId, stepId, reason);
-            vscode.window.showInformationMessage(`Output rejected - step reset to pending for re-execution`);
-            panel.webview.postMessage({ type: 'loadingDone' });
-            await this.refreshPanel(storyId);
-        } catch (error) {
-            const message = error instanceof Error ? error.message : 'Failed to reject output';
-            panel.webview.postMessage({ type: 'error', message });
-        }
-    }
-
     private async handleViewStepContext(storyId: string, stepId: string, panel: vscode.WebviewPanel): Promise<void> {
         try {
             // Get step details and show in a new panel or message
@@ -1197,21 +986,6 @@ export class StoryPanelProvider {
             }
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Failed to view step context';
-            panel.webview.postMessage({ type: 'error', message });
-        }
-    }
-
-    private async handleReassignStep(storyId: string, stepId: string, agentId: string, panel: vscode.WebviewPanel): Promise<void> {
-        try {
-            panel.webview.postMessage({ type: 'loading', action: 'reassign', stepId });
-            await this.apiService.reassignStep(storyId, stepId, agentId);
-            // Refresh the Story to show updated step
-            const updatedStory = await this.apiService.getStory(storyId);
-            panel.webview.postMessage({ type: 'refresh', Story: updatedStory });
-            panel.webview.postMessage({ type: 'loadingDone' });
-            vscode.window.showInformationMessage(`Step reassigned to ${agentId}`);
-        } catch (error) {
-            const message = error instanceof Error ? error.message : 'Failed to reassign step';
             panel.webview.postMessage({ type: 'error', message });
         }
     }

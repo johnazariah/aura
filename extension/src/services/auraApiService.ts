@@ -105,37 +105,6 @@ export interface RagQueryResult {
     contentType: string;
 }
 
-export interface RagExecuteResult {
-    content: string;
-    tokensUsed: number;
-    ragEnriched: boolean;
-    durationMs: number;
-}
-
-export interface AgenticResult {
-    content: string;
-    tokensUsed: number;
-    stepCount: number;
-    durationMs: number;
-    toolSteps: Array<{
-        toolId: string;
-        input: string;
-        output: string;
-        success: boolean;
-    }>;
-}
-
-export interface StreamChatMessage {
-    role: 'user' | 'assistant' | 'system';
-    content: string;
-}
-
-export interface StreamChatCallbacks {
-    onToken: (content: string) => void;
-    onDone: (totalTokens: number, finishReason: string) => void;
-    onError: (message: string, code?: string) => void;
-}
-
 // Story execution progress events (SSE streaming)
 export type StoryProgressEventType =
     | 'Started'
@@ -231,20 +200,6 @@ export interface Story {
     createdAt: string;
     updatedAt: string;
     completedAt?: string;
-}
-
-export interface StoryChatResponse {
-    response: string;
-    planModified: boolean;
-    analysisUpdated: boolean;
-    stepsAdded: { id: string; order: number; name: string; capability: string }[];
-    stepsRemoved: string[];
-}
-
-export interface StepChatResponse {
-    stepId: string;
-    response: string;
-    updatedDescription?: string;
 }
 
 export class AuraApiService {
@@ -373,15 +328,6 @@ export class AuraApiService {
         }
     }
 
-    async executeAgent(agentId: string, prompt: string, workspacePath?: string): Promise<string> {
-        const response = await this.httpClient.post(
-            `${this.getBaseUrl()}/api/agents/${agentId}/execute`,
-            { prompt, workspacePath },
-            { timeout: this.getExecutionTimeout() }
-        );
-        return response.data.content;
-    }
-
     // =====================
     // RAG Methods
     // =====================
@@ -393,152 +339,6 @@ export class AuraApiService {
             { timeout: 30000 }
         );
         return response.data.results;
-    }
-
-    async executeAgentWithRag(
-        agentId: string,
-        prompt: string,
-        workspacePath?: string,
-        topK: number = 5,
-        useRag: boolean = true,
-        useCodeGraph: boolean = true
-    ): Promise<RagExecuteResult> {
-        const response = await this.httpClient.post(
-            `${this.getBaseUrl()}/api/agents/${agentId}/execute/rag`,
-            { prompt, workspacePath, useRag, useCodeGraph, topK },
-            { timeout: this.getExecutionTimeout() }
-        );
-        return response.data;
-    }
-
-    /**
-     * Execute an agent with agentic chat (multi-step tool use).
-     * The agent can explore the codebase using tools before answering.
-     */
-    async executeAgentAgentic(
-        agentId: string,
-        prompt: string,
-        workspacePath?: string,
-        maxSteps: number = 10,
-        useRag: boolean = true,
-        useCodeGraph: boolean = true
-    ): Promise<AgenticResult> {
-        const response = await this.httpClient.post(
-            `${this.getBaseUrl()}/api/agents/${agentId}/execute/agentic`,
-            { prompt, workspacePath, useRag, useCodeGraph, maxSteps },
-            { timeout: this.getExecutionTimeout() * 2 } // Allow more time for multi-step
-        );
-        return response.data;
-    }
-
-    /**
-     * Execute an agent with streaming responses using Server-Sent Events.
-     * Tokens are delivered incrementally via callbacks.
-     * @param agentId The agent to execute
-     * @param message The user's message
-     * @param history Optional conversation history
-     * @param callbacks Callbacks for token, done, and error events
-     * @param abortController Optional AbortController to cancel the stream
-     */
-    async executeAgentStreaming(
-        agentId: string,
-        message: string,
-        history: StreamChatMessage[] = [],
-        callbacks: StreamChatCallbacks,
-        abortController?: AbortController
-    ): Promise<void> {
-        const url = `${this.getBaseUrl()}/api/agents/${agentId}/chat/stream`;
-        
-        try {
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'text/event-stream'
-                },
-                body: JSON.stringify({ message, history }),
-                signal: abortController?.signal
-            });
-
-            if (!response.ok) {
-                const errorText = await response.text();
-                try {
-                    const errorJson = JSON.parse(errorText);
-                    callbacks.onError(errorJson.error || 'Request failed', response.status.toString());
-                } catch {
-                    callbacks.onError(`Request failed: ${response.statusText}`, response.status.toString());
-                }
-                return;
-            }
-
-            const reader = response.body?.getReader();
-            if (!reader) {
-                callbacks.onError('No response body');
-                return;
-            }
-
-            const decoder = new TextDecoder();
-            let buffer = '';
-
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-
-                buffer += decoder.decode(value, { stream: true });
-                
-                // Process complete SSE events (lines ending with \n\n)
-                const events = buffer.split('\n\n');
-                buffer = events.pop() || ''; // Keep incomplete event in buffer
-
-                for (const event of events) {
-                    if (!event.trim()) continue;
-                    
-                    const lines = event.split('\n');
-                    let eventType = '';
-                    let eventData = '';
-
-                    for (const line of lines) {
-                        if (line.startsWith('event: ')) {
-                            eventType = line.slice(7);
-                        } else if (line.startsWith('data: ')) {
-                            eventData = line.slice(6);
-                        }
-                    }
-
-                    if (!eventType || !eventData) continue;
-
-                    try {
-                        const data = JSON.parse(eventData);
-                        
-                        switch (eventType) {
-                            case 'token':
-                                if (data.content) {
-                                    callbacks.onToken(data.content);
-                                }
-                                break;
-                            case 'done':
-                                callbacks.onDone(data.totalTokens || 0, data.finishReason || 'stop');
-                                break;
-                            case 'error':
-                                callbacks.onError(data.message || 'Unknown error', data.code);
-                                break;
-                        }
-                    } catch (parseError) {
-                        console.error('Failed to parse SSE event:', eventData, parseError);
-                    }
-                }
-            }
-        } catch (error) {
-            if (error instanceof Error) {
-                if (error.name === 'AbortError') {
-                    // Request was cancelled - this is normal
-                    return;
-                }
-                callbacks.onError(error.message);
-            } else {
-                callbacks.onError('Unknown error during streaming');
-            }
-        }
     }
 
     async getRagStats(): Promise<{ totalDocuments: number; totalChunks: number }> {
@@ -725,15 +525,6 @@ export class AuraApiService {
         return response.data;
     }
 
-    async executeStoryStep(storyId: string, stepId: string, agentId?: string): Promise<StoryStep> {
-        const response = await this.httpClient.post(
-            `${this.getBaseUrl()}/api/developer/stories/${storyId}/steps/${stepId}/execute`,
-            agentId ? { agentId } : {},
-            { timeout: this.getExecutionTimeout() }
-        );
-        return response.data;
-    }
-
     /**
      * Stream story execution progress via SSE.
      * Delivers real-time progress events as waves and steps execute.
@@ -872,65 +663,6 @@ export class AuraApiService {
     async cancelStory(storyId: string): Promise<Story> {
         const response = await this.httpClient.post(
             `${this.getBaseUrl()}/api/developer/stories/${storyId}/cancel`
-        );
-        return response.data;
-    }
-
-    async sendStoryChat(storyId: string, message: string): Promise<StoryChatResponse> {
-        const response = await this.httpClient.post(
-            `${this.getBaseUrl()}/api/developer/stories/${storyId}/chat`,
-            { message },
-            { timeout: this.getExecutionTimeout() }
-        );
-        return response.data;
-    }
-
-    // Step management methods
-
-    async approveStepOutput(storyId: string, stepId: string): Promise<StoryStep> {
-        const response = await this.httpClient.post(
-            `${this.getBaseUrl()}/api/developer/stories/${storyId}/steps/${stepId}/approve`
-        );
-        return response.data;
-    }
-
-    async rejectStepOutput(storyId: string, stepId: string, feedback?: string): Promise<StoryStep> {
-        const response = await this.httpClient.post(
-            `${this.getBaseUrl()}/api/developer/stories/${storyId}/steps/${stepId}/reject`,
-            feedback ? { feedback } : {}
-        );
-        return response.data;
-    }
-
-    async skipStep(storyId: string, stepId: string, reason?: string): Promise<StoryStep> {
-        const response = await this.httpClient.post(
-            `${this.getBaseUrl()}/api/developer/stories/${storyId}/steps/${stepId}/skip`,
-            reason ? { reason } : {}
-        );
-        return response.data;
-    }
-
-    async resetStep(storyId: string, stepId: string): Promise<StoryStep> {
-        const response = await this.httpClient.post(
-            `${this.getBaseUrl()}/api/developer/stories/${storyId}/steps/${stepId}/reset`,
-            {}
-        );
-        return response.data;
-    }
-
-    async chatWithStep(storyId: string, stepId: string, message: string): Promise<StepChatResponse> {
-        const response = await this.httpClient.post(
-            `${this.getBaseUrl()}/api/developer/stories/${storyId}/steps/${stepId}/chat`,
-            { message },
-            { timeout: this.getExecutionTimeout() }
-        );
-        return response.data;
-    }
-
-    async reassignStep(storyId: string, stepId: string, agentId: string): Promise<StoryStep> {
-        const response = await this.httpClient.post(
-            `${this.getBaseUrl()}/api/developer/stories/${storyId}/steps/${stepId}/reassign`,
-            { agentId }
         );
         return response.data;
     }

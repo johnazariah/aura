@@ -68,15 +68,6 @@ public static class Problem
             context);
     }
 
-    /// <summary>Creates a conversation not found response.</summary>
-    public static IResult ConversationNotFound(Guid id, HttpContext context) =>
-        CreateProblem(
-            ProblemTypes.ConversationNotFound,
-            "Conversation Not Found",
-            404,
-            $"Conversation with ID '{id}' does not exist.",
-            context);
-
     /// <summary>Creates a story not found by path response.</summary>
     public static IResult StoryNotFoundByPath(string path, HttpContext context) =>
         CreateProblem(

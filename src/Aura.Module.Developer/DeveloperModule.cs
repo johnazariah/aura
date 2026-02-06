@@ -93,13 +93,10 @@ public sealed class DeveloperModule : IAuraModule
         services.AddSingleton<IProjectVerificationDetector, ProjectVerificationDetector>();
         services.AddSingleton<IStoryVerificationService, StoryVerificationService>();
 
-        // Register step executors (unified interface for step execution)
-        // Both implement IStepExecutor and are registered with the registry
+        // Register step executors
         services.AddSingleton<GitHubCopilotDispatcher>();
         services.AddSingleton<IGitHubCopilotDispatcher>(sp => sp.GetRequiredService<GitHubCopilotDispatcher>());
         services.AddSingleton<IStepExecutor>(sp => sp.GetRequiredService<GitHubCopilotDispatcher>());
-        services.AddSingleton<InternalAgentExecutor>();
-        services.AddSingleton<IStepExecutor>(sp => sp.GetRequiredService<InternalAgentExecutor>());
         services.AddSingleton<IStepExecutorRegistry, StepExecutorRegistry>();
 
         // Register quality gate service

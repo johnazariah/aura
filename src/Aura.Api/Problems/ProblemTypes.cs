@@ -30,9 +30,6 @@ public static class ProblemTypes
     /// <summary>Agent not found.</summary>
     public const string AgentNotFound = BaseUri + "agent-not-found";
 
-    /// <summary>Conversation not found.</summary>
-    public const string ConversationNotFound = BaseUri + "conversation-not-found";
-
     // =========================================================================
     // Validation Errors
     // =========================================================================

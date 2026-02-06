@@ -57,11 +57,6 @@
           "id": "aura.research",
           "name": "Research Library",
           "icon": "$(book)"
-        },
-        {
-          "id": "aura.agents",
-          "name": "Agents",
-          "icon": "$(hubot)"
         }
       ]
     },
@@ -80,26 +75,6 @@
         "command": "aura.stopServices",
         "title": "Stop Aura Services",
         "icon": "$(debug-stop)"
-      },
-      {
-        "command": "aura.executeAgent",
-        "title": "Execute Agent",
-        "icon": "$(run)"
-      },
-      {
-        "command": "aura.quickExecute",
-        "title": "Aura: Execute Agent",
-        "icon": "$(run)"
-      },
-      {
-        "command": "aura.selectAgent",
-        "title": "Select Agent",
-        "icon": "$(symbol-event)"
-      },
-      {
-        "command": "aura.openChat",
-        "title": "Aura: Open Chat",
-        "icon": "$(comment-discussion)"
       },
       {
         "command": "aura.indexWorkspace",
@@ -130,11 +105,6 @@
         "command": "aura.openStory",
         "title": "Open Story",
         "icon": "$(window)"
-      },
-      {
-        "command": "aura.executeStep",
-        "title": "Execute Step",
-        "icon": "$(run)"
       },
       {
         "command": "aura.refreshStories",
@@ -312,16 +282,6 @@
           "group": "navigation"
         },
         {
-          "command": "aura.executeAgent",
-          "when": "view == aura.agents && viewItem == agent",
-          "group": "inline"
-        },
-        {
-          "command": "aura.executeStep",
-          "when": "view == aura.stories && viewItem == step",
-          "group": "inline"
-        },
-        {
           "command": "aura.deleteStory",
           "when": "view == aura.stories && viewItem == story",
           "group": "inline"
@@ -349,16 +309,6 @@
         "key": "ctrl+shift+w",
         "mac": "cmd+shift+w",
         "when": "workspaceFolderCount > 0"
-      },
-      {
-        "command": "aura.openChat",
-        "key": "ctrl+shift+a",
-        "mac": "cmd+shift+a"
-      },
-      {
-        "command": "aura.quickExecute",
-        "key": "ctrl+shift+e",
-        "mac": "cmd+shift+e"
       },
       {
         "command": "aura.indexWorkspace",
@@ -398,14 +348,6 @@
             "description": "Index your project so Aura understands your code. This powers semantic search and code-aware chat.\n\n[Index Workspace](command:aura.indexWorkspace)",
             "media": {
               "markdown": "resources/walkthrough/index-code.md"
-            }
-          },
-          {
-            "id": "aura.walkthrough.tryChat",
-            "title": "Try Code-Aware Chat",
-            "description": "Ask questions about your codebase. Aura will search your indexed code and provide contextual answers.\n\n[Open Chat](command:aura.openChat)",
-            "media": {
-              "markdown": "resources/walkthrough/try-chat.md"
             }
           },
           {

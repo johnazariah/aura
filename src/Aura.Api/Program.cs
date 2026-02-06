@@ -164,7 +164,6 @@ app.UseGitHubToken();
 app.MapHealthEndpoints();
 app.MapMcpEndpoints();
 app.MapAgentEndpoints();
-app.MapConversationEndpoints();
 app.MapRagEndpoints();
 app.MapIndexEndpoints();
 app.MapToolEndpoints();

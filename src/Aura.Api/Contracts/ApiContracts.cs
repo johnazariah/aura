@@ -5,47 +5,6 @@
 namespace Aura.Api.Contracts;
 
 // =============================================================================
-// Agent Requests
-// =============================================================================
-
-/// <summary>Request to execute an agent.</summary>
-public record ExecuteAgentRequest(string Prompt, string? WorkspacePath = null);
-
-/// <summary>Request for streaming chat.</summary>
-public record StreamChatRequest(
-    string? Message,
-    IReadOnlyList<StreamChatMessage>? History = null);
-
-/// <summary>A message in chat history.</summary>
-public record StreamChatMessage(string? Role, string? Content);
-
-/// <summary>Request for RAG-enriched execution.</summary>
-public record ExecuteWithRagRequest(
-    string Prompt,
-    string? WorkspacePath = null,
-    bool? UseRag = null,
-    bool? UseCodeGraph = null,
-    int? TopK = null);
-
-/// <summary>Request for agentic execution with tools.</summary>
-public record ExecuteAgenticRequest(
-    string Prompt,
-    string? WorkspacePath = null,
-    bool? UseRag = null,
-    bool? UseCodeGraph = null,
-    int? MaxSteps = null);
-
-// =============================================================================
-// Conversation Requests
-// =============================================================================
-
-/// <summary>Request to create a conversation.</summary>
-public record CreateConversationRequest(string AgentId, string? Title = null, string? WorkspacePath = null);
-
-/// <summary>Request to add a message to a conversation.</summary>
-public record AddMessageRequest(string Content);
-
-// =============================================================================
 // RAG Requests
 // =============================================================================
 
@@ -143,31 +102,12 @@ public record CreateStoryRequest(
     string? PreferredExecutor = null,
     List<string>? OpenQuestions = null);
 
-/// <summary>Request to execute all pending steps.</summary>
-public record ExecuteAllStepsRequest(
-    bool StopOnError = true);
-
-/// <summary>Request to execute a workflow step.</summary>
-public record ExecuteStepRequest(string? AgentId = null);
-
 /// <summary>Request to add a step to a workflow.</summary>
 public record AddStepRequest(
     string Name,
     string Capability,
     string? Description = null,
     int? AfterOrder = null);
-
-/// <summary>Request to reject a step.</summary>
-public record RejectStepRequest(string? Feedback = null);
-
-/// <summary>Request to skip a step.</summary>
-public record SkipStepRequest(string? Reason = null);
-
-/// <summary>Request to chat with a step.</summary>
-public record StepChatRequest(string Message);
-
-/// <summary>Request to reassign a step.</summary>
-public record ReassignStepRequest(string AgentId);
 
 /// <summary>Request to update step description.</summary>
 public record UpdateStepDescriptionRequest(string Description);

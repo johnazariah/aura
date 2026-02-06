@@ -1,13 +1,11 @@
 import * as vscode from 'vscode';
 import { StatusTreeProvider } from './providers/statusTreeProvider';
-import { AgentTreeProvider, AgentItem, setExtensionPath } from './providers/agentTreeProvider';
-import { ChatWindowProvider } from './providers/chatWindowProvider';
 import { StoryTreeProvider } from './providers/storyTreeProvider';
 import { StoryPanelProvider } from './providers/storyPanelProvider';
 import { WelcomeViewProvider } from './providers/welcomeViewProvider';
 import { ResearchTreeProvider } from './providers/researchTreeProvider';
 import { HealthCheckService } from './services/healthCheckService';
-import { AuraApiService, AgentInfo } from './services/auraApiService';
+import { AuraApiService } from './services/auraApiService';
 import { gitService } from './services/gitService';
 import { LogService } from './services/logService';
 
@@ -15,11 +13,9 @@ let auraApiService: AuraApiService;
 let healthCheckService: HealthCheckService;
 let logService: LogService;
 let statusTreeProvider: StatusTreeProvider;
-let agentTreeProvider: AgentTreeProvider;
 let storyTreeProvider: StoryTreeProvider;
 let researchTreeProvider: ResearchTreeProvider;
 let welcomeViewProvider: WelcomeViewProvider;
-let chatWindowProvider: ChatWindowProvider;
 let storyPanelProvider: StoryPanelProvider;
 let statusBarItem: vscode.StatusBarItem;
 let refreshInterval: NodeJS.Timeout | undefined;
@@ -35,9 +31,6 @@ export async function activate(context: vscode.ExtensionContext) {
     await vscode.commands.executeCommand('setContext', 'aura.workspaceOnboarded', false);
     await vscode.commands.executeCommand('setContext', 'aura.workspaceNotOnboarded', true);
 
-    // Set extension path for resource loading
-    setExtensionPath(context.extensionPath);
-
     // Initialize services
     auraApiService = new AuraApiService();
     healthCheckService = new HealthCheckService(auraApiService);
@@ -45,11 +38,9 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // Initialize tree providers
     statusTreeProvider = new StatusTreeProvider(healthCheckService);
-    agentTreeProvider = new AgentTreeProvider(auraApiService);
     storyTreeProvider = new StoryTreeProvider(auraApiService);
     researchTreeProvider = new ResearchTreeProvider(auraApiService);
     welcomeViewProvider = new WelcomeViewProvider(auraApiService);
-    chatWindowProvider = new ChatWindowProvider(context.extensionUri, auraApiService);
     storyPanelProvider = new StoryPanelProvider(context.extensionUri, auraApiService);
 
     // Register tree views
@@ -73,11 +64,6 @@ export async function activate(context: vscode.ExtensionContext) {
         showCollapseAll: true
     });
 
-    const agentView = vscode.window.createTreeView('aura.agents', {
-        treeDataProvider: agentTreeProvider,
-        showCollapseAll: true
-    });
-
     // Create status bar item - clicking opens current story panel
     statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
     statusBarItem.command = 'aura.showCurrentStory';
@@ -95,69 +81,6 @@ export async function activate(context: vscode.ExtensionContext) {
 
     const stopCommand = vscode.commands.registerCommand('aura.stopServices', async () => {
         vscode.window.showInformationMessage('Stopping Aura services... (Aspire orchestration coming soon)');
-    });
-
-    const executeAgentCommand = vscode.commands.registerCommand('aura.executeAgent', async (item?: AgentItem) => {
-        await executeAgent(item);
-    });
-
-    const quickExecuteCommand = vscode.commands.registerCommand('aura.quickExecute', async () => {
-        await executeAgent();
-    });
-
-    const selectAgentCommand = vscode.commands.registerCommand('aura.selectAgent', async (agent: AgentInfo) => {
-        const actions = [
-            { label: '$(comment) Chat with this agent', action: 'chat' },
-            { label: '$(info) View details', action: 'details' },
-            { label: '$(copy) Copy agent ID', action: 'copy' }
-        ];
-
-        const selected = await vscode.window.showQuickPick(actions, {
-            placeHolder: `${agent.name} - Select action`
-        });
-
-        if (!selected) return;
-
-        switch (selected.action) {
-            case 'chat':
-                await openChatWindow(agent);
-                break;
-            case 'details':
-                showAgentDetails(agent);
-                break;
-            case 'copy':
-                await vscode.env.clipboard.writeText(agent.id);
-                vscode.window.showInformationMessage(`Copied agent ID: ${agent.id}`);
-                break;
-        }
-    });
-
-    // Open Chat command
-    const openChatCommand = vscode.commands.registerCommand('aura.openChat', async () => {
-        try {
-            const agents = await auraApiService.getAgents();
-            if (agents.length === 0) {
-                vscode.window.showWarningMessage('No agents available');
-                return;
-            }
-
-            const items = agents.map(a => ({
-                label: a.name,
-                description: a.model,
-                detail: a.description,
-                agent: a
-            }));
-
-            const selected = await vscode.window.showQuickPick(items, {
-                placeHolder: 'Select an agent to chat with'
-            });
-
-            if (selected) {
-                await chatWindowProvider.openChatWindow(selected.agent);
-            }
-        } catch (error) {
-            vscode.window.showErrorMessage('Failed to load agents');
-        }
     });
 
     // RAG Commands
@@ -193,10 +116,6 @@ export async function activate(context: vscode.ExtensionContext) {
 
     const openStoryCommand = vscode.commands.registerCommand('aura.openStory', async (storyId: string) => {
         await storyPanelProvider.openStoryPanel(storyId);
-    });
-
-    const executeStepCommand = vscode.commands.registerCommand('aura.executeStep', async (storyId: string, stepId: string) => {
-        await executeStep(storyId, stepId);
     });
 
     const refreshStoriesCommand = vscode.commands.registerCommand('aura.refreshStories', async () => {
@@ -467,15 +386,10 @@ export async function activate(context: vscode.ExtensionContext) {
         welcomeView,
         storyView,
         researchView,
-        agentView,
         statusBarItem,
         refreshCommand,
         startCommand,
         stopCommand,
-        executeAgentCommand,
-        quickExecuteCommand,
-        selectAgentCommand,
-        openChatCommand,
         indexWorkspaceCommand,
         showRagStatsCommand,
         clearRagIndexCommand,
@@ -484,7 +398,6 @@ export async function activate(context: vscode.ExtensionContext) {
         onboardWorkspaceCommand,
         createStoryCommand,
         openStoryCommand,
-        executeStepCommand,
         refreshStoriesCommand,
         deleteStoryCommand,
         refreshResearchCommand,
@@ -964,7 +877,6 @@ async function refreshAll(): Promise<void> {
     try {
         await healthCheckService.checkAll();
         statusTreeProvider.refresh();
-        agentTreeProvider.refresh();
 
         const status = healthCheckService.getOverallStatus();
         updateStatusBar(status);
@@ -1032,132 +944,6 @@ function adjustRefreshRate(isIndexing: boolean): void {
     }
 }
 
-async function openChatWindow(agent: AgentInfo): Promise<void> {
-    await chatWindowProvider.openChatWindow(agent);
-}
-
-async function executeAgentById(agentId: string, agentName: string): Promise<void> {
-    const prompt = await vscode.window.showInputBox({
-        prompt: `Enter prompt for ${agentName}`,
-        placeHolder: 'What would you like the agent to do?'
-    });
-
-    if (!prompt) return;
-
-    const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-
-    await vscode.window.withProgress(
-        {
-            location: vscode.ProgressLocation.Notification,
-            title: `Executing ${agentName}...`,
-            cancellable: false
-        },
-        async () => {
-            const result = await auraApiService.executeAgent(agentId, prompt, workspacePath);
-
-            const doc = await vscode.workspace.openTextDocument({
-                content: `# Agent: ${agentName}\n\n## Prompt\n${prompt}\n\n## Response\n${result}`,
-                language: 'markdown'
-            });
-            await vscode.window.showTextDocument(doc);
-        }
-    );
-}
-
-function showAgentDetails(agent: AgentInfo): void {
-    const capabilities = agent.capabilities?.join(', ') || 'none';
-    const languages = agent.languages?.join(', ') || 'all';
-    const priority = agent.priority ?? 'default';
-
-    const details = `
-# ${agent.name}
-
-## Overview
-- **ID:** ${agent.id}
-- **Model:** ${agent.model}
-- **Provider:** ${agent.provider || 'ollama'}
-- **Priority:** ${priority}
-
-## Capabilities
-${capabilities}
-
-## Language Support
-${languages}
-`;
-
-    vscode.workspace.openTextDocument({
-        content: details.trim(),
-        language: 'markdown'
-    }).then(doc => vscode.window.showTextDocument(doc));
-}
-
-async function executeAgent(item?: AgentItem): Promise<void> {
-    try {
-        let agentId: string;
-        let agentName: string;
-
-        if (item && item.agent.id !== 'offline') {
-            agentId = item.agent.id;
-            agentName = item.agent.name;
-        } else {
-            const agents = await auraApiService.getAgents();
-            if (agents.length === 0) {
-                vscode.window.showWarningMessage('No agents available');
-                return;
-            }
-
-            interface AgentPickItem extends vscode.QuickPickItem {
-                id: string;
-            }
-
-            const pickItems: AgentPickItem[] = agents.map((a: AgentInfo) => ({
-                label: a.name,
-                description: a.model,
-                id: a.id
-            }));
-
-            const picked = await vscode.window.showQuickPick(pickItems, {
-                placeHolder: 'Select an agent to execute'
-            });
-
-            if (!picked) return;
-
-            agentId = picked.id;
-            agentName = picked.label;
-        }
-
-        const prompt = await vscode.window.showInputBox({
-            prompt: `Enter prompt for ${agentName}`,
-            placeHolder: 'What would you like the agent to do?'
-        });
-
-        if (!prompt) return;
-
-        const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-
-        await vscode.window.withProgress(
-            {
-                location: vscode.ProgressLocation.Notification,
-                title: `Executing ${agentName}...`,
-                cancellable: false
-            },
-            async () => {
-                const result = await auraApiService.executeAgent(agentId, prompt, workspacePath);
-
-                const doc = await vscode.workspace.openTextDocument({
-                    content: `# Agent: ${agentName}\n\n## Prompt\n${prompt}\n\n## Response\n${result}`,
-                    language: 'markdown'
-                });
-                await vscode.window.showTextDocument(doc);
-            }
-        );
-
-    } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unknown error';
-        vscode.window.showErrorMessage(`Failed to execute agent: ${message}`);
-    }
-}
-
 // =====================
 // Story Functions
 // =====================
@@ -1168,32 +954,6 @@ async function createStory(): Promise<void> {
         // Refresh tree when story is created
         storyTreeProvider.refresh();
     });
-}
-
-async function executeStep(storyId: string, stepId: string): Promise<void> {
-    try {
-        await vscode.window.withProgress(
-            {
-                location: vscode.ProgressLocation.Notification,
-                title: 'Executing step...',
-                cancellable: false
-            },
-            async () => {
-                const step = await auraApiService.executeStoryStep(storyId, stepId);
-                storyTreeProvider.refresh();
-
-                if (step.status === 'Completed') {
-                    vscode.window.showInformationMessage(`Step completed: ${step.name}`);
-                } else if (step.status === 'Failed') {
-                    vscode.window.showErrorMessage(`Step failed: ${step.error || 'Unknown error'}`);
-                }
-            }
-        );
-    } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unknown error';
-        vscode.window.showErrorMessage(`Failed to execute step: ${message}`);
-        storyTreeProvider.refresh();
-    }
 }
 
 async function deleteStory(item?: any): Promise<void> {
