@@ -217,38 +217,42 @@ This script can be installed as a pre-commit hook: `.\scripts\Validate-Features.
 
 **CRITICAL**: When Aura MCP tools are available, prefer them over text manipulation (`replace_string_in_file`, `create_file`) for C# code changes. Aura tools understand code semantics; text tools don't.
 
+**Polyglot support**: `aura_navigate` and `aura_refactor` support **C#, TypeScript, and Python**. Language is auto-detected from `filePath` extension, `solutionPath` (C#), or `projectPath` (TypeScript/Python). `aura_inspect` and `aura_validate` are C#-only with graceful error messages for other languages.
+
 | Task | Use This | NOT This |
 |------|----------|----------|
 | Add method to class | `aura_generate(operation: "method")` | `replace_string_in_file` |
 | Add property to class | `aura_generate(operation: "property")` | `replace_string_in_file` |
-| Rename symbol | `aura_refactor(operation: "rename")` | Find/replace across files |
+| Rename symbol (C#) | `aura_refactor(operation: "rename", solutionPath: ...)` | Find/replace across files |
+| Rename symbol (TS) | `aura_refactor(operation: "rename", filePath: "*.ts", projectPath: ...)` | Find/replace across files |
 | Create new C# type | `aura_generate(operation: "create_type")` | `create_file` |
 | Implement interface | `aura_generate(operation: "implement_interface")` | Manual stub writing |
 | Generate constructor | `aura_generate(operation: "constructor")` | `replace_string_in_file` |
 | Generate tests | `aura_generate(operation: "tests")` | Manual test writing |
 | Extract method/variable | `aura_refactor(operation: "extract_*")` | Cut/paste with text tools |
 | Find usages/callers | `aura_navigate` | `grep_search` |
+| Find references (TS) | `aura_navigate(operation: "references", filePath: "*.ts", projectPath: ...)` | `grep_search` |
 | Explore type structure | `aura_inspect` | `read_file` + manual parsing |
 | Search codebase semantically | `aura_search` | `semantic_search` or `grep_search` |
 
 **When text manipulation IS appropriate:**
-- Non-C# files (JSON, YAML, Markdown, TypeScript, etc.)
-- Simple one-line fixes in C# where Aura overhead isn't justified
-- Files outside the solution (scripts, docs)
+- Files in languages not yet supported by Aura tools (e.g., Go, Rust)
+- Simple one-line fixes where Aura overhead isn't justified
+- Files outside the solution (scripts, docs, config)
 - When Aura tools fail and fallback is needed
 
 ### Aura Tool Capabilities
 
-| Tool | Operations | When to Use |
-|------|------------|-------------|
-| `aura_search` | Semantic code search | First step to understand codebase |
-| `aura_navigate` | `callers`, `implementations`, `derived_types`, `usages`, `references`, `definition`, `by_attribute` | Understanding code relationships |
-| `aura_inspect` | `type_members`, `list_types` | Exploring class structure |
-| `aura_validate` | `compilation`, `tests` | After changes to verify correctness |
-| `aura_refactor` | `rename`, `extract_method`, `extract_variable`, `extract_interface`, `change_signature`, `safe_delete`, `move_type_to_file` | Semantic code transformations |
-| `aura_generate` | `create_type`, `tests`, `implement_interface`, `constructor`, `property`, `method` | Adding new code elements |
-| `aura_pattern` | `list`, `get` | Load step-by-step operational patterns |
-| `aura_workflow` | `list`, `get`, `get_by_path`, `create`, `enrich`, `update_step` | Manage development stories |
+| Tool | Operations | Language Support | When to Use |
+|------|------------|-----------------|-------------|
+| `aura_search` | Semantic code search | All | First step to understand codebase |
+| `aura_navigate` | `callers`, `implementations`, `derived_types`, `usages`, `references`, `definition`, `by_attribute` | C#, TypeScript, Python | Understanding code relationships |
+| `aura_inspect` | `type_members`, `list_types` | C# only | Exploring class structure |
+| `aura_validate` | `compilation`, `tests` | C# only | After changes to verify correctness |
+| `aura_refactor` | `rename`, `extract_method`, `extract_variable`, `extract_interface`, `change_signature`, `safe_delete`, `move_type_to_file` | C#, TypeScript, Python | Semantic code transformations |
+| `aura_generate` | `create_type`, `tests`, `implement_interface`, `constructor`, `property`, `method` | C# only | Adding new code elements |
+| `aura_pattern` | `list`, `get` | All | Load step-by-step operational patterns |
+| `aura_workflow` | `list`, `get`, `get_by_path`, `create`, `enrich`, `update_step` | All | Manage development stories |
 
 ### Workflow: Using Aura Tools Effectively
 
