@@ -1,0 +1,43 @@
+name: create-enum-with-values
+description: Create an enum type with specific values (Level 2 - Tests enum creation)
+language: csharp
+repository: fixtures/repos/csharp-webapi
+timeoutSeconds: 300
+
+story:
+  title: Create UserRole Enum
+  description: |
+    Create an enum to represent user roles in the system.
+    
+    Create `src/Models/UserRole.cs` with:
+    - Enum `UserRole` with values: Guest, User, Moderator, Admin
+    - Add XML documentation for the enum
+    - Use explicit integer values (Guest=0, User=1, Moderator=2, Admin=3)
+
+expectations:
+  - type: compiles
+    description: Enum should compile
+
+  - type: file_exists
+    description: Enum file created
+    path: src/Models/UserRole.cs
+
+  - type: file_contains
+    description: Has Guest value
+    path: src/Models/UserRole.cs
+    pattern: 'Guest'
+
+  - type: file_contains
+    description: Has Admin value
+    path: src/Models/UserRole.cs
+    pattern: 'Admin'
+
+  - type: file_contains
+    description: Is an enum
+    path: src/Models/UserRole.cs
+    pattern: 'enum UserRole'
+
+tags:
+  - calibration
+  - enum
+  - level-2

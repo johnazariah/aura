@@ -1,0 +1,35 @@
+name: roslyn-agent-test
+description: Test the deterministic Roslyn coding agent
+language: csharp
+repository: fixtures/repos/csharp-console
+timeoutSeconds: 300
+executor: internal
+
+story:
+  title: Add CalculateSum Method to Calculator
+  description: |
+    Add a new method to the Calculator class.
+    
+    Requirements:
+    - Add method `int CalculateSum(int[] numbers)` to the Calculator class
+    - The method should return the sum of all numbers
+    - Handle empty arrays by returning 0
+    - Add XML documentation
+
+expectations:
+  - type: compiles
+    description: Code should compile after changes
+
+  - type: file_contains
+    description: Method should be added
+    path: HelloWorld/Calculator.cs
+    pattern: 'CalculateSum'
+
+  - type: index_usage
+    description: Agent should use semantic tools efficiently
+    min_aura_tool_ratio: 0.4
+    max_steps_to_target: 10
+
+tags:
+  - test
+  - roslyn

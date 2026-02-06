@@ -24,7 +24,7 @@ public static class DeveloperEndpoints
     /// </summary>
     public static WebApplication MapDeveloperEndpoints(this WebApplication app)
     {
-        // story CRUD
+        // Story CRUD (Essential)
         app.MapPost("/api/developer/stories", CreateStory);
         app.MapGet("/api/developer/stories", ListStories);
         app.MapGet("/api/developer/stories/by-path", GetStoryByPath);
@@ -33,24 +33,29 @@ public static class DeveloperEndpoints
         app.MapPatch("/api/developer/stories/{id:guid}/status", ResetStoryStatus);
         app.MapPatch("/api/developer/stories/{id:guid}/orchestrator", ResetOrchestratorStatus);
 
-        // story lifecycle
+        // Story lifecycle (Essential)
         app.MapPost("/api/developer/stories/{id:guid}/analyze", AnalyzeStory);
-        app.MapPost("/api/developer/stories/{id:guid}/plan", PlanStory);
         app.MapPost("/api/developer/stories/{id:guid}/decompose", DecomposeStory);
         app.MapPost("/api/developer/stories/{id:guid}/run", RunStory);
         app.MapGet("/api/developer/stories/{id:guid}/stream", StreamStoryExecution);
-        app.MapGet("/api/developer/stories/{id:guid}/orchestrator-status", GetOrchestratorStatus);
-        app.MapPost("/api/developer/stories/{id:guid}/execute-all", ExecuteAllSteps);
         app.MapPost("/api/developer/stories/{id:guid}/complete", CompleteStory);
         app.MapPost("/api/developer/stories/{id:guid}/cancel", CancelStory);
         app.MapPost("/api/developer/stories/{id:guid}/finalize", FinalizeStory);
         app.MapPost("/api/developer/stories/{id:guid}/chat", ChatWithStory);
 
-        // Step management
+        // DEPRECATED: Internal agent model endpoints - will be removed
+        // These are replaced by /decompose + /run which use Copilot CLI
+#pragma warning disable CS0618 // Type or member is obsolete
+        app.MapPost("/api/developer/stories/{id:guid}/plan", PlanStory);                    // Use /decompose instead
+        app.MapPost("/api/developer/stories/{id:guid}/execute-all", ExecuteAllSteps);       // Use /run instead
+        app.MapGet("/api/developer/stories/{id:guid}/orchestrator-status", GetOrchestratorStatus); // Debug only
+
+        // Step management (Review - may deprecate)
         app.MapPost("/api/developer/stories/{id:guid}/steps", AddStep);
         app.MapDelete("/api/developer/stories/{storyId:guid}/steps/{stepId:guid}", DeleteStep);
 
-        // Step operations
+        // DEPRECATED: Step operations for internal agent model - will be removed
+        // Copilot CLI handles step execution directly, no human-in-loop needed
         app.MapPost("/api/developer/stories/{storyId:guid}/steps/{stepId:guid}/execute", ExecuteStep);
         app.MapPost("/api/developer/stories/{storyId:guid}/steps/{stepId:guid}/approve", ApproveStep);
         app.MapPost("/api/developer/stories/{storyId:guid}/steps/{stepId:guid}/reject", RejectStep);
@@ -58,6 +63,7 @@ public static class DeveloperEndpoints
         app.MapPost("/api/developer/stories/{storyId:guid}/steps/{stepId:guid}/reset", ResetStep);
         app.MapPost("/api/developer/stories/{storyId:guid}/steps/{stepId:guid}/chat", ChatWithStep);
         app.MapPost("/api/developer/stories/{storyId:guid}/steps/{stepId:guid}/reassign", ReassignStep);
+#pragma warning restore CS0618
         app.MapPut("/api/developer/stories/{storyId:guid}/steps/{stepId:guid}/description", UpdateStepDescription);
 
         // Story/Issue integration endpoints
@@ -360,6 +366,8 @@ public static class DeveloperEndpoints
         }
     }
 
+    /// <summary>DEPRECATED: Use /decompose instead. Will be removed in future version.</summary>
+    [Obsolete("Use DecomposeStory instead. PlanStory uses hardcoded defaults and doesn't accept parameters.")]
     private static async Task<IResult> PlanStory(
         Guid id,
         HttpContext context,
@@ -782,6 +790,8 @@ public static class DeveloperEndpoints
         return Results.NoContent();
     }
 
+    /// <summary>DEPRECATED: Use /run instead. Will be removed in future version.</summary>
+    [Obsolete("Use RunStory instead. Individual step execution is part of the old internal agent model.")]
     private static async Task<IResult> ExecuteStep(
         Guid storyId,
         Guid stepId,
@@ -811,6 +821,8 @@ public static class DeveloperEndpoints
         }
     }
 
+    /// <summary>DEPRECATED: Use /run instead. Will be removed in future version.</summary>
+    [Obsolete("Use RunStory instead. ExecuteAllSteps is part of the old internal agent model.")]
     private static async Task<IResult> ExecuteAllSteps(
         Guid id,
         ExecuteAllStepsRequest? request,
@@ -858,6 +870,8 @@ public static class DeveloperEndpoints
         }
     }
 
+    /// <summary>DEPRECATED: Part of old internal agent model. Will be removed in future version.</summary>
+    [Obsolete("Copilot CLI handles execution directly. Human-in-loop approval is not needed.")]
     private static async Task<IResult> ApproveStep(
         Guid storyId,
         Guid stepId,
@@ -881,6 +895,8 @@ public static class DeveloperEndpoints
         }
     }
 
+    /// <summary>DEPRECATED: Part of old internal agent model. Will be removed in future version.</summary>
+    [Obsolete("Copilot CLI handles execution directly. Human-in-loop rejection is not needed.")]
     private static async Task<IResult> RejectStep(
         Guid storyId,
         Guid stepId,
@@ -906,6 +922,8 @@ public static class DeveloperEndpoints
         }
     }
 
+    /// <summary>DEPRECATED: Part of old internal agent model. Will be removed in future version.</summary>
+    [Obsolete("Copilot CLI handles execution directly. Step skipping is not needed.")]
     private static async Task<IResult> SkipStep(
         Guid storyId,
         Guid stepId,
@@ -931,6 +949,8 @@ public static class DeveloperEndpoints
         }
     }
 
+    /// <summary>DEPRECATED: Part of old internal agent model. Will be removed in future version.</summary>
+    [Obsolete("Copilot CLI handles execution directly. Step reset is not needed.")]
     private static async Task<IResult> ResetStep(
         Guid storyId,
         Guid stepId,
@@ -978,6 +998,8 @@ public static class DeveloperEndpoints
         }
     }
 
+    /// <summary>DEPRECATED: Part of old internal agent model. Will be removed in future version.</summary>
+    [Obsolete("Copilot CLI handles execution directly. Agent reassignment is not needed.")]
     private static async Task<IResult> ReassignStep(
         Guid storyId,
         Guid stepId,

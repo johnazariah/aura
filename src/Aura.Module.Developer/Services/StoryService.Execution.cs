@@ -42,50 +42,12 @@ public sealed partial class StoryService
         // Check if we're waiting for a quality gate
         if (story.Status == StoryStatus.GatePending)
         {
-            // Run quality gate
-            var gateResult = await _qualityGateService.RunFullGateAsync(story.WorktreePath, currentWave - 1, ct);
-            if (!gateResult.Passed)
-            {
-                // If the gate was cancelled (e.g., HTTP client disconnect), don't mark the story as failed.
-                // Leave it in GatePending so it can be retried.
-                if (gateResult.WasCancelled)
-                {
-                    _logger.LogWarning("Quality gate was cancelled after wave {Wave}. Story remains in GatePending state for retry.", currentWave - 1);
-                    return new StoryRunResult
-                    {
-                        StoryId = storyId,
-                        Status = StoryStatus.GatePending,
-                        CurrentWave = currentWave - 1,
-                        TotalWaves = waveCount,
-                        StartedSteps = [],
-                        CompletedSteps = [],
-                        FailedSteps = [],
-                        GateResult = gateResult,
-                        Error = "Quality gate was cancelled. Retry when ready.",
-                    };
-                }
-
-                _logger.LogWarning("Quality gate failed after wave {Wave}: {Error}", currentWave - 1, gateResult.Error);
-                story.Status = StoryStatus.GateFailed;
-                story.GateResult = JsonSerializer.Serialize(new { gateResult.Passed, gateResult.Error, gateResult.BuildOutput, gateResult.TestOutput });
-                story.UpdatedAt = DateTimeOffset.UtcNow;
-                await _db.SaveChangesAsync(ct);
-                return new StoryRunResult
-                {
-                    StoryId = storyId,
-                    Status = StoryStatus.GateFailed,
-                    CurrentWave = currentWave - 1,
-                    TotalWaves = waveCount,
-                    StartedSteps = [],
-                    CompletedSteps = [],
-                    FailedSteps = [],
-                    GateResult = gateResult,
-                    Error = $"Quality gate failed: {gateResult.Error}",
-                };
-            }
-
-            _logger.LogInformation("Quality gate passed after wave {Wave}", currentWave - 1);
-            story.GateResult = null; // Clear gate result on success
+            // Skip quality gate for intermediate waves
+            // Intermediate waves may have partial implementations that don't compile
+            // (e.g., wave 1 updates interfaces, wave 2 updates implementations)
+            // The quality gate will run after the final wave completes
+            _logger.LogInformation("Proceeding past gate for wave {Wave}/{TotalWaves} - will validate after final wave", currentWave - 1, waveCount);
+            // Proceed to execute the current wave (no gate check needed)
         }
 
         // Get steps for current wave that are pending
@@ -171,7 +133,10 @@ public sealed partial class StoryService
         // Wave completed successfully
         if (currentWave < waveCount)
         {
-            // More waves to go - wait for quality gate
+            // More waves to go - skip quality gate for intermediate waves
+            // Intermediate waves may have partial implementations that don't compile
+            // (e.g., wave 1 updates interfaces, wave 2 updates implementations)
+            _logger.LogInformation("Skipping quality gate for intermediate wave {Wave}/{TotalWaves} - will validate after final wave", currentWave, waveCount);
             story.Status = StoryStatus.GatePending;
             story.CurrentWave = currentWave + 1;
             story.UpdatedAt = DateTimeOffset.UtcNow;
@@ -188,7 +153,51 @@ public sealed partial class StoryService
             };
         }
 
-        // All waves complete - ready for finalization
+        // All waves complete - run quality gate before marking ready
+        _logger.LogInformation("All waves complete, running final quality gate");
+        var gateResult = await _qualityGateService.RunFullGateAsync(story.WorktreePath, currentWave, ct);
+        if (!gateResult.Passed)
+        {
+            if (gateResult.WasCancelled)
+            {
+                _logger.LogWarning("Quality gate was cancelled after final wave {Wave}. Story remains pending for retry.", currentWave);
+                story.Status = StoryStatus.GatePending;
+                story.UpdatedAt = DateTimeOffset.UtcNow;
+                await _db.SaveChangesAsync(ct);
+                return new StoryRunResult
+                {
+                    StoryId = storyId,
+                    Status = StoryStatus.GatePending,
+                    CurrentWave = currentWave,
+                    TotalWaves = waveCount,
+                    StartedSteps = waveSteps,
+                    CompletedSteps = completedSteps,
+                    FailedSteps = [],
+                    GateResult = gateResult,
+                    Error = "Quality gate was cancelled. Retry when ready.",
+                };
+            }
+
+            _logger.LogWarning("Quality gate failed after final wave {Wave}: {Error}", currentWave, gateResult.Error);
+            story.Status = StoryStatus.GateFailed;
+            story.GateResult = JsonSerializer.Serialize(new { gateResult.Passed, gateResult.Error, gateResult.BuildOutput, gateResult.TestOutput });
+            story.UpdatedAt = DateTimeOffset.UtcNow;
+            await _db.SaveChangesAsync(ct);
+            return new StoryRunResult
+            {
+                StoryId = storyId,
+                Status = StoryStatus.GateFailed,
+                CurrentWave = currentWave,
+                TotalWaves = waveCount,
+                StartedSteps = waveSteps,
+                CompletedSteps = completedSteps,
+                FailedSteps = [],
+                GateResult = gateResult,
+                Error = $"Quality gate failed: {gateResult.Error}",
+            };
+        }
+
+        // Quality gate passed - ready for finalization
         story.Status = StoryStatus.ReadyToComplete;
         story.UpdatedAt = DateTimeOffset.UtcNow;
         await _db.SaveChangesAsync(ct);

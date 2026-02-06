@@ -1,0 +1,36 @@
+name: add-method-to-service
+description: Add a new method to an existing service class (requires code discovery)
+language: csharp
+repository: fixtures/repos/csharp-console
+timeoutSeconds: 600
+executor: internal
+
+story:
+  title: Add CalculateSum Method to Calculator Service
+  description: |
+    Add a new method to the existing Calculator service.
+
+    Requirements:
+    - Find the Calculator class in the codebase
+    - Add a new method: `int CalculateSum(int[] numbers)` that returns the sum of all numbers
+    - The method should handle empty arrays (return 0)
+    - Add XML documentation to the method
+    - Ensure the code compiles
+
+expectations:
+  - type: compiles
+    description: The generated code should compile without errors
+
+  - type: file_contains
+    description: Calculator should have the new method
+    path: "**/*Calculator*.cs"
+    pattern: "CalculateSum"
+
+  - type: index_usage
+    description: Agent should use semantic tools for code discovery
+    min_aura_tool_ratio: 0.3
+
+tags:
+  - test
+  - internal
+  - discovery

@@ -783,7 +783,7 @@ public sealed partial class McpHandler
 
         try
         {
-            _logger.LogDebug("Executing MCP tool: {Tool}", toolName);
+            _logger.LogInformation("MCP tool call: {Tool}", toolName);
             var result = await handler(args, ct);
             var resultJson = JsonSerializer.Serialize(result, JsonOptions);
 

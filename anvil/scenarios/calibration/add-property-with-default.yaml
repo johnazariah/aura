@@ -1,0 +1,41 @@
+name: add-property-with-default
+description: Add properties with default values (Level 2 - Tests property initialization)
+language: csharp
+repository: fixtures/repos/csharp-webapi
+timeoutSeconds: 300
+
+story:
+  title: Add Audit Properties to User
+  description: |
+    Add audit tracking properties to the existing User model.
+    
+    In `src/Models/User.cs`, add:
+    - `DateTime CreatedAt` property with default `DateTime.UtcNow`
+    - `DateTime? UpdatedAt` property (nullable, no default)
+    - `bool IsActive` property with default `true`
+    - Add XML documentation for each property
+
+expectations:
+  - type: compiles
+    description: User model should compile with new properties
+
+  - type: file_contains
+    description: Has CreatedAt property
+    path: src/Models/User.cs
+    pattern: 'CreatedAt'
+
+  - type: file_contains
+    description: Has UpdatedAt nullable property
+    path: src/Models/User.cs
+    pattern: 'DateTime\?.*UpdatedAt'
+
+  - type: file_contains
+    description: Has IsActive property
+    path: src/Models/User.cs
+    pattern: 'IsActive'
+
+tags:
+  - calibration
+  - property-defaults
+  - existing-file
+  - level-2

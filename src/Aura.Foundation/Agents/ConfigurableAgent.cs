@@ -320,11 +320,10 @@ public sealed class ConfigurableAgent : IAgent
                 }
             }
 
-            // Add assistant message with tool calls for context (needed for multi-turn)
-            if (response.Content is not null)
-            {
-                messages.Add(new ChatMessage(ChatRole.Assistant, response.Content));
-            }
+            // NOTE: We don't add the assistant message with tool calls to `messages` here.
+            // The LLM provider's ChatWithFunctionsAsync handles reconstructing the proper
+            // message sequence (assistant with tool_calls + tool results) when we pass
+            // functionResults. Adding content here would cause duplicate assistant messages.
         }
 
         // Exceeded max iterations

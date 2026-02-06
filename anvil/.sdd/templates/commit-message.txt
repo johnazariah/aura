@@ -1,0 +1,23 @@
+# Commit Message Template
+#
+# Types: feat, fix, docs, style, refactor, perf, test, build, ci, chore
+# Scope: component or area affected (optional)
+# Subject: imperative mood, no period, <50 chars
+#
+# Body: Explain WHAT and WHY (not HOW). Wrap at 72 chars.
+#
+# Footer: Reference issues, breaking changes
+#   - Fixes #123
+#   - BREAKING CHANGE: description
+#
+# Agent Attribution (when AI-assisted):
+#   Keep the co-author block to track AI contributions.
+#   Remove if commit is purely human-authored.
+
+<type>(<scope>): <subject>
+
+<body>
+
+<footer>
+
+Co-authored-by: <agent-name> <agent-email>

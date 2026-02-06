@@ -321,8 +321,18 @@ public sealed class AzureOpenAiProvider : ILlmProvider
             }
 
             // Add function result messages if provided
+            // Per OpenAI spec: tool messages must follow an assistant message with tool_calls
             if (functionResults is { Count: > 0 })
             {
+                // Create an assistant message with the tool calls that these results respond to
+                // We reconstruct the tool calls from the function results
+                var toolCalls = functionResults.Select(r => ChatToolCall.CreateFunctionToolCall(
+                    r.CallId ?? r.Name,
+                    r.Name,
+                    BinaryData.FromString("{}"))).ToList();
+                chatMessages.Add(new AssistantChatMessage(toolCalls));
+
+                // Now add the tool result messages
                 foreach (var result in functionResults)
                 {
                     chatMessages.Add(new ToolChatMessage(result.CallId ?? result.Name, result.Result));

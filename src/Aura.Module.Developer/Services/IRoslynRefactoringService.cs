@@ -601,6 +601,17 @@ public sealed record CreateTypeRequest
     /// Example: Repository&lt;TEntity&gt; where TEntity : class, IEntity
     /// </summary>
     public IReadOnlyList<TypeParameterInfo>? TypeParameters { get; init; }
+
+    /// <summary>
+    /// Optional: attributes to apply to the type (e.g., [ApiController]).
+    /// </summary>
+    public IReadOnlyList<AttributeInfo>? Attributes { get; init; }
+
+    /// <summary>
+    /// Optional: enum member names (for typeKind=enum).
+    /// Example: ["None", "Success", "Error", "Warning"]
+    /// </summary>
+    public IReadOnlyList<string>? EnumMembers { get; init; }
 }
 
 

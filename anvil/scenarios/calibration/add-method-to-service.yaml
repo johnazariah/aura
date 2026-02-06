@@ -1,0 +1,36 @@
+name: add-method-to-service
+description: Add a method to an existing service (calibration for targeted editing)
+language: csharp
+repository: fixtures/repos/csharp-webapi
+timeoutSeconds: 600
+
+story:
+  title: Add GetUserByEmail Method
+  description: |
+    Add a new method to the UserService class that retrieves a user by their email address.
+    
+    Requirements:
+    - Add method `GetUserByEmail(string email)` to UserService
+    - Method should query the repository for a user with matching email
+    - Return null if no user found
+    - Add appropriate XML documentation
+    
+    The agent should:
+    1. Use semantic search to find UserService
+    2. Inspect the class structure
+    3. Add the new method following existing patterns
+
+expectations:
+  - type: compiles
+    description: Code should compile after changes
+
+  - type: file_contains
+    description: Method should be added
+    path: src/Services/UserService.cs
+    pattern: 'GetUserByEmail.*string\s+email'
+
+tags:
+  - calibration
+  - semantic-search
+  - editing
+  - medium

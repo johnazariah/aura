@@ -1,0 +1,49 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test / Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# Build
+dist/
+build/
+*.egg-info/
+
+# Node (if applicable)
+node_modules/
+npm-debug.log
+
+# Secrets (never commit)
+.env
+.env.local
+*.pem
+*.key
+# Test run reports (generated)
+reports/
+
+# Test fixture run folders (generated)
+runs/
+
+# Fixture repos with .git (should be templates without .git)
+fixtures/repos/
