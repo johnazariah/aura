@@ -191,8 +191,18 @@ export async function activate(context: vscode.ExtensionContext) {
             });
 
             if (selected) {
-                // TODO: Open the source or show details
-                vscode.window.showInformationMessage(`Selected: ${selected.label}`);
+                try {
+                    const source = await auraApiService.getResearchSource(selected.sourceId);
+                    if (source.sourceUrl) {
+                        vscode.env.openExternal(vscode.Uri.parse(source.sourceUrl));
+                    } else {
+                        vscode.window.showInformationMessage(
+                            `${source.title} (${source.type}) — no URL available`
+                        );
+                    }
+                } catch {
+                    vscode.window.showInformationMessage(`Selected: ${selected.label}`);
+                }
             }
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Unknown error';
