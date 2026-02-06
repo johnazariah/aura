@@ -58,8 +58,8 @@ Source: "..\..\publish\win-x64\prompts\*"; DestDir: "{app}\prompts"; Flags: igno
 Source: "..\..\publish\win-x64\patterns\*"; DestDir: "{app}\patterns"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; VS Code Extension
 Source: "..\..\publish\win-x64\extension\*.vsix"; DestDir: "{app}\extension"; Flags: ignoreversion
-; Scripts
-Source: "..\..\publish\win-x64\scripts\*"; DestDir: "{app}\scripts"; Flags: ignoreversion
+; Scripts (includes language tool scripts in subdirectories)
+Source: "..\..\publish\win-x64\scripts\*"; DestDir: "{app}\scripts"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; Diagnostic script
 Source: "Diagnose-Aura.ps1"; DestDir: "{app}\scripts"; Flags: ignoreversion
 ; PostgreSQL

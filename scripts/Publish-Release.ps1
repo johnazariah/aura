@@ -98,6 +98,15 @@ try {
     Copy-Item "scripts/Get-ServiceAccountCredential.ps1" "$OutputDir/win-x64/scripts/"
     Copy-Item "scripts/Install-AuraService.ps1" "$OutputDir/win-x64/scripts/"
 
+    # Copy language tool scripts
+    New-Item -ItemType Directory -Path "$OutputDir/win-x64/scripts/typescript/dist" -Force | Out-Null
+    Copy-Item "scripts/typescript/dist/*" "$OutputDir/win-x64/scripts/typescript/dist/"
+    New-Item -ItemType Directory -Path "$OutputDir/win-x64/scripts/python" -Force | Out-Null
+    Copy-Item "scripts/python/refactor.py" "$OutputDir/win-x64/scripts/python/"
+    if (Test-Path "scripts/python/requirements.txt") {
+        Copy-Item "scripts/python/requirements.txt" "$OutputDir/win-x64/scripts/python/"
+    }
+
     # Download and bundle PostgreSQL
     Write-Host "`nPreparing PostgreSQL..." -ForegroundColor Green
     $pgVersion = "16.4-1"

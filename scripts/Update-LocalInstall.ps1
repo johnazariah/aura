@@ -291,6 +291,46 @@ try {
     }
 
     # =============================================================================
+    # Deploy Language Tool Scripts (TypeScript ts-morph, Python rope)
+    # =============================================================================
+    if (-not $SkipAgents) {
+        Write-Header "Deploying Language Tool Scripts"
+
+        $langScriptsPath = Join-Path $InstallPath "scripts"
+
+        # TypeScript: deploy compiled refactor.js
+        $tsDistSource = Join-Path $root "scripts/typescript/dist"
+        if (Test-Path $tsDistSource) {
+            $tsDest = Join-Path $langScriptsPath "typescript/dist"
+            if (-not (Test-Path $tsDest)) {
+                New-Item -ItemType Directory -Path $tsDest -Force | Out-Null
+            }
+            Copy-Item -Path "$tsDistSource/*" -Destination $tsDest -Force
+            Write-Step "TypeScript tools updated"
+        } else {
+            Write-Warning "TypeScript dist not found at $tsDistSource - skipping"
+        }
+
+        # Python: deploy refactor.py and requirements
+        $pySource = Join-Path $root "scripts/python"
+        if (Test-Path $pySource) {
+            $pyDest = Join-Path $langScriptsPath "python"
+            if (-not (Test-Path $pyDest)) {
+                New-Item -ItemType Directory -Path $pyDest -Force | Out-Null
+            }
+            Copy-Item -Path "$pySource/refactor.py" -Destination $pyDest -Force
+            if (Test-Path "$pySource/requirements.txt") {
+                Copy-Item -Path "$pySource/requirements.txt" -Destination $pyDest -Force
+            }
+            Write-Step "Python tools updated"
+        } else {
+            Write-Warning "Python scripts not found at $pySource - skipping"
+        }
+    } else {
+        Write-Skip "Language Tool Scripts"
+    }
+
+    # =============================================================================
     # Wait for builds with progress indicator
     # =============================================================================
     $spinner = @('⠋','⠙','⠹','⠸','⠼','⠴','⠦','⠧','⠇','⠏')

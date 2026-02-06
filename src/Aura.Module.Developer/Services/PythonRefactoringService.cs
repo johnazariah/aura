@@ -36,16 +36,8 @@ public sealed class PythonRefactoringService : IPythonRefactoringService
         _processRunner = processRunner;
         _logger = logger;
 
-        // Locate the refactor.py script relative to the application base
-        var baseDir = AppContext.BaseDirectory;
-        _scriptPath = Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", "scripts", "python", "refactor.py"));
-
-        // Fallback for development - try from working directory
-        if (!File.Exists(_scriptPath))
-        {
-            _scriptPath = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "scripts", "python", "refactor.py"));
-        }
-
+        // Locate the refactor.py script
+        _scriptPath = ResolveScriptPath();
         _logger.LogDebug("Python refactoring script path: {ScriptPath}", _scriptPath);
     }
 
@@ -426,5 +418,34 @@ public sealed class PythonRefactoringService : IPythonRefactoringService
         public int? Offset { get; set; }
         public int? Line { get; set; }
         public string? Message { get; set; }
+    }
+
+    /// <summary>
+    /// Resolves the path to the Python refactor.py script using multiple strategies:
+    /// 1. Development: relative to repo root from build output (bin/Debug/net10.0/)
+    /// 2. Installed: relative to install root from api/ directory (C:\Program Files\Aura\api\ → ..\scripts\)
+    /// 3. Fallback: relative to current working directory.
+    /// </summary>
+    private static string ResolveScriptPath()
+    {
+        const string relativePath = "scripts/python/refactor.py";
+        var baseDir = AppContext.BaseDirectory;
+
+        // Strategy 1: Development layout (bin/Debug/net10.0/ → ../../../../scripts/)
+        var devPath = Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", relativePath));
+        if (File.Exists(devPath))
+        {
+            return devPath;
+        }
+
+        // Strategy 2: Installed layout (api/ → ../scripts/)
+        var installedPath = Path.GetFullPath(Path.Combine(baseDir, "..", relativePath));
+        if (File.Exists(installedPath))
+        {
+            return installedPath;
+        }
+
+        // Strategy 3: Fallback to working directory
+        return Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), relativePath));
     }
 }
