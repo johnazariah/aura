@@ -5,6 +5,24 @@
 namespace Aura.Module.Developer.Services.Verification;
 
 /// <summary>
+/// Options for verification.
+/// </summary>
+public sealed record VerifyOptions
+{
+    /// <summary>Gets or sets whether to run build verification.</summary>
+    public bool RunBuild { get; init; } = true;
+
+    /// <summary>Gets or sets whether to run test verification.</summary>
+    public bool RunTests { get; init; } = true;
+
+    /// <summary>Gets or sets whether to run lint verification.</summary>
+    public bool RunLint { get; init; } = true;
+
+    /// <summary>Gets or sets whether to include agent-based code review.</summary>
+    public bool IncludeCodeReview { get; init; }
+}
+
+/// <summary>
 /// Service for running verification checks on workflow changes.
 /// </summary>
 public interface IStoryVerificationService
@@ -20,6 +38,18 @@ public interface IStoryVerificationService
         CancellationToken ct = default);
 
     /// <summary>
+    /// Runs verification checks with options for a workflow's working directory.
+    /// </summary>
+    /// <param name="workingDirectory">The directory to verify.</param>
+    /// <param name="options">Verification options.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>The verification result with structured checklist.</returns>
+    Task<VerificationResult> VerifyAsync(
+        string workingDirectory,
+        VerifyOptions options,
+        CancellationToken ct = default);
+
+    /// <summary>
     /// Runs a single verification step.
     /// </summary>
     /// <param name="step">The verification step to run.</param>
@@ -28,6 +58,13 @@ public interface IStoryVerificationService
     Task<VerificationStepResult> RunStepAsync(
         VerificationStep step,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Converts verification results to a structured checklist format.
+    /// </summary>
+    /// <param name="result">The verification result.</param>
+    /// <returns>A structured verification checklist.</returns>
+    VerificationChecklist ToChecklist(VerificationResult result);
 }
 
 /// <summary>
@@ -92,3 +129,4 @@ public sealed record VerificationStepResult
                 ? $"Exited with code {ExitCode}"
                 : null;
 }
+

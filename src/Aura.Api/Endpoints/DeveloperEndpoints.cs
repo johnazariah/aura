@@ -43,8 +43,9 @@ public static class DeveloperEndpoints
         app.MapPost("/api/developer/stories/{id:guid}/finalize", FinalizeStory);
         app.MapPost("/api/developer/stories/{id:guid}/chat", ChatWithStory);
 
-        // Artifact export
+        // Artifact export and verification
         app.MapPost("/api/developer/stories/{id:guid}/export", ExportStory);
+        app.MapPost("/api/developer/stories/{id:guid}/verify", VerifyStory);
 
         // DEPRECATED: Internal agent model endpoints - will be removed
         // These are replaced by /decompose + /run which use Copilot CLI
@@ -776,6 +777,131 @@ public static class DeveloperEndpoints
         catch (InvalidOperationException ex)
         {
             return Problem.InvalidState(ex.Message, context);
+        }
+        catch (Exception ex)
+        {
+            return Problem.InternalError(ex.Message, context);
+        }
+    }
+
+    private static async Task<IResult> VerifyStory(
+        Guid id,
+        VerifyStoryRequest? request,
+        HttpContext context,
+        IStoryService storyService,
+        Aura.Module.Developer.Services.Verification.IStoryVerificationService verificationService,
+        CancellationToken ct)
+    {
+        try
+        {
+            var story = await storyService.GetByIdWithStepsAsync(id, ct);
+            if (story is null)
+            {
+                return Problem.StoryNotFound(id, context);
+            }
+
+            if (string.IsNullOrEmpty(story.WorktreePath))
+            {
+                return Problem.InvalidState("Story has no worktree path for verification", context);
+            }
+
+            var options = new Aura.Module.Developer.Services.Verification.VerifyOptions
+            {
+                RunBuild = request?.RunBuild ?? true,
+                RunTests = request?.RunTests ?? true,
+                RunLint = request?.RunLint ?? true,
+                IncludeCodeReview = request?.IncludeCodeReview ?? false,
+            };
+
+            var result = await verificationService.VerifyAsync(story.WorktreePath, options, ct);
+            var checklist = verificationService.ToChecklist(result);
+
+            return Results.Ok(new
+            {
+                storyId = id,
+                success = result.Success,
+                summary = result.Summary,
+                durationMs = result.DurationMs,
+                projects = result.Projects.Select(p => new
+                {
+                    name = p.ProjectName,
+                    type = p.ProjectType.ToString(),
+                    path = p.ProjectPath,
+                }),
+                checklist = new
+                {
+                    summary = checklist.Summary,
+                    decision = checklist.Decision.ToString().ToLowerInvariant(),
+                    functional = checklist.Functional is not null ? new
+                    {
+                        items = checklist.Functional.Items.ToDictionary(
+                            kvp => kvp.Key,
+                            kvp => new { passed = kvp.Value.Passed, notes = kvp.Value.Notes }),
+                        notes = checklist.Functional.Notes,
+                    } : null,
+                    codeQuality = checklist.CodeQuality is not null ? new
+                    {
+                        items = checklist.CodeQuality.Items.ToDictionary(
+                            kvp => kvp.Key,
+                            kvp => new { passed = kvp.Value.Passed, notes = kvp.Value.Notes }),
+                        notes = checklist.CodeQuality.Notes,
+                    } : null,
+                    testing = checklist.Testing is not null ? new
+                    {
+                        items = checklist.Testing.Items.ToDictionary(
+                            kvp => kvp.Key,
+                            kvp => new { passed = kvp.Value.Passed, notes = kvp.Value.Notes }),
+                        notes = checklist.Testing.Notes,
+                    } : null,
+                    architecture = checklist.Architecture is not null ? new
+                    {
+                        items = checklist.Architecture.Items.ToDictionary(
+                            kvp => kvp.Key,
+                            kvp => new { passed = kvp.Value.Passed, notes = kvp.Value.Notes }),
+                        notes = checklist.Architecture.Notes,
+                    } : null,
+                    findings = checklist.Findings is not null ? new
+                    {
+                        mustFix = checklist.Findings.MustFix,
+                        shouldFix = checklist.Findings.ShouldFix,
+                        suggestions = checklist.Findings.Suggestions,
+                    } : null,
+                    build = checklist.Build is not null ? new
+                    {
+                        passed = checklist.Build.Passed,
+                        errors = checklist.Build.Errors,
+                        warnings = checklist.Build.Warnings,
+                        output = checklist.Build.Output,
+                    } : null,
+                    tests = checklist.Tests is not null ? new
+                    {
+                        passed = checklist.Tests.Passed,
+                        total = checklist.Tests.Total,
+                        passedCount = checklist.Tests.PassedCount,
+                        failed = checklist.Tests.Failed,
+                        skipped = checklist.Tests.Skipped,
+                        output = checklist.Tests.Output,
+                    } : null,
+                    lint = checklist.Lint is not null ? new
+                    {
+                        passed = checklist.Lint.Passed,
+                        errors = checklist.Lint.Errors,
+                        warnings = checklist.Lint.Warnings,
+                        output = checklist.Lint.Output,
+                    } : null,
+                },
+                stepResults = result.StepResults.Select(sr => new
+                {
+                    stepType = sr.Step.StepType.ToString(),
+                    description = sr.Step.Description,
+                    success = sr.Success,
+                    required = sr.Required,
+                    durationMs = sr.DurationMs,
+                    exitCode = sr.ExitCode,
+                    timedOut = sr.TimedOut,
+                    error = sr.ErrorMessage,
+                }),
+            });
         }
         catch (Exception ex)
         {

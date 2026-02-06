@@ -206,6 +206,13 @@ public record ExportStoryRequest(
     string Format = "sdd",
     List<string>? Include = null);
 
+/// <summary>Request to verify a story's changes.</summary>
+public record VerifyStoryRequest(
+    bool RunBuild = true,
+    bool RunTests = true,
+    bool RunLint = true,
+    bool IncludeCodeReview = false);
+
 /// <summary>Request to decompose a story into parallelizable tasks.</summary>
 public record DecomposeStoryRequest(
     int MaxParallelism = 4,

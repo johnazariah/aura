@@ -360,4 +360,130 @@ public sealed class StoryVerificationServiceTests
         Assert.Equal("Build failed: missing reference", failResult.ErrorMessage);
         Assert.Contains("timed out", timeoutResult.ErrorMessage);
     }
+
+    [Fact]
+    public void ToChecklist_WithMixedResults_CreatesCorrectChecklist()
+    {
+        // Arrange
+        var result = new VerificationResult
+        {
+            Success = false,
+            Projects = [],
+            StepResults =
+            [
+                new VerificationStepResult
+                {
+                    Step = new VerificationStep
+                    {
+                        StepType = "build",
+                        Command = "dotnet",
+                        Arguments = ["build"],
+                        WorkingDirectory = _testDir,
+                        Description = "Build solution",
+                    },
+                    Success = true,
+                    Required = true,
+                    ExitCode = 0,
+                },
+                new VerificationStepResult
+                {
+                    Step = new VerificationStep
+                    {
+                        StepType = "test",
+                        Command = "dotnet",
+                        Arguments = ["test"],
+                        WorkingDirectory = _testDir,
+                        Description = "Run tests",
+                    },
+                    Success = false,
+                    Required = true,
+                    ExitCode = 1,
+                    StandardError = "2 tests failed",
+                },
+                new VerificationStepResult
+                {
+                    Step = new VerificationStep
+                    {
+                        StepType = "lint",
+                        Command = "dotnet",
+                        Arguments = ["format", "--verify-no-changes"],
+                        WorkingDirectory = _testDir,
+                        Description = "Check formatting",
+                    },
+                    Success = true,
+                    Required = false,
+                    ExitCode = 0,
+                },
+            ],
+            DurationMs = 1000,
+        };
+
+        // Act
+        var checklist = _service.ToChecklist(result);
+
+        // Assert
+        Assert.Equal("2/3 steps passed (1 required failures)", checklist.Summary);
+        Assert.Equal(ReviewDecision.ChangesRequested, checklist.Decision);
+
+        Assert.NotNull(checklist.Build);
+        Assert.True(checklist.Build.Passed);
+
+        Assert.NotNull(checklist.Testing);
+        Assert.False(checklist.Testing.Items["tests_pass"].Passed);
+
+        Assert.NotNull(checklist.CodeQuality);
+        Assert.True(checklist.CodeQuality.Items["no_lint_errors"].Passed);
+
+        Assert.NotNull(checklist.Findings);
+        Assert.NotNull(checklist.Findings.MustFix);
+        Assert.Single(checklist.Findings.MustFix);
+        Assert.Contains("test", checklist.Findings.MustFix[0]);
+    }
+
+    [Fact]
+    public void ToChecklist_AllPassing_ReturnsApproved()
+    {
+        // Arrange
+        var result = new VerificationResult
+        {
+            Success = true,
+            Projects = [],
+            StepResults =
+            [
+                new VerificationStepResult
+                {
+                    Step = new VerificationStep
+                    {
+                        StepType = "build",
+                        Command = "dotnet",
+                        Arguments = ["build"],
+                        WorkingDirectory = _testDir,
+                    },
+                    Success = true,
+                    Required = true,
+                },
+                new VerificationStepResult
+                {
+                    Step = new VerificationStep
+                    {
+                        StepType = "test",
+                        Command = "dotnet",
+                        Arguments = ["test"],
+                        WorkingDirectory = _testDir,
+                    },
+                    Success = true,
+                    Required = true,
+                },
+            ],
+            DurationMs = 500,
+        };
+
+        // Act
+        var checklist = _service.ToChecklist(result);
+
+        // Assert
+        Assert.Equal(ReviewDecision.Approved, checklist.Decision);
+        Assert.Null(checklist.Findings?.MustFix);
+        Assert.Null(checklist.Findings?.ShouldFix);
+    }
 }
