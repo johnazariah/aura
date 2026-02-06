@@ -58,6 +58,26 @@ public interface ITypeScriptLanguageService
     Task<TypeScriptFindDefinitionResult> FindDefinitionAsync(
         TypeScriptFindDefinitionRequest request,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Inspect a TypeScript/JavaScript type and return its members.
+    /// </summary>
+    /// <param name="request">The inspect type request.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Type information with members.</returns>
+    Task<TypeScriptInspectTypeResult> InspectTypeAsync(
+        TypeScriptInspectTypeRequest request,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// List all types in a TypeScript/JavaScript project.
+    /// </summary>
+    /// <param name="request">The list types request.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>List of types found.</returns>
+    Task<TypeScriptListTypesResult> ListTypesAsync(
+        TypeScriptListTypesRequest request,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -247,4 +267,127 @@ public record TypeScriptFindDefinitionResult
 
     /// <summary>Message if not found.</summary>
     public string? Message { get; init; }
+}
+
+/// <summary>
+/// Request to inspect a TypeScript/JavaScript type.
+/// </summary>
+public record TypeScriptInspectTypeRequest
+{
+    /// <summary>Path to the project root.</summary>
+    public required string ProjectPath { get; init; }
+
+    /// <summary>Name of the type to inspect.</summary>
+    public required string TypeName { get; init; }
+
+    /// <summary>Optional file path to narrow the search.</summary>
+    public string? FilePath { get; init; }
+}
+
+/// <summary>
+/// Result of inspecting a type.
+/// </summary>
+public record TypeScriptInspectTypeResult
+{
+    /// <summary>Whether the operation succeeded.</summary>
+    public required bool Success { get; init; }
+
+    /// <summary>Error message if failed.</summary>
+    public string? Error { get; init; }
+
+    /// <summary>Name of the type.</summary>
+    public string? TypeName { get; init; }
+
+    /// <summary>Kind of type (class, interface, enum, type).</summary>
+    public string? Kind { get; init; }
+
+    /// <summary>File path where the type is defined.</summary>
+    public string? FilePath { get; init; }
+
+    /// <summary>Line number of the type declaration.</summary>
+    public int? Line { get; init; }
+
+    /// <summary>Members of the type.</summary>
+    public IReadOnlyList<TypeScriptMemberInfo>? Members { get; init; }
+}
+
+/// <summary>
+/// Information about a type member.
+/// </summary>
+public record TypeScriptMemberInfo
+{
+    /// <summary>Name of the member.</summary>
+    public required string Name { get; init; }
+
+    /// <summary>Kind of member (property, method, constructor, getter, setter, enum-member).</summary>
+    public required string Kind { get; init; }
+
+    /// <summary>Type of the member.</summary>
+    public string? Type { get; init; }
+
+    /// <summary>Visibility (public, private, protected).</summary>
+    public string? Visibility { get; init; }
+
+    /// <summary>Whether the member is static.</summary>
+    public bool IsStatic { get; init; }
+
+    /// <summary>Whether the member is async.</summary>
+    public bool IsAsync { get; init; }
+
+    /// <summary>Line number of the member.</summary>
+    public int Line { get; init; }
+}
+
+/// <summary>
+/// Request to list types in a TypeScript/JavaScript project.
+/// </summary>
+public record TypeScriptListTypesRequest
+{
+    /// <summary>Path to the project root.</summary>
+    public required string ProjectPath { get; init; }
+
+    /// <summary>Optional filter by type name (partial match).</summary>
+    public string? NameFilter { get; init; }
+}
+
+/// <summary>
+/// Result of listing types.
+/// </summary>
+public record TypeScriptListTypesResult
+{
+    /// <summary>Whether the operation succeeded.</summary>
+    public required bool Success { get; init; }
+
+    /// <summary>Error message if failed.</summary>
+    public string? Error { get; init; }
+
+    /// <summary>List of types found.</summary>
+    public IReadOnlyList<TypeScriptTypeInfo>? Types { get; init; }
+
+    /// <summary>Total count of types.</summary>
+    public int Count { get; init; }
+}
+
+/// <summary>
+/// Information about a type in the project.
+/// </summary>
+public record TypeScriptTypeInfo
+{
+    /// <summary>Name of the type.</summary>
+    public required string Name { get; init; }
+
+    /// <summary>Kind of type (class, interface, enum, type).</summary>
+    public required string Kind { get; init; }
+
+    /// <summary>File path where the type is defined.</summary>
+    public required string FilePath { get; init; }
+
+    /// <summary>Line number of the type declaration.</summary>
+    public int Line { get; init; }
+
+    /// <summary>Whether the type is exported.</summary>
+    public bool IsExported { get; init; }
+
+    /// <summary>Number of members in the type.</summary>
+    public int MemberCount { get; init; }
 }

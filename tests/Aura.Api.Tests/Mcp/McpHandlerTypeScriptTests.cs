@@ -475,6 +475,217 @@ public class McpHandlerTypeScriptTests
 
     #endregion
 
+    #region aura_inspect - TypeScript type_members
+
+    [Theory]
+    [InlineData("src/app.ts")]
+    [InlineData("src/component.tsx")]
+    public async Task Inspect_TypeMembers_WithTypeScriptProject_RoutesToTypeScriptService(string filePath)
+    {
+        // Arrange
+        var expectedResult = new TypeScriptInspectTypeResult
+        {
+            Success = true,
+            TypeName = "MyClass",
+            Kind = "class",
+            FilePath = filePath,
+            Line = 5,
+            Members = new List<TypeScriptMemberInfo>
+            {
+                new() { Name = "name", Kind = "property", Type = "string", Visibility = "public", IsStatic = false, IsAsync = false, Line = 6 },
+                new() { Name = "doWork", Kind = "method", Type = "void", Visibility = "public", IsStatic = false, IsAsync = true, Line = 8 },
+            },
+        };
+
+        _typeScriptService.InspectTypeAsync(
+            Arg.Any<TypeScriptInspectTypeRequest>(),
+            Arg.Any<CancellationToken>())
+            .Returns(expectedResult);
+
+        var request = CreateToolCallRequest("aura_inspect", new
+        {
+            operation = "type_members",
+            typeName = "MyClass",
+            projectPath = "/project",
+            filePath,
+        });
+
+        // Act
+        var responseJson = await _handler.HandleAsync(request);
+
+        // Assert
+        await _typeScriptService.Received(1).InspectTypeAsync(
+            Arg.Is<TypeScriptInspectTypeRequest>(r =>
+                r.TypeName == "MyClass" &&
+                r.ProjectPath == "/project"),
+            Arg.Any<CancellationToken>());
+
+        var response = ParseResponse(responseJson);
+        response.Error.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Inspect_TypeMembers_WithTypeScriptProject_ReturnsMembers()
+    {
+        // Arrange
+        var expectedResult = new TypeScriptInspectTypeResult
+        {
+            Success = true,
+            TypeName = "UserService",
+            Kind = "class",
+            FilePath = "src/services/user.ts",
+            Line = 10,
+            Members = new List<TypeScriptMemberInfo>
+            {
+                new() { Name = "constructor", Kind = "constructor", Visibility = "public", IsStatic = false, IsAsync = false, Line = 11 },
+                new() { Name = "getUser", Kind = "method", Type = "Promise<User>", Visibility = "public", IsStatic = false, IsAsync = true, Line = 15 },
+                new() { Name = "count", Kind = "property", Type = "number", Visibility = "private", IsStatic = true, IsAsync = false, Line = 9 },
+            },
+        };
+
+        _typeScriptService.InspectTypeAsync(
+            Arg.Any<TypeScriptInspectTypeRequest>(),
+            Arg.Any<CancellationToken>())
+            .Returns(expectedResult);
+
+        var request = CreateToolCallRequest("aura_inspect", new
+        {
+            operation = "type_members",
+            typeName = "UserService",
+            projectPath = "/project",
+            filePath = "src/services/user.ts",
+        });
+
+        // Act
+        var responseJson = await _handler.HandleAsync(request);
+
+        // Assert
+        var resultText = GetResultText(responseJson);
+        resultText.Should().Contain("UserService");
+        resultText.Should().Contain("getUser");
+        resultText.Should().Contain("constructor");
+    }
+
+    #endregion
+
+    #region aura_inspect - TypeScript list_types
+
+    [Fact]
+    public async Task Inspect_ListTypes_WithTypeScriptProject_RoutesToTypeScriptService()
+    {
+        // Arrange
+        var expectedResult = new TypeScriptListTypesResult
+        {
+            Success = true,
+            Count = 2,
+            Types = new List<TypeScriptTypeInfo>
+            {
+                new() { Name = "UserService", Kind = "class", FilePath = "src/services/user.ts", Line = 5, IsExported = true, MemberCount = 4 },
+                new() { Name = "IUserRepository", Kind = "interface", FilePath = "src/repos/user-repo.ts", Line = 3, IsExported = true, MemberCount = 3 },
+            },
+        };
+
+        _typeScriptService.ListTypesAsync(
+            Arg.Any<TypeScriptListTypesRequest>(),
+            Arg.Any<CancellationToken>())
+            .Returns(expectedResult);
+
+        var request = CreateToolCallRequest("aura_inspect", new
+        {
+            operation = "list_types",
+            projectPath = "/project",
+            filePath = "src/index.ts",
+        });
+
+        // Act
+        var responseJson = await _handler.HandleAsync(request);
+
+        // Assert
+        await _typeScriptService.Received(1).ListTypesAsync(
+            Arg.Is<TypeScriptListTypesRequest>(r =>
+                r.ProjectPath == "/project"),
+            Arg.Any<CancellationToken>());
+
+        var response = ParseResponse(responseJson);
+        response.Error.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Inspect_ListTypes_WithNameFilter_PassesFilterToService()
+    {
+        // Arrange
+        var expectedResult = new TypeScriptListTypesResult
+        {
+            Success = true,
+            Count = 1,
+            Types = new List<TypeScriptTypeInfo>
+            {
+                new() { Name = "UserService", Kind = "class", FilePath = "src/services/user.ts", Line = 5, IsExported = true, MemberCount = 4 },
+            },
+        };
+
+        _typeScriptService.ListTypesAsync(
+            Arg.Any<TypeScriptListTypesRequest>(),
+            Arg.Any<CancellationToken>())
+            .Returns(expectedResult);
+
+        var request = CreateToolCallRequest("aura_inspect", new
+        {
+            operation = "list_types",
+            projectPath = "/project",
+            filePath = "src/index.ts",
+            nameFilter = "User",
+        });
+
+        // Act
+        var responseJson = await _handler.HandleAsync(request);
+
+        // Assert
+        await _typeScriptService.Received(1).ListTypesAsync(
+            Arg.Is<TypeScriptListTypesRequest>(r =>
+                r.ProjectPath == "/project" &&
+                r.NameFilter == "User"),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Inspect_ListTypes_WithTypeScriptProject_ReturnsTypeList()
+    {
+        // Arrange
+        var expectedResult = new TypeScriptListTypesResult
+        {
+            Success = true,
+            Count = 2,
+            Types = new List<TypeScriptTypeInfo>
+            {
+                new() { Name = "AppConfig", Kind = "interface", FilePath = "src/config.ts", Line = 1, IsExported = true, MemberCount = 5 },
+                new() { Name = "LogLevel", Kind = "enum", FilePath = "src/logger.ts", Line = 3, IsExported = true, MemberCount = 4 },
+            },
+        };
+
+        _typeScriptService.ListTypesAsync(
+            Arg.Any<TypeScriptListTypesRequest>(),
+            Arg.Any<CancellationToken>())
+            .Returns(expectedResult);
+
+        var request = CreateToolCallRequest("aura_inspect", new
+        {
+            operation = "list_types",
+            projectPath = "/project",
+            filePath = "src/config.ts",
+        });
+
+        // Act
+        var responseJson = await _handler.HandleAsync(request);
+
+        // Assert
+        var resultText = GetResultText(responseJson);
+        resultText.Should().Contain("AppConfig");
+        resultText.Should().Contain("LogLevel");
+    }
+
+    #endregion
+
     #region Helper Methods
 
     private static string CreateToolCallRequest(string toolName, object arguments)

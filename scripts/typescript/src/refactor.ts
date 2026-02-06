@@ -13,7 +13,7 @@
  *     node refactor.js find-references --project /path/to/project --file src/module.ts --offset 42
  */
 
-import { Project, Node, SyntaxKind, SourceFile, ts } from "ts-morph";
+import { Project, Node, SyntaxKind, SourceFile, ts, ClassDeclaration, InterfaceDeclaration, TypeAliasDeclaration, EnumDeclaration } from "ts-morph";
 import * as path from "path";
 
 interface RefactoringResult {
@@ -48,6 +48,42 @@ interface FindDefinitionResult {
   column?: number;
   offset?: number;
   message?: string;
+}
+
+interface MemberInfo {
+  name: string;
+  kind: string;
+  type?: string;
+  visibility?: string;
+  isStatic: boolean;
+  isAsync: boolean;
+  line: number;
+}
+
+interface InspectTypeResult {
+  success: boolean;
+  error?: string;
+  typeName?: string;
+  kind?: string;
+  filePath?: string;
+  line?: number;
+  members?: MemberInfo[];
+}
+
+interface TypeInfo {
+  name: string;
+  kind: string;
+  filePath: string;
+  line: number;
+  isExported: boolean;
+  memberCount: number;
+}
+
+interface ListTypesResult {
+  success: boolean;
+  error?: string;
+  types?: TypeInfo[];
+  count?: number;
 }
 
 function getProject(projectPath: string): Project {
@@ -442,6 +478,324 @@ function findDefinition(
   }
 }
 
+function getVisibility(node: Node): string {
+  if (Node.isModifierable(node)) {
+    if (node.hasModifier(SyntaxKind.PrivateKeyword)) return "private";
+    if (node.hasModifier(SyntaxKind.ProtectedKeyword)) return "protected";
+  }
+  return "public";
+}
+
+function getMemberCount(
+  node: ClassDeclaration | InterfaceDeclaration | EnumDeclaration | TypeAliasDeclaration,
+): number {
+  if (Node.isClassDeclaration(node)) {
+    return (
+      node.getProperties().length +
+      node.getMethods().length +
+      node.getGetAccessors().length +
+      node.getSetAccessors().length
+    );
+  }
+  if (Node.isInterfaceDeclaration(node)) {
+    return node.getProperties().length + node.getMethods().length;
+  }
+  if (Node.isEnumDeclaration(node)) {
+    return node.getMembers().length;
+  }
+  return 0;
+}
+
+function inspectType(
+  projectPath: string,
+  typeName: string,
+  filePath?: string,
+): InspectTypeResult {
+  try {
+    const project = getProject(projectPath);
+
+    if (filePath) {
+      const absolutePath = path.isAbsolute(filePath)
+        ? filePath
+        : path.join(projectPath, filePath);
+      if (!project.getSourceFile(absolutePath)) {
+        project.addSourceFileAtPath(absolutePath);
+      }
+    }
+
+    const sourceFiles = filePath
+      ? [
+          project.getSourceFile(
+            path.isAbsolute(filePath)
+              ? filePath
+              : path.join(projectPath, filePath),
+          )!,
+        ].filter(Boolean)
+      : project
+          .getSourceFiles()
+          .filter((sf) => !sf.getFilePath().includes("node_modules"));
+
+    for (const sf of sourceFiles) {
+      // Search classes
+      for (const cls of sf.getClasses()) {
+        if (cls.getName() === typeName) {
+          const members: MemberInfo[] = [];
+
+          for (const ctor of cls.getConstructors()) {
+            members.push({
+              name: "constructor",
+              kind: "constructor",
+              visibility: getVisibility(ctor),
+              isStatic: false,
+              isAsync: false,
+              line: ctor.getStartLineNumber(),
+            });
+          }
+
+          for (const prop of cls.getProperties()) {
+            members.push({
+              name: prop.getName(),
+              kind: "property",
+              type: prop.getType().getText(prop),
+              visibility: getVisibility(prop),
+              isStatic: prop.isStatic(),
+              isAsync: false,
+              line: prop.getStartLineNumber(),
+            });
+          }
+
+          for (const method of cls.getMethods()) {
+            members.push({
+              name: method.getName(),
+              kind: "method",
+              type: method.getReturnType().getText(method),
+              visibility: getVisibility(method),
+              isStatic: method.isStatic(),
+              isAsync: method.isAsync(),
+              line: method.getStartLineNumber(),
+            });
+          }
+
+          for (const getter of cls.getGetAccessors()) {
+            members.push({
+              name: getter.getName(),
+              kind: "getter",
+              type: getter.getReturnType().getText(getter),
+              visibility: getVisibility(getter),
+              isStatic: getter.isStatic(),
+              isAsync: false,
+              line: getter.getStartLineNumber(),
+            });
+          }
+
+          for (const setter of cls.getSetAccessors()) {
+            members.push({
+              name: setter.getName(),
+              kind: "setter",
+              visibility: getVisibility(setter),
+              isStatic: setter.isStatic(),
+              isAsync: false,
+              line: setter.getStartLineNumber(),
+            });
+          }
+
+          return {
+            success: true,
+            typeName: cls.getName(),
+            kind: "class",
+            filePath: sf.getFilePath(),
+            line: cls.getStartLineNumber(),
+            members,
+          };
+        }
+      }
+
+      // Search interfaces
+      for (const iface of sf.getInterfaces()) {
+        if (iface.getName() === typeName) {
+          const members: MemberInfo[] = [];
+
+          for (const prop of iface.getProperties()) {
+            members.push({
+              name: prop.getName(),
+              kind: "property",
+              type: prop.getType().getText(prop),
+              visibility: "public",
+              isStatic: false,
+              isAsync: false,
+              line: prop.getStartLineNumber(),
+            });
+          }
+
+          for (const method of iface.getMethods()) {
+            members.push({
+              name: method.getName(),
+              kind: "method",
+              type: method.getReturnType().getText(method),
+              visibility: "public",
+              isStatic: false,
+              isAsync: false,
+              line: method.getStartLineNumber(),
+            });
+          }
+
+          return {
+            success: true,
+            typeName: iface.getName(),
+            kind: "interface",
+            filePath: sf.getFilePath(),
+            line: iface.getStartLineNumber(),
+            members,
+          };
+        }
+      }
+
+      // Search enums
+      for (const enumDecl of sf.getEnums()) {
+        if (enumDecl.getName() === typeName) {
+          const members: MemberInfo[] = enumDecl.getMembers().map((m) => ({
+            name: m.getName(),
+            kind: "enum-member",
+            type: m.getValue()?.toString(),
+            visibility: "public",
+            isStatic: false,
+            isAsync: false,
+            line: m.getStartLineNumber(),
+          }));
+
+          return {
+            success: true,
+            typeName: enumDecl.getName(),
+            kind: "enum",
+            filePath: sf.getFilePath(),
+            line: enumDecl.getStartLineNumber(),
+            members,
+          };
+        }
+      }
+
+      // Search type aliases
+      for (const typeAlias of sf.getTypeAliases()) {
+        if (typeAlias.getName() === typeName) {
+          return {
+            success: true,
+            typeName: typeAlias.getName(),
+            kind: "type",
+            filePath: sf.getFilePath(),
+            line: typeAlias.getStartLineNumber(),
+            members: [],
+          };
+        }
+      }
+    }
+
+    return {
+      success: false,
+      error: `Type '${typeName}' not found in project`,
+    };
+  } catch (e) {
+    return {
+      success: false,
+      error: e instanceof Error ? e.message : String(e),
+    };
+  }
+}
+
+function listTypes(
+  projectPath: string,
+  nameFilter?: string,
+): ListTypesResult {
+  try {
+    const project = getProject(projectPath);
+    const types: TypeInfo[] = [];
+
+    for (const sf of project.getSourceFiles()) {
+      const fp = sf.getFilePath();
+      if (fp.includes("node_modules") || fp.endsWith(".d.ts")) continue;
+
+      for (const cls of sf.getClasses()) {
+        const name = cls.getName();
+        if (!name) continue;
+        if (
+          nameFilter &&
+          !name.toLowerCase().includes(nameFilter.toLowerCase())
+        )
+          continue;
+        types.push({
+          name,
+          kind: "class",
+          filePath: fp,
+          line: cls.getStartLineNumber(),
+          isExported: cls.isExported(),
+          memberCount: getMemberCount(cls),
+        });
+      }
+
+      for (const iface of sf.getInterfaces()) {
+        const name = iface.getName();
+        if (
+          nameFilter &&
+          !name.toLowerCase().includes(nameFilter.toLowerCase())
+        )
+          continue;
+        types.push({
+          name,
+          kind: "interface",
+          filePath: fp,
+          line: iface.getStartLineNumber(),
+          isExported: iface.isExported(),
+          memberCount: getMemberCount(iface),
+        });
+      }
+
+      for (const enumDecl of sf.getEnums()) {
+        const name = enumDecl.getName();
+        if (
+          nameFilter &&
+          !name.toLowerCase().includes(nameFilter.toLowerCase())
+        )
+          continue;
+        types.push({
+          name,
+          kind: "enum",
+          filePath: fp,
+          line: enumDecl.getStartLineNumber(),
+          isExported: enumDecl.isExported(),
+          memberCount: getMemberCount(enumDecl),
+        });
+      }
+
+      for (const typeAlias of sf.getTypeAliases()) {
+        const name = typeAlias.getName();
+        if (
+          nameFilter &&
+          !name.toLowerCase().includes(nameFilter.toLowerCase())
+        )
+          continue;
+        types.push({
+          name,
+          kind: "type",
+          filePath: fp,
+          line: typeAlias.getStartLineNumber(),
+          isExported: typeAlias.isExported(),
+          memberCount: 0,
+        });
+      }
+    }
+
+    return {
+      success: true,
+      types,
+      count: types.length,
+    };
+  } catch (e) {
+    return {
+      success: false,
+      error: e instanceof Error ? e.message : String(e),
+    };
+  }
+}
+
 // CLI argument parsing
 function parseArgs(): { command: string; args: Record<string, string | boolean> } {
   const args = process.argv.slice(2);
@@ -468,7 +822,12 @@ function parseArgs(): { command: string; args: Record<string, string | boolean> 
 function main() {
   const { command, args } = parseArgs();
 
-  let result: RefactoringResult | FindReferencesResult | FindDefinitionResult;
+  let result:
+    | RefactoringResult
+    | FindReferencesResult
+    | FindDefinitionResult
+    | InspectTypeResult
+    | ListTypesResult;
 
   switch (command) {
     case "rename":
@@ -519,6 +878,21 @@ function main() {
       );
       break;
 
+    case "inspect-type":
+      result = inspectType(
+        args.project as string,
+        args["type-name"] as string,
+        args.file as string | undefined,
+      );
+      break;
+
+    case "list-types":
+      result = listTypes(
+        args.project as string,
+        args["name-filter"] as string | undefined,
+      );
+      break;
+
     case "help":
     default:
       console.log(`TypeScript/JavaScript Refactoring Tool
@@ -529,15 +903,19 @@ Commands:
   extract-variable  Extract expression into a variable
   find-references   Find all references to a symbol
   find-definition   Find the definition of a symbol
+  inspect-type      Inspect a type's members (properties, methods, etc.)
+  list-types        List all types in a project
 
 Options:
   --project         Path to the project root (required)
-  --file            Path to the file (required)
+  --file            Path to the file (required for most commands, optional for inspect-type)
   --offset          Character offset for rename/find operations
   --start-offset    Start offset for extract operations
   --end-offset      End offset for extract operations
   --new-name        New name for rename/extract operations
   --preview         Show changes without applying them
+  --type-name       Type name for inspect-type
+  --name-filter     Filter types by name (partial match) for list-types
 `);
       process.exit(0);
   }

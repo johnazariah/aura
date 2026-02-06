@@ -205,4 +205,67 @@ public sealed partial class McpHandler
             message = result.Message
         };
     }
+
+    private async Task<object> TypeScriptInspectTypeAsync(JsonElement? args, CancellationToken ct)
+    {
+        var projectPath = args?.GetProperty("projectPath").GetString() ?? "";
+        var typeName = args?.GetProperty("typeName").GetString() ?? "";
+        string? filePath = null;
+        if (args.HasValue && args.Value.TryGetProperty("filePath", out var fpEl))
+        {
+            filePath = fpEl.GetString();
+        }
+
+        var result = await _typeScriptService.InspectTypeAsync(
+            new TypeScriptInspectTypeRequest { ProjectPath = projectPath, TypeName = typeName, FilePath = filePath },
+            ct);
+        return new
+        {
+            success = result.Success,
+            error = result.Error,
+            typeName = result.TypeName,
+            kind = result.Kind,
+            filePath = result.FilePath,
+            line = result.Line,
+            members = result.Members?.Select(m => new
+            {
+                name = m.Name,
+                kind = m.Kind,
+                type = m.Type,
+                visibility = m.Visibility,
+                isStatic = m.IsStatic,
+                isAsync = m.IsAsync,
+                line = m.Line,
+            }),
+        };
+    }
+
+    private async Task<object> TypeScriptListTypesAsync(JsonElement? args, CancellationToken ct)
+    {
+        var projectPath = args?.GetProperty("projectPath").GetString() ?? "";
+        string? nameFilter = null;
+        if (args.HasValue && args.Value.TryGetProperty("nameFilter", out var nfEl))
+        {
+            nameFilter = nfEl.GetString();
+        }
+
+        var result = await _typeScriptService.ListTypesAsync(
+            new TypeScriptListTypesRequest { ProjectPath = projectPath, NameFilter = nameFilter },
+            ct);
+        return new
+        {
+            success = result.Success,
+            error = result.Error,
+            count = result.Count,
+            types = result.Types?.Select(t => new
+            {
+                name = t.Name,
+                kind = t.Kind,
+                filePath = t.FilePath,
+                line = t.Line,
+                isExported = t.IsExported,
+                memberCount = t.MemberCount,
+            }),
+        };
+    }
 }

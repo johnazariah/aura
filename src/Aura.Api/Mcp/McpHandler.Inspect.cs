@@ -30,8 +30,8 @@ public sealed partial class McpHandler
 
         return (operation, language) switch
         {
-            ("type_members", "typescript") => new { error = "TypeScript type_members is not yet implemented. Use aura_tree with maxDepth=3 for TypeScript type exploration." },
-            ("list_types", "typescript") => new { error = "TypeScript list_types is not yet implemented. Use aura_tree with maxDepth=2 for TypeScript type listing." },
+            ("type_members", "typescript") => await TypeScriptInspectTypeAsync(args, ct),
+            ("list_types", "typescript") => await TypeScriptListTypesAsync(args, ct),
             ("type_members", _) => await GetTypeMembersAsync(args, ct),
             ("list_types", _) => await ListClassesFromInspect(args, ct),
             _ => throw new ArgumentException($"Unknown inspect operation: {operation}")

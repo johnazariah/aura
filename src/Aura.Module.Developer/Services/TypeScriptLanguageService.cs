@@ -215,6 +215,105 @@ public sealed class TypeScriptLanguageService : ITypeScriptLanguageService
         }
     }
 
+    /// <inheritdoc/>
+    public async Task<TypeScriptInspectTypeResult> InspectTypeAsync(
+        TypeScriptInspectTypeRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var args = new List<string>
+        {
+            "inspect-type",
+            "--project", request.ProjectPath,
+            "--type-name", request.TypeName,
+        };
+
+        if (!string.IsNullOrEmpty(request.FilePath))
+        {
+            args.AddRange(["--file", request.FilePath]);
+        }
+
+        var (success, stdout, stderr) = await ExecuteNodeScriptAsync(args, cancellationToken);
+
+        if (!success)
+        {
+            return new TypeScriptInspectTypeResult
+            {
+                Success = false,
+                Error = stderr ?? "Node.js script execution failed",
+            };
+        }
+
+        try
+        {
+            var result = JsonSerializer.Deserialize<TypeScriptInspectTypeResult>(stdout, JsonOptions);
+            return result ?? new TypeScriptInspectTypeResult
+            {
+                Success = false,
+                Error = "Failed to deserialize result",
+            };
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogError(ex, "Failed to parse inspect-type result: {Output}", stdout);
+            return new TypeScriptInspectTypeResult
+            {
+                Success = false,
+                Error = $"Failed to parse result: {ex.Message}",
+            };
+        }
+    }
+
+    /// <inheritdoc/>
+    public async Task<TypeScriptListTypesResult> ListTypesAsync(
+        TypeScriptListTypesRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var args = new List<string>
+        {
+            "list-types",
+            "--project", request.ProjectPath,
+        };
+
+        if (!string.IsNullOrEmpty(request.NameFilter))
+        {
+            args.AddRange(["--name-filter", request.NameFilter]);
+        }
+
+        var (success, stdout, stderr) = await ExecuteNodeScriptAsync(args, cancellationToken);
+
+        if (!success)
+        {
+            return new TypeScriptListTypesResult
+            {
+                Success = false,
+                Error = stderr ?? "Node.js script execution failed",
+            };
+        }
+
+        try
+        {
+            var result = JsonSerializer.Deserialize<TypeScriptListTypesResult>(stdout, JsonOptions);
+            return result ?? new TypeScriptListTypesResult
+            {
+                Success = false,
+                Error = "Failed to deserialize result",
+            };
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogError(ex, "Failed to parse list-types result: {Output}", stdout);
+            return new TypeScriptListTypesResult
+            {
+                Success = false,
+                Error = $"Failed to parse result: {ex.Message}",
+            };
+        }
+    }
+
     private async Task<TypeScriptRefactoringResult> ExecuteRefactoringAsync(
         List<string> args,
         CancellationToken cancellationToken)
