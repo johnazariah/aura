@@ -17,6 +17,7 @@ public sealed class PythonRefactoringService : IPythonRefactoringService
     private readonly IProcessRunner _processRunner;
     private readonly ILogger<PythonRefactoringService> _logger;
     private readonly string _scriptPath;
+    private readonly string _pythonPath;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -38,7 +39,8 @@ public sealed class PythonRefactoringService : IPythonRefactoringService
 
         // Locate the refactor.py script
         _scriptPath = ResolveScriptPath();
-        _logger.LogDebug("Python refactoring script path: {ScriptPath}", _scriptPath);
+        _pythonPath = ResolveExecutablePath("python");
+        _logger.LogDebug("Python refactoring script path: {ScriptPath}, python: {PythonPath}", _scriptPath, _pythonPath);
     }
 
     /// <inheritdoc/>
@@ -338,13 +340,14 @@ public sealed class PythonRefactoringService : IPythonRefactoringService
         allArgs.AddRange(args);
 
         _logger.LogDebug(
-            "Executing Python refactoring: python {Args}",
+            "Executing Python refactoring: {Python} {Args}",
+            _pythonPath,
             string.Join(" ", allArgs));
 
         try
         {
             var result = await _processRunner.RunAsync(
-                "python",
+                _pythonPath,
                 allArgs.ToArray(),
                 options: null,
                 ct: cancellationToken);
@@ -418,6 +421,78 @@ public sealed class PythonRefactoringService : IPythonRefactoringService
         public int? Offset { get; set; }
         public int? Line { get; set; }
         public string? Message { get; set; }
+    }
+
+    /// <summary>
+    /// Resolves the full path to an executable by searching PATH and well-known installation directories.
+    /// This is necessary because Windows Services may not inherit the user's PATH (e.g., nvm symlinks
+    /// pointing to user profile directories are inaccessible to the service account).
+    /// </summary>
+    private static string ResolveExecutablePath(string name)
+    {
+        var isWindows = OperatingSystem.IsWindows();
+        var ext = isWindows ? ".exe" : "";
+        var fileName = name + ext;
+
+        // 1. Try PATH first
+        var pathVar = Environment.GetEnvironmentVariable("PATH") ?? "";
+        var separator = isWindows ? ';' : ':';
+        foreach (var dir in pathVar.Split(separator, StringSplitOptions.RemoveEmptyEntries))
+        {
+            var candidate = Path.Combine(dir, fileName);
+            if (File.Exists(candidate))
+            {
+                return candidate;
+            }
+        }
+
+        if (isWindows)
+        {
+            // 2. Check well-known Windows install locations
+            var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+
+            // Python installs to Program Files\PythonXY or via Windows Store
+            var candidate = Path.Combine(programFiles, name, fileName);
+            if (File.Exists(candidate))
+            {
+                return candidate;
+            }
+
+            // Try versioned Python directories (Python313, Python312, etc.)
+            try
+            {
+                var pythonDirs = Directory.GetDirectories(programFiles, "Python*")
+                    .OrderByDescending(d => d)
+                    .ToArray();
+                foreach (var pyDir in pythonDirs)
+                {
+                    candidate = Path.Combine(pyDir, fileName);
+                    if (File.Exists(candidate))
+                    {
+                        return candidate;
+                    }
+                }
+            }
+            catch
+            {
+                // Ignore permission errors
+            }
+
+            // 3. Check LocalAppData (Windows Store Python, pyenv)
+            var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            if (!string.IsNullOrEmpty(localAppData))
+            {
+                var storeApps = Path.Combine(localAppData, "Microsoft", "WindowsApps");
+                candidate = Path.Combine(storeApps, fileName);
+                if (File.Exists(candidate))
+                {
+                    return candidate;
+                }
+            }
+        }
+
+        // Fallback: return bare name and let the OS resolve it
+        return name;
     }
 
     /// <summary>

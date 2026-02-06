@@ -17,6 +17,7 @@ public sealed class TypeScriptLanguageService : ITypeScriptLanguageService
     private readonly IProcessRunner _processRunner;
     private readonly ILogger<TypeScriptLanguageService> _logger;
     private readonly string _scriptPath;
+    private readonly string _nodePath;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -38,7 +39,8 @@ public sealed class TypeScriptLanguageService : ITypeScriptLanguageService
 
         // Locate the refactor.js script
         _scriptPath = ResolveScriptPath();
-        _logger.LogDebug("TypeScript refactoring script path: {ScriptPath}", _scriptPath);
+        _nodePath = ResolveExecutablePath("node", ["nodejs"]);
+        _logger.LogDebug("TypeScript refactoring script path: {ScriptPath}, node: {NodePath}", _scriptPath, _nodePath);
     }
 
     /// <inheritdoc/>
@@ -487,13 +489,19 @@ public sealed class TypeScriptLanguageService : ITypeScriptLanguageService
             return (false, string.Empty, $"Script not found: {_scriptPath}. Run 'npm install && npm run build' in scripts/typescript/");
         }
 
+        if (_nodePath == "node" || !File.Exists(_nodePath))
+        {
+            _logger.LogError("Node.js not found. Resolved path: {NodePath}. Install Node.js system-wide to C:\\Program Files\\nodejs", _nodePath);
+            return (false, string.Empty, $"Node.js executable not found. Install Node.js system-wide (https://nodejs.org) so it's accessible to the Aura service. Resolved: {_nodePath}");
+        }
+
         var allArgs = new List<string> { _scriptPath };
         allArgs.AddRange(args);
 
-        _logger.LogDebug("Executing: node {Args}", string.Join(" ", allArgs));
+        _logger.LogDebug("Executing: {Node} {Args}", _nodePath, string.Join(" ", allArgs));
 
         var result = await _processRunner.RunAsync(
-            "node",
+            _nodePath,
             allArgs.ToArray(),
             ct: cancellationToken);
 
@@ -511,6 +519,85 @@ public sealed class TypeScriptLanguageService : ITypeScriptLanguageService
         }
 
         return (true, result.StandardOutput, null);
+    }
+
+    /// <summary>
+    /// Resolves the full path to an executable by searching PATH and well-known installation directories.
+    /// This is necessary because Windows Services may not inherit the user's PATH (e.g., nvm symlinks
+    /// pointing to user profile directories are inaccessible to the service account).
+    /// </summary>
+    /// <param name="name">Executable name without extension (e.g., "node", "python").</param>
+    /// <param name="alternateNames">Alternate directory names to search for (e.g., "nodejs").</param>
+    /// <returns>Full path to the executable, or the bare name as fallback.</returns>
+    private static string ResolveExecutablePath(string name, string[]? alternateNames = null)
+    {
+        var isWindows = OperatingSystem.IsWindows();
+        var ext = isWindows ? ".exe" : "";
+        var fileName = name + ext;
+
+        // 1. Try PATH first (works in dev and when tools are on system PATH)
+        var pathVar = Environment.GetEnvironmentVariable("PATH") ?? "";
+        var separator = isWindows ? ';' : ':';
+        foreach (var dir in pathVar.Split(separator, StringSplitOptions.RemoveEmptyEntries))
+        {
+            var candidate = Path.Combine(dir, fileName);
+            if (File.Exists(candidate))
+            {
+                return candidate;
+            }
+        }
+
+        if (isWindows)
+        {
+            // 2. Check well-known Windows install locations
+            var searchNames = new List<string> { name };
+            if (alternateNames is not null)
+            {
+                searchNames.AddRange(alternateNames);
+            }
+
+            var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+            foreach (var searchName in searchNames)
+            {
+                var candidate = Path.Combine(programFiles, searchName, fileName);
+                if (File.Exists(candidate))
+                {
+                    return candidate;
+                }
+            }
+
+            // 3. Check nvm4w current version (resolves through symlink target)
+            var appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            if (!string.IsNullOrEmpty(appData) && name == "node")
+            {
+                var nvmDir = Path.Combine(appData, "nvm");
+                if (Directory.Exists(nvmDir))
+                {
+                    // Find the latest installed version
+                    try
+                    {
+                        var versionDirs = Directory.GetDirectories(nvmDir, "v*")
+                            .OrderByDescending(d => d)
+                            .ToArray();
+                        foreach (var vDir in versionDirs)
+                        {
+                            var candidate = Path.Combine(vDir, fileName);
+                            if (File.Exists(candidate))
+                            {
+                                return candidate;
+                            }
+                        }
+                    }
+                    catch
+                    {
+                        // Ignore permission errors
+                    }
+                }
+            }
+        }
+
+        // Fallback: return bare name and let the OS resolve it
+        return name;
     }
 
     /// <summary>
