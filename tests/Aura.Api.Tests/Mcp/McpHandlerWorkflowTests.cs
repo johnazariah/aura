@@ -270,6 +270,7 @@ public class McpHandlerWorkflowTests
             Arg.Any<AutomationMode>(),
             issueUrl,
             Arg.Any<string?>(),
+            Arg.Any<IReadOnlyList<string>?>(),
             Arg.Any<CancellationToken>())
             .Returns(story);
 

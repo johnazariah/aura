@@ -20,6 +20,7 @@ public interface IStoryService
     /// <param name="automationMode">Automation mode (Assisted, Autonomous, FullAutonomous).</param>
     /// <param name="issueUrl">Optional external issue URL to link.</param>
     /// <param name="preferredExecutor">Optional executor preference (e.g., "internal" or "copilot").</param>
+    /// <param name="openQuestions">Optional list of questions to answer during analysis.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>The created workflow.</returns>
     Task<Story> CreateAsync(
@@ -29,6 +30,7 @@ public interface IStoryService
         AutomationMode automationMode = AutomationMode.Assisted,
         string? issueUrl = null,
         string? preferredExecutor = null,
+        IReadOnlyList<string>? openQuestions = null,
         CancellationToken ct = default);
 
     /// <summary>

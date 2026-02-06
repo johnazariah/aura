@@ -140,7 +140,8 @@ public record CreateStoryRequest(
     string? Mode = null,
     string? AutomationMode = null,
     string? IssueUrl = null,
-    string? PreferredExecutor = null);
+    string? PreferredExecutor = null,
+    List<string>? OpenQuestions = null);
 
 /// <summary>Request to execute all pending steps.</summary>
 public record ExecuteAllStepsRequest(

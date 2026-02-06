@@ -71,6 +71,7 @@ public sealed partial class StoryService(
         AutomationMode automationMode = AutomationMode.Assisted,
         string? issueUrl = null,
         string? preferredExecutor = null,
+        IReadOnlyList<string>? openQuestions = null,
         CancellationToken ct = default)
     {
         // Create a branch name from the title
@@ -81,6 +82,18 @@ public sealed partial class StoryService(
             .ToArray());
         var prefix = _options.BranchPrefix.TrimEnd('/');
         var branchName = $"{prefix}/{sanitizedTitle}-{Guid.NewGuid():N}"[..Math.Min(63, prefix.Length + 1 + sanitizedTitle.Length + 33)];
+
+        // Convert open questions to JSON
+        string? openQuestionsJson = null;
+        if (openQuestions is { Count: > 0 })
+        {
+            var questions = openQuestions.Select(q => new OpenQuestion
+            {
+                Question = q,
+                Answered = false,
+            }).ToList();
+            openQuestionsJson = System.Text.Json.JsonSerializer.Serialize(questions);
+        }
 
         // Create the workflow
         var workflow = new Story
@@ -93,6 +106,7 @@ public sealed partial class StoryService(
             Status = StoryStatus.Created,
             AutomationMode = automationMode,
             PreferredExecutor = preferredExecutor,
+            OpenQuestions = openQuestionsJson,
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow,
         };
@@ -186,6 +200,7 @@ public sealed partial class StoryService(
             AutomationMode.Assisted,
             issueUrl: null,
             preferredExecutor: null,
+            openQuestions: null,
             ct);
 
         // Set guardian-specific fields

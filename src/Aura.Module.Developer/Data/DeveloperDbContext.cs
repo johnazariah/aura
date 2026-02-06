@@ -82,6 +82,10 @@ public sealed class DeveloperDbContext(DbContextOptions<DeveloperDbContext> opti
             entity.Property(e => e.VerificationPassed).HasColumnName("verification_passed");
             entity.Property(e => e.VerificationResult).HasColumnName("verification_result");
 
+            // Research Enhancement
+            entity.Property(e => e.OpenQuestions).HasColumnName("open_questions").HasColumnType("jsonb");
+            entity.Property(e => e.IdentifiedRisks).HasColumnName("identified_risks").HasColumnType("jsonb");
+
             // Orchestration
             entity.Property(e => e.CurrentWave).HasColumnName("current_wave");
             entity.Property(e => e.GateMode).HasColumnName("gate_mode");

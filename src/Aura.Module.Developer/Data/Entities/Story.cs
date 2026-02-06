@@ -107,6 +107,22 @@ public sealed class Story
     /// <summary>Gets or sets the verification result as JSON.</summary>
     public string? VerificationResult { get; set; }
 
+    // === Research Enhancement ===
+
+    /// <summary>
+    /// Gets or sets open questions as JSON array.
+    /// Questions that should be answered during analysis.
+    /// Each question can have: question, answered, answer, source.
+    /// </summary>
+    public string? OpenQuestions { get; set; }
+
+    /// <summary>
+    /// Gets or sets identified risks as JSON array.
+    /// Risks identified during analysis or planning.
+    /// Each risk has: risk, likelihood, impact, mitigation.
+    /// </summary>
+    public string? IdentifiedRisks { get; set; }
+
     // === Orchestration (Wave Execution) ===
 
     /// <summary>Gets or sets the current execution wave (0 = not started, 1+ = running wave N).</summary>

@@ -212,6 +212,7 @@ public sealed partial class McpHandler
                 AutomationMode.Assisted, // MCP-created workflows default to assisted mode
                 issueUrl,
                 preferredExecutor: null,
+                openQuestions: null,
                 ct);
             // Post a comment to the issue that work has started
             var branch = workflow.GitBranch ?? "unknown";

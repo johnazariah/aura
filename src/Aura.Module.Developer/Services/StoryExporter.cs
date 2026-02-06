@@ -212,13 +212,85 @@ public sealed partial class StoryExporter(
         // Open Questions
         sb.AppendLine("## Open Questions");
         sb.AppendLine();
-        sb.AppendLine("*No explicit open questions tracked*");
+        if (!string.IsNullOrEmpty(story.OpenQuestions))
+        {
+            try
+            {
+                var questions = JsonSerializer.Deserialize<List<OpenQuestion>>(story.OpenQuestions, JsonOptions);
+                if (questions?.Count > 0)
+                {
+                    foreach (var q in questions)
+                    {
+                        var status = q.Answered ? "✅" : "❓";
+                        sb.AppendLine(CultureInfo.InvariantCulture, $"### {status} {q.Question}");
+                        sb.AppendLine();
+                        if (q.Answered && !string.IsNullOrEmpty(q.Answer))
+                        {
+                            sb.AppendLine(CultureInfo.InvariantCulture, $"**Answer:** {q.Answer}");
+                            if (!string.IsNullOrEmpty(q.Source))
+                            {
+                                sb.AppendLine(CultureInfo.InvariantCulture, $"**Source:** {q.Source}");
+                            }
+
+                            sb.AppendLine();
+                        }
+                        else
+                        {
+                            sb.AppendLine("*Not yet answered*");
+                            sb.AppendLine();
+                        }
+                    }
+                }
+                else
+                {
+                    sb.AppendLine("*No explicit open questions tracked*");
+                }
+            }
+            catch (JsonException)
+            {
+                sb.AppendLine("*No explicit open questions tracked*");
+            }
+        }
+        else
+        {
+            sb.AppendLine("*No explicit open questions tracked*");
+        }
+
         sb.AppendLine();
 
         // Risks
         sb.AppendLine("## Risks");
         sb.AppendLine();
-        sb.AppendLine("*Risk analysis not performed*");
+        if (!string.IsNullOrEmpty(story.IdentifiedRisks))
+        {
+            try
+            {
+                var risks = JsonSerializer.Deserialize<List<IdentifiedRisk>>(story.IdentifiedRisks, JsonOptions);
+                if (risks?.Count > 0)
+                {
+                    sb.AppendLine("| Risk | Likelihood | Impact | Mitigation |");
+                    sb.AppendLine("|------|------------|--------|------------|");
+                    foreach (var risk in risks)
+                    {
+                        var mitigation = risk.Mitigation ?? "*None identified*";
+                        sb.AppendLine(CultureInfo.InvariantCulture, $"| {risk.Risk} | {risk.Likelihood} | {risk.Impact} | {mitigation} |");
+                    }
+                }
+                else
+                {
+                    sb.AppendLine("*Risk analysis not performed*");
+                }
+            }
+            catch (JsonException)
+            {
+                sb.AppendLine("*Risk analysis not performed*");
+            }
+        }
+        else
+        {
+            sb.AppendLine("*Risk analysis not performed*");
+        }
+
         sb.AppendLine();
 
         // Footer
