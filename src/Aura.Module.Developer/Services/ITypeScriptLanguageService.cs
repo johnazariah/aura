@@ -1,4 +1,4 @@
-// <copyright file="ITypeScriptRefactoringService.cs" company="Aura">
+// <copyright file="ITypeScriptLanguageService.cs" company="Aura">
 // Copyright (c) Aura. All rights reserved.
 // </copyright>
 
@@ -7,7 +7,7 @@ namespace Aura.Module.Developer.Services;
 /// <summary>
 /// Service for TypeScript/JavaScript code refactoring operations using ts-morph.
 /// </summary>
-public interface ITypeScriptRefactoringService
+public interface ITypeScriptLanguageService
 {
     /// <summary>
     /// Rename a TypeScript/JavaScript symbol and update all references.

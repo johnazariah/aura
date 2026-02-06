@@ -1,4 +1,4 @@
-// <copyright file="TypeScriptRefactoringService.cs" company="Aura">
+// <copyright file="TypeScriptLanguageService.cs" company="Aura">
 // Copyright (c) Aura. All rights reserved.
 // </copyright>
 
@@ -12,10 +12,10 @@ using Microsoft.Extensions.Logging;
 /// Service for TypeScript/JavaScript code refactoring operations using ts-morph.
 /// Executes refactoring operations via the Node.js refactor.js script.
 /// </summary>
-public sealed class TypeScriptRefactoringService : ITypeScriptRefactoringService
+public sealed class TypeScriptLanguageService : ITypeScriptLanguageService
 {
     private readonly IProcessRunner _processRunner;
-    private readonly ILogger<TypeScriptRefactoringService> _logger;
+    private readonly ILogger<TypeScriptLanguageService> _logger;
     private readonly string _scriptPath;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -25,13 +25,13 @@ public sealed class TypeScriptRefactoringService : ITypeScriptRefactoringService
     };
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="TypeScriptRefactoringService"/> class.
+    /// Initializes a new instance of the <see cref="TypeScriptLanguageService"/> class.
     /// </summary>
     /// <param name="processRunner">Process runner for executing Node.js.</param>
     /// <param name="logger">Logger instance.</param>
-    public TypeScriptRefactoringService(
+    public TypeScriptLanguageService(
         IProcessRunner processRunner,
-        ILogger<TypeScriptRefactoringService> logger)
+        ILogger<TypeScriptLanguageService> logger)
     {
         _processRunner = processRunner;
         _logger = logger;

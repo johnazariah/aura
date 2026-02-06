@@ -123,7 +123,7 @@ public sealed partial class McpHandler
         var offset = args?.GetProperty("offset").GetInt32() ?? 0;
         var newName = args?.GetProperty("newName").GetString() ?? "";
         var preview = args.HasValue && args.Value.TryGetProperty("preview", out var prevEl) && prevEl.GetBoolean();
-        var result = await _typeScriptRefactoringService.RenameSymbolAsync(new TypeScriptRenameRequest { ProjectPath = projectPath, FilePath = filePath, Offset = offset, NewName = newName, Preview = preview }, ct);
+        var result = await _typeScriptService.RenameSymbolAsync(new TypeScriptRenameRequest { ProjectPath = projectPath, FilePath = filePath, Offset = offset, NewName = newName, Preview = preview }, ct);
         return new
         {
             success = result.Success,
@@ -142,7 +142,7 @@ public sealed partial class McpHandler
         var endOffset = args?.GetProperty("endOffset").GetInt32() ?? 0;
         var newName = args?.GetProperty("newName").GetString() ?? "";
         var preview = args.HasValue && args.Value.TryGetProperty("preview", out var prevEl) && prevEl.GetBoolean();
-        var result = await _typeScriptRefactoringService.ExtractFunctionAsync(new TypeScriptExtractFunctionRequest { ProjectPath = projectPath, FilePath = filePath, StartOffset = startOffset, EndOffset = endOffset, NewName = newName, Preview = preview }, ct);
+        var result = await _typeScriptService.ExtractFunctionAsync(new TypeScriptExtractFunctionRequest { ProjectPath = projectPath, FilePath = filePath, StartOffset = startOffset, EndOffset = endOffset, NewName = newName, Preview = preview }, ct);
         return new
         {
             success = result.Success,
@@ -161,7 +161,7 @@ public sealed partial class McpHandler
         var endOffset = args?.GetProperty("endOffset").GetInt32() ?? 0;
         var newName = args?.GetProperty("newName").GetString() ?? "";
         var preview = args.HasValue && args.Value.TryGetProperty("preview", out var prevEl) && prevEl.GetBoolean();
-        var result = await _typeScriptRefactoringService.ExtractVariableAsync(new TypeScriptExtractVariableRequest { ProjectPath = projectPath, FilePath = filePath, StartOffset = startOffset, EndOffset = endOffset, NewName = newName, Preview = preview }, ct);
+        var result = await _typeScriptService.ExtractVariableAsync(new TypeScriptExtractVariableRequest { ProjectPath = projectPath, FilePath = filePath, StartOffset = startOffset, EndOffset = endOffset, NewName = newName, Preview = preview }, ct);
         return new
         {
             success = result.Success,
@@ -177,7 +177,7 @@ public sealed partial class McpHandler
         var projectPath = args?.GetProperty("projectPath").GetString() ?? "";
         var filePath = args?.GetProperty("filePath").GetString() ?? "";
         var offset = args?.GetProperty("offset").GetInt32() ?? 0;
-        var result = await _typeScriptRefactoringService.FindReferencesAsync(new TypeScriptFindReferencesRequest { ProjectPath = projectPath, FilePath = filePath, Offset = offset }, ct);
+        var result = await _typeScriptService.FindReferencesAsync(new TypeScriptFindReferencesRequest { ProjectPath = projectPath, FilePath = filePath, Offset = offset }, ct);
         return new
         {
             success = result.Success,
@@ -192,7 +192,7 @@ public sealed partial class McpHandler
         var projectPath = args?.GetProperty("projectPath").GetString() ?? "";
         var filePath = args?.GetProperty("filePath").GetString() ?? "";
         var offset = args?.GetProperty("offset").GetInt32() ?? 0;
-        var result = await _typeScriptRefactoringService.FindDefinitionAsync(new TypeScriptFindDefinitionRequest { ProjectPath = projectPath, FilePath = filePath, Offset = offset }, ct);
+        var result = await _typeScriptService.FindDefinitionAsync(new TypeScriptFindDefinitionRequest { ProjectPath = projectPath, FilePath = filePath, Offset = offset }, ct);
         return new
         {
             success = result.Success,

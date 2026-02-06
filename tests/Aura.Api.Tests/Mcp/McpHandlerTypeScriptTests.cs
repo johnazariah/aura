@@ -31,7 +31,7 @@ public class McpHandlerTypeScriptTests
     private readonly IRoslynWorkspaceService _roslynService;
     private readonly IRoslynRefactoringService _refactoringService;
     private readonly IPythonRefactoringService _pythonRefactoringService;
-    private readonly ITypeScriptRefactoringService _typeScriptRefactoringService;
+    private readonly ITypeScriptLanguageService _typeScriptService;
     private readonly ITestGenerationService _testGenerationService;
     private readonly IGitWorktreeService _worktreeService;
     private readonly ITreeBuilderService _treeBuilderService;
@@ -49,7 +49,7 @@ public class McpHandlerTypeScriptTests
         _roslynService = Substitute.For<IRoslynWorkspaceService>();
         _refactoringService = Substitute.For<IRoslynRefactoringService>();
         _pythonRefactoringService = Substitute.For<IPythonRefactoringService>();
-        _typeScriptRefactoringService = Substitute.For<ITypeScriptRefactoringService>();
+        _typeScriptService = Substitute.For<ITypeScriptLanguageService>();
         _testGenerationService = Substitute.For<ITestGenerationService>();
         _worktreeService = Substitute.For<IGitWorktreeService>();
         _treeBuilderService = Substitute.For<ITreeBuilderService>();
@@ -65,7 +65,7 @@ public class McpHandlerTypeScriptTests
             _roslynService,
             _refactoringService,
             _pythonRefactoringService,
-            _typeScriptRefactoringService,
+            _typeScriptService,
             _testGenerationService,
             _worktreeService,
             _treeBuilderService,
@@ -97,7 +97,7 @@ public class McpHandlerTypeScriptTests
             },
         };
 
-        _typeScriptRefactoringService.FindReferencesAsync(
+        _typeScriptService.FindReferencesAsync(
             Arg.Any<TypeScriptFindReferencesRequest>(),
             Arg.Any<CancellationToken>())
             .Returns(expectedResult);
@@ -114,7 +114,7 @@ public class McpHandlerTypeScriptTests
         var responseJson = await _handler.HandleAsync(request);
 
         // Assert
-        await _typeScriptRefactoringService.Received(1).FindReferencesAsync(
+        await _typeScriptService.Received(1).FindReferencesAsync(
             Arg.Is<TypeScriptFindReferencesRequest>(r =>
                 r.FilePath == filePath &&
                 r.ProjectPath == "/project" &&
@@ -148,7 +148,7 @@ public class McpHandlerTypeScriptTests
         }
 
         // Assert - TypeScript service should NOT be called for .cs files
-        await _typeScriptRefactoringService.DidNotReceiveWithAnyArgs()
+        await _typeScriptService.DidNotReceiveWithAnyArgs()
             .FindReferencesAsync(Arg.Any<TypeScriptFindReferencesRequest>(), Arg.Any<CancellationToken>());
     }
 
@@ -174,7 +174,7 @@ public class McpHandlerTypeScriptTests
             Offset = 320,
         };
 
-        _typeScriptRefactoringService.FindDefinitionAsync(
+        _typeScriptService.FindDefinitionAsync(
             Arg.Any<TypeScriptFindDefinitionRequest>(),
             Arg.Any<CancellationToken>())
             .Returns(expectedResult);
@@ -191,7 +191,7 @@ public class McpHandlerTypeScriptTests
         var responseJson = await _handler.HandleAsync(request);
 
         // Assert
-        await _typeScriptRefactoringService.Received(1).FindDefinitionAsync(
+        await _typeScriptService.Received(1).FindDefinitionAsync(
             Arg.Is<TypeScriptFindDefinitionRequest>(r =>
                 r.FilePath == filePath &&
                 r.ProjectPath == "/project" &&
@@ -224,7 +224,7 @@ public class McpHandlerTypeScriptTests
         var resultText = GetResultText(responseJson);
         resultText.Should().Contain("projectPath is required");
 
-        await _typeScriptRefactoringService.DidNotReceiveWithAnyArgs()
+        await _typeScriptService.DidNotReceiveWithAnyArgs()
             .FindDefinitionAsync(Arg.Any<TypeScriptFindDefinitionRequest>(), Arg.Any<CancellationToken>());
     }
 
@@ -247,7 +247,7 @@ public class McpHandlerTypeScriptTests
         var resultText = GetResultText(responseJson);
         resultText.Should().Contain("offset is required");
 
-        await _typeScriptRefactoringService.DidNotReceiveWithAnyArgs()
+        await _typeScriptService.DidNotReceiveWithAnyArgs()
             .FindDefinitionAsync(Arg.Any<TypeScriptFindDefinitionRequest>(), Arg.Any<CancellationToken>());
     }
 
@@ -271,7 +271,7 @@ public class McpHandlerTypeScriptTests
             Description = "Renamed to 'newName'",
         };
 
-        _typeScriptRefactoringService.RenameSymbolAsync(
+        _typeScriptService.RenameSymbolAsync(
             Arg.Any<TypeScriptRenameRequest>(),
             Arg.Any<CancellationToken>())
             .Returns(expectedResult);
@@ -289,7 +289,7 @@ public class McpHandlerTypeScriptTests
         var responseJson = await _handler.HandleAsync(request);
 
         // Assert
-        await _typeScriptRefactoringService.Received(1).RenameSymbolAsync(
+        await _typeScriptService.Received(1).RenameSymbolAsync(
             Arg.Is<TypeScriptRenameRequest>(r =>
                 r.FilePath == filePath &&
                 r.ProjectPath == "/project" &&
@@ -319,7 +319,7 @@ public class McpHandlerTypeScriptTests
             Description = "Extracted function 'extractedFunction'",
         };
 
-        _typeScriptRefactoringService.ExtractFunctionAsync(
+        _typeScriptService.ExtractFunctionAsync(
             Arg.Any<TypeScriptExtractFunctionRequest>(),
             Arg.Any<CancellationToken>())
             .Returns(expectedResult);
@@ -338,7 +338,7 @@ public class McpHandlerTypeScriptTests
         var responseJson = await _handler.HandleAsync(request);
 
         // Assert
-        await _typeScriptRefactoringService.Received(1).ExtractFunctionAsync(
+        await _typeScriptService.Received(1).ExtractFunctionAsync(
             Arg.Is<TypeScriptExtractFunctionRequest>(r =>
                 r.FilePath == filePath &&
                 r.ProjectPath == "/project" &&
@@ -369,7 +369,7 @@ public class McpHandlerTypeScriptTests
             Description = "Extracted variable 'extractedVar'",
         };
 
-        _typeScriptRefactoringService.ExtractVariableAsync(
+        _typeScriptService.ExtractVariableAsync(
             Arg.Any<TypeScriptExtractVariableRequest>(),
             Arg.Any<CancellationToken>())
             .Returns(expectedResult);
@@ -388,7 +388,7 @@ public class McpHandlerTypeScriptTests
         var responseJson = await _handler.HandleAsync(request);
 
         // Assert
-        await _typeScriptRefactoringService.Received(1).ExtractVariableAsync(
+        await _typeScriptService.Received(1).ExtractVariableAsync(
             Arg.Is<TypeScriptExtractVariableRequest>(r =>
                 r.FilePath == filePath &&
                 r.ProjectPath == "/project" &&
@@ -415,7 +415,7 @@ public class McpHandlerTypeScriptTests
             Error = "No symbol found at offset 42",
         };
 
-        _typeScriptRefactoringService.FindReferencesAsync(
+        _typeScriptService.FindReferencesAsync(
             Arg.Any<TypeScriptFindReferencesRequest>(),
             Arg.Any<CancellationToken>())
             .Returns(expectedResult);
@@ -449,7 +449,7 @@ public class McpHandlerTypeScriptTests
             ErrorType = "NotRenameable",
         };
 
-        _typeScriptRefactoringService.RenameSymbolAsync(
+        _typeScriptService.RenameSymbolAsync(
             Arg.Any<TypeScriptRenameRequest>(),
             Arg.Any<CancellationToken>())
             .Returns(expectedResult);

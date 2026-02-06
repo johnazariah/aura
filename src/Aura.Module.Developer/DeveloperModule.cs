@@ -84,7 +84,7 @@ public sealed class DeveloperModule : IAuraModule
         services.AddSingleton<IPythonRefactoringService, PythonRefactoringService>();
 
         // Register TypeScript/JavaScript refactoring service
-        services.AddSingleton<ITypeScriptRefactoringService, TypeScriptRefactoringService>();
+        services.AddSingleton<ITypeScriptLanguageService, TypeScriptLanguageService>();
 
         // Register test generation service
         services.AddSingleton<ITestGenerationService, RoslynTestGenerator>();
@@ -157,10 +157,8 @@ public sealed class DeveloperModule : IAuraModule
     {
         // Developer-specific agents can be registered here
         // The markdown agents from agents/developer/ will be loaded separately
+        // Language agents are registered via RegisterLanguageAgentsTask at startup
         var agentsPath = config["Aura:Modules:Developer:AgentsPath"] ?? "./agents/developer";
-
-        // TODO: Load agents from directory when file-based agent loading is implemented
-        // registry.LoadAgentsFromDirectory(agentsPath);
     }
 
     /// <summary>

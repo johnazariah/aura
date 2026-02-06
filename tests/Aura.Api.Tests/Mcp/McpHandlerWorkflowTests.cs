@@ -31,7 +31,7 @@ public class McpHandlerWorkflowTests
     private readonly IRoslynWorkspaceService _roslynService;
     private readonly IRoslynRefactoringService _refactoringService;
     private readonly IPythonRefactoringService _pythonRefactoringService;
-    private readonly ITypeScriptRefactoringService _typeScriptRefactoringService;
+    private readonly ITypeScriptLanguageService _typeScriptService;
     private readonly ITestGenerationService _testGenerationService;
     private readonly IGitWorktreeService _worktreeService;
     private readonly ITreeBuilderService _treeBuilderService;
@@ -49,7 +49,7 @@ public class McpHandlerWorkflowTests
         _roslynService = Substitute.For<IRoslynWorkspaceService>();
         _refactoringService = Substitute.For<IRoslynRefactoringService>();
         _pythonRefactoringService = Substitute.For<IPythonRefactoringService>();
-        _typeScriptRefactoringService = Substitute.For<ITypeScriptRefactoringService>();
+        _typeScriptService = Substitute.For<ITypeScriptLanguageService>();
         _testGenerationService = Substitute.For<ITestGenerationService>();
         _worktreeService = Substitute.For<IGitWorktreeService>();
         _treeBuilderService = Substitute.For<ITreeBuilderService>();
@@ -65,7 +65,7 @@ public class McpHandlerWorkflowTests
             _roslynService,
             _refactoringService,
             _pythonRefactoringService,
-            _typeScriptRefactoringService,
+            _typeScriptService,
             _testGenerationService,
             _worktreeService,
             _treeBuilderService,
