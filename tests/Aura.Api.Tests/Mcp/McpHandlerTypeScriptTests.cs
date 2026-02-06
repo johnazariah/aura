@@ -686,6 +686,315 @@ public class McpHandlerTypeScriptTests
 
     #endregion
 
+    #region aura_navigate - TypeScript Callers
+
+    [Theory]
+    [InlineData("src/app.ts")]
+    [InlineData("src/component.tsx")]
+    public async Task Navigate_Callers_WithTypeScriptFile_RoutesToTypeScriptService(string filePath)
+    {
+        // Arrange
+        var expectedResult = new TypeScriptFindCallersResult
+        {
+            Success = true,
+            Count = 2,
+            Callers = new List<TypeScriptCallerLocation>
+            {
+                new() { File = "src/main.ts", Line = 10, Column = 5, Name = "main", Kind = "function", Text = "doWork()" },
+                new() { File = "src/service.ts", Line = 25, Column = 12, Name = "UserService.init", Kind = "method", Text = "this.doWork()" },
+            },
+        };
+
+        _typeScriptService.FindCallersAsync(
+            Arg.Any<TypeScriptFindCallersRequest>(),
+            Arg.Any<CancellationToken>())
+            .Returns(expectedResult);
+
+        var request = CreateToolCallRequest("aura_navigate", new
+        {
+            operation = "callers",
+            filePath,
+            projectPath = "/project",
+            offset = 42,
+        });
+
+        // Act
+        var responseJson = await _handler.HandleAsync(request);
+
+        // Assert
+        await _typeScriptService.Received(1).FindCallersAsync(
+            Arg.Is<TypeScriptFindCallersRequest>(r =>
+                r.FilePath == filePath &&
+                r.ProjectPath == "/project" &&
+                r.Offset == 42),
+            Arg.Any<CancellationToken>());
+
+        var response = ParseResponse(responseJson);
+        response.Error.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Navigate_Callers_WithTypeScriptFile_ReturnsCallerDetails()
+    {
+        // Arrange
+        var expectedResult = new TypeScriptFindCallersResult
+        {
+            Success = true,
+            Count = 1,
+            Callers = new List<TypeScriptCallerLocation>
+            {
+                new() { File = "src/handler.ts", Line = 15, Column = 3, Name = "handleRequest", Kind = "function", Text = "processData(input)" },
+            },
+        };
+
+        _typeScriptService.FindCallersAsync(
+            Arg.Any<TypeScriptFindCallersRequest>(),
+            Arg.Any<CancellationToken>())
+            .Returns(expectedResult);
+
+        var request = CreateToolCallRequest("aura_navigate", new
+        {
+            operation = "callers",
+            filePath = "src/utils.ts",
+            projectPath = "/project",
+            offset = 100,
+        });
+
+        // Act
+        var responseJson = await _handler.HandleAsync(request);
+
+        // Assert
+        var resultText = GetResultText(responseJson);
+        resultText.Should().Contain("handleRequest");
+        resultText.Should().Contain("processData(input)");
+    }
+
+    [Fact]
+    public async Task Navigate_Callers_WithTypeScriptFile_MissingProjectPath_ReturnsError()
+    {
+        // Arrange
+        var request = CreateToolCallRequest("aura_navigate", new
+        {
+            operation = "callers",
+            filePath = "src/app.ts",
+            offset = 42,
+        });
+
+        // Act
+        var responseJson = await _handler.HandleAsync(request);
+
+        // Assert
+        var resultText = GetResultText(responseJson);
+        resultText.Should().Contain("projectPath is required");
+
+        await _typeScriptService.DidNotReceiveWithAnyArgs()
+            .FindCallersAsync(Arg.Any<TypeScriptFindCallersRequest>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Navigate_Callers_WithTypeScriptFile_MissingOffset_ReturnsError()
+    {
+        // Arrange
+        var request = CreateToolCallRequest("aura_navigate", new
+        {
+            operation = "callers",
+            filePath = "src/app.ts",
+            projectPath = "/project",
+        });
+
+        // Act
+        var responseJson = await _handler.HandleAsync(request);
+
+        // Assert
+        var resultText = GetResultText(responseJson);
+        resultText.Should().Contain("offset is required");
+
+        await _typeScriptService.DidNotReceiveWithAnyArgs()
+            .FindCallersAsync(Arg.Any<TypeScriptFindCallersRequest>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Navigate_Callers_WithCSharpFile_DoesNotRouteToTypeScriptService()
+    {
+        // Arrange - C# callers use symbolName/methodName, not filePath/offset
+        var request = CreateToolCallRequest("aura_navigate", new
+        {
+            operation = "callers",
+            methodName = "DoWork",
+            solutionPath = "c:\\test\\Test.sln",
+        });
+
+        // Act
+        try
+        {
+            await _handler.HandleAsync(request);
+        }
+        catch
+        {
+            // May fail due to code graph not being set up, that's fine
+        }
+
+        // Assert - TypeScript service should NOT be called for C# files
+        await _typeScriptService.DidNotReceiveWithAnyArgs()
+            .FindCallersAsync(Arg.Any<TypeScriptFindCallersRequest>(), Arg.Any<CancellationToken>());
+    }
+
+    #endregion
+
+    #region aura_navigate - TypeScript Implementations
+
+    [Theory]
+    [InlineData("src/app.ts")]
+    [InlineData("src/component.tsx")]
+    public async Task Navigate_Implementations_WithTypeScriptFile_RoutesToTypeScriptService(string filePath)
+    {
+        // Arrange
+        var expectedResult = new TypeScriptFindImplementationsResult
+        {
+            Success = true,
+            Count = 2,
+            Implementations = new List<TypeScriptImplementationLocation>
+            {
+                new() { Name = "UserServiceImpl", Kind = "class", File = "src/services/user-impl.ts", Line = 5, Column = 1 },
+                new() { Name = "MockUserService", Kind = "class", File = "src/tests/mock-user.ts", Line = 3, Column = 1 },
+            },
+        };
+
+        _typeScriptService.FindImplementationsAsync(
+            Arg.Any<TypeScriptFindImplementationsRequest>(),
+            Arg.Any<CancellationToken>())
+            .Returns(expectedResult);
+
+        var request = CreateToolCallRequest("aura_navigate", new
+        {
+            operation = "implementations",
+            filePath,
+            projectPath = "/project",
+            offset = 42,
+        });
+
+        // Act
+        var responseJson = await _handler.HandleAsync(request);
+
+        // Assert
+        await _typeScriptService.Received(1).FindImplementationsAsync(
+            Arg.Is<TypeScriptFindImplementationsRequest>(r =>
+                r.FilePath == filePath &&
+                r.ProjectPath == "/project" &&
+                r.Offset == 42),
+            Arg.Any<CancellationToken>());
+
+        var response = ParseResponse(responseJson);
+        response.Error.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Navigate_Implementations_WithTypeScriptFile_ReturnsImplementationDetails()
+    {
+        // Arrange
+        var expectedResult = new TypeScriptFindImplementationsResult
+        {
+            Success = true,
+            Count = 1,
+            Implementations = new List<TypeScriptImplementationLocation>
+            {
+                new() { Name = "PostgresRepository", Kind = "class", File = "src/repos/postgres.ts", Line = 10, Column = 1 },
+            },
+        };
+
+        _typeScriptService.FindImplementationsAsync(
+            Arg.Any<TypeScriptFindImplementationsRequest>(),
+            Arg.Any<CancellationToken>())
+            .Returns(expectedResult);
+
+        var request = CreateToolCallRequest("aura_navigate", new
+        {
+            operation = "implementations",
+            filePath = "src/repos/repository.ts",
+            projectPath = "/project",
+            offset = 30,
+        });
+
+        // Act
+        var responseJson = await _handler.HandleAsync(request);
+
+        // Assert
+        var resultText = GetResultText(responseJson);
+        resultText.Should().Contain("PostgresRepository");
+    }
+
+    [Fact]
+    public async Task Navigate_Implementations_WithTypeScriptFile_MissingProjectPath_ReturnsError()
+    {
+        // Arrange
+        var request = CreateToolCallRequest("aura_navigate", new
+        {
+            operation = "implementations",
+            filePath = "src/app.ts",
+            offset = 42,
+        });
+
+        // Act
+        var responseJson = await _handler.HandleAsync(request);
+
+        // Assert
+        var resultText = GetResultText(responseJson);
+        resultText.Should().Contain("projectPath is required");
+
+        await _typeScriptService.DidNotReceiveWithAnyArgs()
+            .FindImplementationsAsync(Arg.Any<TypeScriptFindImplementationsRequest>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Navigate_Implementations_WithTypeScriptFile_MissingOffset_ReturnsError()
+    {
+        // Arrange
+        var request = CreateToolCallRequest("aura_navigate", new
+        {
+            operation = "implementations",
+            filePath = "src/app.ts",
+            projectPath = "/project",
+        });
+
+        // Act
+        var responseJson = await _handler.HandleAsync(request);
+
+        // Assert
+        var resultText = GetResultText(responseJson);
+        resultText.Should().Contain("offset is required");
+
+        await _typeScriptService.DidNotReceiveWithAnyArgs()
+            .FindImplementationsAsync(Arg.Any<TypeScriptFindImplementationsRequest>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Navigate_Implementations_WithCSharpFile_DoesNotRouteToTypeScriptService()
+    {
+        // Arrange
+        var request = CreateToolCallRequest("aura_navigate", new
+        {
+            operation = "implementations",
+            symbolName = "IUserService",
+            solutionPath = "c:\\test\\Test.sln",
+        });
+
+        // Act
+        try
+        {
+            await _handler.HandleAsync(request);
+        }
+        catch
+        {
+            // May fail due to code graph not being set up, that's fine
+        }
+
+        // Assert - TypeScript service should NOT be called for C# files
+        await _typeScriptService.DidNotReceiveWithAnyArgs()
+            .FindImplementationsAsync(Arg.Any<TypeScriptFindImplementationsRequest>(), Arg.Any<CancellationToken>());
+    }
+
+    #endregion
+
     #region Helper Methods
 
     private static string CreateToolCallRequest(string toolName, object arguments)

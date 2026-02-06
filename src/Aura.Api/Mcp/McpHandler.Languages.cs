@@ -268,4 +268,53 @@ public sealed partial class McpHandler
             }),
         };
     }
+
+    private async Task<object> TypeScriptFindCallersAsync(JsonElement? args, CancellationToken ct)
+    {
+        var projectPath = args?.GetProperty("projectPath").GetString() ?? "";
+        var filePath = args?.GetProperty("filePath").GetString() ?? "";
+        var offset = args?.GetProperty("offset").GetInt32() ?? 0;
+        var result = await _typeScriptService.FindCallersAsync(
+            new TypeScriptFindCallersRequest { ProjectPath = projectPath, FilePath = filePath, Offset = offset },
+            ct);
+        return new
+        {
+            success = result.Success,
+            error = result.Error,
+            count = result.Count,
+            callers = result.Callers?.Select(c => new
+            {
+                file = c.File,
+                line = c.Line,
+                column = c.Column,
+                name = c.Name,
+                kind = c.Kind,
+                text = c.Text,
+            }),
+        };
+    }
+
+    private async Task<object> TypeScriptFindImplementationsAsync(JsonElement? args, CancellationToken ct)
+    {
+        var projectPath = args?.GetProperty("projectPath").GetString() ?? "";
+        var filePath = args?.GetProperty("filePath").GetString() ?? "";
+        var offset = args?.GetProperty("offset").GetInt32() ?? 0;
+        var result = await _typeScriptService.FindImplementationsAsync(
+            new TypeScriptFindImplementationsRequest { ProjectPath = projectPath, FilePath = filePath, Offset = offset },
+            ct);
+        return new
+        {
+            success = result.Success,
+            error = result.Error,
+            count = result.Count,
+            implementations = result.Implementations?.Select(i => new
+            {
+                name = i.Name,
+                kind = i.Kind,
+                file = i.File,
+                line = i.Line,
+                column = i.Column,
+            }),
+        };
+    }
 }

@@ -78,6 +78,26 @@ public interface ITypeScriptLanguageService
     Task<TypeScriptListTypesResult> ListTypesAsync(
         TypeScriptListTypesRequest request,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Find all callers of a function or method at the given offset.
+    /// </summary>
+    /// <param name="request">The find callers request.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>List of caller locations.</returns>
+    Task<TypeScriptFindCallersResult> FindCallersAsync(
+        TypeScriptFindCallersRequest request,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Find implementations of an interface or abstract class at the given offset.
+    /// </summary>
+    /// <param name="request">The find implementations request.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>List of implementation locations.</returns>
+    Task<TypeScriptFindImplementationsResult> FindImplementationsAsync(
+        TypeScriptFindImplementationsRequest request,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -390,4 +410,115 @@ public record TypeScriptTypeInfo
 
     /// <summary>Number of members in the type.</summary>
     public int MemberCount { get; init; }
+}
+
+/// <summary>
+/// Request to find callers of a function or method.
+/// </summary>
+public record TypeScriptFindCallersRequest
+{
+    /// <summary>Path to the project root.</summary>
+    public required string ProjectPath { get; init; }
+
+    /// <summary>Path to the file containing the symbol.</summary>
+    public required string FilePath { get; init; }
+
+    /// <summary>Character offset of the symbol.</summary>
+    public required int Offset { get; init; }
+}
+
+/// <summary>
+/// Result of finding callers.
+/// </summary>
+public record TypeScriptFindCallersResult
+{
+    /// <summary>Whether the operation succeeded.</summary>
+    public required bool Success { get; init; }
+
+    /// <summary>Error message if failed.</summary>
+    public string? Error { get; init; }
+
+    /// <summary>List of caller locations.</summary>
+    public IReadOnlyList<TypeScriptCallerLocation>? Callers { get; init; }
+
+    /// <summary>Total count of callers.</summary>
+    public int Count { get; init; }
+}
+
+/// <summary>
+/// Location of a caller.
+/// </summary>
+public record TypeScriptCallerLocation
+{
+    /// <summary>File path.</summary>
+    public required string File { get; init; }
+
+    /// <summary>Line number (1-based).</summary>
+    public required int Line { get; init; }
+
+    /// <summary>Column number (1-based).</summary>
+    public required int Column { get; init; }
+
+    /// <summary>Name of the calling function/method.</summary>
+    public required string Name { get; init; }
+
+    /// <summary>Kind of caller (function, method, constructor, module).</summary>
+    public required string Kind { get; init; }
+
+    /// <summary>Source text at the call site.</summary>
+    public string? Text { get; init; }
+}
+
+/// <summary>
+/// Request to find implementations of an interface or abstract class.
+/// </summary>
+public record TypeScriptFindImplementationsRequest
+{
+    /// <summary>Path to the project root.</summary>
+    public required string ProjectPath { get; init; }
+
+    /// <summary>Path to the file containing the interface/class.</summary>
+    public required string FilePath { get; init; }
+
+    /// <summary>Character offset of the symbol.</summary>
+    public required int Offset { get; init; }
+}
+
+/// <summary>
+/// Result of finding implementations.
+/// </summary>
+public record TypeScriptFindImplementationsResult
+{
+    /// <summary>Whether the operation succeeded.</summary>
+    public required bool Success { get; init; }
+
+    /// <summary>Error message if failed.</summary>
+    public string? Error { get; init; }
+
+    /// <summary>List of implementation locations.</summary>
+    public IReadOnlyList<TypeScriptImplementationLocation>? Implementations { get; init; }
+
+    /// <summary>Total count of implementations.</summary>
+    public int Count { get; init; }
+}
+
+/// <summary>
+/// Location of an implementation.
+/// </summary>
+public record TypeScriptImplementationLocation
+{
+    /// <summary>Name of the implementing type or method.</summary>
+    public required string Name { get; init; }
+
+    /// <summary>Kind of implementation (class, interface, method).</summary>
+    public required string Kind { get; init; }
+
+    /// <summary>File path.</summary>
+    public required string File { get; init; }
+
+    /// <summary>Line number (1-based).</summary>
+    public required int Line { get; init; }
+
+    /// <summary>Column number (1-based).</summary>
+    public required int Column { get; init; }
 }

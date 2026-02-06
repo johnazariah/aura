@@ -226,6 +226,16 @@ public sealed partial class McpHandler
     // Navigation helpers - adapt from old parameter names to new unified schema
     private async Task<object> FindImplementationsFromNavigate(JsonElement? args, CancellationToken ct)
     {
+        var language = DetectLanguageFromArgs(args);
+        if (language == "typescript")
+        {
+            if (!args.HasValue || !args.Value.TryGetProperty("projectPath", out _))
+                return new { error = "projectPath is required for TypeScript implementations lookup" };
+            if (!args.Value.TryGetProperty("offset", out _))
+                return new { error = "offset is required for TypeScript implementations lookup" };
+            return await TypeScriptFindImplementationsAsync(args, ct);
+        }
+
         var typeName = args?.GetProperty("symbolName").GetString() ?? "";
         var worktreeInfo = DetectWorktreeFromArgs(args);
         var results = await _graphService.FindImplementationsAsync(typeName, cancellationToken: ct);
@@ -268,6 +278,16 @@ public sealed partial class McpHandler
 
     private async Task<object> FindCallersAsync(JsonElement? args, CancellationToken ct)
     {
+        var language = DetectLanguageFromArgs(args);
+        if (language == "typescript")
+        {
+            if (!args.HasValue || !args.Value.TryGetProperty("projectPath", out _))
+                return new { error = "projectPath is required for TypeScript callers lookup" };
+            if (!args.Value.TryGetProperty("offset", out _))
+                return new { error = "offset is required for TypeScript callers lookup" };
+            return await TypeScriptFindCallersAsync(args, ct);
+        }
+
         var methodName = args?.GetProperty("methodName").GetString() ?? "";
         string? containingType = null;
         if (args.HasValue && args.Value.TryGetProperty("containingType", out var typeEl))

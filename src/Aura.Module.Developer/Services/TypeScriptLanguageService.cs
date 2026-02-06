@@ -314,6 +314,98 @@ public sealed class TypeScriptLanguageService : ITypeScriptLanguageService
         }
     }
 
+    /// <inheritdoc/>
+    public async Task<TypeScriptFindCallersResult> FindCallersAsync(
+        TypeScriptFindCallersRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var args = new List<string>
+        {
+            "find-callers",
+            "--project", request.ProjectPath,
+            "--file", request.FilePath,
+            "--offset", request.Offset.ToString(),
+        };
+
+        var (success, stdout, stderr) = await ExecuteNodeScriptAsync(args, cancellationToken);
+
+        if (!success)
+        {
+            return new TypeScriptFindCallersResult
+            {
+                Success = false,
+                Error = stderr ?? "Node.js script execution failed",
+            };
+        }
+
+        try
+        {
+            var result = JsonSerializer.Deserialize<TypeScriptFindCallersResult>(stdout, JsonOptions);
+            return result ?? new TypeScriptFindCallersResult
+            {
+                Success = false,
+                Error = "Failed to deserialize result",
+            };
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogError(ex, "Failed to parse find-callers result: {Output}", stdout);
+            return new TypeScriptFindCallersResult
+            {
+                Success = false,
+                Error = $"Failed to parse result: {ex.Message}",
+            };
+        }
+    }
+
+    /// <inheritdoc/>
+    public async Task<TypeScriptFindImplementationsResult> FindImplementationsAsync(
+        TypeScriptFindImplementationsRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var args = new List<string>
+        {
+            "find-implementations",
+            "--project", request.ProjectPath,
+            "--file", request.FilePath,
+            "--offset", request.Offset.ToString(),
+        };
+
+        var (success, stdout, stderr) = await ExecuteNodeScriptAsync(args, cancellationToken);
+
+        if (!success)
+        {
+            return new TypeScriptFindImplementationsResult
+            {
+                Success = false,
+                Error = stderr ?? "Node.js script execution failed",
+            };
+        }
+
+        try
+        {
+            var result = JsonSerializer.Deserialize<TypeScriptFindImplementationsResult>(stdout, JsonOptions);
+            return result ?? new TypeScriptFindImplementationsResult
+            {
+                Success = false,
+                Error = "Failed to deserialize result",
+            };
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogError(ex, "Failed to parse find-implementations result: {Output}", stdout);
+            return new TypeScriptFindImplementationsResult
+            {
+                Success = false,
+                Error = $"Failed to parse result: {ex.Message}",
+            };
+        }
+    }
+
     private async Task<TypeScriptRefactoringResult> ExecuteRefactoringAsync(
         List<string> args,
         CancellationToken cancellationToken)

@@ -649,6 +649,261 @@ function listTypes(projectPath, nameFilter) {
         };
     }
 }
+function findCallers(projectPath, filePath, offset) {
+    try {
+        const project = getProject(projectPath);
+        const absolutePath = path.isAbsolute(filePath)
+            ? filePath
+            : path.join(projectPath, filePath);
+        let sourceFile = project.getSourceFile(absolutePath);
+        if (!sourceFile) {
+            sourceFile = project.addSourceFileAtPath(absolutePath);
+        }
+        const node = findNodeAtOffset(sourceFile, offset);
+        if (!node) {
+            return {
+                success: false,
+                error: `No symbol found at offset ${offset}`,
+            };
+        }
+        // Find identifier
+        let identifier = node;
+        if (!ts_morph_1.Node.isIdentifier(identifier)) {
+            const parent = node.getFirstAncestorByKind(ts_morph_1.SyntaxKind.Identifier);
+            if (parent)
+                identifier = parent;
+        }
+        if (!ts_morph_1.Node.isIdentifier(identifier)) {
+            return {
+                success: false,
+                error: `Node at offset ${offset} is not a symbol`,
+            };
+        }
+        // Get the definition nodes for this symbol
+        const definitions = identifier.getDefinitionNodes();
+        const targetSymbolName = identifier.getText();
+        // Find all references, then filter to call sites
+        const refs = identifier.findReferencesAsNodes();
+        const callers = [];
+        const seen = new Set();
+        for (const ref of refs) {
+            // Skip the definition itself
+            const refFile = ref.getSourceFile().getFilePath();
+            const refStart = ref.getStart();
+            const isDefinition = definitions.some((d) => d.getSourceFile().getFilePath() === refFile &&
+                Math.abs(d.getStart() - refStart) < targetSymbolName.length + 5);
+            if (isDefinition)
+                continue;
+            // Find the containing function/method/class for this reference
+            const containingFunc = ref.getFirstAncestor((n) => ts_morph_1.Node.isFunctionDeclaration(n) ||
+                ts_morph_1.Node.isMethodDeclaration(n) ||
+                ts_morph_1.Node.isArrowFunction(n) ||
+                ts_morph_1.Node.isFunctionExpression(n) ||
+                ts_morph_1.Node.isConstructorDeclaration(n));
+            let callerName = "<module>";
+            let callerKind = "module";
+            if (containingFunc) {
+                if (ts_morph_1.Node.isConstructorDeclaration(containingFunc)) {
+                    const parentClass = containingFunc.getFirstAncestorByKind(ts_morph_1.SyntaxKind.ClassDeclaration);
+                    callerName = parentClass?.getName()
+                        ? `${parentClass.getName()}.constructor`
+                        : "constructor";
+                    callerKind = "constructor";
+                }
+                else if (ts_morph_1.Node.isMethodDeclaration(containingFunc)) {
+                    const parentClass = containingFunc.getFirstAncestorByKind(ts_morph_1.SyntaxKind.ClassDeclaration);
+                    callerName = parentClass?.getName()
+                        ? `${parentClass.getName()}.${containingFunc.getName()}`
+                        : containingFunc.getName();
+                    callerKind = "method";
+                }
+                else if (ts_morph_1.Node.isFunctionDeclaration(containingFunc)) {
+                    callerName = containingFunc.getName() ?? "<anonymous>";
+                    callerKind = "function";
+                }
+                else {
+                    // Arrow function or function expression — try to find the variable it's assigned to
+                    const varDecl = containingFunc.getFirstAncestorByKind(ts_morph_1.SyntaxKind.VariableDeclaration);
+                    callerName = varDecl?.getName() ?? "<anonymous>";
+                    callerKind = "function";
+                }
+            }
+            const sf = ref.getSourceFile();
+            const lineAndCol = sf.getLineAndColumnAtPos(refStart);
+            const key = `${refFile}:${lineAndCol.line}:${callerName}`;
+            if (seen.has(key))
+                continue;
+            seen.add(key);
+            // Get the line text for context
+            const lineText = sf
+                .getFullText()
+                .split("\n")[lineAndCol.line - 1]?.trim() ?? "";
+            callers.push({
+                file: refFile,
+                line: lineAndCol.line,
+                column: lineAndCol.column,
+                name: callerName,
+                kind: callerKind,
+                text: lineText.length > 200 ? lineText.substring(0, 200) + "..." : lineText,
+            });
+        }
+        return {
+            success: true,
+            callers,
+            count: callers.length,
+        };
+    }
+    catch (e) {
+        return {
+            success: false,
+            error: e instanceof Error ? e.message : String(e),
+        };
+    }
+}
+function findImplementations(projectPath, filePath, offset) {
+    try {
+        const project = getProject(projectPath);
+        const absolutePath = path.isAbsolute(filePath)
+            ? filePath
+            : path.join(projectPath, filePath);
+        let sourceFile = project.getSourceFile(absolutePath);
+        if (!sourceFile) {
+            sourceFile = project.addSourceFileAtPath(absolutePath);
+        }
+        const node = findNodeAtOffset(sourceFile, offset);
+        if (!node) {
+            return {
+                success: false,
+                error: `No symbol found at offset ${offset}`,
+            };
+        }
+        // Find identifier
+        let identifier = node;
+        if (!ts_morph_1.Node.isIdentifier(identifier)) {
+            const parent = node.getFirstAncestorByKind(ts_morph_1.SyntaxKind.Identifier);
+            if (parent)
+                identifier = parent;
+        }
+        if (!ts_morph_1.Node.isIdentifier(identifier)) {
+            return {
+                success: false,
+                error: `Node at offset ${offset} is not a symbol`,
+            };
+        }
+        const definitions = identifier.getDefinitionNodes();
+        const implementations = [];
+        for (const def of definitions) {
+            // If the definition is an interface, find classes that implement it
+            if (ts_morph_1.Node.isInterfaceDeclaration(def)) {
+                const ifaceName = def.getName();
+                const allSourceFiles = project
+                    .getSourceFiles()
+                    .filter((sf) => !sf.getFilePath().includes("node_modules"));
+                for (const sf of allSourceFiles) {
+                    for (const cls of sf.getClasses()) {
+                        const implementsInterfaces = cls.getImplements();
+                        const extendsExpr = cls.getExtends();
+                        const implementsTarget = implementsInterfaces.some((impl) => impl.getText() === ifaceName);
+                        const extendsTarget = extendsExpr?.getText() === ifaceName;
+                        if (implementsTarget || extendsTarget) {
+                            const lineAndCol = sf.getLineAndColumnAtPos(cls.getStart());
+                            implementations.push({
+                                name: cls.getName() ?? "<anonymous>",
+                                kind: "class",
+                                file: sf.getFilePath(),
+                                line: lineAndCol.line,
+                                column: lineAndCol.column,
+                            });
+                        }
+                    }
+                    // Also check interfaces that extend this interface
+                    for (const iface of sf.getInterfaces()) {
+                        if (iface === def)
+                            continue;
+                        const extendsExprs = iface.getExtends();
+                        const extendsTarget = extendsExprs.some((ext) => ext.getText() === ifaceName);
+                        if (extendsTarget) {
+                            const lineAndCol = sf.getLineAndColumnAtPos(iface.getStart());
+                            implementations.push({
+                                name: iface.getName(),
+                                kind: "interface",
+                                file: sf.getFilePath(),
+                                line: lineAndCol.line,
+                                column: lineAndCol.column,
+                            });
+                        }
+                    }
+                }
+            }
+            // If the definition is an abstract class, find classes that extend it
+            if (ts_morph_1.Node.isClassDeclaration(def) && def.isAbstract()) {
+                const className = def.getName();
+                const allSourceFiles = project
+                    .getSourceFiles()
+                    .filter((sf) => !sf.getFilePath().includes("node_modules"));
+                for (const sf of allSourceFiles) {
+                    for (const cls of sf.getClasses()) {
+                        if (cls === def)
+                            continue;
+                        const extendsExpr = cls.getExtends();
+                        if (extendsExpr?.getText() === className) {
+                            const lineAndCol = sf.getLineAndColumnAtPos(cls.getStart());
+                            implementations.push({
+                                name: cls.getName() ?? "<anonymous>",
+                                kind: "class",
+                                file: sf.getFilePath(),
+                                line: lineAndCol.line,
+                                column: lineAndCol.column,
+                            });
+                        }
+                    }
+                }
+            }
+            // If the definition is an abstract/overridable method, find overrides
+            if (ts_morph_1.Node.isMethodDeclaration(def)) {
+                const parentClass = def.getFirstAncestorByKind(ts_morph_1.SyntaxKind.ClassDeclaration);
+                if (parentClass) {
+                    const methodName = def.getName();
+                    const className = parentClass.getName();
+                    const allSourceFiles = project
+                        .getSourceFiles()
+                        .filter((sf) => !sf.getFilePath().includes("node_modules"));
+                    for (const sf of allSourceFiles) {
+                        for (const cls of sf.getClasses()) {
+                            if (cls === parentClass)
+                                continue;
+                            const extendsExpr = cls.getExtends();
+                            if (extendsExpr?.getText() === className) {
+                                const overrideMethod = cls.getMethod(methodName);
+                                if (overrideMethod) {
+                                    const lineAndCol = sf.getLineAndColumnAtPos(overrideMethod.getStart());
+                                    implementations.push({
+                                        name: `${cls.getName()}.${methodName}`,
+                                        kind: "method",
+                                        file: sf.getFilePath(),
+                                        line: lineAndCol.line,
+                                        column: lineAndCol.column,
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return {
+            success: true,
+            implementations,
+            count: implementations.length,
+        };
+    }
+    catch (e) {
+        return {
+            success: false,
+            error: e instanceof Error ? e.message : String(e),
+        };
+    }
+}
 // CLI argument parsing
 function parseArgs() {
     const args = process.argv.slice(2);
@@ -695,18 +950,26 @@ function main() {
         case "list-types":
             result = listTypes(args.project, args["name-filter"]);
             break;
+        case "find-callers":
+            result = findCallers(args.project, args.file, parseInt(args.offset, 10));
+            break;
+        case "find-implementations":
+            result = findImplementations(args.project, args.file, parseInt(args.offset, 10));
+            break;
         case "help":
         default:
             console.log(`TypeScript/JavaScript Refactoring Tool
 
 Commands:
-  rename            Rename a symbol at the given offset
-  extract-function  Extract code into a new function
-  extract-variable  Extract expression into a variable
-  find-references   Find all references to a symbol
-  find-definition   Find the definition of a symbol
-  inspect-type      Inspect a type's members (properties, methods, etc.)
-  list-types        List all types in a project
+  rename              Rename a symbol at the given offset
+  extract-function    Extract code into a new function
+  extract-variable    Extract expression into a variable
+  find-references     Find all references to a symbol
+  find-definition     Find the definition of a symbol
+  find-callers        Find all callers of a function/method
+  find-implementations Find implementations of an interface or abstract class
+  inspect-type        Inspect a type's members (properties, methods, etc.)
+  list-types          List all types in a project
 
 Options:
   --project         Path to the project root (required)
