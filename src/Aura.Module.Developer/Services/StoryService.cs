@@ -900,7 +900,7 @@ public sealed partial class StoryService(
         var sb = new StringBuilder();
 
         // Attribution banner
-        sb.AppendLine("> 🤖 **This pull request was entirely implemented by [Aura](https://github.com/johnazariah/aura)** — a local-first AI coding agent.");
+        sb.AppendLine("> 🤖 **This pull request was entirely implemented by [Aura](https://github.com/johnazariah/aura)** — an AI-powered coding agent.");
         sb.AppendLine();
 
         // Link to source issue
