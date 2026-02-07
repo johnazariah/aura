@@ -852,7 +852,8 @@ public sealed partial class StoryService(
             }
 
             // Push the branch (force push if squashed to update history)
-            var pushResult = await _gitService.PushAsync(workflow.WorktreePath, setUpstream: true, githubToken, ct);
+            var didSquash = squashResult.Success;
+            var pushResult = await _gitService.PushAsync(workflow.WorktreePath, setUpstream: true, forcePush: didSquash, githubToken, ct);
             if (!pushResult.Success)
             {
                 _logger.LogWarning("Failed to push branch: {Error}", pushResult.Error);

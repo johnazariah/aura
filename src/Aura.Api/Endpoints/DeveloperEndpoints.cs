@@ -580,7 +580,7 @@ public static class DeveloperEndpoints
                 commitSha = commitResult.Value;
             }
 
-            var pushResult = await gitService.PushAsync(story.WorktreePath, setUpstream: true, tokenAccessor.Token, ct);
+            var pushResult = await gitService.PushAsync(story.WorktreePath, setUpstream: true, forcePush: false, tokenAccessor.Token, ct);
             if (!pushResult.Success)
                 return Problem.GitOperationFailed("Push", pushResult.Error ?? "Unknown error", context);
 

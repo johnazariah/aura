@@ -150,13 +150,60 @@ public class GitService(IProcessRunner process, ILogger<GitService> logger) : IG
         _logger.LogInformation("Committed: {Sha}", sha[..Math.Min(7, sha.Length)]);
         return GitResult<string>.Ok(sha);
     }
-    public async Task<GitResult<Unit>> PushAsync(string repoPath, bool setUpstream = false, string? githubToken = null, CancellationToken ct = default)
+    public async Task<GitResult<Unit>> PushAsync(string repoPath, bool setUpstream = false, bool forcePush = false, string? githubToken = null, CancellationToken ct = default)
     {
-        var args = setUpstream
-            ? new[] { "push", "-u", "origin", "HEAD" }
-            : new[] { "push" };
+        // If we have a token, inject it into the remote URL for non-interactive auth.
+        // GH_TOKEN env var only works for `gh` CLI, not `git push`.
+        string? authenticatedUrl = null;
+        if (!string.IsNullOrEmpty(githubToken))
+        {
+            var remoteResult = await GetRemoteUrlAsync(repoPath, ct);
+            if (remoteResult.Success && remoteResult.Value is not null)
+            {
+                var remoteUrl = remoteResult.Value;
+                if (remoteUrl.StartsWith("https://github.com/", StringComparison.OrdinalIgnoreCase))
+                {
+                    authenticatedUrl = remoteUrl.Replace(
+                        "https://github.com/",
+                        $"https://x-access-token:{githubToken}@github.com/",
+                        StringComparison.OrdinalIgnoreCase);
+                }
+            }
+        }
 
-        var result = await RunGitAsync(repoPath, args, githubToken, ct);
+        var argsList = new List<string> { "push" };
+
+        if (forcePush)
+        {
+            argsList.Add("--force-with-lease");
+        }
+
+        if (authenticatedUrl is not null)
+        {
+            if (setUpstream)
+            {
+                argsList.AddRange(["-u", authenticatedUrl, "HEAD"]);
+            }
+            else
+            {
+                argsList.Add(authenticatedUrl);
+            }
+        }
+        else
+        {
+            if (setUpstream)
+            {
+                argsList.AddRange(["-u", "origin", "HEAD"]);
+            }
+        }
+
+        // Use a longer timeout for push (large repos, slow connections)
+        var options = new ProcessOptions
+        {
+            WorkingDirectory = repoPath,
+            Timeout = TimeSpan.FromSeconds(60)
+        };
+        var result = await _process.RunAsync("git", argsList.ToArray(), options, ct);
         if (!result.Success)
             return GitResult<Unit>.Fail(result.StandardError);
 
@@ -402,8 +449,8 @@ public class GitService(IProcessRunner process, ILogger<GitService> logger) : IG
             return GitResult<string>.Fail($"Failed to reset: {resetResult.StandardError}");
         }
 
-        // Commit all staged changes with the new message
-        var commitResult = await RunGitAsync(repoPath, ["commit", "-m", message], ct);
+        // Commit all staged changes with the new message (skip hooks — this is an automated squash)
+        var commitResult = await RunGitAsync(repoPath, ["commit", "--no-verify", "-m", message], ct);
         if (!commitResult.Success)
         {
             return GitResult<string>.Fail($"Failed to commit squashed changes: {commitResult.StandardError}");

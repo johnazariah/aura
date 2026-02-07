@@ -37,9 +37,10 @@ public interface IGitService
     /// <summary>Push the current branch</summary>
     /// <param name="repoPath">Path to the repository</param>
     /// <param name="setUpstream">Set upstream tracking</param>
+    /// <param name="forcePush">Force push with lease (safe force push, needed after squash)</param>
     /// <param name="githubToken">GitHub token for authentication (optional)</param>
     /// <param name="ct">Cancellation token</param>
-    Task<GitResult<Unit>> PushAsync(string repoPath, bool setUpstream = false, string? githubToken = null, CancellationToken ct = default);
+    Task<GitResult<Unit>> PushAsync(string repoPath, bool setUpstream = false, bool forcePush = false, string? githubToken = null, CancellationToken ct = default);
 
     /// <summary>Pull latest changes</summary>
     Task<GitResult<Unit>> PullAsync(string repoPath, CancellationToken ct = default);
