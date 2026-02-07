@@ -29,6 +29,16 @@ internal sealed record CommandResult
 /// </summary>
 public sealed partial class QualityGateService : IQualityGateService
 {
+    /// <summary>
+    /// Shared NuGet package cache used by the service account.
+    /// The service runs as a dedicated user (e.g., .\AuraService) whose profile
+    /// may not have a populated NuGet cache. We use a shared location under ProgramData
+    /// so that packages restored once are available to all worktree builds.
+    /// </summary>
+    private static readonly string SharedNuGetCache = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+        "Aura", "nuget-cache");
+
     private readonly ILogger<QualityGateService> _logger;
 
     /// <summary>
@@ -37,6 +47,8 @@ public sealed partial class QualityGateService : IQualityGateService
     public QualityGateService(ILogger<QualityGateService> logger)
     {
         _logger = logger;
+        // Ensure shared NuGet cache directory exists
+        Directory.CreateDirectory(SharedNuGetCache);
     }
 
     /// <inheritdoc/>
@@ -54,13 +66,13 @@ public sealed partial class QualityGateService : IQualityGateService
         // For .NET projects, run restore first to ensure packages are available
         if (command.Contains("dotnet", StringComparison.OrdinalIgnoreCase))
         {
-            _logger.LogInformation("[{WorktreeName}] Running restore before build...", worktreeName);
+            _logger.LogInformation("[{WorktreeName}] Running restore before build (cache: {Cache})...", worktreeName, SharedNuGetCache);
 
-            // The service runs as the AuraService user account, which has its own NuGet cache
-            // in its user profile. No special cache path needed.
+            // Use shared NuGet cache so the service account doesn't need its own populated cache.
+            // This also avoids re-downloading packages for every worktree.
             var restoreResult = await RunCommandAsync(
                 command,
-                "restore",
+                $"restore --packages \"{SharedNuGetCache}\"",
                 worktreePath,
                 ct);
 
@@ -326,6 +338,10 @@ public sealed partial class QualityGateService : IQualityGateService
             UseShellExecute = false,
             CreateNoWindow = true,
         };
+
+        // Point all dotnet commands at the shared NuGet cache so build/test
+        // find the packages that were restored earlier.
+        psi.Environment["NUGET_PACKAGES"] = SharedNuGetCache;
 
         using var process = new Process { StartInfo = psi };
         var outputBuilder = new StringBuilder();
