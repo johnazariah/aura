@@ -152,25 +152,6 @@ public class GitService(IProcessRunner process, ILogger<GitService> logger) : IG
     }
     public async Task<GitResult<Unit>> PushAsync(string repoPath, bool setUpstream = false, bool forcePush = false, string? githubToken = null, CancellationToken ct = default)
     {
-        // If we have a token, inject it into the remote URL for non-interactive auth.
-        // GH_TOKEN env var only works for `gh` CLI, not `git push`.
-        string? authenticatedUrl = null;
-        if (!string.IsNullOrEmpty(githubToken))
-        {
-            var remoteResult = await GetRemoteUrlAsync(repoPath, ct);
-            if (remoteResult.Success && remoteResult.Value is not null)
-            {
-                var remoteUrl = remoteResult.Value;
-                if (remoteUrl.StartsWith("https://github.com/", StringComparison.OrdinalIgnoreCase))
-                {
-                    authenticatedUrl = remoteUrl.Replace(
-                        "https://github.com/",
-                        $"https://x-access-token:{githubToken}@github.com/",
-                        StringComparison.OrdinalIgnoreCase);
-                }
-            }
-        }
-
         var argsList = new List<string> { "push" };
 
         if (forcePush)
@@ -178,23 +159,9 @@ public class GitService(IProcessRunner process, ILogger<GitService> logger) : IG
             argsList.Add("--force-with-lease");
         }
 
-        if (authenticatedUrl is not null)
+        if (setUpstream)
         {
-            if (setUpstream)
-            {
-                argsList.AddRange(["-u", authenticatedUrl, "HEAD"]);
-            }
-            else
-            {
-                argsList.Add(authenticatedUrl);
-            }
-        }
-        else
-        {
-            if (setUpstream)
-            {
-                argsList.AddRange(["-u", "origin", "HEAD"]);
-            }
+            argsList.AddRange(["-u", "origin", "HEAD"]);
         }
 
         // Use a longer timeout for push (large repos, slow connections)
@@ -203,6 +170,44 @@ public class GitService(IProcessRunner process, ILogger<GitService> logger) : IG
             WorkingDirectory = repoPath,
             Timeout = TimeSpan.FromSeconds(60)
         };
+
+        // For non-interactive auth, override the credential helper to supply the token.
+        // We push to "origin" (not a raw URL) so that -u tracking works correctly,
+        // and use GIT_ASKPASS to inject the token when git prompts for credentials.
+        if (!string.IsNullOrEmpty(githubToken))
+        {
+            // GIT_ASKPASS is called by git with a prompt string; we just need it to echo the token.
+            // PowerShell one-liner works on Windows where /bin/echo doesn't exist.
+            var isWindows = OperatingSystem.IsWindows();
+
+            // Write a tiny script that GIT_ASKPASS can invoke
+            var askPassDir = Path.Combine(Path.GetTempPath(), "aura-git");
+            Directory.CreateDirectory(askPassDir);
+            var askPassScript = Path.Combine(askPassDir, isWindows ? "git-askpass.cmd" : "git-askpass.sh");
+
+            if (isWindows)
+            {
+                await File.WriteAllTextAsync(askPassScript, $"@echo {githubToken}\n", ct);
+            }
+            else
+            {
+                await File.WriteAllTextAsync(askPassScript, $"#!/bin/sh\necho \"{githubToken}\"\n", ct);
+                // Make executable
+                await _process.RunAsync("chmod", ["+x", askPassScript], new ProcessOptions(), ct);
+            }
+
+            options = options with
+            {
+                Environment = new Dictionary<string, string>
+                {
+                    ["GIT_ASKPASS"] = askPassScript,
+                    ["GIT_TERMINAL_PROMPT"] = "0",
+                    ["GH_TOKEN"] = githubToken,
+                    ["GITHUB_TOKEN"] = githubToken,
+                }
+            };
+        }
+
         var result = await _process.RunAsync("git", argsList.ToArray(), options, ct);
         if (!result.Success)
             return GitResult<Unit>.Fail(result.StandardError);
