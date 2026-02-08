@@ -431,6 +431,71 @@ Configure file logging in `appsettings.Production.json`:
 }
 ```
 
+## Deployment Configuration
+
+### Server Start Time
+
+The server start time is automatically initialized when the application starts. This timestamp is used by the `/health` endpoint to indicate when the server was last restarted, which is useful for:
+
+- Verifying successful deployments
+- Tracking uptime
+- Diagnosing issues related to server restarts
+
+**No configuration required** - the server start time is captured automatically at application startup.
+
+### Deployment Tag
+
+The `DEPLOY_TAG` environment variable identifies the specific version or build of the running server. This is useful for:
+
+- Verifying that the correct version is deployed
+- Correlating server behavior with specific builds
+- Tracking deployments across environments
+
+**Setting the deployment tag**:
+
+**Windows (PowerShell)**:
+```powershell
+$env:DEPLOY_TAG = "v1.3.1-abc1234"
+```
+
+**Windows (System-wide)**:
+```powershell
+[System.Environment]::SetEnvironmentVariable("DEPLOY_TAG", "v1.3.1-abc1234", "Machine")
+```
+
+**Linux/macOS**:
+```bash
+export DEPLOY_TAG="v1.3.1-abc1234"
+```
+
+**Docker/Container**:
+```dockerfile
+ENV DEPLOY_TAG=v1.3.1-abc1234
+```
+
+**Windows Service**:
+
+When deploying as a Windows Service, set the environment variable at the system level before installing the service:
+
+```powershell
+[System.Environment]::SetEnvironmentVariable("DEPLOY_TAG", "v1.3.1-abc1234", "Machine")
+.\scripts\Update-LocalInstall.ps1
+```
+
+If not set, the deployment tag will default to `"unknown"`.
+
+**Health endpoint response**:
+
+The `/health` endpoint includes both the server start time and deployment tag:
+
+```json
+{
+  "status": "healthy",
+  "startedAt": "2026-02-07T09:12:51Z",
+  "deployTag": "v1.3.1-abc1234"
+}
+```
+
 ## Environment Variables
 
 ### Summary Table
@@ -438,6 +503,7 @@ Configure file logging in `appsettings.Production.json`:
 | Variable | Purpose | Example |
 |----------|---------|---------|
 | `ASPNETCORE_ENVIRONMENT` | Environment name | `Production` |
+| `DEPLOY_TAG` | Deployment version identifier | `v1.3.1-abc1234` |
 | `AURA_AZUREOPENAI_APIKEY` | Azure OpenAI API key | `<your-api-key>` |
 | `AURA_OPENAI_APIKEY` | OpenAI API key | `<your-api-key>` |
 | `AURA_DB_HOST` | Database host | `localhost` |

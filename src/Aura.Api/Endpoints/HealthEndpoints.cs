@@ -18,9 +18,15 @@ public static class HealthEndpoints
     /// <summary>
     /// Maps all health endpoints to the application.
     /// </summary>
-    public static WebApplication MapHealthEndpoints(this WebApplication app)
+    /// <param name="app">The web application.</param>
+    /// <param name="serverStartTime">The server start time.</param>
+    /// <param name="deploymentTag">The deployment tag.</param>
+    public static WebApplication MapHealthEndpoints(
+        this WebApplication app,
+        DateTime serverStartTime,
+        string deploymentTag)
     {
-        app.MapGet("/health", GetHealth);
+        app.MapGet("/health", () => GetHealth(serverStartTime, deploymentTag));
         app.MapGet("/health/db", GetDatabaseHealth);
         app.MapGet("/health/rag", GetRagHealth);
         app.MapGet("/health/ollama", GetLlmHealth);
@@ -30,12 +36,11 @@ public static class HealthEndpoints
         return app;
     }
 
-    private static object GetHealth() => new
+    private static object GetHealth(DateTime serverStartTime, string deploymentTag) => new
     {
         status = "healthy",
-        healthy = true,
-        version = "0.1.0",
-        timestamp = DateTime.UtcNow
+        startedAt = serverStartTime.ToString("yyyy-MM-ddTHH:mm:ssZ", System.Globalization.CultureInfo.InvariantCulture),
+        deployTag = deploymentTag
     };
 
     private static async Task<IResult> GetDatabaseHealth(AuraDbContext db)
