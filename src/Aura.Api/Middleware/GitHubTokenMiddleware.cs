@@ -9,20 +9,28 @@ using Aura.Api.Services;
 /// <summary>
 /// Middleware that extracts the GitHub token from the X-GitHub-Token header
 /// and makes it available via IGitHubTokenAccessor for the duration of the request.
+/// Falls back to the configured GitHub:Token from appsettings when no header is present.
 /// </summary>
 public class GitHubTokenMiddleware
 {
     private readonly RequestDelegate _next;
+    private readonly string? _configuredToken;
 
-    public GitHubTokenMiddleware(RequestDelegate next)
+    public GitHubTokenMiddleware(RequestDelegate next, IConfiguration configuration)
     {
         _next = next;
+        _configuredToken = configuration.GetValue<string>("GitHub:Token");
     }
 
     public async Task InvokeAsync(HttpContext context, IGitHubTokenAccessor tokenAccessor)
     {
-        // Extract token from header
+        // Prefer token from request header, fall back to configured token
         var token = context.Request.Headers["X-GitHub-Token"].FirstOrDefault();
+        if (string.IsNullOrEmpty(token))
+        {
+            token = _configuredToken;
+        }
+
         if (!string.IsNullOrEmpty(token))
         {
             tokenAccessor.SetToken(token);
