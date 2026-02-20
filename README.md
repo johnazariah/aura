@@ -4,7 +4,7 @@
 [![codecov](https://codecov.io/gh/johnazariah/aura/graph/badge.svg)](https://codecov.io/gh/johnazariah/aura)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Aura is an AI coding assistant that runs on your machine. It indexes your codebase, understands your code structure, and helps you implement features through a VS Code extension.
+Aura is an AI coding assistant that indexes your codebase locally and helps you implement features through a VS Code extension. It uses cloud LLMs (Azure OpenAI, OpenAI) or local models (Ollama) for inference, and integrates with GitHub Copilot via MCP.
 
 ## What Can You Do With It?
 

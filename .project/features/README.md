@@ -10,9 +10,11 @@ Unified documentation for all Aura features - combining specification, design, a
 
 ```text
 features/
-├── completed/     # Implemented and shipped (each doc has Implementation Status section)
-├── upcoming/      # Planned but not yet implemented
-└── roadmap.md     # Prioritized sequencing of upcoming work
+├── completed/     # Implemented and shipped
+├── in-progress/   # Actively being built (full spec template)
+├── proposed/      # Ideas awaiting spec
+├── spikes/        # Time-boxed research
+└── templates/     → ../.project/templates/ (feature-spec, refactor-brief, spike-report)
 ```
 
 ## Completed Features
@@ -96,38 +98,39 @@ features/
 | [Remove Internal Agent Architecture](completed/remove-internal-agent-architecture.md) | Remove dead internal execution & chat code (7,093 lines) | 2026-02-06 |
 | [Polyglot MCP Tools](completed/polyglot-mcp-tools.md) | Extend aura_inspect, aura_navigate, aura_validate to TypeScript | 2026-02-06 |
 
-## Upcoming Features
-
-### High Priority
+## In Progress
 
 | Feature | Description |
 |---------|-------------|
+| [Python Inspect & Validate](in-progress/python-inspect-validate.md) | Extend aura_inspect and aura_validate to Python |
+| [macOS CI & Distribution](in-progress/macos-ci-and-distribution.md) | CI builds, Homebrew cask, menu bar app |
 
-### Medium Priority
-
-| Feature | Description |
-|---------|-------------|
-| [Python Inspect & Validate](upcoming/python-inspect-validate.md) | Extend aura_inspect and aura_validate to Python |
-| [macOS CI & Distribution](upcoming/macos-ci-and-distribution.md) | CI builds, Homebrew cask, menu bar app (needs self-hosted runner) |
-
-### Lower Priority (Advanced)
+## Proposed (Backlog)
 
 | Feature | Description |
 |---------|-------------|
-| [Condensed Export](upcoming/condensed-export.md) | Export indexed context |
-| [Internationalization](upcoming/internationalization.md) | Multi-language UI support |
-| [Layered Fleet Architecture](upcoming/layered-fleet-architecture.md) | Multi-tier fleet with local/team/cloud layers |
+| [Agent Capability Comparison](proposed/agent-capability-comparison.md) | Agent comparison tooling |
+| [Azure DevOps / Jira Integration](proposed/azure-devops-jira-integration.md) | Non-GitHub issue tracker support |
+| [Condensed Export](proposed/condensed-export.md) | Export indexed context |
+| [Document Ingestion](proposed/document-ingestion.md) | Ingest non-code documents |
+| [Indexing Epic](proposed/indexing-epic.md) | Future indexing enhancements |
+| [Internationalization](proposed/internationalization.md) | Multi-language UI support |
+| [Layered Fleet Architecture](proposed/layered-fleet-architecture.md) | Multi-tier fleet with local/team/cloud layers |
+| [LSP Refactoring Framework](proposed/lsp-refactoring-framework.md) | Generic LSP for Go/Rust/Java refactoring |
+| [Orchestrator GHCP Integration](proposed/orchestrator-ghcp-integration.md) | Deeper GitHub Copilot integration |
+| [Pattern Catalog](proposed/pattern-catalog.md) | Expanded pattern library |
+| [Quick Actions Bar](proposed/quick-actions-bar.md) | Build/Test/Commit/PR buttons for workflow chat |
+| [Research Workflows](proposed/research-workflows.md) | Research-specific workflow support |
+| [Web UI](proposed/web-ui.md) | Browser-based interface |
 
-### Unplanned (Backlog)
+## Spikes
 
-| Feature | Description |
-|---------|-------------|
-| [Quick Actions Bar](unplanned/quick-actions-bar.md) | Build/Test/Commit/PR buttons for workflow chat |
-| [Indexing Epic](unplanned/indexing-epic.md) | Future indexing enhancements (smart content, boolean queries, etc.) |
-| [LSP Refactoring Framework](unplanned/lsp-refactoring-framework.md) | Generic LSP for Go/Rust/Java refactoring |
+| Spike | Description |
+|-------|-------------|
+| [API Harmonization Audit](spikes/api-harmonization-phase1-audit.md) | Phase 1 API audit |
+| [EMIC PDF Approach](spikes/emic-pdf-approach.md) | PDF extraction research |
 
 ## See Also
 
-- [Roadmap](roadmap.md) - Prioritized sequencing of upcoming work
 - [ADRs](../adr/README.md) - Architecture decisions
-- [Progress](../progress/README.md) - Date-stamped status snapshots
+- [Templates](../templates/) - Feature spec, refactor brief, spike report templates

@@ -63,7 +63,7 @@ This means changes to:
 
 ## Quick Context
 
-Aura is a **local-first, privacy-safe AI foundation** for knowledge work. The Developer Module MVP is **complete** with full workflow UI, multi-language code indexing, and cloud LLM support.
+Aura is an **AI-powered development assistant with local code intelligence**. It indexes your codebase locally (Roslyn, TreeSitter, pgvector RAG) and exposes tools via MCP for GitHub Copilot. LLM inference uses cloud providers (Azure OpenAI by default; Ollama supported for local inference). See [ADR-024](../.project/adr/024-hybrid-architecture.md) for architecture details.
 
 ## Key Documents (Source of Truth)
 

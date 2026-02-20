@@ -7,7 +7,7 @@
 
 ## Quick Summary
 
-Aura is a **local-first, privacy-safe AI foundation** for knowledge work. The Developer Module is production-ready with MCP integration for GitHub Copilot, Roslyn refactoring tools, pattern-driven workflows, and multi-language support. The Researcher Module provides academic paper management and research workflows.
+Aura is an **AI-powered development assistant with local code intelligence**. It indexes your codebase locally (Roslyn, TreeSitter, pgvector RAG) and exposes tools via MCP for GitHub Copilot. LLM inference uses cloud providers by default (Azure OpenAI); local inference via Ollama is also supported. The Developer Module is production-ready with MCP integration, Roslyn refactoring tools, pattern-driven workflows, and multi-language support. The Researcher Module provides academic paper management and research workflows.
 
 ## Recent Changes
 
@@ -364,9 +364,10 @@ See spec: [features/completed/agentic-execution-v2.md](features/completed/agenti
 
 ## Principles
 
-1. **Local-First, Privacy-Safe** - No cloud uploads, works offline
-2. **Human-in-the-Loop** - Users control workflow execution
-3. **Composable Modules** - Mix-and-match capabilities
-4. **Hot-Reloadable Agents** - Drop markdown files to add agents
+1. **Local Code Intelligence** - Codebase indexing, code graph, and RAG stay on your machine
+2. **Cloud-Accelerated LLM** - Azure OpenAI by default; Ollama for local inference
+3. **Human-in-the-Loop** - Users control workflow execution
+4. **Composable Modules** - Mix-and-match capabilities
+5. **Hot-Reloadable Agents** - Drop markdown files to add agents
 
-See [spec/00-overview.md](spec/00-overview.md) for full design principles.
+See [ADR-024](adr/024-hybrid-architecture.md) for the full architecture rationale.

@@ -1,7 +1,7 @@
 {
   "name": "aura",
   "displayName": "Aura - AI Development Assistant",
-  "description": "Local-first AI assistant for knowledge work",
+  "description": "AI development assistant with local code intelligence",
   "version": "1.5.0",
   "publisher": "aura",
   "repository": {

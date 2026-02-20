@@ -2,13 +2,16 @@
 
 This document helps future sessions quickly understand the codebase structure.
 
+> **Architecture**: Hybrid — local code intelligence (Roslyn, TreeSitter, pgvector RAG) with cloud LLM inference (Azure OpenAI default, Ollama optional). See [ADR-024](../.project/adr/024-hybrid-architecture.md).
+
 ## Solution Structure
 
 ```
 src/
-├── Aura.Foundation/          # Core abstractions (agents, RAG, prompts, data)
-├── Aura.Module.Developer/    # Developer workflow module (WorkflowService, CodeGraphIndexer)
-├── Aura.Api/                 # REST API (Program.cs has ALL endpoints inline)
+├── Aura.Foundation/          # Core: agents, LLM, RAG, prompts, data
+├── Aura.Module.Developer/    # Developer vertical: stories, git, Roslyn, code gen
+├── Aura.Module.Researcher/   # Researcher vertical: library, papers, PDF ingestion
+├── Aura.Api/                 # REST API + MCP server (Windows Service, port 5300)
 ├── Aura.AppHost/             # Aspire orchestration
 └── Aura.ServiceDefaults/     # Shared Aspire configuration
 
@@ -19,32 +22,59 @@ extension/                    # VS Code extension (TypeScript)
 
 prompts/                      # Prompt templates (.prompt files with Handlebars)
 agents/                       # Agent definitions (.md files)
+patterns/                     # Step-by-step operational patterns
 ```
 
 ## Key Files
 
 | What | Where |
 |------|-------|
-| **All API endpoints** | `src/Aura.Api/Program.cs` (monolithic, search for `app.Map`) |
-| **Workflow logic** | `src/Aura.Module.Developer/Services/WorkflowService.cs` |
+| **Endpoint registration** | `src/Aura.Api/Program.cs` (calls `Map*Endpoints()` extension methods) |
+| **Endpoint implementations** | `src/Aura.Api/Endpoints/*.cs` (one file per module) |
+| **MCP handler** | `src/Aura.Api/Mcp/McpHandler.cs` + 11 partial files |
+| **Story logic** | `src/Aura.Module.Developer/Services/StoryService.cs` |
 | **RAG service** | `src/Aura.Foundation/Rag/RagService.cs` |
 | **Code graph service** | `src/Aura.Foundation/Rag/ICodeGraphService.cs` |
 | **Semantic indexer** | `src/Aura.Foundation/Rag/ISemanticIndexer.cs` |
 | **Agent execution** | `src/Aura.Foundation/Agents/ConfigurableAgent.cs` |
 | **Prompt loading** | `src/Aura.Foundation/Prompts/PromptRegistry.cs` |
 | **LLM providers** | `src/Aura.Foundation/Llm/` |
+| **Library service** | `src/Aura.Module.Researcher/Services/LibraryService.cs` |
 | **Extension API client** | `extension/src/services/auraApiService.ts` |
+
+## MCP Tools (13 tools exposed to GitHub Copilot)
+
+| Tool | Partial File | Purpose |
+|------|-------------|---------|
+| `aura_architect` | McpHandler.cs | Architecture analysis |
+| `aura_docs` | McpHandler.cs | Documentation tools |
+| `aura_edit` | McpHandler.Edit.cs | File editing |
+| `aura_generate` | McpHandler.Generate.cs | Code generation (C#) |
+| `aura_inspect` | McpHandler.Inspect.cs | Type/member inspection |
+| `aura_navigate` | McpHandler.Navigate.cs | Callers, implementations, references |
+| `aura_pattern` | McpHandler.Pattern.cs | Load operational patterns |
+| `aura_refactor` | McpHandler.Refactor.cs | Rename, extract, move |
+| `aura_search` | McpHandler.Search.cs | Semantic code search |
+| `aura_tree` | McpHandler.cs | File tree |
+| `aura_validate` | McpHandler.Validate.cs | Compilation & test validation |
+| `aura_workflow` | McpHandler.Workflow.cs | Story management |
+| `aura_workspace` | McpHandler.Workspaces.cs | Workspace registration |
 
 ## API Endpoints Quick Reference
 
-### Workflows (`/api/developer/workflows`)
-- `POST /api/developer/workflows` - Create workflow (needs `repositoryPath`)
-- `GET /api/developer/workflows` - List workflows (optional `?repositoryPath=` filter)
-- `GET /api/developer/workflows/{id}` - Get workflow details
-- `DELETE /api/developer/workflows/{id}` - Delete workflow
-- `POST /api/developer/workflows/{id}/analyze` - Enrich/analyze workflow
-- `POST /api/developer/workflows/{id}/plan` - Generate steps
-- `POST /api/developer/workflows/{id}/steps/{stepId}/execute` - Execute step
+### Stories (`/api/developer/stories`)
+- `POST /api/developer/stories` - Create story
+- `GET /api/developer/stories` - List stories
+- `GET /api/developer/stories/by-path` - Find story by worktree path
+- `GET /api/developer/stories/{id}` - Get story details
+- `DELETE /api/developer/stories/{id}` - Delete story
+- `POST /api/developer/stories/{id}/analyze` - Enrich/analyze story
+- `POST /api/developer/stories/{id}/decompose` - Generate steps
+- `POST /api/developer/stories/{id}/run` - Execute story
+- `GET /api/developer/stories/{id}/stream` - SSE stream of execution
+- `POST /api/developer/stories/{id}/complete` - Mark complete
+- `POST /api/developer/stories/{id}/cancel` - Cancel execution
+- `POST /api/developer/stories/{id}/chat` - Chat with story context
 
 ### Workspace Indexing (`/api/workspaces`)
 - `POST /api/workspaces` - Onboard workspace (registers + starts RAG + code graph indexing)
@@ -53,6 +83,15 @@ agents/                       # Agent definitions (.md files)
 - `POST /api/workspaces/{id}/reindex` - Reindex existing workspace
 - `DELETE /api/workspaces/{id}` - Remove workspace and its indexed data
 - `GET /api/workspaces/lookup?path=...` - Look up workspace by path
+
+### Researcher (`/api/researcher`)
+- `GET /api/researcher/sources` - List library sources
+- `POST /api/researcher/sources` - Create source
+- `POST /api/researcher/sources/import` - Import from URL/file
+- `POST /api/researcher/sources/search` - Semantic search across library
+- `POST /api/researcher/papers/search` - Search academic papers
+- `POST /api/researcher/sources/{id}/convert` - PDF → Markdown
+- `GET /api/researcher/sources/{id}/excerpts` - Get excerpts
 
 ### Code Graph Queries
 - `GET /api/graph/find/{name}` - Find nodes by name
@@ -130,6 +169,7 @@ Invoke-RestMethod -Method POST -Uri "http://localhost:5300/api/rag/search" -Cont
 ## ADRs Reference
 
 Key architectural decisions in `.project/adr/`:
+- `024-hybrid-architecture.md` - Hybrid architecture (supersedes ADR-001)
 - `016-configurable-rag-queries.md` - RAG queries in prompt frontmatter
 - `017-case-insensitive-paths.md` - Path normalization
 - `018-prompt-template-architecture.md` - Prompt vs agent separation

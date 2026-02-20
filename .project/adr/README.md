@@ -27,6 +27,10 @@ This directory contains the architecture decision records for the Aura project.
 | [ADR-018](018-prompt-template-architecture.md) | Prompt Template Architecture | ✅ Accepted | 2025-12-02 |
 | [ADR-019](019-codebase-context-service.md) | Codebase Context Service | ✅ Accepted | 2025-12-02 |
 | [ADR-020](020-test-project-separation.md) | Test Project Separation | ✅ Accepted | 2025-11-27 |
+| [ADR-021](021-session-infrastructure-pivot.md) | Session Infrastructure Pivot | ✅ Accepted | 2026-01-15 |
+| [ADR-022](022-multi-agent-orchestration.md) | Multi-Agent Orchestration | ✅ Accepted | 2026-01-20 |
+| [ADR-023](023-mcp-over-copilot-sdk.md) | MCP Integration Over Copilot SDK | ✅ Accepted | 2026-02-06 |
+| [ADR-024](024-hybrid-architecture.md) | Hybrid Architecture | ✅ Accepted | 2026-02-20 |
 
 ## ADR Template
 

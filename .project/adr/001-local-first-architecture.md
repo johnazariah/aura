@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Superseded by [ADR-024](024-hybrid-architecture.md)
 
 ## Date
 
