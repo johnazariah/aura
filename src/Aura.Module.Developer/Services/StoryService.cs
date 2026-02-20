@@ -335,9 +335,7 @@ public sealed partial class StoryService(
     /// <inheritdoc/>
     public async Task<Story> ResetStatusAsync(Guid workflowId, StoryStatus newStatus, CancellationToken ct = default)
     {
-        var workflow = await _db.Stories
-            .FirstOrDefaultAsync(w => w.Id == workflowId, ct)
-            ?? throw new InvalidOperationException($"Workflow {workflowId} not found");
+        var workflow = await GetStoryOrThrowAsync(workflowId, ct);
 
         var oldStatus = workflow.Status;
         workflow.Status = newStatus;
@@ -353,10 +351,7 @@ public sealed partial class StoryService(
     /// <inheritdoc/>
     public async Task<Story> ResetOrchestratorAsync(Guid workflowId, bool resetFailedSteps = false, CancellationToken ct = default)
     {
-        var story = await _db.Stories
-            .Include(w => w.Steps)
-            .FirstOrDefaultAsync(w => w.Id == workflowId, ct)
-            ?? throw new InvalidOperationException($"Story {workflowId} not found");
+        var story = await GetStoryWithStepsOrThrowAsync(workflowId, ct);
 
         if (story.Status != StoryStatus.Failed && story.Status != StoryStatus.GateFailed)
         {
@@ -455,10 +450,7 @@ public sealed partial class StoryService(
         string? githubToken = null,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
     {
-        var story = await _db.Stories
-            .Include(w => w.Steps)
-            .FirstOrDefaultAsync(w => w.Id == storyId, ct)
-            ?? throw new InvalidOperationException($"Story {storyId} not found");
+        var story = await GetStoryWithStepsOrThrowAsync(storyId, ct);
 
         if (!story.Steps.Any())
         {
@@ -679,10 +671,7 @@ public sealed partial class StoryService(
         int? afterOrder = null,
         CancellationToken ct = default)
     {
-        var workflow = await _db.Stories
-            .Include(w => w.Steps)
-            .FirstOrDefaultAsync(w => w.Id == workflowId, ct)
-            ?? throw new InvalidOperationException($"Workflow {workflowId} not found");
+        var workflow = await GetStoryWithStepsOrThrowAsync(workflowId, ct);
 
         // Determine the order for the new step
         int newOrder;
@@ -727,10 +716,7 @@ public sealed partial class StoryService(
     /// <inheritdoc/>
     public async Task RemoveStepAsync(Guid workflowId, Guid stepId, CancellationToken ct = default)
     {
-        var workflow = await _db.Stories
-            .Include(w => w.Steps)
-            .FirstOrDefaultAsync(w => w.Id == workflowId, ct)
-            ?? throw new InvalidOperationException($"Workflow {workflowId} not found");
+        var workflow = await GetStoryWithStepsOrThrowAsync(workflowId, ct);
 
         var step = workflow.Steps.FirstOrDefault(s => s.Id == stepId);
         if (step is null)
@@ -756,10 +742,7 @@ public sealed partial class StoryService(
     /// <inheritdoc/>
     public async Task<Story> CompleteAsync(Guid workflowId, string? githubToken = null, CancellationToken ct = default)
     {
-        var workflow = await _db.Stories
-            .Include(w => w.Steps)
-            .FirstOrDefaultAsync(w => w.Id == workflowId, ct)
-            ?? throw new InvalidOperationException($"Workflow {workflowId} not found");
+        var workflow = await GetStoryWithStepsOrThrowAsync(workflowId, ct);
 
         // Validate all steps are in a terminal state
         var runningSteps = workflow.Steps.Where(s => s.Status == StepStatus.Running).ToList();
@@ -988,8 +971,7 @@ public sealed partial class StoryService(
     /// <inheritdoc/>
     public async Task<Story> CancelAsync(Guid workflowId, CancellationToken ct = default)
     {
-        var workflow = await _db.Stories.FindAsync([workflowId], ct)
-            ?? throw new InvalidOperationException($"Workflow {workflowId} not found");
+        var workflow = await GetStoryOrThrowAsync(workflowId, ct);
 
         workflow.Status = StoryStatus.Cancelled;
         workflow.UpdatedAt = DateTimeOffset.UtcNow;
@@ -1002,13 +984,9 @@ public sealed partial class StoryService(
     /// <inheritdoc/>
     public async Task<StoryStep> ApproveStepAsync(Guid workflowId, Guid stepId, CancellationToken ct = default)
     {
-        var workflow = await _db.Stories
-            .Include(w => w.Steps)
-            .FirstOrDefaultAsync(w => w.Id == workflowId, ct)
-            ?? throw new InvalidOperationException($"Workflow {workflowId} not found");
+        var workflow = await GetStoryWithStepsOrThrowAsync(workflowId, ct);
 
-        var step = workflow.Steps.FirstOrDefault(s => s.Id == stepId)
-            ?? throw new InvalidOperationException($"Step {stepId} not found in workflow");
+        var step = GetStepOrThrow(workflow, stepId);
 
         if (step.Status != StepStatus.Completed)
         {
@@ -1026,13 +1004,9 @@ public sealed partial class StoryService(
     /// <inheritdoc/>
     public async Task<StoryStep> RejectStepAsync(Guid workflowId, Guid stepId, string? feedback = null, CancellationToken ct = default)
     {
-        var workflow = await _db.Stories
-            .Include(w => w.Steps)
-            .FirstOrDefaultAsync(w => w.Id == workflowId, ct)
-            ?? throw new InvalidOperationException($"Workflow {workflowId} not found");
+        var workflow = await GetStoryWithStepsOrThrowAsync(workflowId, ct);
 
-        var step = workflow.Steps.FirstOrDefault(s => s.Id == stepId)
-            ?? throw new InvalidOperationException($"Step {stepId} not found in workflow");
+        var step = GetStepOrThrow(workflow, stepId);
 
         if (step.Status != StepStatus.Completed)
         {
@@ -1054,13 +1028,9 @@ public sealed partial class StoryService(
     /// <inheritdoc/>
     public async Task<StoryStep> SkipStepAsync(Guid workflowId, Guid stepId, string? reason = null, CancellationToken ct = default)
     {
-        var workflow = await _db.Stories
-            .Include(w => w.Steps)
-            .FirstOrDefaultAsync(w => w.Id == workflowId, ct)
-            ?? throw new InvalidOperationException($"Workflow {workflowId} not found");
+        var workflow = await GetStoryWithStepsOrThrowAsync(workflowId, ct);
 
-        var step = workflow.Steps.FirstOrDefault(s => s.Id == stepId)
-            ?? throw new InvalidOperationException($"Step {stepId} not found in workflow");
+        var step = GetStepOrThrow(workflow, stepId);
 
         if (step.Status is StepStatus.Running)
         {
@@ -1079,13 +1049,9 @@ public sealed partial class StoryService(
     /// <inheritdoc/>
     public async Task<StoryStep> ResetStepAsync(Guid workflowId, Guid stepId, CancellationToken ct = default)
     {
-        var workflow = await _db.Stories
-            .Include(w => w.Steps)
-            .FirstOrDefaultAsync(w => w.Id == workflowId, ct)
-            ?? throw new InvalidOperationException($"Workflow {workflowId} not found");
+        var workflow = await GetStoryWithStepsOrThrowAsync(workflowId, ct);
 
-        var step = workflow.Steps.FirstOrDefault(s => s.Id == stepId)
-            ?? throw new InvalidOperationException($"Step {stepId} not found in workflow");
+        var step = GetStepOrThrow(workflow, stepId);
 
         if (step.Status == StepStatus.Running)
         {
@@ -1672,13 +1638,9 @@ public sealed partial class StoryService(
         string agentId,
         CancellationToken ct = default)
     {
-        var workflow = await _db.Stories
-            .Include(w => w.Steps)
-            .FirstOrDefaultAsync(w => w.Id == workflowId, ct)
-            ?? throw new KeyNotFoundException($"Workflow {workflowId} not found");
+        var workflow = await GetStoryWithStepsOrThrowAsync(workflowId, ct);
 
-        var step = workflow.Steps.FirstOrDefault(s => s.Id == stepId)
-            ?? throw new KeyNotFoundException($"Step {stepId} not found in workflow {workflowId}");
+        var step = GetStepOrThrow(workflow, stepId);
 
         // Validate the agent exists
         var agent = _agentRegistry.GetAgent(agentId);
@@ -1708,13 +1670,9 @@ public sealed partial class StoryService(
         string description,
         CancellationToken ct = default)
     {
-        var workflow = await _db.Stories
-            .Include(w => w.Steps)
-            .FirstOrDefaultAsync(w => w.Id == workflowId, ct)
-            ?? throw new KeyNotFoundException($"Workflow {workflowId} not found");
+        var workflow = await GetStoryWithStepsOrThrowAsync(workflowId, ct);
 
-        var step = workflow.Steps.FirstOrDefault(s => s.Id == stepId)
-            ?? throw new KeyNotFoundException($"Step {stepId} not found in workflow {workflowId}");
+        var step = GetStepOrThrow(workflow, stepId);
 
         step.Description = description;
 
@@ -1744,5 +1702,34 @@ public sealed partial class StoryService(
         }
 
         return (match.Groups[1].Value, match.Groups[2].Value, int.Parse(match.Groups[3].Value));
+    }
+
+    /// <summary>
+    /// Fetches a story by ID or throws <see cref="InvalidOperationException"/> if not found.
+    /// </summary>
+    private async Task<Story> GetStoryOrThrowAsync(Guid storyId, CancellationToken ct)
+    {
+        return await _db.Stories.FindAsync([storyId], ct)
+            ?? throw new InvalidOperationException($"Story {storyId} not found");
+    }
+
+    /// <summary>
+    /// Fetches a story with its steps included, or throws <see cref="InvalidOperationException"/> if not found.
+    /// </summary>
+    private async Task<Story> GetStoryWithStepsOrThrowAsync(Guid storyId, CancellationToken ct)
+    {
+        return await _db.Stories
+            .Include(w => w.Steps)
+            .FirstOrDefaultAsync(w => w.Id == storyId, ct)
+            ?? throw new InvalidOperationException($"Story {storyId} not found");
+    }
+
+    /// <summary>
+    /// Fetches a step from a story or throws <see cref="InvalidOperationException"/> if not found.
+    /// </summary>
+    private static StoryStep GetStepOrThrow(Story story, Guid stepId)
+    {
+        return story.Steps.FirstOrDefault(s => s.Id == stepId)
+            ?? throw new InvalidOperationException($"Step {stepId} not found in story {story.Id}");
     }
 }

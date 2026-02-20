@@ -140,7 +140,7 @@ public sealed class CSharpIngesterAgent(ILogger<CSharpIngesterAgent> logger) : I
             _ => ChunkTypes.Class,
         };
 
-        var namespaceName = GetNamespace(typeDecl);
+        var namespaceName = RoslynSyntaxHelpers.GetContainingNamespace(typeDecl);
         var fullName = string.IsNullOrEmpty(namespaceName)
             ? typeDecl.Identifier.Text
             : $"{namespaceName}.{typeDecl.Identifier.Text}";
@@ -178,7 +178,7 @@ public sealed class CSharpIngesterAgent(ILogger<CSharpIngesterAgent> logger) : I
         var startLine = text.Lines.GetLinePosition(enumDecl.SpanStart).Line + 1;
         var endLine = text.Lines.GetLinePosition(enumDecl.Span.End).Line + 1;
 
-        var namespaceName = GetNamespace(enumDecl);
+        var namespaceName = RoslynSyntaxHelpers.GetContainingNamespace(enumDecl);
         var fullName = string.IsNullOrEmpty(namespaceName)
             ? enumDecl.Identifier.Text
             : $"{namespaceName}.{enumDecl.Identifier.Text}";
@@ -323,11 +323,7 @@ public sealed class CSharpIngesterAgent(ILogger<CSharpIngesterAgent> logger) : I
         }
     }
 
-    private static string? GetNamespace(SyntaxNode node)
-    {
-        var namespaceDecl = node.Ancestors().OfType<BaseNamespaceDeclarationSyntax>().FirstOrDefault();
-        return namespaceDecl?.Name.ToString();
-    }
+
 
     private static string GetTypeSignature(TypeDeclarationSyntax typeDecl)
     {

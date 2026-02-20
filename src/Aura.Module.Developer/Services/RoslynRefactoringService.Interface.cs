@@ -204,13 +204,7 @@ public sealed partial class RoslynRefactoringService
             // Create interface declaration
             var interfaceDecl = SyntaxFactory.InterfaceDeclaration(request.InterfaceName).WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword))).WithMembers(SyntaxFactory.List(interfaceMembers));
             // Get namespace
-            var namespaceDecl = classNode.Ancestors().OfType<BaseNamespaceDeclarationSyntax>().FirstOrDefault();
-            var namespaceName = namespaceDecl switch
-            {
-                NamespaceDeclarationSyntax ns => ns.Name.ToString(),
-                FileScopedNamespaceDeclarationSyntax fsns => fsns.Name.ToString(),
-                _ => "Unknown"
-            };
+            var namespaceName = RoslynSyntaxHelpers.GetContainingNamespace(classNode) ?? "Unknown";
             // Create interface file content
             var usings = root.DescendantNodes().OfType<UsingDirectiveSyntax>().ToList();
             var interfaceRoot = SyntaxFactory.CompilationUnit().WithUsings(SyntaxFactory.List(usings)).WithMembers(SyntaxFactory.SingletonList<MemberDeclarationSyntax>(SyntaxFactory.FileScopedNamespaceDeclaration(SyntaxFactory.ParseName(namespaceName)).WithMembers(SyntaxFactory.SingletonList<MemberDeclarationSyntax>(interfaceDecl))));

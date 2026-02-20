@@ -142,7 +142,7 @@ public sealed class RoslynCodeIngestor : ICodeIngestor
             _ => CodeNodeType.Class,
         };
 
-        var namespaceName = GetNamespace(typeDecl);
+        var namespaceName = RoslynSyntaxHelpers.GetContainingNamespace(typeDecl) ?? string.Empty;
         var fullName = string.IsNullOrEmpty(namespaceName)
             ? typeDecl.Identifier.Text
             : $"{namespaceName}.{typeDecl.Identifier.Text}";
@@ -198,7 +198,7 @@ public sealed class RoslynCodeIngestor : ICodeIngestor
         var startLine = text.Lines.GetLinePosition(enumDecl.SpanStart).Line + 1;
         var endLine = text.Lines.GetLinePosition(enumDecl.Span.End).Line + 1;
 
-        var namespaceName = GetNamespace(enumDecl);
+        var namespaceName = RoslynSyntaxHelpers.GetContainingNamespace(enumDecl) ?? string.Empty;
         var fullName = string.IsNullOrEmpty(namespaceName)
             ? enumDecl.Identifier.Text
             : $"{namespaceName}.{enumDecl.Identifier.Text}";
@@ -463,20 +463,6 @@ public sealed class RoslynCodeIngestor : ICodeIngestor
                 TargetId = memberNode.Id,
             });
         }
-    }
-
-    private static string GetNamespace(Microsoft.CodeAnalysis.SyntaxNode node)
-    {
-        var current = node.Parent;
-        while (current != null)
-        {
-            if (current is BaseNamespaceDeclarationSyntax ns)
-            {
-                return ns.Name.ToString();
-            }
-            current = current.Parent;
-        }
-        return string.Empty;
     }
 
     private static string GetAccessibility(SyntaxTokenList modifiers)

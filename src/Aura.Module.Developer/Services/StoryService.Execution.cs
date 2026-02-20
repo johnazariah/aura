@@ -436,7 +436,7 @@ public sealed partial class StoryService
                 const int StepTimeoutMinutes = 10;
                 using var stepTimeoutCts = new CancellationTokenSource(TimeSpan.FromMinutes(StepTimeoutMinutes));
                 using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, stepTimeoutCts.Token);
-                _logger.LogWarning("[STEP-DEBUG] Starting ReAct execution with {Timeout}min timeout", StepTimeoutMinutes);
+                _logger.LogDebug("[STEP-DEBUG] Starting ReAct execution with {Timeout}min timeout", StepTimeoutMinutes);
                 var stepExecutionStart = DateTime.UtcNow;
                 ReActResult reactResult;
                 try
@@ -451,7 +451,7 @@ public sealed partial class StoryService
                 }
 
                 var stepDuration = DateTime.UtcNow - stepExecutionStart;
-                _logger.LogWarning("[STEP-DEBUG] ReAct execution completed in {Duration:F1}s", stepDuration.TotalSeconds);
+                _logger.LogDebug("[STEP-DEBUG] ReAct execution completed in {Duration:F1}s", stepDuration.TotalSeconds);
                 output = new AgentOutput(Content: reactResult.FinalAnswer, TokensUsed: reactResult.TotalTokensUsed);
                 toolSteps = reactResult.Steps;
                 _logger.LogInformation("ReAct execution completed: {Success}, {StepCount} steps, {TokenCount} tokens", reactResult.Success, reactResult.Steps.Count, reactResult.TotalTokensUsed);

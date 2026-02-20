@@ -268,7 +268,7 @@ public partial class ReActExecutor(IToolRegistry toolRegistry, ILogger<ReActExec
         conversationHistory.AppendLine($"Task: {task}");
         conversationHistory.AppendLine();
 
-        _logger.LogWarning("[REACT-DEBUG] Starting ReAct loop with MaxSteps={MaxSteps}, UseStructuredOutput={UseStructured}",
+        _logger.LogDebug("[REACT-DEBUG] Starting ReAct loop with MaxSteps={MaxSteps}, UseStructuredOutput={UseStructured}",
             options.MaxSteps, options.UseStructuredOutput);
         var loopStartTime = DateTime.UtcNow;
 
@@ -278,7 +278,7 @@ public partial class ReActExecutor(IToolRegistry toolRegistry, ILogger<ReActExec
 
             var stepStart = DateTime.UtcNow;
             var elapsedSinceStart = DateTime.UtcNow - loopStartTime;
-            _logger.LogWarning("[REACT-DEBUG] Step {Step}/{MaxSteps} starting at {Elapsed:F1}s elapsed", step, options.MaxSteps, elapsedSinceStart.TotalSeconds);
+            _logger.LogDebug("[REACT-DEBUG] Step {Step}/{MaxSteps} starting at {Elapsed:F1}s elapsed", step, options.MaxSteps, elapsedSinceStart.TotalSeconds);
 
 
             // Build budget warning if above threshold
@@ -353,14 +353,14 @@ public partial class ReActExecutor(IToolRegistry toolRegistry, ILogger<ReActExec
                     tokenTracker.UsagePercent, tokenTracker.Used, tokenTracker.Budget, tokenTracker.GetRecommendation());
             }
             var llmDuration = DateTime.UtcNow - stepStart;
-            _logger.LogWarning("[REACT-DEBUG] Step {Step}: LLM call completed in {Duration:F1}s, tokens={Tokens}", step, llmDuration.TotalSeconds, llmResponse.TokensUsed);
+            _logger.LogDebug("[REACT-DEBUG] Step {Step}: LLM call completed in {Duration:F1}s, tokens={Tokens}", step, llmDuration.TotalSeconds, llmResponse.TokensUsed);
 
             // Parse the response (structured or text-based)
             var parsed = options.UseStructuredOutput
                 ? ParseStructuredResponse(llmResponse.Content)
                 : ParseResponse(llmResponse.Content);
 
-            _logger.LogWarning("[REACT-DEBUG] Step {Step}: Action={Action}", step, parsed.Action);
+            _logger.LogDebug("[REACT-DEBUG] Step {Step}: Action={Action}", step, parsed.Action);
             _logger.LogDebug("Thought: {Thought}", parsed.Thought);
             _logger.LogDebug("Action Input: {ActionInput}", parsed.ActionInput);
 
@@ -431,7 +431,7 @@ public partial class ReActExecutor(IToolRegistry toolRegistry, ILogger<ReActExec
                 }
 
                 var totalElapsed = DateTime.UtcNow - loopStartTime;
-                _logger.LogWarning("[REACT-DEBUG] Agent finished at step {Step} after {Elapsed:F1}s total", step, totalElapsed.TotalSeconds);
+                _logger.LogDebug("[REACT-DEBUG] Agent finished at step {Step} after {Elapsed:F1}s total", step, totalElapsed.TotalSeconds);
                 steps.Add(new ReActStep
                 {
                     StepNumber = step,
@@ -546,7 +546,7 @@ public partial class ReActExecutor(IToolRegistry toolRegistry, ILogger<ReActExec
 
         // Max steps reached
         var totalDuration = DateTime.UtcNow - loopStartTime;
-        _logger.LogWarning("[REACT-DEBUG] ReAct reached max steps ({MaxSteps}) after {Elapsed:F1}s total", options.MaxSteps, totalDuration.TotalSeconds);
+        _logger.LogDebug("[REACT-DEBUG] ReAct reached max steps ({MaxSteps}) after {Elapsed:F1}s total", options.MaxSteps, totalDuration.TotalSeconds);
         return new ReActResult
         {
             Success = false,
@@ -563,10 +563,10 @@ public partial class ReActExecutor(IToolRegistry toolRegistry, ILogger<ReActExec
         var toolStart = DateTime.UtcNow;
         try
         {
-            _logger.LogWarning("[REACT-DEBUG] Executing tool: {ToolId}", tool.ToolId);
+            _logger.LogDebug("[REACT-DEBUG] Executing tool: {ToolId}", tool.ToolId);
             var result = await _toolRegistry.ExecuteAsync(input, ct);
             var toolDuration = DateTime.UtcNow - toolStart;
-            _logger.LogWarning("[REACT-DEBUG] Tool {ToolId} completed in {Duration:F1}s, success={Success}", tool.ToolId, toolDuration.TotalSeconds, result.Success);
+            _logger.LogDebug("[REACT-DEBUG] Tool {ToolId} completed in {Duration:F1}s, success={Success}", tool.ToolId, toolDuration.TotalSeconds, result.Success);
 
             if (result.Success)
             {
