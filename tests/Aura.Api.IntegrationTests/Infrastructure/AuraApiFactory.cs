@@ -8,6 +8,7 @@ using Aura.Foundation;
 using Aura.Foundation.Data;
 using Aura.Foundation.Llm;
 using Aura.Module.Developer.Data;
+using Aura.Module.Researcher.Data;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Configurations;
 using Microsoft.AspNetCore.Hosting;
@@ -96,8 +97,10 @@ public class AuraApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
             // Remove the existing DbContext registrations
             RemoveService<DbContextOptions<AuraDbContext>>(services);
             RemoveService<DbContextOptions<DeveloperDbContext>>(services);
+            RemoveService<DbContextOptions<ResearcherDbContext>>(services);
             RemoveService<AuraDbContext>(services);
             RemoveService<DeveloperDbContext>(services);
+            RemoveService<ResearcherDbContext>(services);
 
             // Add DbContexts with the test container connection string
             services.AddDbContext<AuraDbContext>(options =>
@@ -108,6 +111,11 @@ public class AuraApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
             services.AddDbContext<DeveloperDbContext>(options =>
             {
                 options.UseNpgsql(ConnectionString);
+            });
+
+            services.AddDbContext<ResearcherDbContext>(options =>
+            {
+                options.UseNpgsql(ConnectionString, o => o.UseVector());
             });
 
             // Configure agents to load from the actual agents directory
