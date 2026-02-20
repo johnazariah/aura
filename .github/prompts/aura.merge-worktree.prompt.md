@@ -96,7 +96,7 @@ if ($LASTEXITCODE -ne 0) {
 dotnet test tests/Aura.Foundation.Tests -c Release --verbosity minimal
 dotnet test tests/Aura.Module.Developer.Tests -c Release --verbosity minimal
 
-# Total should be 656+ tests passing
+# Verify all tests pass (count varies as tests are added)
 ```
 
 ### Gate 4: No Secrets or Credentials
@@ -247,7 +247,7 @@ Provide a summary to the user:
 | Phase | Status |
 |-------|--------|
 | Build | ✅ Passed |
-| Tests | ✅ 656 passing |
+| Tests | ✅ All passing |
 | Merge | ✅ Fast-forward to main |
 | Push | ✅ origin/main updated |
 | Cleanup | ✅ Worktree removed |
@@ -287,7 +287,7 @@ Before merging, ensure:
 
 - [ ] Working tree is clean (no uncommitted changes)
 - [ ] Build succeeds with zero warnings
-- [ ] All 656+ tests pass
+- [ ] All tests pass
 - [ ] No secrets in commits
 - [ ] Commit messages follow conventional format
 - [ ] Documentation updated for new features

@@ -38,29 +38,17 @@ docs/
 
 These sections have NO dependencies and can be updated **simultaneously**:
 
-1. **@getting-started-agent** (`aura.update-getting-started.prompt.md`)
-   - Updates: `docs/getting-started/*.md`
-   - Priority: CRITICAL (first-time user experience)
+1. **@user-facing-docs-agent** (`aura.update-docs-user-facing.prompt.md`)
+   - Updates: `docs/getting-started/*.md`, `docs/user-guide/*.md`, `docs/troubleshooting/*.md`
+   - Priority: CRITICAL (first-time user experience + daily usage)
 
-2. **@user-guide-agent** (`aura.update-user-guide.prompt.md`)
-   - Updates: `docs/user-guide/*.md`
-   - Priority: HIGH (primary usage documentation)
-
-3. **@concepts-agent** (`aura.update-concepts.prompt.md`)
-   - Updates: `docs/configuration/*.md`, architecture docs
-   - Priority: MEDIUM (configuration and concepts)
-
-4. **@agent-dev-agent** (`aura.update-agent-development-guide.prompt.md`)
-   - Updates: Agent development documentation
-   - Priority: HIGH (key extensibility feature)
-
-5. **@examples-tutorials-agent** (`aura.update-examples-tutorials.prompt.md`)
-   - Updates: Examples and tutorials
-   - Priority: MEDIUM (hands-on learning)
+2. **@technical-docs-agent** (`aura.update-docs-technical.prompt.md`)
+   - Updates: `docs/configuration/*.md`, architecture and concepts docs
+   - Priority: HIGH (contributor and developer documentation)
 
 ### Phase 2: Sequential Updates (Dependent on Phase 1)
 
-6. **@readme-agent** (`aura.update-readme.prompt.md`)
+3. **@readme-agent** (`aura.update-readme.prompt.md`)
    - Updates: Root `README.md` and `docs/README.md`
    - Priority: HIGH (project entry points)
    - **Dependencies**: Requires Phase 1 docs to be current for accurate linking
@@ -88,17 +76,14 @@ After documentation updates, verify GitHub Pages:
 
 ```
 Phase 1 (Parallel - 20-30 minutes):
-├── getting-started-agent     ⚡ Start
-├── user-guide-agent          ⚡ Start
-├── concepts-agent            ⚡ Start
-├── agent-dev-agent           ⚡ Start
-└── examples-tutorials-agent  ⚡ Start
+├── user-facing-docs-agent    ⚡ Start
+└── technical-docs-agent      ⚡ Start
     ↓
 Phase 2 (Sequential - 10-15 minutes):
 └── readme-agent              ⚡ Start (after Phase 1)
     ↓
 Phase 3 (Verification - 5 minutes):
-└── GitHub Pages checks
+└── Link and accuracy checks
 ```
 
 ## 🎯 Success Criteria
@@ -106,7 +91,7 @@ Phase 3 (Verification - 5 minutes):
 - ✅ All `docs/` files are current and accurate
 - ✅ No broken internal links
 - ✅ GitHub Pages site loads correctly
-- ✅ Local-first philosophy emphasized throughout
+- ✅ Hybrid architecture (local intelligence + cloud LLM) accurately represented
 - ✅ No placeholder content (TODO, TBD)
 - ✅ Code examples are complete and working
 - ✅ Feature lists consistent across README and docs
@@ -187,9 +172,6 @@ jobs:
 
 All prompts are in `.github/prompts/`:
 
-- ✅ `aura.update-getting-started.prompt.md`
-- ✅ `aura.update-user-guide.prompt.md`
-- ✅ `aura.update-concepts.prompt.md`
-- ✅ `aura.update-agent-development-guide.prompt.md`
-- ✅ `aura.update-examples-tutorials.prompt.md`
+- ✅ `aura.update-docs-user-facing.prompt.md`
+- ✅ `aura.update-docs-technical.prompt.md`
 - ✅ `aura.update-readme.prompt.md`
