@@ -891,6 +891,18 @@ public static class DeveloperEndpoints
     private static string BuildPrBody(Story story)
     {
         var sb = new StringBuilder();
+
+        // Attribution banner
+        sb.AppendLine("> 🤖 **This pull request was created by [Aura](https://github.com/johnazariah/aura)** — an AI-powered coding agent.");
+        sb.AppendLine();
+
+        // Link to source issue (enables auto-close on merge)
+        if (!string.IsNullOrEmpty(story.IssueUrl))
+        {
+            sb.AppendLine($"Closes {story.IssueUrl}");
+            sb.AppendLine();
+        }
+
         sb.AppendLine($"## {story.Title}");
         sb.AppendLine();
         if (!string.IsNullOrEmpty(story.Description))
@@ -898,7 +910,7 @@ public static class DeveloperEndpoints
             sb.AppendLine(story.Description);
             sb.AppendLine();
         }
-        sb.AppendLine("### story Steps");
+        sb.AppendLine("### Steps");
         sb.AppendLine();
         foreach (var step in story.Steps.OrderBy(s => s.Order))
         {
@@ -911,9 +923,34 @@ public static class DeveloperEndpoints
             };
             sb.AppendLine($"- {status} {step.Name}");
         }
+
+        // Append repository PR template if found
+        var repoPath = story.WorktreePath ?? story.RepositoryPath;
+        if (!string.IsNullOrEmpty(repoPath))
+        {
+            var templatePaths = new[]
+            {
+                Path.Combine(repoPath, ".github", "PULL_REQUEST_TEMPLATE.md"),
+                Path.Combine(repoPath, ".github", "PULL_REQUEST_TEMPLATE", "default.md"),
+                Path.Combine(repoPath, "PULL_REQUEST_TEMPLATE.md"),
+            };
+
+            foreach (var path in templatePaths)
+            {
+                if (File.Exists(path))
+                {
+                    sb.AppendLine();
+                    sb.AppendLine("---");
+                    sb.AppendLine();
+                    sb.AppendLine(File.ReadAllText(path));
+                    break;
+                }
+            }
+        }
+
         sb.AppendLine();
         sb.AppendLine("---");
-        sb.AppendLine("*Created by [Aura](https://github.com/johnazariah/aura)*");
+        sb.AppendLine($"*Created by [Aura](https://github.com/johnazariah/aura) · workflow `{story.Id}`*");
         return sb.ToString();
     }
 
