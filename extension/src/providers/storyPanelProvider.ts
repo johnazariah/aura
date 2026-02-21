@@ -3325,6 +3325,16 @@ export class StoryPanelProvider {
             }
         }
 
+        // Track elapsed time timers per step
+        const stepTimers = {};
+
+        function formatElapsed(seconds) {
+            if (seconds < 60) return seconds + 's';
+            const m = Math.floor(seconds / 60);
+            const s = seconds % 60;
+            return m + 'm ' + s + 's';
+        }
+
         function showStepStreaming(stepId, stepName) {
             const stepCard = document.querySelector('[data-step-id="' + stepId + '"]');
             if (!stepCard) return;
@@ -3333,16 +3343,31 @@ export class StoryPanelProvider {
             const existing = stepCard.querySelector('.step-streaming');
             if (existing) existing.remove();
             
+            // Clear any existing timer for this step
+            if (stepTimers[stepId]) {
+                clearInterval(stepTimers[stepId]);
+            }
+            
             // Create streaming output section
             const streaming = document.createElement('div');
             streaming.className = 'step-streaming';
             streaming.id = 'streaming-' + stepId;
-            streaming.innerHTML = '<div class="step-streaming-header"><div class="spinner"></div>Executing...</div><div class="step-streaming-content" id="streaming-content-' + stepId + '"></div>';
+            streaming.innerHTML = '<div class="step-streaming-header"><div class="spinner"></div><span class="step-elapsed" id="elapsed-' + stepId + '">Executing... (0s)</span></div><div class="step-streaming-content" id="streaming-content-' + stepId + '"></div>';
             
             // Insert after the header (and progress bar if present)
             const header = stepCard.querySelector('.step-header');
             const progress = stepCard.querySelector('.step-progress');
             (progress || header).after(streaming);
+
+            // Start elapsed time counter
+            const startTime = Date.now();
+            stepTimers[stepId] = setInterval(() => {
+                const elapsed = Math.floor((Date.now() - startTime) / 1000);
+                const el = document.getElementById('elapsed-' + stepId);
+                if (el) {
+                    el.textContent = 'Executing... (' + formatElapsed(elapsed) + ')';
+                }
+            }, 1000);
         }
 
         function appendStepOutput(stepId, text, type) {
@@ -3357,12 +3382,22 @@ export class StoryPanelProvider {
         }
 
         function finalizeStepStreaming(stepId, success) {
+            // Stop the elapsed timer
+            if (stepTimers[stepId]) {
+                clearInterval(stepTimers[stepId]);
+                delete stepTimers[stepId];
+            }
+
             const streaming = document.getElementById('streaming-' + stepId);
             if (!streaming) return;
             
             const header = streaming.querySelector('.step-streaming-header');
             if (header) {
-                header.innerHTML = success ? '✓ Completed' : '✗ Failed';
+                // Calculate final duration
+                const elapsedEl = document.getElementById('elapsed-' + stepId);
+                const durationText = elapsedEl ? elapsedEl.textContent.replace('Executing... ', '') : '';
+                const statusText = success ? '✓ Completed' : '✗ Failed';
+                header.innerHTML = statusText + (durationText ? ' ' + durationText : '');
                 header.style.color = success ? 'var(--vscode-terminal-ansiBrightGreen)' : 'var(--vscode-terminal-ansiBrightRed)';
             }
         }
