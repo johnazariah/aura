@@ -14,6 +14,10 @@ using Aura.Module.Developer;
 using Aura.Module.Researcher;
 using Microsoft.EntityFrameworkCore;
 
+// Server metadata for health endpoint
+var ServerStartTime = DateTime.UtcNow;
+var DeploymentTag = Environment.GetEnvironmentVariable("DEPLOY_TAG") ?? "unknown";
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Configure as Windows Service when installed as service
@@ -162,7 +166,7 @@ app.UseCors();
 app.UseGitHubToken();
 
 // Map all endpoint groups
-app.MapHealthEndpoints();
+app.MapHealthEndpoints(ServerStartTime, DeploymentTag);
 app.MapMcpEndpoints();
 app.MapAgentEndpoints();
 app.MapRagEndpoints();
