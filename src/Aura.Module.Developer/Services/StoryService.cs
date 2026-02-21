@@ -17,6 +17,7 @@ using Aura.Foundation.Rag;
 using Aura.Foundation.Tools;
 using Aura.Module.Developer.Data;
 using Aura.Module.Developer.Data.Entities;
+using Aura.Module.Developer.GitHub;
 using Aura.Module.Developer.Services.Verification;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -34,6 +35,7 @@ public sealed partial class StoryService(
     IPromptRegistry promptRegistry,
     IGitWorktreeService worktreeService,
     IGitService gitService,
+    IGitHubService gitHubService,
     IRagService ragService,
     IBackgroundIndexer backgroundIndexer,
     ICodebaseContextService codebaseContextService,
@@ -43,6 +45,7 @@ public sealed partial class StoryService(
     IStoryVerificationService verificationService,
     IStepExecutorRegistry stepExecutorRegistry,
     IQualityGateService qualityGateService,
+    IStoryProgressCommentService progressCommentService,
     IOptions<DeveloperModuleOptions> options,
     ILogger<StoryService> logger) : IStoryService
 {
@@ -51,6 +54,7 @@ public sealed partial class StoryService(
     private readonly IPromptRegistry _promptRegistry = promptRegistry;
     private readonly IGitWorktreeService _worktreeService = worktreeService;
     private readonly IGitService _gitService = gitService;
+    private readonly IGitHubService _gitHubService = gitHubService;
     private readonly IRagService _ragService = ragService;
     private readonly IBackgroundIndexer _backgroundIndexer = backgroundIndexer;
     private readonly ICodebaseContextService _codebaseContextService = codebaseContextService;
@@ -60,6 +64,7 @@ public sealed partial class StoryService(
     private readonly IStoryVerificationService _verificationService = verificationService;
     private readonly IStepExecutorRegistry _stepExecutorRegistry = stepExecutorRegistry;
     private readonly IQualityGateService _qualityGateService = qualityGateService;
+    private readonly IStoryProgressCommentService _progressCommentService = progressCommentService;
     private readonly DeveloperModuleOptions _options = options.Value;
     private readonly ILogger<StoryService> _logger = logger;
 
@@ -567,6 +572,11 @@ public sealed partial class StoryService(
 
             yield return StoryProgressEvent.WaveCompleted(storyId, currentWave, completedCount, failedCount);
 
+            if (failedCount == 0 && story.IssueOwner is not null && story.IssueRepo is not null && story.IssueNumber is not null)
+            {
+                await _progressCommentService.PostWaveCompleteCommentAsync(story.IssueOwner, story.IssueRepo, story.IssueNumber.Value, currentWave, waveCount, ct);
+            }
+
             if (failedCount > 0)
             {
                 story.Status = StoryStatus.Failed;
@@ -861,6 +871,11 @@ public sealed partial class StoryService(
                 {
                     workflow.PullRequestUrl = prResult.Value.Url;
                     _logger.LogInformation("Created PR: {Url}", prResult.Value.Url);
+
+                    if (workflow.IssueOwner is not null && workflow.IssueRepo is not null && workflow.IssueNumber is not null)
+                    {
+                        await _progressCommentService.PostPRReadyCommentAsync(workflow.IssueOwner, workflow.IssueRepo, workflow.IssueNumber.Value, prResult.Value.Url, ct);
+                    }
                 }
                 else
                 {

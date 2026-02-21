@@ -91,6 +91,12 @@ public sealed partial class StoryService
             workflow.Status = StoryStatus.Analyzed;
             workflow.UpdatedAt = DateTimeOffset.UtcNow;
             await _db.SaveChangesAsync(ct);
+
+            if (workflow.IssueOwner is not null && workflow.IssueRepo is not null && workflow.IssueNumber is not null)
+            {
+                await _progressCommentService.PostAnalysisCompleteCommentAsync(workflow.IssueOwner, workflow.IssueRepo, workflow.IssueNumber.Value, ct);
+            }
+
             _logger.LogInformation("Analyzed workflow {WorkflowId}", workflowId);
             return workflow;
         }
@@ -194,6 +200,12 @@ public sealed partial class StoryService
             await _db.SaveChangesAsync(ct);
             // Reload with steps
             var reloaded = await GetByIdWithStepsAsync(workflowId, ct);
+
+            if (workflow.IssueOwner is not null && workflow.IssueRepo is not null && workflow.IssueNumber is not null)
+            {
+                await _progressCommentService.PostPlanningCompleteCommentAsync(workflow.IssueOwner, workflow.IssueRepo, workflow.IssueNumber.Value, steps.Count, ct);
+            }
+
             _logger.LogInformation("Planned workflow {WorkflowId} with {StepCount} steps", workflowId, steps.Count);
             return reloaded!;
         }

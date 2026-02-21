@@ -483,6 +483,30 @@ public sealed partial class McpHandler
         try
         {
             var workflow = await _storyService.CompleteAsync(storyId, githubToken, ct);
+
+            // Post a comment to the linked issue with the PR link
+            if (workflow.PullRequestUrl is not null
+                && workflow.IssueNumber.HasValue
+                && !string.IsNullOrEmpty(workflow.IssueOwner)
+                && !string.IsNullOrEmpty(workflow.IssueRepo)
+                && _gitHubService.IsConfigured)
+            {
+                try
+                {
+                    var comment = $"🤖 Pull request created: {workflow.PullRequestUrl}";
+                    await _gitHubService.PostCommentAsync(
+                        workflow.IssueOwner,
+                        workflow.IssueRepo,
+                        workflow.IssueNumber.Value,
+                        comment,
+                        ct);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to post PR comment to issue #{IssueNumber}", workflow.IssueNumber);
+                }
+            }
+
             return new
             {
                 storyId = workflow.Id,

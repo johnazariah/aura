@@ -316,4 +316,129 @@ public class McpHandlerWorkflowTests
     }
 
     #endregion
+
+    #region aura_workflow - complete operation (issue comment)
+
+    [Fact]
+    public async Task Workflow_Complete_WithLinkedIssue_PostsCommentToIssue()
+    {
+        // Arrange
+        var storyId = Guid.NewGuid();
+        var prUrl = "https://github.com/owner/repo/pull/42";
+        var story = new Story
+        {
+            Id = storyId,
+            Title = "Test Story",
+            Status = StoryStatus.Completed,
+            IssueUrl = "https://github.com/owner/repo/issues/10",
+            IssueOwner = "owner",
+            IssueRepo = "repo",
+            IssueNumber = 10,
+            PullRequestUrl = prUrl,
+            GitBranch = "workflow/test",
+            CompletedAt = DateTimeOffset.UtcNow,
+        };
+        _storyService.CompleteAsync(storyId, Arg.Any<string?>(), Arg.Any<CancellationToken>())
+            .Returns(story);
+        _gitHubService.IsConfigured.Returns(true);
+
+        var request = CreateToolCallRequest("aura_workflow", new
+        {
+            operation = "complete",
+            storyId = storyId.ToString(),
+        });
+
+        // Act
+        var responseJson = await _handler.HandleAsync(request);
+
+        // Assert
+        var response = ParseResponse(responseJson);
+        response.Error.Should().BeNull();
+        await _gitHubService.Received(1).PostCommentAsync(
+            "owner",
+            "repo",
+            10,
+            Arg.Is<string>(s => s.Contains(prUrl)),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Workflow_Complete_WithoutLinkedIssue_DoesNotPostComment()
+    {
+        // Arrange
+        var storyId = Guid.NewGuid();
+        var story = new Story
+        {
+            Id = storyId,
+            Title = "Test Story",
+            Status = StoryStatus.Completed,
+            PullRequestUrl = "https://github.com/owner/repo/pull/42",
+            GitBranch = "workflow/test",
+            CompletedAt = DateTimeOffset.UtcNow,
+        };
+        _storyService.CompleteAsync(storyId, Arg.Any<string?>(), Arg.Any<CancellationToken>())
+            .Returns(story);
+        _gitHubService.IsConfigured.Returns(true);
+
+        var request = CreateToolCallRequest("aura_workflow", new
+        {
+            operation = "complete",
+            storyId = storyId.ToString(),
+        });
+
+        // Act
+        var responseJson = await _handler.HandleAsync(request);
+
+        // Assert
+        var response = ParseResponse(responseJson);
+        response.Error.Should().BeNull();
+        await _gitHubService.DidNotReceive().PostCommentAsync(
+            Arg.Any<string>(),
+            Arg.Any<string>(),
+            Arg.Any<int>(),
+            Arg.Any<string>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Workflow_Complete_WhenCommentFails_StillReturnsSuccess()
+    {
+        // Arrange
+        var storyId = Guid.NewGuid();
+        var story = new Story
+        {
+            Id = storyId,
+            Title = "Test Story",
+            Status = StoryStatus.Completed,
+            IssueUrl = "https://github.com/owner/repo/issues/10",
+            IssueOwner = "owner",
+            IssueRepo = "repo",
+            IssueNumber = 10,
+            PullRequestUrl = "https://github.com/owner/repo/pull/42",
+            GitBranch = "workflow/test",
+            CompletedAt = DateTimeOffset.UtcNow,
+        };
+        _storyService.CompleteAsync(storyId, Arg.Any<string?>(), Arg.Any<CancellationToken>())
+            .Returns(story);
+        _gitHubService.IsConfigured.Returns(true);
+        _gitHubService.PostCommentAsync(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<int>(),
+            Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromException(new HttpRequestException("Network error")));
+
+        var request = CreateToolCallRequest("aura_workflow", new
+        {
+            operation = "complete",
+            storyId = storyId.ToString(),
+        });
+
+        // Act
+        var responseJson = await _handler.HandleAsync(request);
+
+        // Assert - should still succeed despite comment failure
+        var response = ParseResponse(responseJson);
+        response.Error.Should().BeNull();
+    }
+
+    #endregion
 }

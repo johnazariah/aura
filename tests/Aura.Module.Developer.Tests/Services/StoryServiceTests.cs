@@ -12,7 +12,9 @@ using Aura.Foundation.Rag;
 using Aura.Foundation.Tools;
 using Aura.Module.Developer.Data;
 using Aura.Module.Developer.Data.Entities;
+using Aura.Module.Developer.GitHub;
 using Aura.Module.Developer.Services;
+using Aura.Module.Developer.Services.Verification;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -20,7 +22,6 @@ using Microsoft.Extensions.Options;
 using NSubstitute;
 using Xunit;
 using Aura.Module.Developer;
-using Aura.Module.Developer.Services.Verification;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Threading;
@@ -35,6 +36,7 @@ public class StoryServiceTests : IDisposable
     private readonly IPromptRegistry _promptRegistry;
     private readonly IGitWorktreeService _worktreeService;
     private readonly IGitService _gitService;
+    private readonly IGitHubService _gitHubService;
     private readonly IRagService _ragService;
     private readonly IBackgroundIndexer _backgroundIndexer;
     private readonly ICodebaseContextService _codebaseContextService;
@@ -44,6 +46,7 @@ public class StoryServiceTests : IDisposable
     private readonly IStoryVerificationService _verificationService;
     private readonly IStepExecutorRegistry _stepExecutorRegistry;
     private readonly IQualityGateService _qualityGateService;
+    private readonly IStoryProgressCommentService _progressCommentService;
     private readonly IOptions<DeveloperModuleOptions> _options;
     private readonly StoryService _sut;
 
@@ -63,6 +66,7 @@ public class StoryServiceTests : IDisposable
         _worktreeService.CreateAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .Returns(Task.FromResult(GitResult<WorktreeInfo>.Fail("Test mode - no worktree creation")));
         _gitService = Substitute.For<IGitService>();
+        _gitHubService = Substitute.For<IGitHubService>();
         _ragService = Substitute.For<IRagService>();
         _backgroundIndexer = Substitute.For<IBackgroundIndexer>();
         _codebaseContextService = Substitute.For<ICodebaseContextService>();
@@ -72,6 +76,7 @@ public class StoryServiceTests : IDisposable
         _verificationService = Substitute.For<IStoryVerificationService>();
         _stepExecutorRegistry = Substitute.For<IStepExecutorRegistry>();
         _qualityGateService = Substitute.For<IQualityGateService>();
+        _progressCommentService = Substitute.For<IStoryProgressCommentService>();
         _options = Options.Create(new DeveloperModuleOptions { BranchPrefix = "workflow/" });
 
         _sut = new StoryService(
@@ -80,6 +85,7 @@ public class StoryServiceTests : IDisposable
             _promptRegistry,
             _worktreeService,
             _gitService,
+            _gitHubService,
             _ragService,
             _backgroundIndexer,
             _codebaseContextService,
@@ -89,6 +95,7 @@ public class StoryServiceTests : IDisposable
             _verificationService,
             _stepExecutorRegistry,
             _qualityGateService,
+            _progressCommentService,
             _options,
             NullLogger<StoryService>.Instance);
     }
@@ -540,6 +547,177 @@ public class StoryServiceTests : IDisposable
 
         // Assert
         result.Description.Should().Be("New description");
+    }
+
+    #endregion
+
+    #region IStoryProgressCommentService Integration Tests
+
+    [Fact]
+    public async Task CompleteAsync_WhenStoryHasLinkedIssueAndPRCreated_PostsPRReadyComment()
+    {
+        // Arrange
+        var story = await _sut.CreateAsync(
+            "PR Ready Test",
+            issueUrl: "https://github.com/owner/repo/issues/42");
+
+        // Set worktree path so git operations are triggered
+        story.WorktreePath = "/worktree/path";
+        story.RepositoryPath = "/repo/path";
+        await _sut.UpdateAsync(story);
+
+        // Add a step and mark it completed
+        var step = await _sut.AddStepAsync(story.Id, "Step 1", "code-review");
+        step.Status = StepStatus.Completed;
+        await _sut.UpdateStepAsync(step);
+
+        // Mock git service for the complete flow
+        _verificationService.VerifyAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(new Aura.Module.Developer.Services.Verification.VerificationResult
+            {
+                Success = true,
+                Projects = Array.Empty<Aura.Module.Developer.Services.Verification.DetectedProject>(),
+                StepResults = Array.Empty<Aura.Module.Developer.Services.Verification.VerificationStepResult>(),
+            });
+        _gitService.HasUncommittedChangesAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(GitResult<bool>.Ok(false));
+        _gitService.GetDefaultBranchAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(GitResult<string>.Ok("main"));
+        _gitService.SquashCommitsAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(GitResult<string>.Ok("abc123"));
+        _gitService.PushAsync(Arg.Any<string>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
+            .Returns(GitResult<Unit>.Ok(Unit.Value));
+        _gitService.CreatePullRequestAsync(
+                Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(),
+                Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<IReadOnlyList<string>?>(),
+                Arg.Any<string?>(), Arg.Any<CancellationToken>())
+            .Returns(GitResult<PullRequestInfo>.Ok(new PullRequestInfo
+            {
+                Number = 99,
+                Url = "https://github.com/owner/repo/pull/99",
+                State = "open",
+                IsDraft = true,
+            }));
+
+        // Act
+        await _sut.CompleteAsync(story.Id);
+
+        // Assert
+        await _progressCommentService.Received(1).PostPRReadyCommentAsync(
+            "owner",
+            "repo",
+            42,
+            "https://github.com/owner/repo/pull/99",
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CompleteAsync_WhenStoryHasNoLinkedIssue_DoesNotPostPRReadyComment()
+    {
+        // Arrange - story with no issue URL
+        var story = await _sut.CreateAsync("No Issue Test");
+
+        story.WorktreePath = "/worktree/path";
+        story.RepositoryPath = "/repo/path";
+        await _sut.UpdateAsync(story);
+
+        var step = await _sut.AddStepAsync(story.Id, "Step 1", "code-review");
+        step.Status = StepStatus.Completed;
+        await _sut.UpdateStepAsync(step);
+
+        _verificationService.VerifyAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(new Aura.Module.Developer.Services.Verification.VerificationResult
+            {
+                Success = true,
+                Projects = Array.Empty<Aura.Module.Developer.Services.Verification.DetectedProject>(),
+                StepResults = Array.Empty<Aura.Module.Developer.Services.Verification.VerificationStepResult>(),
+            });
+        _gitService.HasUncommittedChangesAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(GitResult<bool>.Ok(false));
+        _gitService.GetDefaultBranchAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(GitResult<string>.Ok("main"));
+        _gitService.SquashCommitsAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(GitResult<string>.Ok("abc123"));
+        _gitService.PushAsync(Arg.Any<string>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
+            .Returns(GitResult<Unit>.Ok(Unit.Value));
+        _gitService.CreatePullRequestAsync(
+                Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(),
+                Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<IReadOnlyList<string>?>(),
+                Arg.Any<string?>(), Arg.Any<CancellationToken>())
+            .Returns(GitResult<PullRequestInfo>.Ok(new PullRequestInfo
+            {
+                Number = 99,
+                Url = "https://github.com/owner/repo/pull/99",
+                State = "open",
+                IsDraft = true,
+            }));
+
+        // Act
+        await _sut.CompleteAsync(story.Id);
+
+        // Assert - no PR comment because story has no issue linked
+        await _progressCommentService.DidNotReceive().PostPRReadyCommentAsync(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<int>(),
+            Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task CompleteAsync_WhenGitHubNotConfigured_ProgressCommentServiceStillCalled()
+    {
+        // The StoryService delegates config checking to IStoryProgressCommentService.
+        // It calls PostPRReadyCommentAsync regardless of IsConfigured; the service handles graceful fallback.
+        // Arrange
+        _gitHubService.IsConfigured.Returns(false);
+
+        var story = await _sut.CreateAsync(
+            "Unconfigured GitHub Test",
+            issueUrl: "https://github.com/owner/repo/issues/10");
+
+        story.WorktreePath = "/worktree/path";
+        story.RepositoryPath = "/repo/path";
+        await _sut.UpdateAsync(story);
+
+        var step = await _sut.AddStepAsync(story.Id, "Step 1", "code-review");
+        step.Status = StepStatus.Completed;
+        await _sut.UpdateStepAsync(step);
+
+        _verificationService.VerifyAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(new Aura.Module.Developer.Services.Verification.VerificationResult
+            {
+                Success = true,
+                Projects = Array.Empty<Aura.Module.Developer.Services.Verification.DetectedProject>(),
+                StepResults = Array.Empty<Aura.Module.Developer.Services.Verification.VerificationStepResult>(),
+            });
+        _gitService.HasUncommittedChangesAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(GitResult<bool>.Ok(false));
+        _gitService.GetDefaultBranchAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(GitResult<string>.Ok("main"));
+        _gitService.SquashCommitsAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(GitResult<string>.Ok("abc123"));
+        _gitService.PushAsync(Arg.Any<string>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
+            .Returns(GitResult<Unit>.Ok(Unit.Value));
+        _gitService.CreatePullRequestAsync(
+                Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(),
+                Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<IReadOnlyList<string>?>(),
+                Arg.Any<string?>(), Arg.Any<CancellationToken>())
+            .Returns(GitResult<PullRequestInfo>.Ok(new PullRequestInfo
+            {
+                Number = 10,
+                Url = "https://github.com/owner/repo/pull/10",
+                State = "open",
+                IsDraft = true,
+            }));
+
+        // Act - should not throw even when GitHub is not configured
+        await _sut.CompleteAsync(story.Id);
+
+        // Assert - StoryService still calls the progress comment service; the service itself handles the missing config
+        await _progressCommentService.Received(1).PostPRReadyCommentAsync(
+            "owner",
+            "repo",
+            10,
+            Arg.Any<string>(),
+            Arg.Any<CancellationToken>());
     }
 
     #endregion
