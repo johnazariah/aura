@@ -553,6 +553,7 @@ public static class DeveloperEndpoints
         HttpContext context,
         IStoryService storyService,
         IGitService gitService,
+        IStoryProgressCommentService progressCommentService,
         IGitHubTokenAccessor tokenAccessor,
         CancellationToken ct)
     {
@@ -604,6 +605,14 @@ public static class DeveloperEndpoints
 
                 prUrl = prResult.Value?.Url;
                 prNumber = prResult.Value?.Number;
+
+                // Post progress comment to linked issue
+                if (prUrl is not null && story.IssueNumber.HasValue &&
+                    !string.IsNullOrEmpty(story.IssueOwner) && !string.IsNullOrEmpty(story.IssueRepo))
+                {
+                    await progressCommentService.PostPRReadyCommentAsync(
+                        story.IssueOwner, story.IssueRepo, story.IssueNumber.Value, prUrl, ct);
+                }
             }
 
             if (story.Status != StoryStatus.Completed)
@@ -891,6 +900,18 @@ public static class DeveloperEndpoints
     private static string BuildPrBody(Story story)
     {
         var sb = new StringBuilder();
+
+        // Attribution banner
+        sb.AppendLine("> 🤖 **This pull request was created by [Aura](https://github.com/johnazariah/aura)** — an AI-powered coding agent.");
+        sb.AppendLine();
+
+        // Link to source issue (enables auto-close on merge)
+        if (!string.IsNullOrEmpty(story.IssueUrl))
+        {
+            sb.AppendLine($"Closes {story.IssueUrl}");
+            sb.AppendLine();
+        }
+
         sb.AppendLine($"## {story.Title}");
         sb.AppendLine();
         if (!string.IsNullOrEmpty(story.Description))
@@ -898,7 +919,7 @@ public static class DeveloperEndpoints
             sb.AppendLine(story.Description);
             sb.AppendLine();
         }
-        sb.AppendLine("### story Steps");
+        sb.AppendLine("### Steps");
         sb.AppendLine();
         foreach (var step in story.Steps.OrderBy(s => s.Order))
         {
@@ -913,7 +934,7 @@ public static class DeveloperEndpoints
         }
         sb.AppendLine();
         sb.AppendLine("---");
-        sb.AppendLine("*Created by [Aura](https://github.com/johnazariah/aura)*");
+        sb.AppendLine($"*Created by [Aura](https://github.com/johnazariah/aura) · workflow `{story.Id}`*");
         return sb.ToString();
     }
 

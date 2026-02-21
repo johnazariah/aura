@@ -173,6 +173,24 @@ The pre-commit hook will reject files with CRLF line endings.
 | New feature | `.project/features/upcoming/` | Create spec first |
 | Complete feature | `.project/features/completed/` | **Follow ceremony** (see below) |
 
+## Interactive Story Workflow
+
+You can work on an Aura story interactively from any Copilot CLI session. Use the `/work-on-story` prompt to bootstrap, or follow this flow manually:
+
+1. **Find your story**: `aura_workflow(operation: "list")` or `aura_workflow(operation: "get", storyId: "...")`
+2. **Get next step**: `aura_workflow(operation: "next_step", storyId: "...")` — returns the next actionable step with full context
+3. **Start the step**: `aura_workflow(operation: "start_step", storyId: "...", stepId: "...")` — marks it Running
+4. **Do the work**: Edit files in the worktree using **absolute paths** from the step context
+5. **Complete the step**: `aura_workflow(operation: "update_step", storyId: "...", stepId: "...", status: "completed", output: "...")`
+6. **Repeat** until all steps done, then `aura_workflow(operation: "complete", storyId: "...")`
+
+**Critical conventions when working on a story:**
+- Your cwd is the main workspace, but **file edits must target the worktree** (absolute paths)
+- Use `worktreeSolutionPath` from step context for `aura_validate` calls
+- Use `repositoryPath` for `aura_search` — RAG indexes the main repo, not the worktree
+- Run git commands with `cd <worktreePath> && git ...`
+- Load the full pattern: `aura_pattern(operation: "get", name: "interactive-story")`
+
 ## Blast Radius Protocol (Renames, Extract, Large Changes)
 
 `aura_refactor` defaults to **analyze mode** (`analyze: true`). Before executing any refactoring:
