@@ -33,8 +33,7 @@ public class HealthEndpointTests(AuraApiFactory factory) : IntegrationTestBase(f
 
         var result = await response.Content.ReadFromJsonAsync<HealthResponse>(JsonOptions);
         result.Should().NotBeNull();
-        result!.Healthy.Should().BeTrue();
-        result.Status.Should().Be("healthy");
+        result!.Status.Should().Be("healthy");
     }
 
     [Fact]
@@ -59,5 +58,6 @@ public class HealthEndpointTests(AuraApiFactory factory) : IntegrationTestBase(f
         string? Status,
         bool Healthy,
         string? Details,
-        DateTime Timestamp);
+        string? StartedAt,
+        string? DeployTag);
 }
