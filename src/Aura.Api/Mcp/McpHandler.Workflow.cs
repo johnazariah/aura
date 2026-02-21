@@ -504,12 +504,14 @@ public sealed partial class McpHandler
             };
         }
 
-        // Get GitHub token if provided
+        // Get GitHub token if provided, fall back to request-scoped token from middleware
         string? githubToken = null;
         if (args?.TryGetProperty("githubToken", out var tokenProp) == true)
         {
             githubToken = tokenProp.GetString();
         }
+
+        githubToken ??= _tokenAccessor.Token;
 
         try
         {

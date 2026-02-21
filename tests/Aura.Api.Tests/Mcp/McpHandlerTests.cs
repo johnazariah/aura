@@ -71,6 +71,7 @@ public class McpHandlerTests
             _docsService,
             _workspaceRegistryService,
             Substitute.For<IGitService>(),
+            Substitute.For<IGitHubTokenAccessor>(),
             NullLogger<McpHandler>.Instance);
     }
 

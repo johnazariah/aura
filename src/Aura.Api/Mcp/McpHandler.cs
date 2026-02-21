@@ -51,6 +51,7 @@ public sealed partial class McpHandler
     private readonly IDocsService _docsService;
     private readonly IWorkspaceRegistryService _workspaceRegistryService;
     private readonly IGitService _gitService;
+    private readonly IGitHubTokenAccessor _tokenAccessor;
     private readonly ILogger<McpHandler> _logger;
 
     private readonly Dictionary<string, Func<JsonElement?, CancellationToken, Task<object>>> _tools;
@@ -74,6 +75,7 @@ public sealed partial class McpHandler
         IDocsService docsService,
         IWorkspaceRegistryService workspaceRegistryService,
         IGitService gitService,
+        IGitHubTokenAccessor tokenAccessor,
         ILogger<McpHandler> logger)
     {
         _ragService = ragService;
@@ -91,6 +93,7 @@ public sealed partial class McpHandler
         _docsService = docsService;
         _workspaceRegistryService = workspaceRegistryService;
         _gitService = gitService;
+        _tokenAccessor = tokenAccessor;
         _logger = logger;
 
         // Phase 7: Consolidated meta-tools (28 tools → 11 tools)
