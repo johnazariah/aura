@@ -30,7 +30,7 @@ public sealed partial class McpHandler
             "list" => await ListStoriesAsync(args, ct),
             "get" => await GetStoryContextAsync(args, ct),
             "get_by_path" => await GetStoryByPathAsync(args, ct),
-            "create" => await CreateStoryFromIssueAsync(args, ct),
+            "create" => await CreateStoryAsync(args, ct),
             "enrich" => await EnrichStoryAsync(args, ct),
             "update_step" => await UpdateStepAsync(args, ct),
             "complete" => await CompleteStoryAsync(args, ct),
@@ -167,6 +167,64 @@ public sealed partial class McpHandler
             createdAt = workflow.CreatedAt,
             updatedAt = workflow.UpdatedAt
         };
+    }
+
+    private async Task<object> CreateStoryAsync(JsonElement? args, CancellationToken ct)
+    {
+        var issueUrl = args.GetStringOrDefault("issueUrl");
+
+        // Route: issue-based creation (fetches title/description from GitHub)
+        if (!string.IsNullOrEmpty(issueUrl))
+        {
+            return await CreateStoryFromIssueAsync(args, ct);
+        }
+
+        // Route: plain creation (title + description provided directly)
+        var title = args.GetStringOrDefault("title");
+        if (string.IsNullOrWhiteSpace(title))
+        {
+            return new
+            {
+                error = "Either 'issueUrl' or 'title' is required. Provide issueUrl to create from a GitHub issue, or title+description for a plain story."
+            };
+        }
+
+        var description = args.GetStringOrDefault("description");
+        string? repositoryPath = null;
+        if (args?.TryGetProperty("repositoryPath", out var repoEl) == true)
+        {
+            repositoryPath = repoEl.GetString();
+        }
+
+        try
+        {
+            var workflow = await _storyService.CreateAsync(
+                title,
+                description,
+                repositoryPath,
+                AutomationMode.Assisted,
+                issueUrl: null,
+                preferredExecutor: null,
+                openQuestions: null,
+                ct);
+
+            return new
+            {
+                id = workflow.Id,
+                title = workflow.Title,
+                description = workflow.Description,
+                status = workflow.Status.ToString(),
+                gitBranch = workflow.GitBranch,
+                worktreePath = workflow.WorktreePath,
+                repositoryPath = workflow.RepositoryPath,
+                createdAt = workflow.CreatedAt,
+                message = "Story created. Use enrich to add implementation steps, then start working through them."
+            };
+        }
+        catch (InvalidOperationException ex)
+        {
+            return new { error = ex.Message };
+        }
     }
 
     private async Task<object> CreateStoryFromIssueAsync(JsonElement? args, CancellationToken ct)
