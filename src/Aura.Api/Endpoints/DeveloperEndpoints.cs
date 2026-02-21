@@ -932,6 +932,31 @@ public static class DeveloperEndpoints
             };
             sb.AppendLine($"- {status} {step.Name}");
         }
+
+        // Append repository PR template if found
+        var repoPath = story.WorktreePath ?? story.RepositoryPath;
+        if (!string.IsNullOrEmpty(repoPath))
+        {
+            var templatePaths = new[]
+            {
+                Path.Combine(repoPath, ".github", "PULL_REQUEST_TEMPLATE.md"),
+                Path.Combine(repoPath, ".github", "PULL_REQUEST_TEMPLATE", "default.md"),
+                Path.Combine(repoPath, "PULL_REQUEST_TEMPLATE.md"),
+            };
+
+            foreach (var path in templatePaths)
+            {
+                if (File.Exists(path))
+                {
+                    sb.AppendLine();
+                    sb.AppendLine("---");
+                    sb.AppendLine();
+                    sb.AppendLine(File.ReadAllText(path));
+                    break;
+                }
+            }
+        }
+
         sb.AppendLine();
         sb.AppendLine("---");
         sb.AppendLine($"*Created by [Aura](https://github.com/johnazariah/aura) · workflow `{story.Id}`*");

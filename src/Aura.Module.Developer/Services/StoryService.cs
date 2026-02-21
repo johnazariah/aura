@@ -937,10 +937,49 @@ public sealed partial class StoryService(
                 : "⚠️ Verification had issues — please review");
         }
 
+        // Append repository PR template if found
+        var repoPath = workflow.WorktreePath ?? workflow.RepositoryPath;
+        var template = FindPullRequestTemplate(repoPath);
+        if (template is not null)
+        {
+            sb.AppendLine();
+            sb.AppendLine("---");
+            sb.AppendLine();
+            sb.AppendLine(template);
+        }
+
         sb.AppendLine();
         sb.AppendLine("---");
         sb.AppendLine($"*Implemented autonomously by Aura · workflow `{workflow.Id}`*");
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// Searches for a pull request template in the repository.
+    /// </summary>
+    private static string? FindPullRequestTemplate(string? repoPath)
+    {
+        if (string.IsNullOrEmpty(repoPath))
+        {
+            return null;
+        }
+
+        var templatePaths = new[]
+        {
+            Path.Combine(repoPath, ".github", "PULL_REQUEST_TEMPLATE.md"),
+            Path.Combine(repoPath, ".github", "PULL_REQUEST_TEMPLATE", "default.md"),
+            Path.Combine(repoPath, "PULL_REQUEST_TEMPLATE.md"),
+        };
+
+        foreach (var path in templatePaths)
+        {
+            if (File.Exists(path))
+            {
+                return File.ReadAllText(path);
+            }
+        }
+
+        return null;
     }
 
     private static string BuildSquashCommitMessage(Story workflow)
