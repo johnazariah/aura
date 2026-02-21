@@ -34,6 +34,9 @@ public sealed partial class McpHandler
             "enrich" => await EnrichStoryAsync(args, ct),
             "update_step" => await UpdateStepAsync(args, ct),
             "complete" => await CompleteStoryAsync(args, ct),
+            "next_step" => await NextStepAsync(args, ct),
+            "start_step" => await StartStepAsync(args, ct),
+            "step_context" => await StepContextAsync(args, ct),
             _ => throw new ArgumentException($"Unknown workflow operation: {operation}")
         };
     }
@@ -217,6 +220,33 @@ public sealed partial class McpHandler
             // Post a comment to the issue that work has started
             var branch = workflow.GitBranch ?? "unknown";
             await _gitHubService.PostCommentAsync(parsed.Value.Owner, parsed.Value.Repo, parsed.Value.Number, $"Started work in branch `{branch}`", ct);
+
+            // Check if the worktree branch already has commits ahead of the default branch
+            string? branchAheadWarning = null;
+            if (!string.IsNullOrEmpty(workflow.WorktreePath))
+            {
+                try
+                {
+                    var defaultBranchResult = await _gitService.GetDefaultBranchAsync(workflow.WorktreePath, ct);
+                    if (defaultBranchResult.Success && defaultBranchResult.Value is not null)
+                    {
+                        var countResult = await _gitService.CountCommitsSinceAsync(
+                            workflow.WorktreePath, defaultBranchResult.Value, ct);
+                        if (countResult.Success && countResult.Value > 0)
+                        {
+                            branchAheadWarning = $"⚠️ Branch '{branch}' already has {countResult.Value} commit(s) ahead of '{defaultBranchResult.Value}'. " +
+                                "This branch may contain work from a previous session. Review existing changes before starting new work.";
+                            _logger.LogWarning("Branch {Branch} has {Count} commits ahead of {DefaultBranch} — pre-existing work detected",
+                                branch, countResult.Value, defaultBranchResult.Value);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogDebug(ex, "Failed to check branch-ahead status for worktree {Path}", workflow.WorktreePath);
+                }
+            }
+
             return new
             {
                 id = workflow.Id,
@@ -227,7 +257,8 @@ public sealed partial class McpHandler
                 worktreePath = workflow.WorktreePath,
                 issueUrl = workflow.IssueUrl,
                 issueNumber = workflow.IssueNumber,
-                createdAt = workflow.CreatedAt
+                createdAt = workflow.CreatedAt,
+                warning = branchAheadWarning
             };
         }
         catch (HttpRequestException ex)
@@ -527,5 +558,193 @@ public sealed partial class McpHandler
                 hint = "Ensure all steps are completed or skipped before completing the workflow."
             };
         }
+    }
+
+    /// <summary>
+    /// Get the next actionable step for a story (first Pending step in the lowest incomplete wave).
+    /// </summary>
+    private async Task<object> NextStepAsync(JsonElement? args, CancellationToken ct)
+    {
+        var storyIdStr = args.GetStringOrDefault("storyId");
+        if (!Guid.TryParse(storyIdStr, out var storyId))
+        {
+            return new { error = "storyId is required and must be a valid GUID" };
+        }
+
+        var workflow = await _storyService.GetByIdWithStepsAsync(storyId, ct);
+        if (workflow is null)
+        {
+            return new { error = $"Story not found: {storyId}" };
+        }
+
+        var nextStep = workflow.Steps
+            .Where(s => s.Status == StepStatus.Pending)
+            .OrderBy(s => s.Wave)
+            .ThenBy(s => s.Order)
+            .FirstOrDefault();
+
+        if (nextStep is null)
+        {
+            var allDone = workflow.Steps.All(s => s.Status is StepStatus.Completed or StepStatus.Skipped);
+            return new
+            {
+                storyId,
+                message = allDone
+                    ? "All steps are complete. Use aura_workflow(operation: 'complete') to finalize and create a PR."
+                    : "No pending steps found. Some steps may have failed — use update_step to reset them to pending.",
+                allStepsComplete = allDone,
+                steps = workflow.Steps.OrderBy(s => s.Order).Select(s => new { id = s.Id, name = s.Name, status = s.Status.ToString() })
+            };
+        }
+
+        return BuildStepContext(workflow, nextStep);
+    }
+
+    /// <summary>
+    /// Mark a step as Running and return its full context. Combines status update + context retrieval.
+    /// </summary>
+    private async Task<object> StartStepAsync(JsonElement? args, CancellationToken ct)
+    {
+        var storyIdStr = args.GetStringOrDefault("storyId");
+        if (!Guid.TryParse(storyIdStr, out var storyId))
+        {
+            return new { error = "storyId is required and must be a valid GUID" };
+        }
+
+        var stepIdStr = args.GetStringOrDefault("stepId");
+        if (!Guid.TryParse(stepIdStr, out var stepId))
+        {
+            return new { error = "stepId is required and must be a valid GUID" };
+        }
+
+        var workflow = await _storyService.GetByIdWithStepsAsync(storyId, ct);
+        if (workflow is null)
+        {
+            return new { error = $"Story not found: {storyId}" };
+        }
+
+        var step = workflow.Steps.FirstOrDefault(s => s.Id == stepId);
+        if (step is null)
+        {
+            return new { error = $"Step not found: {stepId}" };
+        }
+
+        if (step.Status is not (StepStatus.Pending or StepStatus.Failed))
+        {
+            return new
+            {
+                error = $"Step is {step.Status} — can only start Pending or Failed steps",
+                stepId = step.Id,
+                currentStatus = step.Status.ToString()
+            };
+        }
+
+        step.Status = StepStatus.Running;
+        step.StartedAt = DateTimeOffset.UtcNow;
+        step.Attempts++;
+        await _storyService.UpdateStepAsync(step, ct);
+
+        return BuildStepContext(workflow, step);
+    }
+
+    /// <summary>
+    /// Get rich context for a specific step without changing its status (read-only).
+    /// </summary>
+    private async Task<object> StepContextAsync(JsonElement? args, CancellationToken ct)
+    {
+        var storyIdStr = args.GetStringOrDefault("storyId");
+        if (!Guid.TryParse(storyIdStr, out var storyId))
+        {
+            return new { error = "storyId is required and must be a valid GUID" };
+        }
+
+        var stepIdStr = args.GetStringOrDefault("stepId");
+        if (!Guid.TryParse(stepIdStr, out var stepId))
+        {
+            return new { error = "stepId is required and must be a valid GUID" };
+        }
+
+        var workflow = await _storyService.GetByIdWithStepsAsync(storyId, ct);
+        if (workflow is null)
+        {
+            return new { error = $"Story not found: {storyId}" };
+        }
+
+        var step = workflow.Steps.FirstOrDefault(s => s.Id == stepId);
+        if (step is null)
+        {
+            return new { error = $"Step not found: {stepId}" };
+        }
+
+        return BuildStepContext(workflow, step);
+    }
+
+    /// <summary>
+    /// Builds rich step context including worktree paths, prior step outputs, and story analysis.
+    /// Shared by next_step, start_step, and step_context operations.
+    /// </summary>
+    private static object BuildStepContext(Story workflow, StoryStep step)
+    {
+        var completedSteps = workflow.Steps
+            .Where(s => s.Status == StepStatus.Completed)
+            .OrderBy(s => s.Order)
+            .ToList();
+
+        // Collect outputs from completed steps in earlier waves (or same wave, lower order)
+        var priorOutputs = completedSteps
+            .Where(s => s.Wave < step.Wave || (s.Wave == step.Wave && s.Order < step.Order))
+            .Select(s => new { stepName = s.Name, output = s.Output })
+            .ToList();
+
+        var totalSteps = workflow.Steps.Count;
+        var completedCount = completedSteps.Count;
+        var skippedCount = workflow.Steps.Count(s => s.Status == StepStatus.Skipped);
+        var maxWave = workflow.Steps.Max(s => s.Wave);
+
+        // Compute worktree solution path by finding .sln file pattern
+        string? worktreeSolutionPath = null;
+        if (!string.IsNullOrEmpty(workflow.WorktreePath) && !string.IsNullOrEmpty(workflow.RepositoryPath))
+        {
+            // Look for .sln files relative to repository, map to worktree
+            var repoDir = new DirectoryInfo(workflow.RepositoryPath);
+            var slnFiles = repoDir.Exists
+                ? repoDir.GetFiles("*.sln", SearchOption.TopDirectoryOnly)
+                : [];
+            if (slnFiles.Length > 0)
+            {
+                worktreeSolutionPath = Path.Combine(workflow.WorktreePath, slnFiles[0].Name);
+            }
+        }
+
+        return new
+        {
+            stepId = step.Id,
+            name = step.Name,
+            description = step.Description,
+            capability = step.Capability,
+            language = step.Language,
+            status = step.Status.ToString(),
+            wave = step.Wave,
+            order = step.Order,
+            input = step.Input,
+            worktreePath = workflow.WorktreePath,
+            worktreeSolutionPath,
+            repositoryPath = workflow.RepositoryPath,
+            gitBranch = workflow.GitBranch,
+            storyId = workflow.Id,
+            storyTitle = workflow.Title,
+            storyDescription = workflow.Description,
+            analysis = workflow.AnalyzedContext,
+            priorStepOutputs = priorOutputs,
+            progress = $"{completedCount + skippedCount}/{totalSteps} steps done (Wave {step.Wave}/{maxWave})",
+            allSteps = workflow.Steps.OrderBy(s => s.Order).Select(s => new
+            {
+                id = s.Id,
+                name = s.Name,
+                status = s.Status.ToString(),
+                wave = s.Wave,
+                order = s.Order
+            })
+        };
     }
 }
