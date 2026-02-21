@@ -527,7 +527,7 @@ public sealed partial class McpHandler
                         {
                             type = "string",
                             description = "Workflow operation type",
-                            @enum = new[] { "list", "get", "get_by_path", "create", "enrich", "update_step", "complete", "next_step", "start_step", "step_context" }
+                            @enum = new[] { "list", "get", "get_by_path", "create", "enrich", "update_step", "complete", "delete", "next_step", "start_step", "step_context" }
                         },
                         storyId = new { type = "string", description = "Story ID (GUID) - for get, enrich operations" },
                         workspacePath = new { type = "string", description = "Workspace/worktree path - for get_by_path to auto-discover current story" },

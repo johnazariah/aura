@@ -173,9 +173,22 @@ The pre-commit hook will reject files with CRLF line endings.
 | New feature | `.project/features/upcoming/` | Create spec first |
 | Complete feature | `.project/features/completed/` | **Follow ceremony** (see below) |
 
-## Interactive Story Workflow
+## Aura Story Commands
 
-You can work on an Aura story interactively from any Copilot CLI session. Use the `/work-on-story` prompt to bootstrap, or follow this flow manually:
+Use these slash commands for story management from the Copilot CLI:
+
+| Command | Purpose |
+|---------|---------|
+| `/aura-stories` | List all active stories with progress |
+| `/aura-create-story` | Create a new story (from description or GitHub issue) |
+| `/aura-run-story` | Interactively work through a story: pick up → implement → PR |
+| `/aura-story-status` | Detailed status for one story |
+| `/aura-sync-issues` | Import open GitHub issues as Aura stories |
+| `/aura-cleanup` | Delete stale/completed stories and worktrees |
+
+### Interactive Story Workflow
+
+You can work on an Aura story interactively from any Copilot CLI session. Use the `/aura-run-story` prompt to bootstrap, or follow this flow manually:
 
 1. **Find your story**: `aura_workflow(operation: "list")` or `aura_workflow(operation: "get", storyId: "...")`
 2. **Get next step**: `aura_workflow(operation: "next_step", storyId: "...")` — returns the next actionable step with full context

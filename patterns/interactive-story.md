@@ -2,7 +2,7 @@
 
 Drive an Aura story from creation to PR entirely within a Copilot CLI session, using worktrees for git isolation.
 
-> **Entry point**: Use `.github/prompts/aura.work-on-story.prompt.md` to bootstrap a session.
+> **Entry point**: Use `.github/prompts/aura.run-story.prompt.md` (`/aura-run-story`) to bootstrap a session.
 
 ## When to Use
 

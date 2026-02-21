@@ -1,5 +1,5 @@
 ---
-description: Work on an Aura story interactively — create or pick up a story, break it into steps, implement each one, and finalize to PR.
+description: Run an Aura story interactively — create or pick up a story, break it into steps, implement each one, and finalize to PR.
 ---
 
 # Work on Story

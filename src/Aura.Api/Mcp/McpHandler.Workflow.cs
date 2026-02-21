@@ -37,6 +37,7 @@ public sealed partial class McpHandler
             "next_step" => await NextStepAsync(args, ct),
             "start_step" => await StartStepAsync(args, ct),
             "step_context" => await StepContextAsync(args, ct),
+            "delete" => await DeleteStoryAsync(args, ct),
             _ => throw new ArgumentException($"Unknown workflow operation: {operation}")
         };
     }
@@ -805,6 +806,37 @@ public sealed partial class McpHandler
                 wave = s.Wave,
                 order = s.Order
             })
+        };
+    }
+
+    /// <summary>
+    /// Delete a story and its worktree.
+    /// </summary>
+    private async Task<object> DeleteStoryAsync(JsonElement? args, CancellationToken ct)
+    {
+        var storyIdStr = args.GetStringOrDefault("storyId");
+        if (!Guid.TryParse(storyIdStr, out var storyId))
+        {
+            return new { error = "storyId is required and must be a valid GUID" };
+        }
+
+        var workflow = await _storyService.GetByIdWithStepsAsync(storyId, ct);
+        if (workflow is null)
+        {
+            return new { error = $"Story not found: {storyId}" };
+        }
+
+        var title = workflow.Title;
+        var worktreePath = workflow.WorktreePath;
+
+        await _storyService.DeleteAsync(storyId, ct);
+
+        return new
+        {
+            storyId,
+            title,
+            worktreePath,
+            message = $"Story '{title}' deleted." + (worktreePath != null ? $" Worktree at {worktreePath} may need manual cleanup." : "")
         };
     }
 }
