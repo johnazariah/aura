@@ -50,6 +50,7 @@ public sealed partial class McpHandler
     private readonly IAuraDocsTool _auraDocsTool;
     private readonly IDocsService _docsService;
     private readonly IWorkspaceRegistryService _workspaceRegistryService;
+    private readonly IGitService _gitService;
     private readonly ILogger<McpHandler> _logger;
 
     private readonly Dictionary<string, Func<JsonElement?, CancellationToken, Task<object>>> _tools;
@@ -72,6 +73,7 @@ public sealed partial class McpHandler
         IAuraDocsTool auraDocsTool,
         IDocsService docsService,
         IWorkspaceRegistryService workspaceRegistryService,
+        IGitService gitService,
         ILogger<McpHandler> logger)
     {
         _ragService = ragService;
@@ -88,6 +90,7 @@ public sealed partial class McpHandler
         _auraDocsTool = auraDocsTool;
         _docsService = docsService;
         _workspaceRegistryService = workspaceRegistryService;
+        _gitService = gitService;
         _logger = logger;
 
         // Phase 7: Consolidated meta-tools (28 tools → 11 tools)
@@ -511,7 +514,7 @@ public sealed partial class McpHandler
             new McpToolDefinition
             {
                 Name = "aura_workflow",
-                Description = "Manage Aura development workflows/stories: list, get details, get by worktree path, create from GitHub issues, complete with squash merge. Use get_by_path to auto-discover current story context. Use complete to finalize: squash commits, push, create draft PR. Pattern content is auto-included when story has a bound pattern. (CRUD)",
+                Description = "Manage Aura development workflows/stories: list, get details, get by worktree path, create from GitHub issues, complete with squash merge. Use get_by_path to auto-discover current story context. Use next_step/start_step for interactive execution from Copilot CLI. Use complete to finalize: squash commits, push, create draft PR. Pattern content is auto-included when story has a bound pattern. (CRUD)",
                 InputSchema = new
                 {
                     type = "object",
@@ -521,7 +524,7 @@ public sealed partial class McpHandler
                         {
                             type = "string",
                             description = "Workflow operation type",
-                            @enum = new[] { "list", "get", "get_by_path", "create", "enrich", "update_step", "complete" }
+                            @enum = new[] { "list", "get", "get_by_path", "create", "enrich", "update_step", "complete", "next_step", "start_step", "step_context" }
                         },
                         storyId = new { type = "string", description = "Story ID (GUID) - for get, enrich operations" },
                         workspacePath = new { type = "string", description = "Workspace/worktree path - for get_by_path to auto-discover current story" },

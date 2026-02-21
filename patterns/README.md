@@ -23,6 +23,7 @@ A pattern is NOT:
 | Pattern | Description | Overlays |
 |---------|-------------|----------|
 | [generate-tests.md](generate-tests.md) | Generate comprehensive tests for a class/module | csharp, python |
+| [interactive-story.md](interactive-story.md) | Drive an Aura story to PR from Copilot CLI | — |
 
 ### Language-Specific
 

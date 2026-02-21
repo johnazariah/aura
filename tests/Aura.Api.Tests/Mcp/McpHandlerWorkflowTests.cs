@@ -72,6 +72,7 @@ public class McpHandlerWorkflowTests
             _auraDocsTool,
             _docsService,
             _workspaceRegistryService,
+            Substitute.For<IGitService>(),
             NullLogger<McpHandler>.Instance);
     }
 
