@@ -46,6 +46,7 @@ public static class DeveloperEndpoints
         // Artifact export and verification
         app.MapPost("/api/developer/stories/{id:guid}/export", ExportStory);
         app.MapPost("/api/developer/stories/{id:guid}/verify", VerifyStory);
+        app.MapPost("/api/developer/stories/{id:guid}/reconcile", ReconcileStory);
 
         // Step management
         app.MapPost("/api/developer/stories/{id:guid}/steps", AddStep);
@@ -820,6 +821,30 @@ public static class DeveloperEndpoints
                     timedOut = sr.TimedOut,
                     error = sr.ErrorMessage,
                 }),
+            });
+        }
+        catch (Exception ex)
+        {
+            return Problem.InternalError(ex.Message, context);
+        }
+    }
+
+    private static async Task<IResult> ReconcileStory(
+        Guid id,
+        HttpContext context,
+        IStoryReconciliationService reconciliationService,
+        CancellationToken ct)
+    {
+        try
+        {
+            var reconciledCount = await reconciliationService.ReconcileStepStatusesAsync(id, ct);
+            return Results.Ok(new
+            {
+                storyId = id,
+                reconciledSteps = reconciledCount,
+                message = reconciledCount > 0
+                    ? $"Reconciled {reconciledCount} step(s) from git history"
+                    : "No steps needed reconciliation",
             });
         }
         catch (Exception ex)
