@@ -185,6 +185,7 @@ Use these slash commands for story management from the Copilot CLI:
 | `/aura-story-status` | Detailed status for one story |
 | `/aura-sync-issues` | Import open GitHub issues as Aura stories |
 | `/aura-cleanup` | Delete stale/completed stories and worktrees |
+| `/aura-onboard` | Register current repo, trigger RAG indexing, confirm readiness |
 
 ### Interactive Story Workflow
 
