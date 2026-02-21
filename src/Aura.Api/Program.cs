@@ -107,6 +107,7 @@ builder.Services.AddSingleton<Aura.Api.Services.IDocsService, Aura.Api.Services.
 
 // Add GitHub token accessor for per-request token access
 builder.Services.AddScoped<Aura.Api.Services.IGitHubTokenAccessor, Aura.Api.Services.GitHubTokenAccessor>();
+builder.Services.AddScoped<Aura.Api.Services.IStoryReconciliationService, Aura.Api.Services.StoryReconciliationService>();
 
 // Add CORS for the VS Code extension
 builder.Services.AddCors(options =>

@@ -41,7 +41,7 @@ public sealed class StoryReconciliationService : IStoryReconciliationService
     }
 
     /// <inheritdoc/>
-    public async Task ReconcileStepStatusesAsync(Guid storyId, CancellationToken ct)
+    public async Task<int> ReconcileStepStatusesAsync(Guid storyId, CancellationToken ct)
     {
         _logger.LogInformation("Reconciling step statuses for story {StoryId}", storyId);
 
@@ -49,13 +49,13 @@ public sealed class StoryReconciliationService : IStoryReconciliationService
         if (story is null)
         {
             _logger.LogWarning("Story {StoryId} not found during reconciliation", storyId);
-            return;
+            return 0;
         }
 
         if (string.IsNullOrEmpty(story.WorktreePath))
         {
             _logger.LogDebug("Story {StoryId} has no worktree path, skipping reconciliation", storyId);
-            return;
+            return 0;
         }
 
         var isRepo = await _gitService.IsRepositoryAsync(story.WorktreePath, ct);
@@ -65,14 +65,14 @@ public sealed class StoryReconciliationService : IStoryReconciliationService
                 "Worktree path '{WorktreePath}' for story {StoryId} is not a git repository",
                 story.WorktreePath,
                 storyId);
-            return;
+            return 0;
         }
 
         var commitMessages = await GetCommitMessagesAsync(story.WorktreePath, ct);
         if (commitMessages is null)
         {
             _logger.LogWarning("Failed to retrieve git log for story {StoryId}", storyId);
-            return;
+            return 0;
         }
 
         var reconciledCount = 0;
@@ -102,6 +102,8 @@ public sealed class StoryReconciliationService : IStoryReconciliationService
             "Reconciliation complete for story {StoryId}: {Count} step(s) recovered",
             storyId,
             reconciledCount);
+
+        return reconciledCount;
     }
 
     /// <summary>
