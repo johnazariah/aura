@@ -12,6 +12,7 @@ using Aura.Foundation.Rag;
 using Aura.Foundation.Tools;
 using Aura.Module.Developer.Data;
 using Aura.Module.Developer.Data.Entities;
+using Aura.Module.Developer.GitHub;
 using Aura.Module.Developer.Services;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
@@ -35,6 +36,7 @@ public class StoryServiceTests : IDisposable
     private readonly IPromptRegistry _promptRegistry;
     private readonly IGitWorktreeService _worktreeService;
     private readonly IGitService _gitService;
+    private readonly IGitHubService _gitHubService;
     private readonly IRagService _ragService;
     private readonly IBackgroundIndexer _backgroundIndexer;
     private readonly ICodebaseContextService _codebaseContextService;
@@ -63,6 +65,7 @@ public class StoryServiceTests : IDisposable
         _worktreeService.CreateAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .Returns(Task.FromResult(GitResult<WorktreeInfo>.Fail("Test mode - no worktree creation")));
         _gitService = Substitute.For<IGitService>();
+        _gitHubService = Substitute.For<IGitHubService>();
         _ragService = Substitute.For<IRagService>();
         _backgroundIndexer = Substitute.For<IBackgroundIndexer>();
         _codebaseContextService = Substitute.For<ICodebaseContextService>();
@@ -80,6 +83,7 @@ public class StoryServiceTests : IDisposable
             _promptRegistry,
             _worktreeService,
             _gitService,
+            _gitHubService,
             _ragService,
             _backgroundIndexer,
             _codebaseContextService,
