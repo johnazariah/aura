@@ -6,6 +6,7 @@ namespace Aura.Module.Researcher;
 
 using Aura.Module.Researcher.Data;
 using Aura.Module.Researcher.Fetchers;
+using Aura.Module.Researcher.Ingestors;
 using Aura.Module.Researcher.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -33,6 +34,7 @@ public sealed class ResearcherModule
         services.AddScoped<ILibraryService, LibraryService>();
         services.AddSingleton<IPdfExtractor, PdfExtractor>();
         services.AddSingleton<IPdfToMarkdownService, PdfToMarkdownService>();
+        services.AddSingleton<PdfIngestor>();
 
         // Register fetchers with typed HttpClient
         services.AddHttpClient<ArxivFetcher>();

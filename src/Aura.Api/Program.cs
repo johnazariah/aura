@@ -11,8 +11,10 @@ using Aura.Foundation;
 using Aura.Foundation.Data;
 using Aura.Module.Developer.Services;
 using Aura.Module.Developer.Services.Testing;
+using Aura.Foundation.Rag.Ingestors;
 using Aura.Module.Researcher;
 using Aura.Module.Researcher.Data;
+using Aura.Module.Researcher.Ingestors;
 using Microsoft.EntityFrameworkCore;
 
 // Server metadata for health endpoint
@@ -141,6 +143,11 @@ if (!app.Environment.IsEnvironment("Testing"))
     // Apply Researcher module migrations
     var researcherDb = scope.ServiceProvider.GetRequiredService<ResearcherDbContext>();
     await ApplyMigrationsAsync(researcherDb, "Researcher", logger);
+
+    // Register PDF ingestor with the ingestor registry
+    var ingestorRegistry = scope.ServiceProvider.GetRequiredService<IIngestorRegistry>();
+    var pdfIngestor = scope.ServiceProvider.GetRequiredService<PdfIngestor>();
+    ingestorRegistry.Register(pdfIngestor);
 }
 
 // Map Aspire default endpoints (health, alive)
