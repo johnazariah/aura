@@ -107,6 +107,8 @@ builder.Services.AddScoped<ITypeScriptLanguageService, TypeScriptLanguageService
 builder.Services.AddScoped<ITestGenerationService, RoslynTestGenerator>();
 builder.Services.AddScoped<ICodeGraphIndexer, CodeGraphIndexer>();
 builder.Services.AddSingleton<ITreeBuilderService, TreeBuilderService>();
+builder.Services.AddSingleton<Aura.Module.Developer.Ingestors.RoslynCodeIngestor>();
+builder.Services.AddSingleton<Aura.Module.Developer.Ingestors.TreeSitterCodeIngestor>();
 
 // Add Researcher Module
 var researcherModule = new ResearcherModule();
@@ -148,6 +150,14 @@ if (!app.Environment.IsEnvironment("Testing"))
     var ingestorRegistry = scope.ServiceProvider.GetRequiredService<IIngestorRegistry>();
     var pdfIngestor = scope.ServiceProvider.GetRequiredService<PdfIngestor>();
     ingestorRegistry.Register(pdfIngestor);
+
+    // Register Roslyn code ingestor (replaces regex-based CodeIngestor for .cs files)
+    var roslynIngestor = scope.ServiceProvider.GetRequiredService<Aura.Module.Developer.Ingestors.RoslynCodeIngestor>();
+    ingestorRegistry.Register(roslynIngestor);
+
+    // Register TreeSitter code ingestor (AST-aware indexing for Python, TypeScript, Go, etc.)
+    var treeSitterIngestor = scope.ServiceProvider.GetRequiredService<Aura.Module.Developer.Ingestors.TreeSitterCodeIngestor>();
+    ingestorRegistry.Register(treeSitterIngestor);
 }
 
 // Map Aspire default endpoints (health, alive)

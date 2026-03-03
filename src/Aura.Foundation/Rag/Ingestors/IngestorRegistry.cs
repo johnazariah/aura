@@ -50,6 +50,7 @@ public sealed class IngestorRegistry : IIngestorRegistry
         // Register default ingestors
         Register(new MarkdownIngestor());
         Register(new CodeIngestor());
+        Register(new StructuredDataIngestor());
         Register(_fallback);
     }
 
