@@ -53,6 +53,7 @@ public sealed class OpenAiEmbeddingProvider : IEmbeddingProvider
         {
             Model = model,
             Input = [truncated],
+            Dimensions = _options.Dimensions,
         };
 
         var response = await SendRequestAsync(request, cancellationToken).ConfigureAwait(false);
@@ -95,6 +96,7 @@ public sealed class OpenAiEmbeddingProvider : IEmbeddingProvider
             {
                 Model = model,
                 Input = batch,
+                Dimensions = _options.Dimensions,
             };
 
             var response = await SendRequestAsync(request, cancellationToken).ConfigureAwait(false);
@@ -187,6 +189,7 @@ public sealed class OpenAiEmbeddingProvider : IEmbeddingProvider
     {
         public required string Model { get; init; }
         public required IReadOnlyList<string> Input { get; init; }
+        public int? Dimensions { get; init; }
     }
 
     private sealed class OpenAiEmbeddingResponse
@@ -231,6 +234,14 @@ public sealed class OpenAiEmbeddingOptions
     /// OpenAI: "text-embedding-3-small" (1536d) or "text-embedding-3-large" (3072d).
     /// </summary>
     public string Model { get; set; } = "text-embedding-3-small";
+
+    /// <summary>
+    /// Gets or sets the output dimensions for the embedding vector.
+    /// OpenAI's text-embedding-3 models support Matryoshka dimension reduction.
+    /// Set to 768 to match Ollama's nomic-embed-text for seamless failover.
+    /// If null, uses the model's native dimensions (1536 for small, 3072 for large).
+    /// </summary>
+    public int? Dimensions { get; set; } = 768;
 
     /// <summary>
     /// Gets or sets the number of texts to send per API request.
