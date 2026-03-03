@@ -57,7 +57,10 @@ public static class ServiceCollectionExtensions
         services.Configure<RagWatcherOptions>(configuration.GetSection(RagWatcherOptions.SectionName));
         services.Configure<BackgroundIndexerOptions>(configuration.GetSection(BackgroundIndexerOptions.SectionName));
         services.Configure<OllamaOptions>(configuration.GetSection(OllamaOptions.SectionName));
+        services.Configure<OpenAiEmbeddingOptions>(configuration.GetSection(OpenAiEmbeddingOptions.SectionName));
+        services.Configure<EmbeddingOptions>(configuration.GetSection(EmbeddingOptions.SectionName));
 
+        // Register Ollama provider (always available for health checks)
         services.AddHttpClient<OllamaProvider>(client =>
         {
             var section = configuration.GetSection(OllamaOptions.SectionName);
@@ -66,7 +69,35 @@ public static class ServiceCollectionExtensions
             client.Timeout = Timeout.InfiniteTimeSpan;
         });
 
-        services.AddScoped<IEmbeddingProvider>(sp => sp.GetRequiredService<OllamaProvider>());
+        // Register OpenAI embedding provider
+        services.AddHttpClient<OpenAiEmbeddingProvider>(client =>
+        {
+            var section = configuration.GetSection(OpenAiEmbeddingOptions.SectionName);
+            var baseUrl = section["BaseUrl"] ?? "https://api.openai.com/";
+            client.BaseAddress = new Uri(baseUrl);
+            var apiKey = section["ApiKey"];
+            if (!string.IsNullOrEmpty(apiKey))
+            {
+                client.DefaultRequestHeaders.Authorization =
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
+            }
+
+            var timeout = int.TryParse(section["TimeoutSeconds"], out var t) ? t : 60;
+            client.Timeout = TimeSpan.FromSeconds(timeout);
+        });
+
+        // Select embedding provider based on configuration
+        var embeddingProvider = configuration
+            .GetSection(EmbeddingOptions.SectionName)["Provider"]?.ToLowerInvariant() ?? "ollama";
+
+        if (embeddingProvider == "openai")
+        {
+            services.AddScoped<IEmbeddingProvider>(sp => sp.GetRequiredService<OpenAiEmbeddingProvider>());
+        }
+        else
+        {
+            services.AddScoped<IEmbeddingProvider>(sp => sp.GetRequiredService<OllamaProvider>());
+        }
 
         services.AddSingleton<TextChunker>();
         services.AddSingleton<Rag.Ingestors.IIngestorRegistry, Rag.Ingestors.IngestorRegistry>();
