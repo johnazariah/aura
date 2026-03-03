@@ -180,6 +180,32 @@ public sealed class RoslynCodeIngestor : ICodeIngestor
         };
         nodes.Add(typeNode);
 
+        // Extract base types and interfaces for graph edges
+        if (typeDecl.BaseList is not null)
+        {
+            foreach (var baseType in typeDecl.BaseList.Types)
+            {
+                var baseTypeName = baseType.Type.ToString();
+                // Convention: interfaces start with 'I' followed by uppercase
+                var isInterface = baseTypeName.Length > 1
+                    && baseTypeName[0] == 'I'
+                    && char.IsUpper(baseTypeName[1]);
+
+                edges.Add(new CodeEdge
+                {
+                    Id = Guid.NewGuid(),
+                    EdgeType = isInterface ? CodeEdgeType.Implements : CodeEdgeType.Inherits,
+                    SourceId = typeNode.Id,
+                    TargetId = Guid.Empty, // resolved later via graph enrichment
+                    PropertiesJson = System.Text.Json.JsonSerializer.Serialize(new
+                    {
+                        targetName = baseTypeName,
+                        sourceFullName = fullName,
+                    }),
+                });
+            }
+        }
+
         // Process members
         foreach (var member in typeDecl.Members)
         {
