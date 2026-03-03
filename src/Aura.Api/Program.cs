@@ -7,11 +7,12 @@ using Serilog;
 using Serilog.Events;
 using Aura.Api.Endpoints;
 using Aura.Api.Mcp;
-using Aura.Api.Middleware;
 using Aura.Foundation;
 using Aura.Foundation.Data;
-using Aura.Module.Developer;
+using Aura.Module.Developer.Services;
+using Aura.Module.Developer.Services.Testing;
 using Aura.Module.Researcher;
+using Aura.Module.Researcher.Data;
 using Microsoft.EntityFrameworkCore;
 
 // Server metadata for health endpoint
@@ -96,9 +97,14 @@ builder.Services.AddDbContextFactory<AuraDbContext>(options =>
 // Add Aura Foundation services
 builder.Services.AddAuraFoundation(builder.Configuration);
 
-// Add Developer Module
-var developerModule = new DeveloperModule();
-developerModule.ConfigureServices(builder.Services, builder.Configuration);
+// Add Developer services (MCP code intelligence)
+builder.Services.AddSingleton<IRoslynWorkspaceService, RoslynWorkspaceService>();
+builder.Services.AddScoped<IRoslynRefactoringService, RoslynRefactoringService>();
+builder.Services.AddScoped<IPythonRefactoringService, PythonRefactoringService>();
+builder.Services.AddScoped<ITypeScriptLanguageService, TypeScriptLanguageService>();
+builder.Services.AddScoped<ITestGenerationService, RoslynTestGenerator>();
+builder.Services.AddScoped<ICodeGraphIndexer, CodeGraphIndexer>();
+builder.Services.AddSingleton<ITreeBuilderService, TreeBuilderService>();
 
 // Add Researcher Module
 var researcherModule = new ResearcherModule();
@@ -106,12 +112,6 @@ researcherModule.ConfigureServices(builder.Services, builder.Configuration);
 
 // Add MCP handler for GitHub Copilot integration
 builder.Services.AddScoped<McpHandler>();
-builder.Services.AddSingleton<Aura.Api.Mcp.Tools.IAuraDocsTool, Aura.Api.Mcp.Tools.AuraDocsTool>();
-builder.Services.AddSingleton<Aura.Api.Services.IDocsService, Aura.Api.Services.DocsService>();
-
-// Add GitHub token accessor for per-request token access
-builder.Services.AddScoped<Aura.Api.Services.IGitHubTokenAccessor, Aura.Api.Services.GitHubTokenAccessor>();
-builder.Services.AddScoped<Aura.Api.Services.IStoryReconciliationService, Aura.Api.Services.StoryReconciliationService>();
 
 // Add CORS for the VS Code extension
 builder.Services.AddCors(options =>
@@ -138,22 +138,9 @@ if (!app.Environment.IsEnvironment("Testing"))
     var foundationDb = scope.ServiceProvider.GetRequiredService<AuraDbContext>();
     await ApplyMigrationsAsync(foundationDb, "Foundation", logger);
 
-    // Apply Developer module migrations (includes its own entities)
-    var developerDb = scope.ServiceProvider.GetRequiredService<Aura.Module.Developer.Data.DeveloperDbContext>();
-    await ApplyMigrationsAsync(developerDb, "Developer", logger);
-
     // Apply Researcher module migrations
-    var researcherDb = scope.ServiceProvider.GetRequiredService<Aura.Module.Researcher.Data.ResearcherDbContext>();
+    var researcherDb = scope.ServiceProvider.GetRequiredService<ResearcherDbContext>();
     await ApplyMigrationsAsync(researcherDb, "Researcher", logger);
-
-    // Register Developer Module tools with the tool registry
-    var toolRegistry = scope.ServiceProvider.GetRequiredService<Aura.Foundation.Tools.IToolRegistry>();
-    developerModule.RegisterTools(toolRegistry, scope.ServiceProvider);
-    logger.LogInformation("Registered {Count} Developer Module tools", toolRegistry.GetAllTools().Count);
-
-    // Run startup tasks (registers ingestors, agents, etc.)
-    var startupRunner = scope.ServiceProvider.GetRequiredService<Aura.Foundation.Startup.StartupTaskRunner>();
-    await startupRunner.RunAsync();
 }
 
 // Map Aspire default endpoints (health, alive)
@@ -162,24 +149,13 @@ app.MapDefaultEndpoints();
 // Enable CORS
 app.UseCors();
 
-// Extract GitHub token from headers for all requests
-app.UseGitHubToken();
-
 // Map all endpoint groups
 app.MapHealthEndpoints(ServerStartTime, DeploymentTag);
 app.MapMcpEndpoints();
-app.MapAgentEndpoints();
-app.MapRagEndpoints();
-app.MapIndexEndpoints();
-app.MapToolEndpoints();
-app.MapGitEndpoints();
 app.MapWorkspaceEndpoints();
 app.MapWorkspaceIndexEndpoints();
 app.MapWorkspaceGraphEndpoints();
 app.MapWorkspaceSearchEndpoints();
-app.MapDeveloperEndpoints();
-app.MapGuardianEndpoints();
-app.MapResearcherEndpoints();
 
 await app.RunAsync();
 
@@ -220,4 +196,3 @@ static async Task ApplyMigrationsAsync(DbContext db, string moduleName, Microsof
 /// Partial class for Program to support WebApplicationFactory in integration tests.
 /// </summary>
 public partial class Program { }
-

@@ -1,17 +1,6 @@
 using System.Text.Json;
-using Aura.Api.Mcp.Tools;
-using Aura.Api.Services;
-using Aura.Foundation.Data.Entities;
-using Aura.Foundation.Git;
-using Aura.Foundation.Rag;
-using Aura.Module.Developer.Data.Entities;
-using Aura.Module.Developer.GitHub;
 using Aura.Module.Developer.Services;
 using Aura.Module.Developer.Services.Testing;
-using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
-using Microsoft.CodeAnalysis.FindSymbols;
-using Microsoft.Extensions.Logging;
 using RefactoringParameterInfo = Aura.Module.Developer.Services.ParameterInfo;
 
 namespace Aura.Api.Mcp;

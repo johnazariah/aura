@@ -6,9 +6,7 @@ namespace Aura.Foundation.Rag;
 
 using System.Collections.Concurrent;
 using System.IO.Abstractions;
-using System.Text.Json;
 using System.Threading.Channels;
-using Aura.Foundation.Agents;
 using Aura.Foundation.Data;
 using Aura.Foundation.Data.Entities;
 using Aura.Foundation.Git;
@@ -226,7 +224,6 @@ public sealed class BackgroundIndexer : BackgroundService, IBackgroundIndexer
     {
         using var scope = _scopeFactory.CreateScope();
         var ragService = scope.ServiceProvider.GetRequiredService<IRagService>();
-        var agentRegistry = scope.ServiceProvider.GetRequiredService<IAgentRegistry>();
         var ingestorRegistry = scope.ServiceProvider.GetRequiredService<Ingestors.IIngestorRegistry>();
         var codeGraphService = scope.ServiceProvider.GetRequiredService<ICodeGraphService>();
         var dbContext = scope.ServiceProvider.GetRequiredService<AuraDbContext>();
@@ -239,7 +236,7 @@ public sealed class BackgroundIndexer : BackgroundService, IBackgroundIndexer
                 break;
 
             case WorkItemType.Directory when workItem.DirectoryPath is not null:
-                await ProcessDirectoryAsync(workItem, ragService, agentRegistry, ingestorRegistry, codeGraphService, dbContext, gitService, cancellationToken);
+                await ProcessDirectoryAsync(workItem, ragService, ingestorRegistry, codeGraphService, dbContext, gitService, cancellationToken);
                 break;
         }
     }
@@ -247,7 +244,6 @@ public sealed class BackgroundIndexer : BackgroundService, IBackgroundIndexer
     private async Task ProcessDirectoryAsync(
         IndexWorkItem workItem,
         IRagService ragService,
-        IAgentRegistry agentRegistry,
         Ingestors.IIngestorRegistry ingestorRegistry,
         ICodeGraphService codeGraphService,
         AuraDbContext dbContext,
@@ -366,47 +362,14 @@ public sealed class BackgroundIndexer : BackgroundService, IBackgroundIndexer
                     }
                     else
                     {
-                        // Try agent-based ingestion (LLM-powered)
-                        var capability = $"ingest:{extension}";
-                        var ingesterAgent = agentRegistry.GetBestForCapability(capability);
+                        // Final fallback: plain text indexing
+                        _logger.LogDebug("No ingestor for .{Extension}, using text indexing: {Path}",
+                            extension, filePath);
 
-                        if (ingesterAgent is not null)
+                        if (!string.IsNullOrWhiteSpace(content))
                         {
-                            _logger.LogDebug("Using agent {AgentId} for {FilePath}",
-                                ingesterAgent.AgentId, filePath);
-
-                            var chunks = await IngestWithAgentAsync(
-                                ingesterAgent, filePath, content, extension, cancellationToken);
-
-                            // Collect all chunks for batch embedding
-                            var ragContents = new List<RagContent>(chunks.Count);
-                            foreach (var chunk in chunks)
-                            {
-                                var contentId = $"{filePath}:{chunk.ChunkType}:{chunk.SymbolName ?? chunk.StartLine.ToString()}";
-                                ragContents.Add(new RagContent(contentId, chunk.Text, RagContentType.Code)
-                                {
-                                    SourcePath = filePath,
-                                    Language = chunk.Language,
-                                    Metadata = chunk.Metadata.AsReadOnly(),
-                                });
-                            }
-
-                            if (ragContents.Count > 0)
-                            {
-                                await ragService.IndexBatchAsync(ragContents, cancellationToken);
-                            }
-                        }
-                        else
-                        {
-                            // Final fallback: plain text indexing
-                            _logger.LogDebug("No ingestor/agent for .{Extension}, using text indexing: {Path}",
-                                extension, filePath);
-
-                            if (!string.IsNullOrWhiteSpace(content))
-                            {
-                                var ragContent = RagContent.FromFile(filePath, content);
-                                await ragService.IndexAsync(ragContent, cancellationToken);
-                            }
+                            var ragContent = RagContent.FromFile(filePath, content);
+                            await ragService.IndexAsync(ragContent, cancellationToken);
                         }
                     }
 
@@ -605,58 +568,6 @@ public sealed class BackgroundIndexer : BackgroundService, IBackgroundIndexer
         }
 
         return false;
-    }
-
-    private async Task<IReadOnlyList<SemanticChunk>> IngestWithAgentAsync(
-        IAgent ingester,
-        string filePath,
-        string content,
-        string extension,
-        CancellationToken cancellationToken)
-    {
-        _logger.LogDebug("Using ingester {AgentId} for {FilePath}", ingester.AgentId, filePath);
-
-        var ingesterContext = new IngesterContext(filePath, content, extension);
-        var context = ingesterContext.ToAgentContext();
-
-        try
-        {
-            var output = await ingester.ExecuteAsync(context, cancellationToken);
-
-            if (output.Artifacts.TryGetValue(Agents.ArtifactKeys.Chunks, out var chunksJson))
-            {
-                var chunks = JsonSerializer.Deserialize<List<SemanticChunk>>(chunksJson);
-                if (chunks is not null)
-                {
-                    _logger.LogDebug("Ingester {AgentId} extracted {ChunkCount} chunks from {FilePath}",
-                        ingester.AgentId, chunks.Count, filePath);
-                    return chunks;
-                }
-            }
-
-            // Ingester didn't return chunks in expected format, create fallback
-            _logger.LogWarning("Ingester {AgentId} did not return valid chunks for {FilePath}",
-                ingester.AgentId, filePath);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Ingester {AgentId} failed for {FilePath}, using fallback",
-                ingester.AgentId, filePath);
-        }
-
-        // Fallback: return entire file as single chunk
-        return [
-            new SemanticChunk
-            {
-                Text = content,
-                FilePath = filePath,
-                ChunkType = ChunkTypes.File,
-                SymbolName = Path.GetFileName(filePath),
-                StartLine = 1,
-                EndLine = content.Split('\n').Length,
-                Language = extension,
-            }
-        ];
     }
 
     private void UpdateJobStatus(Guid jobId, Func<IndexJobStatus, IndexJobStatus> updater)

@@ -47,3 +47,4 @@ runs/
 
 # Fixture repos with .git (should be templates without .git)
 fixtures/repos/
+.deploy-temp/
