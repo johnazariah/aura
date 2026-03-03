@@ -1,4 +1,4 @@
-﻿
+
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31903.59
@@ -14,6 +14,8 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Aura.Module.Developer", "src\Aura.Module.Developer\Aura.Module.Developer.csproj", "{9050CB7C-E552-40D9-B55F-22FFA3C2BD96}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Aura.Module.Researcher", "src\Aura.Module.Researcher\Aura.Module.Researcher.csproj", "{D8B73676-68AC-4EEC-BA85-5DE20FE753F0}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Aura.Tray", "src\Aura.Tray\Aura.Tray.csproj", "{7BA07D9F-EDED-4F42-A20C-99AC3625EE53}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -85,6 +87,18 @@ Global
 		{D8B73676-68AC-4EEC-BA85-5DE20FE753F0}.Release|x64.Build.0 = Release|Any CPU
 		{D8B73676-68AC-4EEC-BA85-5DE20FE753F0}.Release|x86.ActiveCfg = Release|Any CPU
 		{D8B73676-68AC-4EEC-BA85-5DE20FE753F0}.Release|x86.Build.0 = Release|Any CPU
+		{7BA07D9F-EDED-4F42-A20C-99AC3625EE53}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7BA07D9F-EDED-4F42-A20C-99AC3625EE53}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7BA07D9F-EDED-4F42-A20C-99AC3625EE53}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{7BA07D9F-EDED-4F42-A20C-99AC3625EE53}.Debug|x64.Build.0 = Debug|Any CPU
+		{7BA07D9F-EDED-4F42-A20C-99AC3625EE53}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{7BA07D9F-EDED-4F42-A20C-99AC3625EE53}.Debug|x86.Build.0 = Debug|Any CPU
+		{7BA07D9F-EDED-4F42-A20C-99AC3625EE53}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7BA07D9F-EDED-4F42-A20C-99AC3625EE53}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7BA07D9F-EDED-4F42-A20C-99AC3625EE53}.Release|x64.ActiveCfg = Release|Any CPU
+		{7BA07D9F-EDED-4F42-A20C-99AC3625EE53}.Release|x64.Build.0 = Release|Any CPU
+		{7BA07D9F-EDED-4F42-A20C-99AC3625EE53}.Release|x86.ActiveCfg = Release|Any CPU
+		{7BA07D9F-EDED-4F42-A20C-99AC3625EE53}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -95,5 +109,6 @@ Global
 		{BBF5C18E-8B90-4046-BB14-BA60914DE93B} = {A1B2C3D4-E5F6-A7B8-C9D0-E1F2A3B4C5D6}
 		{9050CB7C-E552-40D9-B55F-22FFA3C2BD96} = {A1B2C3D4-E5F6-A7B8-C9D0-E1F2A3B4C5D6}
 		{D8B73676-68AC-4EEC-BA85-5DE20FE753F0} = {A1B2C3D4-E5F6-A7B8-C9D0-E1F2A3B4C5D6}
+		{7BA07D9F-EDED-4F42-A20C-99AC3625EE53} = {A1B2C3D4-E5F6-A7B8-C9D0-E1F2A3B4C5D6}
 	EndGlobalSection
 EndGlobal
