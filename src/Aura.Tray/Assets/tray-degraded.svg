@@ -1,8 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
-  <!-- Aura logo - gold center with status-colored aura ring -->
-  <!-- Outer aura ring - yellow/amber for degraded -->
-  <circle cx="16" cy="16" r="14" fill="none" stroke="#FFC107" stroke-width="2" opacity="0.6"/>
-  <circle cx="16" cy="16" r="12" fill="none" stroke="#FFC107" stroke-width="1" opacity="0.3"/>
-  <!-- Gold solid center -->
-  <circle cx="16" cy="16" r="8" fill="#FFB300"/>
-</svg>

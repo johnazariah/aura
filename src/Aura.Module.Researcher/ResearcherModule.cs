@@ -4,8 +4,6 @@
 
 namespace Aura.Module.Researcher;
 
-using Aura.Foundation.Agents;
-using Aura.Foundation.Modules;
 using Aura.Module.Researcher.Data;
 using Aura.Module.Researcher.Fetchers;
 using Aura.Module.Researcher.Services;
@@ -17,21 +15,8 @@ using Microsoft.Extensions.DependencyInjection;
 /// Research assistant module for Aura.
 /// Provides paper management, PDF extraction, knowledge graphs, and synthesis.
 /// </summary>
-public sealed class ResearcherModule : IAuraModule
+public sealed class ResearcherModule
 {
-    /// <inheritdoc/>
-    public string ModuleId => "researcher";
-
-    /// <inheritdoc/>
-    public string Name => "Research Assistant";
-
-    /// <inheritdoc/>
-    public string Description => "Paper management, knowledge graphs, and literature synthesis";
-
-    /// <inheritdoc/>
-    public IReadOnlyList<string> Dependencies => []; // Only depends on Foundation
-
-    /// <inheritdoc/>
     public void ConfigureServices(IServiceCollection services, IConfiguration config)
     {
         // Register module options
@@ -70,10 +55,4 @@ public sealed class ResearcherModule : IAuraModule
         Directory.CreateDirectory(moduleOptions.PapersPath);
     }
 
-    /// <inheritdoc/>
-    public void RegisterAgents(IAgentRegistry registry, IConfiguration configuration)
-    {
-        // Agents will be loaded from agents/ directory via markdown definitions
-        // No programmatic agent registration needed
-    }
 }

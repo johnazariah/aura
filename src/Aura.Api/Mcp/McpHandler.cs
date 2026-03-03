@@ -5,13 +5,9 @@
 namespace Aura.Api.Mcp;
 
 using System.Text.Json;
-using Aura.Api.Mcp.Tools;
-using Aura.Api.Services;
 using Aura.Foundation.Data.Entities;
 using Aura.Foundation.Git;
 using Aura.Foundation.Rag;
-using Aura.Module.Developer.Data.Entities;
-using Aura.Module.Developer.GitHub;
 using Aura.Module.Developer.Services;
 using Aura.Module.Developer.Services.Testing;
 using Microsoft.CodeAnalysis;
@@ -38,8 +34,6 @@ public sealed partial class McpHandler
 
     private readonly IRagService _ragService;
     private readonly ICodeGraphService _graphService;
-    private readonly IStoryService _storyService;
-    private readonly IGitHubService _gitHubService;
     private readonly IRoslynWorkspaceService _roslynService;
     private readonly IRoslynRefactoringService _refactoringService;
     private readonly IPythonRefactoringService _pythonRefactoringService;
@@ -47,11 +41,7 @@ public sealed partial class McpHandler
     private readonly ITestGenerationService _testGenerationService;
     private readonly IGitWorktreeService _worktreeService;
     private readonly ITreeBuilderService _treeBuilderService;
-    private readonly IAuraDocsTool _auraDocsTool;
-    private readonly IDocsService _docsService;
     private readonly IWorkspaceRegistryService _workspaceRegistryService;
-    private readonly IGitService _gitService;
-    private readonly IGitHubTokenAccessor _tokenAccessor;
     private readonly ILogger<McpHandler> _logger;
 
     private readonly Dictionary<string, Func<JsonElement?, CancellationToken, Task<object>>> _tools;
@@ -62,8 +52,6 @@ public sealed partial class McpHandler
     public McpHandler(
         IRagService ragService,
         ICodeGraphService graphService,
-        IStoryService workflowService,
-        IGitHubService gitHubService,
         IRoslynWorkspaceService roslynService,
         IRoslynRefactoringService refactoringService,
         IPythonRefactoringService pythonRefactoringService,
@@ -71,17 +59,11 @@ public sealed partial class McpHandler
         ITestGenerationService testGenerationService,
         IGitWorktreeService worktreeService,
         ITreeBuilderService treeBuilderService,
-        IAuraDocsTool auraDocsTool,
-        IDocsService docsService,
         IWorkspaceRegistryService workspaceRegistryService,
-        IGitService gitService,
-        IGitHubTokenAccessor tokenAccessor,
         ILogger<McpHandler> logger)
     {
         _ragService = ragService;
         _graphService = graphService;
-        _storyService = workflowService;
-        _gitHubService = gitHubService;
         _roslynService = roslynService;
         _refactoringService = refactoringService;
         _pythonRefactoringService = pythonRefactoringService;
@@ -89,28 +71,20 @@ public sealed partial class McpHandler
         _testGenerationService = testGenerationService;
         _worktreeService = worktreeService;
         _treeBuilderService = treeBuilderService;
-        _auraDocsTool = auraDocsTool;
-        _docsService = docsService;
         _workspaceRegistryService = workspaceRegistryService;
-        _gitService = gitService;
-        _tokenAccessor = tokenAccessor;
         _logger = logger;
 
         // Phase 7: Consolidated meta-tools (28 tools → 11 tools)
         _tools = new Dictionary<string, Func<JsonElement?, CancellationToken, Task<object>>>
         {
             ["aura_architect"] = ArchitectAsync,
-            ["aura_docs"] = DocsAsync,
-            ["aura_edit"] = EditAsync,
             ["aura_generate"] = GenerateAsync,
             ["aura_inspect"] = InspectAsync,
             ["aura_navigate"] = NavigateAsync,
-            ["aura_pattern"] = PatternAsync,
             ["aura_refactor"] = RefactorAsync,
             ["aura_search"] = SearchAsync,
             ["aura_tree"] = TreeAsync,
             ["aura_validate"] = ValidateAsync,
-            ["aura_workflow"] = WorkflowAsync,
             ["aura_workspace"] = WorkspaceAsync,
         };
     }
@@ -512,64 +486,6 @@ public sealed partial class McpHandler
             },
 
             // =================================================================
-            // aura_workflow - Manage development workflows
-            // =================================================================
-            new McpToolDefinition
-            {
-                Name = "aura_workflow",
-                Description = "Manage Aura development workflows/stories. Two creation paths: (1) from GitHub issue URL → worktree + PR + close issue, (2) from title+description → worktree + PR. Use enrich to add implementation steps. Use next_step/start_step/update_step for interactive step-by-step execution. Use complete to finalize: squash commits, push, create draft PR. (CRUD)",
-                InputSchema = new
-                {
-                    type = "object",
-                    properties = new
-                    {
-                        operation = new
-                        {
-                            type = "string",
-                            description = "Workflow operation type",
-                            @enum = new[] { "list", "get", "get_by_path", "create", "enrich", "update_step", "complete", "delete", "next_step", "start_step", "step_context" }
-                        },
-                        storyId = new { type = "string", description = "Story ID (GUID) - for get, enrich operations" },
-                        workspacePath = new { type = "string", description = "Workspace/worktree path - for get_by_path to auto-discover current story" },
-                        issueUrl = new { type = "string", description = "GitHub issue URL - for create operation. If omitted, provide title+description instead." },
-                        title = new { type = "string", description = "Story title - for create operation when no issueUrl is provided" },
-                        description = new { type = "string", description = "Story description - for create or enrich operations" },
-                        repositoryPath = new { type = "string", description = "Local repository path for worktree creation - for create operation" },
-                        pattern = new { type = "string", description = "Pattern name to apply - for enrich operation. Binds pattern to story and loads content." },
-                        language = new { type = "string", description = "Language for pattern overlay (e.g., 'csharp', 'python') - for enrich operation. Stored with story." },
-                        steps = new
-                        {
-                            type = "array",
-                            description = "Steps to add - for enrich operation (optional if pattern is provided)",
-                            items = new
-                            {
-                                type = "object",
-                                properties = new
-                                {
-                                    name = new { type = "string", description = "Step name" },
-                                    capability = new { type = "string", description = "Required capability/tool (e.g., 'aura_refactor', 'run_in_terminal')" },
-                                    description = new { type = "string", description = "Step description with phase prefix like '[Analysis] Examine code structure'" },
-                                    input = new { type = "object", description = "Tool arguments as JSON object" }
-                                },
-                                required = new[] { "name", "capability" }
-                            }
-                        },
-                        stepId = new { type = "string", description = "Step ID (GUID) - for update_step operation" },
-                        status = new
-                        {
-                            type = "string",
-                            description = "New step status - for update_step operation",
-                            @enum = new[] { "completed", "failed", "skipped", "pending" }
-                        },
-                        output = new { type = "string", description = "Step output/result - for update_step operation" },
-                        error = new { type = "string", description = "Error message - for update_step with status=failed" },
-                        skipReason = new { type = "string", description = "Reason for skipping - for update_step with status=skipped" }
-                    },
-                    required = new[] { "operation" }
-                }
-            },
-
-            // =================================================================
             // aura_architect - Whole-codebase architectural analysis (placeholder)
             // =================================================================
             new McpToolDefinition
@@ -627,60 +543,6 @@ public sealed partial class McpHandler
             },
 
             // =================================================================
-            // aura_pattern - Load operational patterns for complex tasks
-            // =================================================================
-            new McpToolDefinition
-            {
-                Name = "aura_pattern",
-                Description = "Load operational patterns (step-by-step playbooks) for complex multi-step tasks. Patterns are dynamically discovered from the patterns/ folder. Supports language overlays for language-specific guidance. (Read)",
-                InputSchema = new
-                {
-                    type = "object",
-                    properties = new
-                    {
-                        operation = new
-                        {
-                            type = "string",
-                            description = "Pattern operation: 'list' to see available patterns, 'get' to load a specific pattern",
-                            @enum = new[] { "list", "get" }
-                        },
-                        name = new { type = "string", description = "Pattern name (without .md extension), e.g., 'comprehensive-rename'" },
-                        language = new { type = "string", description = "Language for overlay (e.g., 'csharp', 'python', 'typescript'). If specified, merges language-specific guidance with base pattern." }
-                    },
-                    required = new[] { "operation" }
-                }
-            },
-
-            // =================================================================
-            // aura_edit - Surgical text editing (line-based)
-            // =================================================================
-            new McpToolDefinition
-            {
-                Name = "aura_edit",
-                Description = "Surgical text editing: insert, replace, or delete lines in any file. Use for simple edits where AST manipulation is overkill. Works with any file type. Always normalizes to LF line endings. (Write)",
-                InputSchema = new
-                {
-                    type = "object",
-                    properties = new
-                    {
-                        operation = new
-                        {
-                            type = "string",
-                            description = "Edit operation type",
-                            @enum = new[] { "insert_lines", "replace_lines", "delete_lines", "append", "prepend" }
-                        },
-                        filePath = new { type = "string", description = "Absolute path to the file to edit" },
-                        line = new { type = "integer", description = "Line number (1-based) for insert operations. For insert_lines: inserts AFTER this line. Use 0 to insert at the beginning." },
-                        startLine = new { type = "integer", description = "Start line number (1-based, inclusive) for replace_lines and delete_lines" },
-                        endLine = new { type = "integer", description = "End line number (1-based, inclusive) for replace_lines and delete_lines" },
-                        content = new { type = "string", description = "Content to insert or replace with. Can be multi-line (use \\n for newlines)." },
-                        preview = new { type = "boolean", description = "If true, return the result without writing to disk (default: false)" }
-                    },
-                    required = new[] { "operation", "filePath" }
-                }
-            },
-
-            // =================================================================
             // aura_tree - Hierarchical code exploration
             // =================================================================
             new McpToolDefinition
@@ -713,37 +575,6 @@ public sealed partial class McpHandler
                 }
             },
 
-            // =================================================================
-            // aura_docs - Documentation operations
-            // =================================================================
-            new McpToolDefinition
-            {
-                Name = "aura_docs",
-                Description = "Search documentation with semantic retrieval. Returns relevant documentation chunks with scores and metadata. (Read)",
-                InputSchema = new
-                {
-                    type = "object",
-                    properties = new
-                    {
-                        operation = new
-                        {
-                            type = "string",
-                            description = "Documentation operation type: 'search' (default), 'list', or 'get'",
-                            @enum = new[] { "search", "list", "get" }
-                        },
-                        query = new { type = "string", description = "The documentation search query (required for search operation)" },
-                        id = new { type = "string", description = "Document ID to retrieve (required for get operation)" },
-                        category = new { type = "string", description = "Filter by category (for list operation)" },
-                        tags = new
-                        {
-                            type = "array",
-                            items = new { type = "string" },
-                            description = "Filter by tags (for list operation)"
-                        }
-                    },
-                    required = Array.Empty<string>() // No required fields - depends on operation
-                }
-            },
         };
 
         return new JsonRpcResponse
@@ -1115,96 +946,6 @@ public sealed partial class McpHandler
                 docstring = node.Metadata.Docstring,
                 language = node.Metadata.Language
             }
-        };
-    }
-
-    /// <summary>
-    /// aura_docs - Documentation operations: search, list, get.
-    /// </summary>
-    private async Task<object> DocsAsync(JsonElement? args, CancellationToken ct)
-    {
-        var operation = args?.TryGetProperty("operation", out var opEl) == true
-            ? opEl.GetString() ?? "search"
-            : "search";
-
-        return operation switch
-        {
-            "search" => await DocsSearchAsync(args, ct),
-            "list" => DocsListInternal(args),
-            "get" => DocsGetInternal(args),
-            _ => throw new ArgumentException($"Unknown docs operation: {operation}")
-        };
-    }
-
-    private async Task<object> DocsSearchAsync(JsonElement? args, CancellationToken ct)
-    {
-        var query = args.GetRequiredString("query");
-
-        _logger.LogDebug("aura_docs(search): query={Query}", query);
-
-        return await _auraDocsTool.SearchDocumentationAsync(query, ct);
-    }
-
-    private object DocsListInternal(JsonElement? args)
-    {
-        string? category = null;
-        IReadOnlyList<string>? tags = null;
-
-        if (args.HasValue)
-        {
-            if (args.Value.TryGetProperty("category", out var categoryEl))
-            {
-                category = categoryEl.GetString();
-            }
-
-            if (args.Value.TryGetProperty("tags", out var tagsEl))
-            {
-                tags = tagsEl.EnumerateArray()
-                    .Select(e => e.GetString() ?? string.Empty)
-                    .Where(s => !string.IsNullOrWhiteSpace(s))
-                    .ToList();
-            }
-        }
-
-        _logger.LogDebug("aura_docs(list): category={Category}, tags={Tags}", category, tags);
-
-        var docs = _docsService.ListDocuments(category, tags);
-
-        return new
-        {
-            count = docs.Count,
-            docs = docs.Select(d => new
-            {
-                id = d.Id,
-                title = d.Title,
-                summary = d.Summary,
-                category = d.Category,
-                tags = d.Tags
-            })
-        };
-    }
-
-    private object DocsGetInternal(JsonElement? args)
-    {
-        var id = args.GetRequiredString("id");
-
-        _logger.LogDebug("aura_docs(get): id={Id}", id);
-
-        var doc = _docsService.GetDocument(id);
-
-        if (doc is null)
-        {
-            throw new KeyNotFoundException($"Document with ID '{id}' not found");
-        }
-
-        return new
-        {
-            id = doc.Id,
-            title = doc.Title,
-            category = doc.Category,
-            tags = doc.Tags,
-            content = doc.Content,
-            last_updated = doc.LastUpdated
         };
     }
 
