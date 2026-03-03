@@ -1,373 +1,163 @@
 # Aura Project Status
 
-> **Last Updated**: 2026-02-06
-> **Current Release**: v1.3.1
-> **Branch**: main
-> **Overall Status**: ✅ Production Ready
+> **Last Updated**: 2026-03-03
+> **Current Branch**: trim/personal-knowledge-mcp
+> **Overall Status**: 🔄 Major Pivot In Progress
 
 ## Quick Summary
 
-Aura is an **AI-powered development assistant with local code intelligence**. It indexes your codebase locally (Roslyn, TreeSitter, pgvector RAG) and exposes tools via MCP for GitHub Copilot. LLM inference uses cloud providers by default (Azure OpenAI); local inference via Ollama is also supported. The Developer Module is production-ready with MCP integration, Roslyn refactoring tools, pattern-driven workflows, and multi-language support. The Researcher Module provides academic paper management and research workflows.
+Aura is a **personal knowledge indexing platform** with an MCP interface. It indexes code, documents, PDFs, and structured data locally (Roslyn, TreeSitter, pgvector RAG) and exposes tools via MCP for GitHub Copilot. Embedding generation uses Ollama (local) or OpenAI (hosted) — configurable. The system runs as a Windows Service with a cross-platform tray app for monitoring.
+
+**This is a major architectural pivot from the previous agent-orchestration platform.** See [ADR-025](adr/025-personal-knowledge-mcp-pivot.md) for rationale.
 
 ## Recent Changes
 
-- **2026-02-06**: Remove Internal Agent Architecture (7,093 lines deleted)
-  - Deleted RoslynCodingAgent, InternalAgentExecutor, ConversationService
-  - Removed built-in chat UI (chatPanelProvider, chatWindowProvider, agentTreeProvider)
-  - Removed 10 deprecated endpoints and 4 agent execution endpoints
-  - Copilot Chat + MCP is now the only execution path
-  - All 849 tests pass
-
-- **2026-02-02**: Researcher Module - Academic paper and research management
-  - Entities: Source, Excerpt, Concept, ConceptLink, Synthesis
-  - Fetchers: ArxivFetcher, SemanticScholarFetcher, WebPageFetcher
-  - Services: LibraryService, PdfExtractor, PdfToMarkdownService
-  - API endpoints for source CRUD, import, excerpts, concepts, search
-  - VS Code extension: Research Library view with import/search commands
-  - Agents: research-agent.md, reading-assistant-agent.md
-  - 29 unit tests passing
-
-- **2026-01-29**: Unified Wave Orchestration - Simplified story execution model
-  - Removed `StoryTask` abstraction (use `StoryStep` directly)
-  - Removed `InternalAgentsDispatcher` (use Copilot CLI only for wave execution)
-  - Removed `DispatchTarget` enum (no longer needed)
-  - Extension now shows wave progress ("Wave 2/4") and groups steps by wave
-  - Steps are updated in-place during dispatch (no conversion overhead)
+- **2026-03-03**: Personal Knowledge MCP Pivot
+  - Removed agent orchestration, VS Code extension, prompt templates, story lifecycle, GitHub integration, Aspire host (~60,000 lines deleted)
+  - Added PdfIngestor, TreeSitterCodeIngestor, StructuredDataIngestor
+  - Added `aura_index` MCP tool for on-demand indexing
+  - Added OpenAI embedding provider with configurable batching
+  - Restored cross-platform system tray app (Avalonia)
+  - Updated CI/release pipelines for Windows + macOS
+  - 388 tests passing across 4 projects
 
 ## Component Status
 
-| Component | Status | Key Files |
-|-----------|--------|-----------|
-| **Aura.Foundation** | ✅ Complete | `src/Aura.Foundation/` |
-| **Aura.Module.Developer** | ✅ Complete | `src/Aura.Module.Developer/` |
-| **Aura.Module.Researcher** | ✅ Complete | `src/Aura.Module.Researcher/` |
-| **Aura.Api** | ✅ Complete | `src/Aura.Api/Program.cs` |
-| **Aura.AppHost** | ✅ Complete | `src/Aura.AppHost/` |
-| **VS Code Extension** | ✅ Complete | `extension/src/` |
-| **Tests** | ✅ 849 passing | `tests/` |
+| Component | Status | Notes |
+|-----------|--------|-------|
+| **Aura.Foundation** | ✅ Active | RAG pipeline, embeddings, code graph, git, shell |
+| **Aura.Module.Developer** | ✅ Active | Roslyn, TreeSitter, Python/TS refactoring |
+| **Aura.Module.Researcher** | ✅ Active | PDF extraction, library management |
+| **Aura.Api** | ✅ Active | MCP server + REST endpoints |
+| **Aura.Tray** | ✅ Active | Cross-platform system tray monitor |
+| **Aura.ServiceDefaults** | ✅ Active | Shared service configuration |
+| ~~Aura.AppHost~~ | ❌ Removed | Aspire host no longer needed |
+| ~~VS Code Extension~~ | ❌ Removed | Copilot Chat is the UI |
+| **Tests** | ✅ 388 passing | Foundation, Developer, Researcher, Api |
 
-## Feature Inventory
-
-### Core Infrastructure
-
-| Feature | Status | Spec/ADR |
-|---------|--------|----------|
-| Agent Registry & Loading | ✅ | [spec/01-agents.md](spec/01-agents.md) |
-| Capability-based Routing | ✅ | [adr/011-two-tier-capability-model.md](adr/011-two-tier-capability-model.md) |
-| LLM Providers (Ollama, Azure, OpenAI) | ✅ | [spec/24-llm-providers.md](spec/24-llm-providers.md) |
-| RAG Pipeline | ✅ | [adr/008-local-rag-foundation.md](adr/008-local-rag-foundation.md) |
-| Tool Framework (ReAct) | ✅ | [adr/012-tool-using-agents.md](adr/012-tool-using-agents.md) |
-| Tool Execution (Function Calling) | ✅ | [features/completed/tool-execution-for-agents.md](features/completed/tool-execution-for-agents.md) |
-| Prompt Templates | ✅ | [adr/018-prompt-template-architecture.md](adr/018-prompt-template-architecture.md) |
-
-### Developer Module
-
-| Feature | Status | Spec/ADR |
-|---------|--------|----------|
-| Workflow Lifecycle | ✅ | [spec/12-developer-module.md](spec/12-developer-module.md) |
-| Git Worktree Integration | ✅ | [spec/05-git-worktrees.md](spec/05-git-worktrees.md) |
-| Assisted Workflow UI | ✅ | [spec/assisted-workflow-ui.md](spec/assisted-workflow-ui.md) |
-| Roslyn Tools (6 tools) | ✅ | [adr/014-developer-module-roslyn-tools.md](adr/014-developer-module-roslyn-tools.md) |
-| Graph RAG for Code | ✅ | [adr/015-graph-rag-for-code.md](adr/015-graph-rag-for-code.md) |
-| TreeSitter Ingesters | ✅ | [spec/22-ingester-agents.md](spec/22-ingester-agents.md) |
-| Semantic Enrichment | ✅ | [tasks/treesitter-ingesters.md](tasks/treesitter-ingesters.md) |
-| Language Specialist Agents | ✅ | [features/completed/generic-language-agent.md](features/completed/generic-language-agent.md) |
-
-### VS Code Extension
-
-| Feature | Status | Notes |
-|---------|--------|-------|
-| Workflow Tree View | ✅ | Grouped by status, filtered by workspace |
-| Workflow Panel | ✅ | Full create/analyze/plan/execute UI |
-| Status Tree View | ✅ | Health, Ollama models, RAG stats |
-| Research Library View | ✅ | Source import, search, excerpts |
-
-## API Reference
-
-All endpoints in `src/Aura.Api/Program.cs`. Quick reference: [ARCHITECTURE-QUICK-REFERENCE.md](ARCHITECTURE-QUICK-REFERENCE.md)
-
-### Key Endpoints
+## Architecture
 
 ```
-# Workflows
-POST   /api/developer/workflows              # Create
-GET    /api/developer/workflows/{id}         # Get with steps
-POST   /api/developer/workflows/{id}/analyze # Enrich with RAG
-POST   /api/developer/workflows/{id}/plan    # Generate steps
-POST   /api/developer/workflows/{id}/steps/{stepId}/execute
-
-# Step Management (Assisted UI)
-POST   /api/developer/workflows/{id}/steps/{stepId}/approve
-POST   /api/developer/workflows/{id}/steps/{stepId}/reject
-POST   /api/developer/workflows/{id}/steps/{stepId}/skip
-POST   /api/developer/workflows/{id}/steps/{stepId}/chat
-POST   /api/developer/workflows/{id}/steps/{stepId}/reassign
-
-# Workspaces (indexing + code graph)
-POST   /api/workspaces                 # Onboard (registers + indexes)
-GET    /api/workspaces                 # List all
-GET    /api/workspaces/{id}            # Get details + stats
-POST   /api/workspaces/{id}/reindex    # Reindex existing
-DELETE /api/workspaces/{id}            # Remove + clean data
-GET    /api/workspaces/lookup?path=... # Look up by path
-
-# RAG
-POST   /api/rag/search
-
-# Code Graph Queries
-GET    /api/graph/find/{name}
-GET    /api/graph/implementations/{interface}
-GET    /api/graph/callers/{method}
-GET    /api/graph/members/{type}
+Copilot CLI / Copilot Chat
+  └─ MCP connection
+      └─ Aura MCP Server (port 5300, Windows Service)
+          ├─ aura_search     → semantic search across all indexed content
+          ├─ aura_navigate   → code relationships (Roslyn/TreeSitter graph)
+          ├─ aura_inspect    → type structure
+          ├─ aura_refactor   → code transforms (Roslyn/rope/ts-morph)
+          ├─ aura_generate   → code generation (Roslyn)
+          ├─ aura_validate   → build/test
+          ├─ aura_index      → trigger indexing of files/directories
+          ├─ aura_architect  → architecture analysis (planned)
+          ├─ aura_tree       → hierarchical code exploration
+          └─ aura_workspace  → manage indexed collections
+              │
+              ├─ Ingestor Pipeline (priority order)
+              │   ├─ RoslynCodeIngestor (.cs) — full AST + code graph
+              │   ├─ TreeSitterCodeIngestor (.py/.ts/.js/.go/.rs/.java/.c++)
+              │   ├─ StructuredDataIngestor (.json/.yaml/.xml/.toml)
+              │   ├─ PdfIngestor (.pdf) — via pdftotext
+              │   ├─ MarkdownIngestor (.md)
+              │   ├─ CodeIngestor (regex fallback)
+              │   └─ PlainTextIngestor (everything else)
+              │
+              ├─ Embedding Layer
+              │   ├─ OllamaProvider (local, nomic-embed-text, 768d)
+              │   └─ OpenAiEmbeddingProvider (hosted, text-embedding-3-small, 1536d)
+              │
+              └─ Storage (PostgreSQL + pgvector)
 ```
+
+## MCP Tools (10)
+
+| Tool | Purpose | Language Support |
+|------|---------|-----------------|
+| `aura_search` | Semantic search across indexed content | All |
+| `aura_navigate` | Find callers, implementations, usages, references | C# (Roslyn), Python (rope), TypeScript (ts-morph) |
+| `aura_inspect` | Examine type members, list types | C# (Roslyn) |
+| `aura_refactor` | Rename, extract, move, change signature | C# (Roslyn), Python (rope), TypeScript (ts-morph) |
+| `aura_generate` | Create types, implement interfaces, generate tests | C# (Roslyn) |
+| `aura_validate` | Compilation check, run tests | C# (dotnet), TypeScript (tsc) |
+| `aura_index` | Index files/directories, check job status, get stats | All |
+| `aura_workspace` | Manage workspaces: add, remove, list, status | All |
+| `aura_tree` | Hierarchical code exploration | All |
+| `aura_architect` | Architecture analysis (planned) | C# |
 
 ## Configuration
 
-### LLM Providers
+### Embedding Provider
 
 ```json
 {
-  "LlmProviders": {
-    "default": {
-      "Provider": "ollama",
-      "Endpoint": "http://localhost:11434",
-      "Model": "llama3:8b"
+  "Aura": {
+    "Embedding": {
+      "Provider": "ollama"
     }
   }
 }
 ```
 
-See [spec/24-llm-providers.md](spec/24-llm-providers.md) for Azure/OpenAI config.
+Set `Provider` to `"openai"` for hosted embeddings. See [ADR-027](adr/027-configurable-embedding-providers.md).
 
 ### Running the System
 
-Aura runs as a Windows Service. For development:
-
 ```powershell
-# Test API (Aura service must be running)
-curl http://localhost:5300/health
-
-# Build extension
-.\scripts\Build-Extension.ps1
+# Build
+dotnet build
 
 # Run tests
-.\scripts\Run-UnitTests.ps1
+dotnet test --filter "FullyQualifiedName!~IntegrationTests"
 
-# Update local install after code changes (run as Administrator)
-.\scripts\Update-LocalInstall.ps1
+# Test API (service must be running)
+curl http://localhost:5300/health
+
+# Lint
+dotnet format --verify-no-changes
 ```
 
 ## Project Structure
 
 ```
 src/
-├── Aura.Foundation/          # Core: agents, LLM, RAG, data, tools
-├── Aura.Module.Developer/    # Developer vertical: workflows, git, Roslyn
-├── Aura.Api/                 # API host (all endpoints in Program.cs)
-└── Aura.AppHost/             # Aspire orchestration
+├── Aura.Foundation/          # Core: RAG, embeddings, git, shell, data
+├── Aura.Module.Developer/    # Roslyn, TreeSitter, Python/TS services
+├── Aura.Module.Researcher/   # PDF extraction, library management
+├── Aura.Api/                 # MCP server + REST endpoints
+├── Aura.Tray/                # Cross-platform system tray (Avalonia)
+└── Aura.ServiceDefaults/     # Shared service config
 
-extension/
-└── src/
-    ├── providers/            # Tree views and panels
-    └── services/             # API client
+tests/
+├── Aura.Foundation.Tests/    # 216 tests
+├── Aura.Module.Developer.Tests/  # 27 tests
+├── Aura.Module.Researcher.Tests/ # 61 tests
+└── Aura.Api.Tests/           # 84 tests
 
-agents/                       # Markdown agent definitions
-prompts/                      # Handlebars prompt templates
+patterns/                     # Operational patterns for complex tasks
+scripts/                      # Build, test, publish scripts
+installers/windows/           # Inno Setup installer
 ```
 
-## Key Documents
+## Key ADRs
 
-| Document | Purpose |
-|----------|---------|
-| [ARCHITECTURE-QUICK-REFERENCE.md](ARCHITECTURE-QUICK-REFERENCE.md) | API endpoints, file locations, debugging |
-| [plan/implementation/00-overview.md](plan/implementation/00-overview.md) | Implementation status and architecture |
-| [spec/12-developer-module.md](spec/12-developer-module.md) | Developer workflow design |
-| [spec/assisted-workflow-ui.md](spec/assisted-workflow-ui.md) | UI collaboration model |
-| [progress/2025-12-11.md](progress/2025-12-11.md) | Latest weekly progress |
+| ADR | Decision |
+|-----|----------|
+| [ADR-025](adr/025-personal-knowledge-mcp-pivot.md) | Pivot to personal knowledge MCP server |
+| [ADR-026](adr/026-multi-language-ast-indexing.md) | Multi-language AST indexing via TreeSitter |
+| [ADR-027](adr/027-configurable-embedding-providers.md) | Configurable embedding providers (Ollama + OpenAI) |
+| [ADR-008](adr/008-local-rag-foundation.md) | Local RAG as foundation component |
+| [ADR-015](adr/015-graph-rag-for-code.md) | Graph RAG for code understanding |
+| [ADR-001](adr/001-local-first-architecture.md) | Local-first, privacy-safe architecture |
 
-## Release v1.3.0 (Jan 19, 2026)
+## Superseded ADRs
 
-Major release with 121 commits since v1.2.0.
+These decisions were valid in the agent-orchestration era but are no longer applicable:
 
-### Highlights
-
-- **MCP Tools Consolidation** - 28 tools consolidated into 8 meta-tools (`aura_search`, `aura_navigate`, `aura_inspect`, `aura_validate`, `aura_refactor`, `aura_generate`, `aura_pattern`, `aura_workflow`)
-- **Roslyn Refactoring** - Full semantic refactoring: rename, extract method/variable/interface, move type to file, change signature, safe delete
-- **Python Refactoring** - Cross-language refactoring support via rope
-- **Blast Radius Protocol** - Analyze mode shows affected files before executing refactorings
-- **Agent Reflection** - Agents self-critique responses before returning
-- **Workflow Verification** - Verification stage ensures work is complete before finishing
-- **Pattern System** - Tiered patterns with language overlays for complex multi-step operations
-- **Guardian System** - Background guardians for CI, test coverage, and documentation
-- **Worktree Support** - Path translation and cache invalidation for git worktrees
-- **macOS Development** - Local development support for macOS
-- **Test Generation** - Improved quality with compilation validation and proper namespace handling
-- **GitHub Integration** - MCP server for Copilot, GitHub Actions tools
-
-### Breaking Changes
-
-None - all changes are additive.
-
-## Release v1.3.1 (Jan 23, 2026)
-
-### Agentic Execution v2 (Shipped)
-
-Enhanced ReAct execution system with multi-agent orchestration, intelligent retry loops, and token budget awareness.
-
-| Feature | Description |
-|---------|-------------|
-| Sub-Agent Spawning | `spawn_subagent` tool for hierarchical task delegation |
-| Token Budget Tracking | `TokenTracker` class with configurable budgets |
-| Context Budget Awareness | `check_token_budget` tool for agents to monitor capacity |
-| Budget Warnings | Automatic warnings injected at 70%/80%/90% thresholds |
-| Intelligent Retry | Retry loops for tool failures with error context injection |
-| Retry Templates | `react-retry.prompt` Handlebars template |
-
-### New Tools
-
-- `spawn_subagent` - Delegate complex subtasks to a new agent with fresh context
-- `check_token_budget` - Check remaining context window capacity
-
-### Modern C# Support (Shipped)
-
-Extended `aura_generate` MCP tool with modern C# 9-13 features:
-- `required` properties, `init` setters
-- Method modifiers (`virtual`/`override`/`abstract`/`sealed`/`new`)
-- Primary constructors and positional records
-- Generic type parameters with constraints
-- Attributes on properties and methods
-- Extension methods and XML documentation
-
-### Other Improvements
-
-- Fixed `Run-UnitTests.ps1` to exclude integration tests
-- Added `aura_edit` tool for surgical text editing
-
-See spec: [features/completed/agentic-execution-v2.md](features/completed/agentic-execution-v2.md)
-
-## Recent Changes (Jan 13, 2026)
-
-1. **Structured Output Mode (Complete)**
-   - Added `JsonSchema` and `ChatOptions` for declarative response schemas
-   - Implemented schema support in Azure OpenAI and OpenAI providers
-   - Added Ollama fallback with JSON mode + schema injection
-   - Created `WellKnownSchemas` (ReActResponse, WorkflowPlan, CodeModification)
-   - Integrated structured output in ReActExecutor with `UseStructuredOutput` option
-   - Integrated structured output in WorkflowService.PlanAsync for reliable step parsing
-
-2. **Streaming Responses (Complete)**
-   - Added `StreamChatAsync` to all LLM providers
-   - Implemented NDJSON streaming for Ollama
-   - Implemented SDK streaming for Azure OpenAI and OpenAI
-   - Added `/api/agents/{agentId}/chat/stream` SSE endpoint
-   - Updated extension chat panel to consume SSE stream
-   - Added streaming to workflow step execution
-
-## Recent Changes (Jan 3, 2026)
-
-1. **Tool Execution for Agents (Complete)**
-   - Added `ChatWithFunctionsAsync` to all LLM providers (Azure OpenAI, OpenAI, Ollama)
-   - Added `FunctionDefinition`, `FunctionCall`, `LlmFunctionResponse` records for function calling
-   - Updated `ConfigurableAgent` with tool execution loop supporting native LLM function calling
-   - Added `IToolConfirmationService` for human-in-the-loop tool approval
-   - Added `ToolConfirmationOptions` for configuring auto-approve/require-approval tools
-   - Agents can now execute tools declared in their `## Tools Available` section
-   - Tools requiring confirmation will be rejected in auto-approve mode
-
-2. **Language Specialist Agents (Complete)**
-   - Implemented `LanguageSpecialistAgent` that loads behavior from YAML config files
-   - Added `LanguageConfigLoader` to parse `agents/languages/*.yaml` files
-   - Added `LanguageToolFactory` to create CLI tools from YAML definitions
-   - Added `RegisterLanguageAgentsTask` startup task to auto-load language agents
-   - Python, TypeScript, Go, Rust, F#, etc. now have proper specialist agents
-   - C# continues to use hardcoded `RoslynCodingAgent` (needs Roslyn APIs)
-
-## Previous Changes (Jan 2, 2026)
-
-1. **Unified Capability Model**
-   - RoslynCodingAgent now uses `software-development-csharp` capability (replaces fragmented `csharp-coding`, `testing-csharp`, etc.)
-   - Added capability aliases in AgentRegistry for backward compatibility
-   - Old capability names automatically resolve to new unified names
-
-2. **Removed Duplicate Language Agents**
-   - Deleted `PythonCodingAgent.cs`, `GoCodingAgent.cs`, `TypeScriptCodingAgent.cs`, `FSharpCodingAgent.cs`
-   - These duplicated functionality defined in `agents/languages/*.yaml`
-   - Languages now fall back to generic `coding-agent.md` until LanguageSpecialistAgent is implemented
-
-3. **Unified Indexing Backend (Complete)**
-   - Created `RoslynCodeIngestor` that produces both RAG chunks AND code graph nodes in single parse
-   - Added `RegisterCodeIngestorsTask` startup task to register ingestors at module load
-   - `/api/semantic/index` endpoint now delegates to BackgroundIndexer with unified pipeline
-   - Deleted `DeveloperSemanticIndexer` - no longer needed with unified approach
-   - C# files indexed via background indexer now get both RAG embeddings and graph nodes
-
-## Previous Changes (Dec 6-11, 2025)
-
-1. **Agent Test-Writing Improvements**
-   - Agents read existing tests to match framework and patterns
-   - Explicit test file path instructions
-   - Agents run tests after writing to verify correctness
-
-2. **LLM Provider Refinements**
-   - Default model fallback when agent doesn't specify a model
-   - Unified LLM configuration across providers
-
-3. **Git Tools for Agents** - Git status, diff, log, branch operations available as tools
-
-4. **Bug Fixes**
-   - Step status stuck in Running when HTTP request cancelled
-   - WorkingDirectory for Roslyn validation
-   - Background RAG indexing for faster workflow creation
-
-5. **Documentation** - Added API Cheat Sheet for quick reference
-
-## Earlier Changes (Dec 2-5, 2025)
-
-1. **Assisted Workflow UI** - 5-phase implementation complete
-   - Step cards with collapsible output/chat
-   - Execute gating based on predecessor completion
-   - Approve/reject step outputs
-   - Step-level chat with agents
-   - Reassign agents, edit descriptions, skip steps
-
-2. **Cloud LLM Providers** - Azure OpenAI and OpenAI support
-
-3. **TreeSitter Semantic Enrichment** - Docstrings, imports, types extracted
-
-4. **RAG Improvements** - Case-insensitive paths, multi-query approach
-
-## Open Items
-
-### Technical Debt
-
-| Item | Impact | Notes |
-|------|--------|-------|
-| ReActExecutor inline prompt | Low | Core ReAct prompt is inline in `ReActExecutor.cs` - tightly coupled to parsing logic, consider externalizing with care. |
-
-### Not Yet Implemented
-
-| Item | Priority | Notes |
-|------|----------|-------|
-| Dependency Graph edges | Low | Import relationships in code graph |
-| Azure AD for LLM | Future | Currently API key only |
-| Cost tracking | Future | For cloud LLM usage |
-| Parallel step execution | Future | Currently sequential |
-
-### Pending Actions
-
-- [x] Push commits to origin ✅
-- [x] Update progress documentation ✅
-- [x] Remove duplicate language agents (PythonCodingAgent, GoCodingAgent, TypeScriptCodingAgent, FSharpCodingAgent) ✅
-- [x] Create MVP release tag ✅ (v1.0.0-mvp)
-- [x] Release v1.3.0 ✅ (Jan 19, 2026)
-- [ ] User testing with real workflows
-
-## Principles
-
-1. **Local Code Intelligence** - Codebase indexing, code graph, and RAG stay on your machine
-2. **Cloud-Accelerated LLM** - Azure OpenAI by default; Ollama for local inference
-3. **Human-in-the-Loop** - Users control workflow execution
-4. **Composable Modules** - Mix-and-match capabilities
-5. **Hot-Reloadable Agents** - Drop markdown files to add agents
-
-See [ADR-024](adr/024-hybrid-architecture.md) for the full architecture rationale.
+| ADR | Was | Now |
+|-----|-----|-----|
+| ADR-004 | Markdown Agent Definitions | Agents deleted — Copilot CLI is the agent |
+| ADR-005 | Aspire Orchestration | AppHost deleted — single-process deployment |
+| ADR-011 | Two-Tier Capability Model | Capability routing deleted |
+| ADR-012 | Tool-Using Agents (ReAct) | Agent execution deleted |
+| ADR-018 | Prompt Templates | Prompts deleted |
+| ADR-022 | Multi-Agent Orchestration | Orchestration deleted |
+| ADR-024 | Hybrid Architecture | Superseded by ADR-025 |

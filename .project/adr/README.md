@@ -30,7 +30,10 @@ This directory contains the architecture decision records for the Aura project.
 | [ADR-021](021-session-infrastructure-pivot.md) | Session Infrastructure Pivot | ✅ Accepted | 2026-01-15 |
 | [ADR-022](022-multi-agent-orchestration.md) | Multi-Agent Orchestration | ✅ Accepted | 2026-01-20 |
 | [ADR-023](023-mcp-over-copilot-sdk.md) | MCP Integration Over Copilot SDK | ✅ Accepted | 2026-02-06 |
-| [ADR-024](024-hybrid-architecture.md) | Hybrid Architecture | ✅ Accepted | 2026-02-20 |
+| [ADR-024](024-hybrid-architecture.md) | Hybrid Architecture | ⚠️ Superseded by ADR-025 | 2026-02-20 |
+| [ADR-025](025-personal-knowledge-mcp-pivot.md) | Pivot to Personal Knowledge MCP Server | ✅ Accepted | 2026-03-03 |
+| [ADR-026](026-multi-language-ast-indexing.md) | Multi-Language AST Indexing via TreeSitter | ✅ Accepted | 2026-03-03 |
+| [ADR-027](027-configurable-embedding-providers.md) | Configurable Embedding Providers | ✅ Accepted | 2026-03-03 |
 
 ## ADR Template
 
