@@ -88,15 +88,20 @@ public static class ServiceCollectionExtensions
 
         // Select embedding provider based on configuration
         var embeddingProvider = configuration
-            .GetSection(EmbeddingOptions.SectionName)["Provider"]?.ToLowerInvariant() ?? "ollama";
+            .GetSection(EmbeddingOptions.SectionName)["Provider"]?.ToLowerInvariant() ?? "auto";
 
-        if (embeddingProvider == "openai")
+        switch (embeddingProvider)
         {
-            services.AddScoped<IEmbeddingProvider>(sp => sp.GetRequiredService<OpenAiEmbeddingProvider>());
-        }
-        else
-        {
-            services.AddScoped<IEmbeddingProvider>(sp => sp.GetRequiredService<OllamaProvider>());
+            case "openai":
+                services.AddScoped<IEmbeddingProvider>(sp => sp.GetRequiredService<OpenAiEmbeddingProvider>());
+                break;
+            case "ollama":
+                services.AddScoped<IEmbeddingProvider>(sp => sp.GetRequiredService<OllamaProvider>());
+                break;
+            default: // "auto" — try OpenAI first, fall back to Ollama
+                services.AddScoped<FallbackEmbeddingProvider>();
+                services.AddScoped<IEmbeddingProvider>(sp => sp.GetRequiredService<FallbackEmbeddingProvider>());
+                break;
         }
 
         services.AddSingleton<TextChunker>();

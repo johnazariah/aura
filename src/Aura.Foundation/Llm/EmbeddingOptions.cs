@@ -15,9 +15,10 @@ public sealed class EmbeddingOptions
 
     /// <summary>
     /// Gets or sets the embedding provider to use.
-    /// Supported values: "ollama" (default, local), "openai" (hosted).
+    /// Supported values: "auto" (default — try OpenAI first, fall back to Ollama),
+    /// "openai" (hosted only), "ollama" (local only).
     /// </summary>
-    public string Provider { get; set; } = "ollama";
+    public string Provider { get; set; } = "auto";
 
     /// <summary>
     /// Gets or sets the batch size for embedding generation.
@@ -26,4 +27,11 @@ public sealed class EmbeddingOptions
     /// For Ollama, this controls how many texts are sent in one /api/embed call.
     /// </summary>
     public int BatchSize { get; set; } = 100;
+
+    /// <summary>
+    /// Gets or sets the model to use when falling back to Ollama.
+    /// Only used when Provider is "auto" and the primary (OpenAI) fails.
+    /// If null, uses the same model name (which may not exist in Ollama).
+    /// </summary>
+    public string? FallbackModel { get; set; } = "nomic-embed-text";
 }
