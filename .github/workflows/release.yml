@@ -7,7 +7,6 @@ on:
 
 env:
   DOTNET_VERSION: '10.0.x'
-  NODE_VERSION: '20'
 
 jobs:
   build-windows:
@@ -15,17 +14,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Full history for changelog
+          fetch-depth: 0
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
 
       - name: Extract version from tag
         id: version
@@ -38,7 +32,7 @@ jobs:
         run: dotnet test --configuration Release --verbosity normal --filter "FullyQualifiedName!~IntegrationTests"
 
       - name: Publish Release
-        run: .\scripts\Publish-Release.ps1 -Version ${{ steps.version.outputs.VERSION }}
+        run: .\scripts\Publish-Release.ps1 -Version ${{ steps.version.outputs.VERSION }} -Runtime win-x64
 
       - name: Install Inno Setup
         run: choco install innosetup -y
@@ -54,21 +48,45 @@ jobs:
           name: windows-installer
           path: publish/installers/Aura-Setup-*.exe
 
-      - name: Upload VS Code Extension
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Extract version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+
+      - name: Publish Release
+        run: pwsh ./scripts/Publish-Release.ps1 -Version ${{ steps.version.outputs.VERSION }} -Runtime osx-arm64 -SkipPostgres
+
+      - name: Create macOS archive
+        run: |
+          cd publish/osx-arm64
+          tar -czf ../Aura-${{ steps.version.outputs.VERSION }}-macos-arm64.tar.gz .
+
+      - name: Upload macOS Archive
         uses: actions/upload-artifact@v4
         with:
-          name: vscode-extension
-          path: publish/win-x64/extension/aura-*.vsix
+          name: macos-archive
+          path: publish/Aura-*.tar.gz
 
   create-release:
-    needs: build-windows
+    needs: [build-windows, build-macos]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Full history for changelog
+          fetch-depth: 0
 
       - name: Download Windows Installer
         uses: actions/download-artifact@v4
@@ -76,21 +94,17 @@ jobs:
           name: windows-installer
           path: artifacts
 
-      - name: Download VS Code Extension
+      - name: Download macOS Archive
         uses: actions/download-artifact@v4
         with:
-          name: vscode-extension
+          name: macos-archive
           path: artifacts
 
       - name: Generate Changelog
-        id: changelog
         run: |
-          # Get previous tag
           PREV_TAG=$(git describe --abbrev=0 --tags HEAD^ 2>/dev/null || echo "")
-          
           echo "## Changes" > changelog.md
           echo "" >> changelog.md
-          
           if [ -n "$PREV_TAG" ]; then
             echo "Changes since $PREV_TAG:" >> changelog.md
             echo "" >> changelog.md
@@ -100,9 +114,7 @@ jobs:
             echo "" >> changelog.md
             git log --pretty=format:"- %s (%h)" -20 >> changelog.md
           fi
-          
           echo "" >> changelog.md
-          cat changelog.md
 
       - name: Extract version
         id: version
@@ -113,28 +125,26 @@ jobs:
         with:
           files: |
             artifacts/Aura-Setup-*.exe
-            artifacts/aura-*.vsix
+            artifacts/Aura-*-macos-arm64.tar.gz
           body_path: changelog.md
           append_body: |
-            
+
             ## Installation
-            
+
+            ### Windows
             1. Download `Aura-Setup-${{ steps.version.outputs.VERSION }}.exe` and run the installer
-            2. The VS Code extension will be installed automatically if VS Code is detected
+            2. The installer bundles PostgreSQL + pgvector
             3. Ensure Ollama is installed: https://ollama.com
-            
+
+            ### macOS
+            1. Download and extract `Aura-${{ steps.version.outputs.VERSION }}-macos-arm64.tar.gz`
+            2. Install PostgreSQL with pgvector: `brew install postgresql@16 pgvector`
+            3. Install Ollama: https://ollama.com
+            4. Run `./api/Aura.Api` to start the service, `./tray/Aura.Tray` for status monitor
+
             ## Requirements
-            
-            - Windows 10/11 (x64)
-            - Ollama (for local LLM)
-            - PostgreSQL is bundled with the installer
-            
-            ## Manual Extension Install
-            
-            If VS Code was not detected during installation:
-            ```powershell
-            & "$env:ProgramFiles\Aura\scripts\install-extension.ps1"
-            ```
+            - Ollama (for local embeddings)
+            - PostgreSQL 16+ with pgvector (bundled on Windows, manual on macOS)
           draft: false
           prerelease: ${{ contains(github.ref_name, 'preview') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'alpha') || contains(github.ref_name, 'rc') }}
           generate_release_notes: true

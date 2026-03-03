@@ -43,22 +43,15 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "installservice"; Description: "Install as Windows Service (auto-start on boot)"; GroupDescription: "Service Options:"
 Name: "starttray"; Description: "Start system tray monitor after installation"; GroupDescription: "Tray Options:"
 Name: "autostartray"; Description: "Start system tray monitor with Windows"; GroupDescription: "Tray Options:"
-Name: "installextension"; Description: "Install VS Code extension"; GroupDescription: "VS Code Integration:"; Check: VSCodeExists
 
 [Files]
 ; API/Service
 Source: "..\..\publish\win-x64\api\*"; DestDir: "{app}\api"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; Tray application
 Source: "..\..\publish\win-x64\tray\*"; DestDir: "{app}\tray"; Flags: ignoreversion recursesubdirs createallsubdirs
-; Agents
-Source: "..\..\publish\win-x64\agents\*"; DestDir: "{app}\agents"; Flags: ignoreversion recursesubdirs createallsubdirs
-; Prompts
-Source: "..\..\publish\win-x64\prompts\*"; DestDir: "{app}\prompts"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; Patterns
-Source: "..\..\publish\win-x64\patterns\*"; DestDir: "{app}\patterns"; Flags: ignoreversion recursesubdirs createallsubdirs
-; VS Code Extension
-Source: "..\..\publish\win-x64\extension\*.vsix"; DestDir: "{app}\extension"; Flags: ignoreversion
-; Scripts (includes language tool scripts in subdirectories)
+Source: "..\..\publish\win-x64\patterns\*"; DestDir: "{app}\patterns"; Flags: ignoreversion recursesubdirs createallsubdirs; Check: DirExists(ExpandConstant('{src}\..\..\publish\win-x64\patterns'))
+; Scripts (language tool scripts)
 Source: "..\..\publish\win-x64\scripts\*"; DestDir: "{app}\scripts"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; Diagnostic script
 Source: "Diagnose-Aura.ps1"; DestDir: "{app}\scripts"; Flags: ignoreversion
@@ -90,16 +83,12 @@ Filename: "{app}\pgsql\bin\createdb.exe"; Parameters: "-h localhost -p 5433 -U p
 ; Enable pgvector extension
 Filename: "{app}\pgsql\bin\psql.exe"; Parameters: "-h localhost -p 5433 -U postgres -d auradb -c ""CREATE EXTENSION IF NOT EXISTS vector"""; Flags: runhidden
 
-; Create dedicated service account (provides proper user context for all languages)
-Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -File ""{app}\scripts\Create-ServiceAccount.ps1"""; Flags: runhidden; Tasks: installservice
-; Install as Windows Service with dedicated account
-Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -File ""{app}\scripts\Install-AuraService.ps1"" -InstallPath ""{app}"""; Flags: runhidden; Tasks: installservice
-Filename: "sc.exe"; Parameters: "description AuraService ""Aura local AI assistant service"""; Flags: runhidden; Tasks: installservice
+; Install as Windows Service
+Filename: "sc.exe"; Parameters: "create AuraService binPath= ""{app}\api\Aura.Api.exe"" start= delayed-auto"; Flags: runhidden; Tasks: installservice
+Filename: "sc.exe"; Parameters: "description AuraService ""Aura personal knowledge indexing service"""; Flags: runhidden; Tasks: installservice
 ; Set environment for service to use Production settings
 Filename: "reg.exe"; Parameters: "add ""HKLM\SYSTEM\CurrentControlSet\Services\AuraService"" /v Environment /t REG_MULTI_SZ /d ""ASPNETCORE_ENVIRONMENT=Production"" /f"; Flags: runhidden; Tasks: installservice
 Filename: "sc.exe"; Parameters: "start AuraService"; Flags: runhidden; Tasks: installservice
-; Install VS Code extension using helper script (finds VSIX dynamically)
-Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -File ""{app}\scripts\install-extension.ps1"""; Flags: runhidden nowait; Tasks: installextension
 ; Start tray app
 Filename: "{app}\tray\{#MyTrayExeName}"; Parameters: "--minimized"; Flags: nowait postinstall; Tasks: starttray
 ; Offer to run diagnostics if user wants to verify installation
@@ -173,26 +162,6 @@ begin
   end;
   
   DeleteFile(TempFile);
-end;
-
-function VSCodeExists(): Boolean;
-begin
-  // Check common VS Code locations
-  Result := FileExists(ExpandConstant('{localappdata}\Programs\Microsoft VS Code\bin\code.cmd')) or
-            FileExists('C:\Program Files\Microsoft VS Code\bin\code.cmd') or
-            FileExists(ExpandConstant('{localappdata}\Programs\Microsoft VS Code Insiders\bin\code-insiders.cmd'));
-end;
-
-function GetVSCodePath(Param: string): string;
-begin
-  if FileExists(ExpandConstant('{localappdata}\Programs\Microsoft VS Code\bin\code.cmd')) then
-    Result := ExpandConstant('{localappdata}\Programs\Microsoft VS Code\bin\code.cmd')
-  else if FileExists('C:\Program Files\Microsoft VS Code\bin\code.cmd') then
-    Result := 'C:\Program Files\Microsoft VS Code\bin\code.cmd'
-  else if FileExists(ExpandConstant('{localappdata}\Programs\Microsoft VS Code Insiders\bin\code-insiders.cmd')) then
-    Result := ExpandConstant('{localappdata}\Programs\Microsoft VS Code Insiders\bin\code-insiders.cmd')
-  else
-    Result := 'code';  // Fallback to PATH
 end;
 
 function GetPreviousInstallPath(): String;
@@ -325,15 +294,6 @@ begin
     begin
       Result := False;
     end;
-  end;
-
-  // Inform about VS Code if not detected
-  if not VSCodeExists() then
-  begin
-    MsgBox('VS Code was not detected. The Aura extension will be placed in the installation folder.' + #13#10 + #13#10 +
-           'You can manually install it later by running:' + #13#10 +
-           'powershell -File "' + ExpandConstant('{app}') + '\scripts\install-extension.ps1"',
-           mbInformation, MB_OK);
   end;
 end;
 
