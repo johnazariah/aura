@@ -182,12 +182,13 @@ public sealed class IncrementalIndexer : BackgroundService, IDisposable
 
         using var scope = _scopeFactory.CreateScope();
         var ragService = scope.ServiceProvider.GetRequiredService<IRagService>();
+        var ingestorRegistry = scope.ServiceProvider.GetRequiredService<Ingestors.IIngestorRegistry>();
 
         switch (change.ChangeType)
         {
             case FileChangeType.Created:
             case FileChangeType.Modified:
-                await IndexFileAsync(ragService, change.Path, cancellationToken).ConfigureAwait(false);
+                await IndexFileAsync(ragService, ingestorRegistry, change.Path, cancellationToken).ConfigureAwait(false);
                 break;
 
             case FileChangeType.Deleted:
@@ -197,7 +198,11 @@ public sealed class IncrementalIndexer : BackgroundService, IDisposable
         }
     }
 
-    private async Task IndexFileAsync(IRagService ragService, string path, CancellationToken cancellationToken)
+    private async Task IndexFileAsync(
+        IRagService ragService,
+        Ingestors.IIngestorRegistry ingestorRegistry,
+        string path,
+        CancellationToken cancellationToken)
     {
         if (!_fileSystem.File.Exists(path))
         {
@@ -206,16 +211,64 @@ public sealed class IncrementalIndexer : BackgroundService, IDisposable
 
         try
         {
-            var content = await _fileSystem.File.ReadAllTextAsync(path, cancellationToken).ConfigureAwait(false);
-            var ragContent = RagContent.FromFile(path, content);
-            await ragService.IndexAsync(ragContent, cancellationToken).ConfigureAwait(false);
-            _logger.LogInformation("Indexed: {Path}", path);
+            var ingestor = ingestorRegistry.GetIngestor(path);
+
+            if (ingestor is not null && ingestor is not Ingestors.PlainTextIngestor)
+            {
+                // Use the ingestor pipeline (handles binary files like PDFs)
+                var content = IsBinaryExtension(path)
+                    ? string.Empty
+                    : await _fileSystem.File.ReadAllTextAsync(path, cancellationToken).ConfigureAwait(false);
+
+                var chunks = await ingestor.IngestAsync(path, content, cancellationToken).ConfigureAwait(false);
+
+                var ragContents = chunks.Select(chunk =>
+                {
+                    var contentId = $"{path}:{chunk.ChunkType}:{chunk.SymbolName ?? chunk.StartLine.ToString()}";
+                    return new RagContent(contentId, chunk.Text, ingestor.ContentType)
+                    {
+                        SourcePath = path,
+                        Language = chunk.Language,
+                        Metadata = chunk.Metadata,
+                    };
+                }).ToList();
+
+                if (ragContents.Count > 0)
+                {
+                    await ragService.IndexBatchAsync(ragContents, cancellationToken).ConfigureAwait(false);
+                }
+
+                _logger.LogInformation("Indexed via {Ingestor}: {Path} ({Chunks} chunks)",
+                    ingestor.IngestorId, path, ragContents.Count);
+            }
+            else
+            {
+                // Fallback: plain text indexing
+                var content = await _fileSystem.File.ReadAllTextAsync(path, cancellationToken).ConfigureAwait(false);
+                var ragContent = RagContent.FromFile(path, content);
+                await ragService.IndexAsync(ragContent, cancellationToken).ConfigureAwait(false);
+                _logger.LogInformation("Indexed: {Path}", path);
+            }
         }
         catch (IOException ex) when (ex.HResult == -2147024864)
         {
+            // File locked — retry after brief delay
             await Task.Delay(100, cancellationToken).ConfigureAwait(false);
-            await IndexFileAsync(ragService, path, cancellationToken).ConfigureAwait(false);
+            await IndexFileAsync(ragService, ingestorRegistry, path, cancellationToken).ConfigureAwait(false);
         }
+    }
+
+    private static bool IsBinaryExtension(string path)
+    {
+        var ext = Path.GetExtension(path);
+        return ext.Equals(".pdf", StringComparison.OrdinalIgnoreCase)
+            || ext.Equals(".png", StringComparison.OrdinalIgnoreCase)
+            || ext.Equals(".jpg", StringComparison.OrdinalIgnoreCase)
+            || ext.Equals(".jpeg", StringComparison.OrdinalIgnoreCase)
+            || ext.Equals(".gif", StringComparison.OrdinalIgnoreCase)
+            || ext.Equals(".bmp", StringComparison.OrdinalIgnoreCase)
+            || ext.Equals(".docx", StringComparison.OrdinalIgnoreCase)
+            || ext.Equals(".xlsx", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <inheritdoc/>
@@ -255,7 +308,7 @@ public sealed class RagWatcherOptions
     /// <summary>
     /// Gets or sets the default file patterns to watch.
     /// </summary>
-    public string[] DefaultPatterns { get; set; } = ["*.cs", "*.ts", "*.md", "*.py", "*.json"];
+    public string[] DefaultPatterns { get; set; } = ["*.cs", "*.ts", "*.md", "*.py", "*.json", "*.pdf"];
 }
 
 /// <summary>
