@@ -42,6 +42,7 @@ public sealed partial class McpHandler
     private readonly IGitWorktreeService _worktreeService;
     private readonly ITreeBuilderService _treeBuilderService;
     private readonly IWorkspaceRegistryService _workspaceRegistryService;
+    private readonly IBackgroundIndexer _backgroundIndexer;
     private readonly ILogger<McpHandler> _logger;
 
     private readonly Dictionary<string, Func<JsonElement?, CancellationToken, Task<object>>> _tools;
@@ -60,6 +61,7 @@ public sealed partial class McpHandler
         IGitWorktreeService worktreeService,
         ITreeBuilderService treeBuilderService,
         IWorkspaceRegistryService workspaceRegistryService,
+        IBackgroundIndexer backgroundIndexer,
         ILogger<McpHandler> logger)
     {
         _ragService = ragService;
@@ -72,6 +74,7 @@ public sealed partial class McpHandler
         _worktreeService = worktreeService;
         _treeBuilderService = treeBuilderService;
         _workspaceRegistryService = workspaceRegistryService;
+        _backgroundIndexer = backgroundIndexer;
         _logger = logger;
 
         // Phase 7: Consolidated meta-tools (28 tools → 11 tools)
@@ -79,6 +82,7 @@ public sealed partial class McpHandler
         {
             ["aura_architect"] = ArchitectAsync,
             ["aura_generate"] = GenerateAsync,
+            ["aura_index"] = IndexAsync,
             ["aura_inspect"] = InspectAsync,
             ["aura_navigate"] = NavigateAsync,
             ["aura_refactor"] = RefactorAsync,
@@ -505,6 +509,33 @@ public sealed partial class McpHandler
                         },
                         projectPath = new { type = "string", description = "Path to project or solution" },
                         targetLayer = new { type = "string", description = "Target layer for layer_check" }
+                    },
+                    required = new[] { "operation" }
+                }
+            },
+
+            // =================================================================
+            // aura_index - Content indexing management
+            // =================================================================
+            new McpToolDefinition
+            {
+                Name = "aura_index",
+                Description = "Trigger and manage content indexing. Index directories or files, check job status, get index statistics. (Read/Write)",
+                InputSchema = new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        operation = new
+                        {
+                            type = "string",
+                            description = "Index operation type",
+                            @enum = new[] { "index_directory", "index_file", "status", "stats" }
+                        },
+                        path = new { type = "string", description = "Path to directory or file to index (for index_directory, index_file, stats)" },
+                        recursive = new { type = "boolean", description = "Whether to recursively index subdirectories (default: true, for index_directory)" },
+                        filePattern = new { type = "string", description = "Glob pattern to filter files (e.g., '*.pdf', '*.md') (for index_directory)" },
+                        jobId = new { type = "string", description = "Job ID to check status for (for status operation)" }
                     },
                     required = new[] { "operation" }
                 }
