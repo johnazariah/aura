@@ -6,11 +6,8 @@ namespace Aura.Api.Tests.Mcp;
 
 using System.Text.Json;
 using Aura.Api.Mcp;
-using Aura.Api.Mcp.Tools;
-using Aura.Api.Services;
 using Aura.Foundation.Git;
 using Aura.Foundation.Rag;
-using Aura.Module.Developer.GitHub;
 using Aura.Module.Developer.Services;
 using Aura.Module.Developer.Services.Testing;
 using FluentAssertions;
@@ -26,8 +23,6 @@ public class McpHandlerTypeScriptTests
 {
     private readonly IRagService _ragService;
     private readonly ICodeGraphService _graphService;
-    private readonly IStoryService _storyService;
-    private readonly IGitHubService _gitHubService;
     private readonly IRoslynWorkspaceService _roslynService;
     private readonly IRoslynRefactoringService _refactoringService;
     private readonly IPythonRefactoringService _pythonRefactoringService;
@@ -35,17 +30,14 @@ public class McpHandlerTypeScriptTests
     private readonly ITestGenerationService _testGenerationService;
     private readonly IGitWorktreeService _worktreeService;
     private readonly ITreeBuilderService _treeBuilderService;
-    private readonly IAuraDocsTool _auraDocsTool;
-    private readonly IDocsService _docsService;
     private readonly IWorkspaceRegistryService _workspaceRegistryService;
+    private readonly IBackgroundIndexer _backgroundIndexer;
     private readonly McpHandler _handler;
 
     public McpHandlerTypeScriptTests()
     {
         _ragService = Substitute.For<IRagService>();
         _graphService = Substitute.For<ICodeGraphService>();
-        _storyService = Substitute.For<IStoryService>();
-        _gitHubService = Substitute.For<IGitHubService>();
         _roslynService = Substitute.For<IRoslynWorkspaceService>();
         _refactoringService = Substitute.For<IRoslynRefactoringService>();
         _pythonRefactoringService = Substitute.For<IPythonRefactoringService>();
@@ -53,15 +45,12 @@ public class McpHandlerTypeScriptTests
         _testGenerationService = Substitute.For<ITestGenerationService>();
         _worktreeService = Substitute.For<IGitWorktreeService>();
         _treeBuilderService = Substitute.For<ITreeBuilderService>();
-        _auraDocsTool = Substitute.For<IAuraDocsTool>();
-        _docsService = Substitute.For<IDocsService>();
         _workspaceRegistryService = Substitute.For<IWorkspaceRegistryService>();
+        _backgroundIndexer = Substitute.For<IBackgroundIndexer>();
 
         _handler = new McpHandler(
             _ragService,
             _graphService,
-            _storyService,
-            _gitHubService,
             _roslynService,
             _refactoringService,
             _pythonRefactoringService,
@@ -69,11 +58,8 @@ public class McpHandlerTypeScriptTests
             _testGenerationService,
             _worktreeService,
             _treeBuilderService,
-            _auraDocsTool,
-            _docsService,
             _workspaceRegistryService,
-            Substitute.For<IGitService>(),
-            Substitute.For<IGitHubTokenAccessor>(),
+            _backgroundIndexer,
             NullLogger<McpHandler>.Instance);
     }
 
