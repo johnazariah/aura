@@ -79,6 +79,7 @@ jobs:
         with:
           name: coverage-report
           path: coveragereport
+          retention-days: 30
 
   lint:
     runs-on: ubuntu-latest
