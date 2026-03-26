@@ -52,6 +52,15 @@ public sealed partial class McpHandler
         try
         {
             var workspace = _workspaceRegistryService.AddWorkspace(path, alias, tags);
+
+            // Also queue background indexing so content is searchable
+            Guid? jobId = null;
+            if (Directory.Exists(path))
+            {
+                var (id, _) = _backgroundIndexer.QueueDirectory(path);
+                jobId = id;
+            }
+
             return new
             {
                 success = true,
@@ -62,7 +71,8 @@ public sealed partial class McpHandler
                     path = workspace.Path,
                     alias = workspace.Alias,
                     tags = workspace.Tags
-                }
+                },
+                indexingJobId = jobId
             };
         }
         catch (InvalidOperationException ex)
