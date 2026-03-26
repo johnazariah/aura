@@ -56,6 +56,21 @@ public sealed class Workspace
     /// Gets or sets the default branch name.
     /// </summary>
     public string? DefaultBranch { get; set; }
+
+    /// <summary>
+    /// Gets or sets an optional short alias for MCP/CLI reference.
+    /// </summary>
+    public string? Alias { get; set; }
+
+    /// <summary>
+    /// Gets or sets tags for categorization (stored as JSON array).
+    /// </summary>
+    public List<string> Tags { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets whether this is the default workspace.
+    /// </summary>
+    public bool IsDefault { get; set; }
 }
 
 /// <summary>

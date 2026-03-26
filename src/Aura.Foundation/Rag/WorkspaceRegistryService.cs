@@ -4,81 +4,58 @@
 
 namespace Aura.Foundation.Rag;
 
-using System.IO.Abstractions;
-using System.Text.Json;
 using Aura.Foundation.Data;
+using Aura.Foundation.Data.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
 /// <summary>
-/// Implementation of workspace registry using a JSON file for persistence.
+/// Unified workspace registry backed by the database.
+/// Replaces the previous dual-store approach (JSON file + DB).
 /// </summary>
 public sealed class WorkspaceRegistryService : IWorkspaceRegistryService
 {
-    private readonly IFileSystem _fileSystem;
     private readonly IDbContextFactory<AuraDbContext> _dbContextFactory;
     private readonly ILogger<WorkspaceRegistryService> _logger;
-    private readonly string _registryPath;
-    private readonly object _lock = new();
-
-    private WorkspaceRegistryData? _cache;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="WorkspaceRegistryService"/> class.
     /// </summary>
     public WorkspaceRegistryService(
-        IFileSystem fileSystem,
         IDbContextFactory<AuraDbContext> dbContextFactory,
         ILogger<WorkspaceRegistryService> logger)
     {
-        _fileSystem = fileSystem;
         _dbContextFactory = dbContextFactory;
         _logger = logger;
-
-        // Use platform-appropriate config directory
-        var configDir = Environment.OSVersion.Platform == PlatformID.Win32NT
-            ? Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData)
-            : Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + "/.config";
-
-        _registryPath = _fileSystem.Path.Combine(configDir, "aura", "workspaces.json");
-        _logger.LogDebug("Workspace registry path: {Path}", _registryPath);
     }
 
     /// <inheritdoc/>
     public IReadOnlyList<RegisteredWorkspace> ListWorkspaces()
     {
-        var data = LoadRegistry();
-        return EnrichWithIndexStatus(data.Workspaces);
+        using var db = _dbContextFactory.CreateDbContext();
+        var workspaces = db.Workspaces.OrderByDescending(w => w.LastAccessedAt).ToList();
+        return workspaces.Select(w => ToRegistered(w, db)).ToList();
     }
 
     /// <inheritdoc/>
     public RegisteredWorkspace? GetWorkspace(string idOrAlias)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(idOrAlias);
+        using var db = _dbContextFactory.CreateDbContext();
 
-        var data = LoadRegistry();
-        var entry = data.Workspaces.FirstOrDefault(w =>
-            w.Id.Equals(idOrAlias, StringComparison.OrdinalIgnoreCase) ||
-            (w.Alias?.Equals(idOrAlias, StringComparison.OrdinalIgnoreCase) ?? false));
+        var workspace = db.Workspaces.FirstOrDefault(w =>
+            w.Id == idOrAlias ||
+            (w.Alias != null && w.Alias.ToLower() == idOrAlias.ToLower()));
 
-        if (entry is null)
-        {
-            return null;
-        }
-
-        return EnrichWithIndexStatus([entry]).FirstOrDefault();
+        return workspace is null ? null : ToRegistered(workspace, db);
     }
 
     /// <inheritdoc/>
     public RegisteredWorkspace? GetDefaultWorkspace()
     {
-        var data = LoadRegistry();
-        if (string.IsNullOrEmpty(data.DefaultId))
-        {
-            return null;
-        }
-
-        return GetWorkspace(data.DefaultId);
+        using var db = _dbContextFactory.CreateDbContext();
+        var workspace = db.Workspaces.FirstOrDefault(w => w.IsDefault);
+        return workspace is null ? null : ToRegistered(workspace, db);
     }
 
     /// <inheritdoc/>
@@ -89,44 +66,42 @@ public sealed class WorkspaceRegistryService : IWorkspaceRegistryService
         var normalizedPath = PathNormalizer.Normalize(path);
         var id = WorkspaceIdGenerator.GenerateId(path);
 
-        lock (_lock)
+        using var db = _dbContextFactory.CreateDbContext();
+
+        var existing = db.Workspaces.Find(id);
+        if (existing is not null)
         {
-            var data = LoadRegistry();
-
-            // Check for duplicate ID
-            if (data.Workspaces.Any(w => w.Id == id))
-            {
-                throw new InvalidOperationException($"Workspace already registered: {path}");
-            }
-
-            // Check for duplicate alias
-            if (!string.IsNullOrEmpty(alias) &&
-                data.Workspaces.Any(w => w.Alias?.Equals(alias, StringComparison.OrdinalIgnoreCase) ?? false))
-            {
-                throw new InvalidOperationException($"Alias already in use: {alias}");
-            }
-
-            var entry = new WorkspaceRegistryEntry
-            {
-                Id = id,
-                Path = normalizedPath,
-                Alias = alias,
-                Tags = tags?.ToList() ?? []
-            };
-
-            data.Workspaces.Add(entry);
-
-            // Set as default if it's the first workspace
-            if (data.Workspaces.Count == 1)
-            {
-                data.DefaultId = id;
-            }
-
-            SaveRegistry(data);
-            _logger.LogInformation("Added workspace to registry: {Path} (ID: {Id}, Alias: {Alias})", path, id, alias);
+            throw new InvalidOperationException($"Workspace already registered: {path}");
         }
 
-        return GetWorkspace(id)!;
+        if (!string.IsNullOrEmpty(alias) &&
+            db.Workspaces.Any(w => w.Alias != null && w.Alias.ToLower() == alias.ToLower()))
+        {
+            throw new InvalidOperationException($"Alias already in use: {alias}");
+        }
+
+        var directoryName = Path.GetFileName(
+            Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
+            ?? "Workspace";
+
+        var isFirst = !db.Workspaces.Any();
+
+        var workspace = new Workspace
+        {
+            Id = id,
+            CanonicalPath = normalizedPath,
+            Name = alias ?? directoryName,
+            Alias = alias,
+            Tags = tags?.ToList() ?? [],
+            Status = WorkspaceStatus.Pending,
+            IsDefault = isFirst,
+        };
+
+        db.Workspaces.Add(workspace);
+        db.SaveChanges();
+
+        _logger.LogInformation("Added workspace: {Path} (ID: {Id}, Alias: {Alias})", path, id, alias);
+        return ToRegistered(workspace, db);
     }
 
     /// <inheritdoc/>
@@ -134,28 +109,27 @@ public sealed class WorkspaceRegistryService : IWorkspaceRegistryService
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(id);
 
-        lock (_lock)
+        using var db = _dbContextFactory.CreateDbContext();
+        var workspace = db.Workspaces.Find(id);
+        if (workspace is null)
         {
-            var data = LoadRegistry();
-            var entry = data.Workspaces.FirstOrDefault(w => w.Id == id);
-
-            if (entry is null)
-            {
-                return false;
-            }
-
-            data.Workspaces.Remove(entry);
-
-            // Clear default if it was the removed workspace
-            if (data.DefaultId == id)
-            {
-                data.DefaultId = data.Workspaces.FirstOrDefault()?.Id;
-            }
-
-            SaveRegistry(data);
-            _logger.LogInformation("Removed workspace from registry: {Id}", id);
+            return false;
         }
 
+        var wasDefault = workspace.IsDefault;
+        db.Workspaces.Remove(workspace);
+
+        if (wasDefault)
+        {
+            var next = db.Workspaces.FirstOrDefault(w => w.Id != id);
+            if (next is not null)
+            {
+                next.IsDefault = true;
+            }
+        }
+
+        db.SaveChanges();
+        _logger.LogInformation("Removed workspace: {Id}", id);
         return true;
     }
 
@@ -164,21 +138,22 @@ public sealed class WorkspaceRegistryService : IWorkspaceRegistryService
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(id);
 
-        lock (_lock)
+        using var db = _dbContextFactory.CreateDbContext();
+        var workspace = db.Workspaces.Find(id);
+        if (workspace is null)
         {
-            var data = LoadRegistry();
-            var entry = data.Workspaces.FirstOrDefault(w => w.Id == id);
-
-            if (entry is null)
-            {
-                return false;
-            }
-
-            data.DefaultId = id;
-            SaveRegistry(data);
-            _logger.LogInformation("Set default workspace: {Id}", id);
+            return false;
         }
 
+        var currentDefault = db.Workspaces.FirstOrDefault(w => w.IsDefault);
+        if (currentDefault is not null)
+        {
+            currentDefault.IsDefault = false;
+        }
+
+        workspace.IsDefault = true;
+        db.SaveChanges();
+        _logger.LogInformation("Set default workspace: {Id}", id);
         return true;
     }
 
@@ -190,24 +165,23 @@ public sealed class WorkspaceRegistryService : IWorkspaceRegistryService
             return [];
         }
 
-        // Handle wildcard
+        using var db = _dbContextFactory.CreateDbContext();
+
         if (workspaceRefs.Contains("*"))
         {
-            return ListWorkspaces().Select(w => w.Id).ToList();
+            return db.Workspaces.Select(w => w.Id).ToList();
         }
 
-        var data = LoadRegistry();
         var resolved = new List<string>();
-
         foreach (var refStr in workspaceRefs)
         {
-            var entry = data.Workspaces.FirstOrDefault(w =>
-                w.Id.Equals(refStr, StringComparison.OrdinalIgnoreCase) ||
-                (w.Alias?.Equals(refStr, StringComparison.OrdinalIgnoreCase) ?? false));
+            var workspace = db.Workspaces.FirstOrDefault(w =>
+                w.Id == refStr ||
+                (w.Alias != null && w.Alias.ToLower() == refStr.ToLower()));
 
-            if (entry is not null)
+            if (workspace is not null)
             {
-                resolved.Add(entry.Id);
+                resolved.Add(workspace.Id);
             }
             else
             {
@@ -218,119 +192,22 @@ public sealed class WorkspaceRegistryService : IWorkspaceRegistryService
         return resolved.Distinct().ToList();
     }
 
-    private WorkspaceRegistryData LoadRegistry()
+    private static RegisteredWorkspace ToRegistered(Workspace w, AuraDbContext db)
     {
-        if (_cache is not null)
+        var chunkCount = db.RagChunks
+            .Where(c => c.SourcePath != null && c.SourcePath.StartsWith(w.CanonicalPath))
+            .Count();
+
+        var indexMeta = db.IndexMetadata
+            .Where(m => m.WorkspacePath == w.CanonicalPath)
+            .OrderByDescending(m => m.IndexedAt)
+            .FirstOrDefault();
+
+        return new RegisteredWorkspace(w.Id, w.CanonicalPath, w.Alias, w.Tags)
         {
-            return _cache;
-        }
-
-        lock (_lock)
-        {
-            if (_cache is not null)
-            {
-                return _cache;
-            }
-
-            if (!_fileSystem.File.Exists(_registryPath))
-            {
-                _cache = new WorkspaceRegistryData();
-                return _cache;
-            }
-
-            try
-            {
-                var json = _fileSystem.File.ReadAllText(_registryPath);
-                _cache = JsonSerializer.Deserialize<WorkspaceRegistryData>(json, JsonOptions) ?? new WorkspaceRegistryData();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Failed to load workspace registry from {Path}, starting fresh", _registryPath);
-                _cache = new WorkspaceRegistryData();
-            }
-
-            return _cache;
-        }
-    }
-
-    private void SaveRegistry(WorkspaceRegistryData data)
-    {
-        var directory = _fileSystem.Path.GetDirectoryName(_registryPath);
-        if (!string.IsNullOrEmpty(directory) && !_fileSystem.Directory.Exists(directory))
-        {
-            _fileSystem.Directory.CreateDirectory(directory);
-        }
-
-        var json = JsonSerializer.Serialize(data, JsonOptions);
-        _fileSystem.File.WriteAllText(_registryPath, json);
-        _cache = data;
-    }
-
-    private IReadOnlyList<RegisteredWorkspace> EnrichWithIndexStatus(IReadOnlyList<WorkspaceRegistryEntry> entries)
-    {
-        if (entries.Count == 0)
-        {
-            return [];
-        }
-
-        using var db = _dbContextFactory.CreateDbContext();
-
-        var result = new List<RegisteredWorkspace>();
-
-        foreach (var entry in entries)
-        {
-            // Look up workspace in database to get index status
-            var workspace = db.Workspaces.FirstOrDefault(w => w.Id == entry.Id);
-
-            // Count chunks for this workspace path
-            var chunkCount = db.RagChunks
-                .Where(c => c.SourcePath != null && c.SourcePath.StartsWith(entry.Path))
-                .Count();
-
-            // Get last indexed time from IndexMetadata
-            var indexMeta = db.IndexMetadata
-                .Where(m => m.WorkspacePath == entry.Path)
-                .OrderByDescending(m => m.IndexedAt)
-                .FirstOrDefault();
-
-            result.Add(new RegisteredWorkspace(
-                entry.Id,
-                entry.Path,
-                entry.Alias,
-                entry.Tags)
-            {
-                Indexed = chunkCount > 0,
-                ChunkCount = chunkCount,
-                LastIndexed = indexMeta?.IndexedAt
-            });
-        }
-
-        return result;
-    }
-
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        WriteIndented = true
-    };
-
-    /// <summary>
-    /// Internal data structure for registry persistence.
-    /// </summary>
-    private sealed class WorkspaceRegistryData
-    {
-        public List<WorkspaceRegistryEntry> Workspaces { get; set; } = [];
-        public string? DefaultId { get; set; }
-    }
-
-    /// <summary>
-    /// Internal entry for a registered workspace.
-    /// </summary>
-    private sealed class WorkspaceRegistryEntry
-    {
-        public required string Id { get; set; }
-        public required string Path { get; set; }
-        public string? Alias { get; set; }
-        public List<string> Tags { get; set; } = [];
+            Indexed = chunkCount > 0,
+            ChunkCount = chunkCount,
+            LastIndexed = indexMeta?.IndexedAt,
+        };
     }
 }

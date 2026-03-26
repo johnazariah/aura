@@ -4,7 +4,6 @@
 
 namespace Aura.Foundation.Tests.Rag;
 
-using System.IO.Abstractions.TestingHelpers;
 using Aura.Foundation.Data;
 using Aura.Foundation.Data.Entities;
 using Aura.Foundation.Rag;
@@ -16,15 +15,12 @@ using Xunit;
 
 public class WorkspaceRegistryServiceTests
 {
-    private readonly MockFileSystem _fileSystem;
     private readonly DbContextOptions<AuraDbContext> _dbOptions;
     private readonly IDbContextFactory<AuraDbContext> _dbContextFactory;
     private readonly WorkspaceRegistryService _sut;
 
     public WorkspaceRegistryServiceTests()
     {
-        _fileSystem = new MockFileSystem();
-
         // Create in-memory database options - reuse same database name for consistency
         var dbName = Guid.NewGuid().ToString();
         _dbOptions = new DbContextOptionsBuilder<AuraDbContext>()
@@ -36,7 +32,6 @@ public class WorkspaceRegistryServiceTests
         _dbContextFactory.CreateDbContext().Returns(_ => new MinimalTestDbContext(_dbOptions));
 
         _sut = new WorkspaceRegistryService(
-            _fileSystem,
             _dbContextFactory,
             NullLogger<WorkspaceRegistryService>.Instance);
     }
@@ -364,7 +359,6 @@ public class WorkspaceRegistryServiceTests
 
         // Create a fresh service to ensure cache is clear
         var freshService = new WorkspaceRegistryService(
-            _fileSystem,
             _dbContextFactory,
             NullLogger<WorkspaceRegistryService>.Instance);
 
@@ -386,7 +380,6 @@ public class WorkspaceRegistryServiceTests
 
         // Create a new service instance (simulates restart)
         var newService = new WorkspaceRegistryService(
-            _fileSystem,
             _dbContextFactory,
             NullLogger<WorkspaceRegistryService>.Instance);
 
