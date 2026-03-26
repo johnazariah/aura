@@ -40,9 +40,9 @@ If you've found a new bug:
 Brief description of the issue
 
 ## Steps to Reproduce
-1. Open VS Code
-2. Create a new workflow with "..."
-3. Click approve
+1. Start Aura service
+2. Call MCP tool with '...'
+3. Observe the response
 4. See error
 
 ## Expected Behavior
@@ -53,9 +53,9 @@ What actually happened
 
 ## Environment
 - Aura version: X.Y.Z
-- VS Code version: X.Y.Z
+- OS: Windows 11 / macOS 14
 - Windows version: 11 23H2
-- LLM: Ollama qwen2.5-coder:7b
+- Embedding model: nomic-embed-text
 
 ## Logs
 ```text

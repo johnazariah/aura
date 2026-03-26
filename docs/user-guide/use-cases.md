@@ -1,467 +1,189 @@
-# Aura Use Cases for Developers
+# Use Cases
 
-This guide shows practical examples of how to use Aura for common development tasks. Each use case includes step-by-step instructions and tips for getting the best results.
+Practical examples of using Aura's MCP tools through GitHub Copilot.
 
-## Table of Contents
+## Code Search
 
-- [Starting from a GitHub Issue](#starting-from-a-github-issue)
-- [Understanding Your Codebase](#understanding-your-codebase)
-- [Writing New Features](#writing-new-features)
-- [Writing Tests](#writing-tests)
-- [Refactoring Code](#refactoring-code)
-- [Documentation](#documentation)
-- [Bug Investigation](#bug-investigation)
-- [Code Review Assistance](#code-review-assistance)
-- [Learning a New Codebase](#learning-a-new-codebase)
+Find code by concept, not just by name:
 
----
+> "Search for how authentication tokens are validated"
 
-## Starting from a GitHub Issue
-
-### Use Case: "Implement a feature from a GitHub issue"
-
-The fastest way to start work is directly from a GitHub issue.
-
-**Steps:**
-1. Open VS Code Command Palette (`Ctrl+Shift+P`)
-2. Run **"Aura: Start Story from Issue"**
-3. Paste the GitHub issue URL (e.g., `https://github.com/org/repo/issues/42`)
-4. Aura creates:
-   - A git worktree with an isolated branch
-   - A new VS Code window in that worktree
-   - A workflow bound to the issue context
-
-**Example:**
-```
-Paste: https://github.com/myteam/backend/issues/123
-
-Aura: Creating story from issue #123...
-      ✅ Branch: feature/123-add-user-export
-      ✅ Worktree: ~/projects/backend-worktrees/123-add-user-export/
-      ✅ Opening VS Code in worktree...
-```
-
-**Benefits:**
-- **Isolated environment** - Your main branch stays clean
-- **Issue context** - The agent knows exactly what to build
-- **Easy PR creation** - When done, finalize to create a PR
-
-### Use Case: "Work on multiple issues in parallel"
-
-Each story runs in its own worktree, so you can work on multiple issues simultaneously.
-
-**Steps:**
-1. Start Story from Issue #123
-2. Work on it until you're blocked
-3. Start Story from Issue #456 in a new window
-4. Switch between windows as needed
-5. Finalize each when complete
-
-```
-Window 1: ~/projects/backend-worktrees/123-add-user-export/
-Window 2: ~/projects/backend-worktrees/456-fix-auth-bug/
-Main repo: ~/projects/backend/ (stays on main branch)
-```
-
-### Use Case: "Follow a pattern for complex changes"
-
-For complex tasks, attach an operational pattern to your story.
-
-**Steps:**
-1. Start Story from Issue
-2. In the workflow panel, click **"Attach Pattern"**
-3. Select a pattern (e.g., "comprehensive-rename")
-4. The agent follows the pattern's steps exactly
-
-**Example patterns:**
-- `comprehensive-rename` - Domain-level renames across the codebase
-- `generate-tests` - Comprehensive test coverage for a class
-
----
-
-## Understanding Your Codebase
-
-### Use Case: "How does X work in this project?"
-
-Use Aura's code-aware chat to understand unfamiliar code.
-
-**Steps:**
-1. Open the Aura panel in VS Code
-2. Click the **Chat** tab
-3. Ask your question with context
-
-**Example Questions:**
-```
-How does authentication work in this project?
-```
-```
-What's the flow when a user places an order?
-```
-```
-Where is the database connection configured?
-```
-
-**Tips:**
-- Be specific about what you want to understand
-- Reference class or file names if you know them
-- Ask follow-up questions to drill deeper
-
-### Use Case: "Find all code related to X"
-
-Use semantic search to find relevant code even without knowing exact names.
-
-**Steps:**
-1. Open Aura Chat
-2. Ask where functionality is implemented
-
-**Example:**
-```
-Where is email sending implemented?
-```
-
-Aura will return:
-- File paths and line numbers
-- Function/class names
-- How they relate to each other
-
----
-
-## Writing New Features
-
-### Use Case: "Implement a new endpoint/feature"
-
-Use workflows for multi-file feature implementation.
-
-**Steps:**
-1. Click **+ New Workflow** in Aura panel
-2. Describe what you want to build
-3. Let Aura analyze your codebase and create a plan
-4. Review and approve each step
-
-**Good Workflow Descriptions:**
-
-```
-Create a REST endpoint POST /api/users/{id}/avatar that accepts 
-an image upload, validates it's under 5MB, and stores it in Azure 
-Blob Storage. Return the URL of the uploaded image.
-```
-
-```
-Add a "favorites" feature where users can favorite products. 
-Create the database table, repository, service, and API endpoints 
-for add/remove/list favorites.
-```
-
-**Tips:**
-- Reference existing patterns: "following the same structure as OrderController"
-- Specify constraints: "use async/await throughout"
-- Mention frameworks: "use FluentValidation for input validation"
-
-### Use Case: "Create a new class following project patterns"
-
-Let Aura analyze existing code to match your conventions.
-
-**Workflow Description:**
-```
-Create a new ShippingService class following the same patterns 
-as PaymentService. It should have methods for:
-- CalculateShippingCost(Order order)
-- GetShippingOptions(Address destination)
-- TrackShipment(string trackingNumber)
-```
-
-Aura will:
-1. Analyze PaymentService structure
-2. Match dependency injection patterns
-3. Follow naming conventions
-4. Use appropriate interfaces
-
----
-
-## Writing Tests
-
-### Use Case: "Generate unit tests for existing code"
-
-Create comprehensive test coverage for your code.
-
-**Steps:**
-1. Create a new workflow
-2. Describe what needs testing
-
-**Workflow Description:**
-```
-Write unit tests for the OrderService class. Cover all public 
-methods including edge cases. Use xUnit and Moq following 
-the existing test patterns in the project.
-```
-
-**Tips:**
-- Specify the test framework (xUnit, NUnit, Jest, pytest, etc.)
-- Reference existing tests: "follow the patterns in UserServiceTests.cs"
-- Mention coverage goals: "cover all public methods"
-
-### Use Case: "Add tests for a specific scenario"
-
-Target specific functionality or edge cases.
-
-**Workflow Description:**
-```
-Add tests to OrderServiceTests for the scenario where a user 
-tries to place an order with an expired payment method. 
-Should test that appropriate exceptions are thrown and 
-no order is created.
-```
-
----
-
-## Refactoring Code
-
-### Use Case: "Extract a class/method"
-
-Break down large files into smaller, focused units.
-
-**Workflow Description:**
-```
-The UserService class is too large (800+ lines). Extract the 
-email-related functionality into a new EmailNotificationService 
-class. Update UserService to depend on the new service.
-```
-
-### Use Case: "Modernize legacy patterns"
-
-Update old code to use modern idioms.
-
-**Workflow Description:**
-```
-Refactor the PaymentProcessor class to use async/await 
-instead of the current callback-based approach. Ensure 
-all calling code is updated appropriately.
-```
-
-### Use Case: "Apply a pattern consistently"
-
-Standardize code across your project.
-
-**Workflow Description:**
-```
-All repository classes should implement the IDisposable pattern 
-like OrderRepository does. Update CustomerRepository, 
-ProductRepository, and InventoryRepository to match.
-```
-
----
-
-## Documentation
-
-### Use Case: "Generate API documentation"
-
-Create documentation from your code.
-
-**Workflow Description:**
-```
-Generate XML documentation comments for all public methods 
-in the OrderController class. Include parameter descriptions, 
-return value documentation, and example usage where appropriate.
-```
-
-### Use Case: "Create a README for a component"
-
-Document how a subsystem works.
-
-**Workflow Description:**
-```
-Create a README.md for the /src/Payments directory explaining:
-- What the payment module does
-- Key classes and their responsibilities
-- How to add a new payment provider
-- Configuration options
-```
-
-### Use Case: "Document architecture decisions"
-
-Capture why code is structured a certain way.
-
-**Chat Question:**
-```
-Explain the architecture of the order processing system 
-and why it's designed this way. I want to document this 
-for new team members.
-```
-
----
-
-## Bug Investigation
-
-### Use Case: "Understand a bug's root cause"
-
-Use chat to trace through code paths.
-
-**Chat Questions:**
-```
-Trace the code path when a user submits an order. 
-What validations happen and in what order?
-```
-```
-What could cause the OrderProcessor to throw a 
-NullReferenceException on line 145?
-```
-
-### Use Case: "Find similar patterns that might have the same bug"
-
-Identify code that might have the same issue.
-
-**Chat Question:**
-```
-Show me all places where we access user.Address without 
-null checking first.
+```json
+{
+  "name": "aura_search",
+  "arguments": {
+    "query": "authentication token validation",
+    "workspacePath": "C:/projects/my-app",
+    "contentType": "code"
+  }
+}
 ```
 
-### Use Case: "Implement a bug fix"
+Results include the matching code snippet, file path, and a similarity score. Exact symbol matches (e.g., `ValidateToken`) are boosted above semantic matches.
 
-Create a workflow to fix an issue.
+## PDF Research
 
-**Workflow Description:**
-```
-Fix: Users can submit orders with negative quantities.
-
-Add validation in OrderValidator to reject line items 
-where Quantity <= 0. Add a unit test that verifies 
-negative quantities are rejected.
-```
-
----
-
-## Code Review Assistance
+Index research papers or technical PDFs, then search them alongside code:
 
-### Use Case: "Review code for issues"
-
-Get a second opinion on code quality.
-
-**Chat Question:**
+```json
+{
+  "name": "aura_index",
+  "arguments": {
+    "operation": "index_directory",
+    "path": "C:/research/papers",
+    "filePattern": "*.pdf"
+  }
+}
 ```
-Review the PaymentService class for potential issues:
-- Thread safety concerns
-- Error handling gaps
-- Performance problems
-- Code smells
-```
 
-### Use Case: "Check for security issues"
+Then search across everything:
 
-Identify potential vulnerabilities.
-
-**Chat Question:**
-```
-Are there any SQL injection vulnerabilities in the 
-UserRepository class?
+```json
+{
+  "name": "aura_search",
+  "arguments": {
+    "query": "transformer attention mechanism",
+    "workspaces": ["*"],
+    "contentType": "docs"
+  }
+}
 ```
-```
-Review the authentication flow for security issues.
-```
 
-### Use Case: "Suggest improvements"
+## Config File Search
 
-Get recommendations for better code.
+Find configuration patterns across JSON, YAML, and XML files:
 
-**Chat Question:**
+```json
+{
+  "name": "aura_search",
+  "arguments": {
+    "query": "connection string database timeout",
+    "contentType": "config"
+  }
+}
 ```
-How could the OrderProcessor class be improved? 
-Consider testability, maintainability, and performance.
-```
 
----
+The StructuredData ingestor chunks config files by top-level keys, so results are contextually meaningful.
 
-## Learning a New Codebase
+## Multi-Language Projects
 
-### Use Case: "Get a high-level overview"
+Aura handles polyglot repositories. A single workspace can contain C#, TypeScript, Python, Go, Rust, and more — each processed by the appropriate ingestor.
 
-Understand project structure quickly.
+### Navigate across languages
 
-**Chat Questions:**
-```
-Give me a high-level overview of this codebase. 
-What are the main components and how do they interact?
-```
+```json
+{
+  "name": "aura_search",
+  "arguments": {
+    "query": "user registration endpoint",
+    "workspacePath": "C:/projects/fullstack-app"
+  }
+}
 ```
-What's the tech stack of this project?
-```
 
-### Use Case: "Understand coding conventions"
+This returns results from both the C# backend and the TypeScript frontend.
 
-Learn how the team writes code.
+### Inspect C# types
 
-**Chat Questions:**
-```
-What patterns are used for error handling in this project?
-```
-```
-How is logging typically done? Show me some examples.
-```
+```json
+{
+  "name": "aura_inspect",
+  "arguments": {
+    "operation": "type_members",
+    "typeName": "UserController",
+    "solutionPath": "C:/projects/fullstack-app/Backend.sln"
+  }
+}
 ```
-What naming conventions are used for tests?
-```
-
-### Use Case: "Find entry points"
 
-Locate where execution starts.
+### Find Python callers
 
-**Chat Questions:**
-```
-What are the main entry points into the application?
-```
-```
-How does a request flow from the API endpoint to the database?
+```json
+{
+  "name": "aura_navigate",
+  "arguments": {
+    "operation": "references",
+    "filePath": "C:/projects/fullstack-app/scripts/deploy.py",
+    "offset": 150,
+    "projectPath": "C:/projects/fullstack-app/scripts"
+  }
+}
+```
+
+## Code Generation
+
+Generate a new service class with proper namespace detection:
+
+```json
+{
+  "name": "aura_generate",
+  "arguments": {
+    "operation": "create_type",
+    "typeName": "OrderService",
+    "typeKind": "class",
+    "implements": ["IOrderService"],
+    "solutionPath": "C:/projects/my-app/MyApp.sln",
+    "targetDirectory": "C:/projects/my-app/src/Services"
+  }
+}
+```
+
+Generate tests for an existing class:
+
+```json
+{
+  "name": "aura_generate",
+  "arguments": {
+    "operation": "tests",
+    "target": "OrderService",
+    "solutionPath": "C:/projects/my-app/MyApp.sln",
+    "focus": "edge_cases"
+  }
+}
+```
+
+## Refactoring with Blast Radius Analysis
+
+Rename a symbol and see what would change before applying:
+
+```json
+{
+  "name": "aura_refactor",
+  "arguments": {
+    "operation": "rename",
+    "symbolName": "ProcessOrder",
+    "newName": "ProcessOrderAsync",
+    "solutionPath": "C:/projects/my-app/MyApp.sln",
+    "analyze": true
+  }
+}
+```
+
+The `analyze: true` flag returns which files and references would be affected without making changes. Set `analyze: false` to apply.
+
+## Multi-Workspace Search
+
+Search across all registered workspaces at once:
+
+```json
+{
+  "name": "aura_search",
+  "arguments": {
+    "query": "retry policy implementation",
+    "workspaces": ["*"]
+  }
+}
+```
+
+Or search specific workspaces by alias:
+
+```json
+{
+  "name": "aura_search",
+  "arguments": {
+    "query": "retry policy",
+    "workspaces": ["backend", "shared-libs"]
+  }
+}
 ```
-
----
-
-## Best Practices
-
-### For Workflows
-
-1. **Be specific** - Include details about what you want
-2. **Reference patterns** - Point to existing code to follow
-3. **Specify constraints** - Mention frameworks, styles, requirements
-4. **Review carefully** - Check each step before approving
-5. **Use step chat** - Ask agents to refine their work
-
-### For Chat
-
-1. **Index first** - Ensure your codebase is indexed
-2. **Ask follow-ups** - Drill down into specifics
-3. **Reference files** - Mention specific files when relevant
-4. **Be conversational** - Aura remembers context within a session
-
-### For Code Quality
-
-1. **Run tests after workflows** - Verify changes work
-2. **Review diffs** - Check exactly what changed
-3. **Use Git history** - Aura creates commits you can revert
-4. **Iterate** - Use chat to refine workflow outputs
-
----
-
-## Supported Languages
-
-Aura provides full support for these languages:
-
-| Language | Indexing | Workflows | Specialist Agent |
-|----------|----------|-----------|------------------|
-| C# | ✅ Full (Roslyn) | ✅ | ✅ Roslyn + MCP operations |
-| TypeScript | ✅ TreeSitter | ✅ | ✅ TreeSitter + ts-morph operations |
-| JavaScript | ✅ TreeSitter | ✅ | ✅ TreeSitter + ts-morph operations |
-| Python | ✅ TreeSitter | ✅ | ✅ TreeSitter + rope operations |
-| Go | ✅ TreeSitter | ✅ | ✅ TreeSitter indexing |
-| Rust | ✅ TreeSitter | ✅ | ✅ TreeSitter indexing |
-| Java | ✅ TreeSitter | ✅ | ✅ TreeSitter indexing |
-| F# | ✅ TreeSitter | ✅ | ✅ TreeSitter indexing |
-
-Other languages fall back to generic code chunking plus semantic search.
-
----
-
-## Next Steps
 
-- [MCP Tools](mcp-tools.md) - Detailed MCP tool documentation
-- [Indexing Guide](indexing.md) - Code indexing details
-- [LLM Configuration](../configuration/llm-providers.md) - Configure AI providers

@@ -1,201 +1,140 @@
 # Aura Architecture Quick Reference
 
-> **For Copilot/AI Assistants**: Read this first to avoid searching for endpoints and file locations.
+> **For Copilot/AI Assistants**: Read this first to understand project layout and key files.
 
-## API Endpoints (all in `src/Aura.Api/Program.cs`)
+## Project Layout
 
-### Workflow Endpoints (`/api/developer/workflows`)
+### Source Projects (6)
 
-| Method | Endpoint | Purpose |
-|--------|----------|---------|
-| POST | `/api/developer/workflows` | Create workflow (requires `repositoryPath`, auto-creates worktree) |
-| GET | `/api/developer/workflows` | List workflows (filter by `status`, `repositoryPath`) |
-| GET | `/api/developer/workflows/{id}` | Get workflow details with steps |
-| DELETE | `/api/developer/workflows/{id}` | Delete workflow and cleanup worktree |
-| POST | `/api/developer/workflows/{id}/analyze` | Enrich/analyze workflow (uses RAG) |
-| POST | `/api/developer/workflows/{id}/plan` | Generate execution steps |
-| POST | `/api/developer/workflows/{id}/complete` | Mark workflow as complete |
-| POST | `/api/developer/workflows/{id}/cancel` | Cancel workflow |
-| POST | `/api/developer/workflows/{id}/chat` | Chat to modify workflow plan |
-| POST | `/api/developer/workflows/{id}/steps/{stepId}/execute` | Execute a step |
-| POST | `/api/developer/workflows/{id}/steps/{stepId}/approve` | Approve step output |
-| POST | `/api/developer/workflows/{id}/steps/{stepId}/reject` | Reject step output (with feedback) |
-| POST | `/api/developer/workflows/{id}/steps/{stepId}/skip` | Skip a step (with optional reason) |
-| POST | `/api/developer/workflows/{id}/steps/{stepId}/chat` | Chat with agent about a step |
-| POST | `/api/developer/workflows/{id}/steps/{stepId}/reassign` | Reassign step to different agent |
-| PUT | `/api/developer/workflows/{id}/steps/{stepId}/description` | Update step description |
+| Project | Purpose |
+|---------|---------|
+| `src/Aura.Api` | HTTP + MCP host (endpoints, MCP handlers) |
+| `src/Aura.Foundation` | Core: embeddings, RAG, data, shell, git |
+| `src/Aura.Module.Developer` | Roslyn + multi-language code intelligence |
+| `src/Aura.Module.Researcher` | PDF and document ingestion |
+| `src/Aura.ServiceDefaults` | Shared Aspire service configuration |
+| `src/Aura.Tray` | Windows system tray app |
 
-### Workspace Endpoints (`/api/workspaces`)
+### Test Projects (5)
 
-| Method | Endpoint | Purpose |
-|--------|----------|---------|
-| POST | `/api/workspaces` | Onboard workspace (registers + starts RAG + code graph) |
-| GET | `/api/workspaces` | List all workspaces |
-| GET | `/api/workspaces/{id}` | Get workspace details with stats |
-| POST | `/api/workspaces/{id}/reindex` | Reindex existing workspace |
-| DELETE | `/api/workspaces/{id}` | Remove workspace and its indexed data |
-| GET | `/api/workspaces/lookup?path=...` | Look up workspace by path |
+| Project | Mirrors |
+|---------|---------|
+| `tests/Aura.Api.Tests` | `Aura.Api` |
+| `tests/Aura.Api.IntegrationTests` | `Aura.Api` (requires PostgreSQL) |
+| `tests/Aura.Foundation.Tests` | `Aura.Foundation` |
+| `tests/Aura.Module.Developer.Tests` | `Aura.Module.Developer` |
+| `tests/Aura.Module.Researcher.Tests` | `Aura.Module.Researcher` |
 
-### RAG Endpoints (`/api/rag`)
-
-| Method | Endpoint | Purpose |
-|--------|----------|---------|
-| POST | `/api/rag/search` | Search RAG index |
-
-### Graph Endpoints (Code Analysis)
-
-| Method | Endpoint | Purpose |
-|--------|----------|---------|
-| GET | `/api/graph/find/{name}` | Find nodes by name |
-| GET | `/api/graph/implementations/{interface}` | Find implementations |
-| GET | `/api/graph/callers/{method}` | Find method callers |
-| GET | `/api/graph/members/{type}` | Get type members |
-| DELETE | `/api/graph/{workspacePath}` | Clear graph for workspace |
-
-### Git Worktree Endpoints
-
-| Method | Endpoint | Purpose |
-|--------|----------|---------|
-| POST | `/api/git/worktree` | Create worktree |
-| GET | `/api/git/worktree?repositoryPath=...` | List worktrees |
-| DELETE | `/api/git/worktree` | Remove worktree |
-
-## Key File Locations
-
-### Source Code
+## Key Files
 
 | Path | Purpose |
 |------|---------|
-| `src/Aura.Api/Program.cs` | All API endpoints (single file, ~2000 lines) |
-| `src/Aura.Foundation/` | Core abstractions (agents, RAG, prompts, data) |
-| `src/Aura.Module.Developer/` | Developer module (workflows, git, code analysis) |
-| `src/Aura.Module.Developer/Services/WorkflowService.cs` | Workflow logic |
-| `src/Aura.Foundation/Agents/ConfigurableAgent.cs` | Agent execution, RAG context injection |
-| `src/Aura.Foundation/Prompts/PromptRegistry.cs` | Prompt loading and rendering |
+| `src/Aura.Api/Program.cs` | Startup — DI, middleware, endpoint registration |
+| `src/Aura.Api/Endpoints/*.cs` | REST endpoints (`Map*Endpoints()` extension methods) |
+| `src/Aura.Api/Mcp/McpHandler.cs` | MCP entry point (partial class) |
+| `src/Aura.Api/Mcp/McpHandler.*.cs` | MCP domain partials (see below) |
+| `src/Aura.Foundation/ServiceCollectionExtensions.cs` | Foundation DI registration |
+| `src/Aura.Foundation/Rag/BackgroundIndexer.cs` | Async indexing via `Channel<IndexWorkItem>` |
+| `src/Aura.Foundation/Rag/IncrementalIndexer.cs` | File-watcher-based incremental indexing |
 | `src/Aura.Foundation/Rag/RagService.cs` | RAG indexing and querying |
-| `src/Aura.Foundation/Rag/RagOptions.cs` | Default include/exclude patterns |
+| `src/Aura.Foundation/Data/AuraDbContext.cs` | EF Core context (Npgsql + pgvector) |
+| `src/Aura.Api/appsettings.json` | Configuration (embedding providers, RAG, ports) |
 
-### Configuration
-
-| Path | Purpose |
-|------|---------|
-| `src/Aura.Api/appsettings.json` | API configuration (LLM providers, RAG settings) |
-| `agents/*.md` | Agent definitions (system prompts, capabilities) |
-| `prompts/*.prompt` | Prompt templates (Handlebars format with YAML frontmatter) |
-
-### Prompt Templates
-
-| File | Used For |
-|------|----------|
-| `prompts/workflow-enrich.prompt` | Analyze phase (enrichment) |
-| `prompts/workflow-plan.prompt` | Plan phase (step generation) |
-| `prompts/step-execute.prompt` | Generic step execution |
-| `prompts/step-execute-documentation.prompt` | Documentation steps |
-| `prompts/step-review.prompt` | Code review steps |
-
-### ADRs (Architecture Decision Records)
-
-Location: `.project/adr/`
-
-Key ADRs:
-- `016-configurable-rag-queries.md` - RAG queries in prompt frontmatter
-- `017-case-insensitive-paths.md` - Path normalization for Windows
-- `018-prompt-template-architecture.md` - Prompt vs agent vs RAG separation
-
-## Common Debugging Commands
-
-```powershell
-# Check API health
-curl -s http://localhost:5300/health
-
-# List workflows
-curl -s http://localhost:5300/api/developer/workflows | ConvertFrom-Json | ConvertTo-Json -Depth 3
-
-# Check workspace status (use URL-encoded path)
-curl -s "http://localhost:5300/api/workspaces/lookup?path=C%3A%5Cwork%5CYourRepo"
-
-# Check if code graph is indexed
-curl -s "http://localhost:5300/api/graph/find/YourClassName?workspacePath=c%3A%2Fwork%2Fyourrepo"
-
-# Onboard a workspace (registers + starts indexing)
-curl -s -X POST "http://localhost:5300/api/workspaces" -H "Content-Type: application/json" -d '{"path":"C:\\work\\YourRepo"}'
-```
-
-## Architecture Patterns
-
-### Prompt Flow
+### MCP Handler Partials
 
 ```
-Agent Definition (.md)     →  System Prompt ("who you are")
-  ↓
-RAG Context (auto-injected) →  Appended to system prompt by ConfigurableAgent
-  ↓
-Prompt Template (.prompt)   →  User Message ("what to do")
-  ↓
-LLM Provider               →  Azure OpenAI / Ollama (configured in appsettings.json)
+McpHandler.cs             — base partial (routing, tool registry)
+McpHandler.Generate.cs    — code generation tools
+McpHandler.Index.cs       — indexing tools
+McpHandler.Inspect.cs     — type/member inspection tools
+McpHandler.Languages.cs   — language service tools
+McpHandler.Navigate.cs    — callers/implementations/references
+McpHandler.Refactor.cs    — refactoring tools
+McpHandler.Search.cs      — semantic search tools
+McpHandler.Tree.cs        — hierarchical exploration
+McpHandler.Validate.cs    — compilation and test validation
+McpHandler.Workspaces.cs  — workspace management tools
 ```
 
-### RAG Query Configuration
+### Endpoint Files
 
-RAG queries can be defined in prompt template frontmatter:
-
-```yaml
----
-description: Your prompt description
-ragQueries:
-  - "query one keywords"
-  - "query two keywords"
----
+```
+src/Aura.Api/Endpoints/
+├── HealthEndpoints.cs              → MapHealthEndpoints()
+├── McpEndpoints.cs                 → MapMcpEndpoints()
+├── WorkspaceEndpoints.cs           → MapWorkspaceEndpoints()
+├── WorkspaceIndexEndpoints.cs      → MapWorkspaceIndexEndpoints()
+├── WorkspaceGraphEndpoints.cs      → MapWorkspaceGraphEndpoints()
+└── WorkspaceSearchEndpoints.cs     → MapWorkspaceSearchEndpoints()
 ```
 
-The code reads these via `_promptRegistry.GetRagQueries(promptName)`.
+## DI Registration Chain
 
-### Path Handling
-
-Windows paths are case-insensitive. The system normalizes paths:
-- `RagService.cs`: Uses `ToLowerInvariant()` and `ILike` for matching
-- `WorkflowService.cs`: Uses `ToLowerInvariant()` for filtering
-- `CodeGraphService.cs`: Uses `ToLowerInvariant()` and `ILike` for workspace path matching
-
-```csharp
-// Standard pattern:
-private static string NormalizePath(string path) =>
-    path.Replace('\\', '/').ToLowerInvariant();
-
-var normalized = NormalizePath(workspacePath);
-query.Where(n => EF.Functions.ILike(n.WorkspacePath!, normalized));
+```
+Program.cs
+├── builder.AddServiceDefaults()                    ← Aspire telemetry, health, resilience
+├── builder.Services.AddDbContext<AuraDbContext>()   ← Npgsql + pgvector
+├── builder.Services.AddAuraFoundation(config)      ← Foundation chain:
+│   ├── AddShellServices()
+│   │   └── IProcessRunner → ProcessRunner
+│   ├── AddGitServices()
+│   │   ├── IGitService → GitService
+│   │   └── IGitWorktreeService → GitWorktreeService
+│   └── AddRagServices(config)
+│       ├── Configure<RagOptions>               (Aura:Rag)
+│       ├── Configure<RagWatcherOptions>        (Aura:RagWatcher)
+│       ├── Configure<BackgroundIndexerOptions> (Aura:BackgroundIndexer)
+│       ├── Configure<EmbeddingOptions>         (Aura:Embedding)
+│       ├── Configure<OllamaOptions>            (Aura:Ollama)
+│       ├── Configure<OpenAiEmbeddingOptions>   (Aura:OpenAiEmbedding)
+│       ├── IEmbeddingProvider (see provider selection below)
+│       ├── TextChunker, IIngestorRegistry
+│       ├── IRagService → RagService
+│       ├── ICodeGraphService → CodeGraphService
+│       ├── ICodeGraphEnricher → CodeGraphEnricher
+│       ├── BackgroundIndexer (singleton + hosted service)
+│       ├── IncrementalIndexer (singleton)
+│       └── IWorkspaceRegistryService → WorkspaceRegistryService
+├── Developer services (registered individually):
+│   ├── IRoslynWorkspaceService → RoslynWorkspaceService
+│   ├── IRoslynRefactoringService → RoslynRefactoringService
+│   ├── IPythonRefactoringService → PythonRefactoringService
+│   ├── ITypeScriptLanguageService → TypeScriptLanguageService
+│   ├── ITestGenerationService → RoslynTestGenerator
+│   ├── ICodeGraphIndexer → CodeGraphIndexer
+│   ├── ITreeBuilderService → TreeBuilderService
+│   ├── RoslynCodeIngestor, TreeSitterCodeIngestor
+│   └── ResearcherModule.ConfigureServices()
+└── AddScoped<McpHandler>()
 ```
 
-### Indexing Types
+## Ingestor Priority Order
 
-1. **Text RAG** (`/api/rag/index/directory`): Just embeddings, no code understanding
-2. **Semantic Index** (`/api/semantic/index`): Code graph (Roslyn) + selective embeddings
-3. **Graph Index** (`/api/graph/index`): Code graph only from .sln file
+Ingestors registered via `IIngestorRegistry.Register()` — first match wins.
 
-**Always prefer `/api/semantic/index`** for code repositories.
+| Priority | ID | Class | Extensions |
+|----------|----|-------|------------|
+| 1 (highest) | `roslyn-code` | `RoslynCodeIngestor` | `.cs`, `.csx` |
+| 2 | `tree-sitter-code` | `TreeSitterCodeIngestor` | `.py` `.ts` `.tsx` `.js` `.jsx` `.go` `.rs` `.java` `.cpp` `.c` `.h` `.rb` `.swift` `.kt` |
+| 3 | `pdf` | `PdfIngestor` | `.pdf` |
+| 4 | `structured-data` | `StructuredDataIngestor` | `.json` `.yaml` `.yml` `.xml` `.toml` `.env` `.properties` |
+| 5 | `code` | `CodeIngestor` | `.cs` `.ts` `.tsx` `.js` `.jsx` `.py` `.rs` `.go` `.java` `.cpp` `.c` `.h` `.hpp` `.fs` `.fsx` |
+| 6 | `markdown` | `MarkdownIngestor` | `.md` `.markdown` `.mdx` |
+| 7 (lowest) | `plaintext` | `PlainTextIngestor` | `.txt` `.text` `.log` `.cfg` `.ini` `.conf` + extensionless |
 
-## LLM Provider Configuration
+Priorities 1–3 are registered at startup in `Program.cs` and inserted at index 0 (shadowing lower-priority defaults for overlapping extensions). Priority 4–7 are defaults from `IngestorRegistry`.
 
-In `appsettings.json`:
+## Embedding Provider Selection
 
-```json
-{
-  "LlmProviders": {
-    "default": {
-      "Provider": "azureopenai",
-      "Endpoint": "https://your-endpoint.cognitiveservices.azure.com/",
-      "ApiKey": "your-key",
-      "DeploymentName": "gpt-4.1-mini"
-    }
-  }
-}
-```
+Configured via `Aura:Embedding` section → `EmbeddingOptions`.
 
-## Extension (VS Code)
+| `Provider` value | Resolved to | Behavior |
+|------------------|-------------|----------|
+| `"openai"` | `OpenAiEmbeddingProvider` | OpenAI-compatible API only |
+| `"ollama"` | `OllamaProvider` | Local Ollama only |
+| `"auto"` (default) | `FallbackEmbeddingProvider` | Try OpenAI first, fall back to Ollama |
 
-| Path | Purpose |
-|------|---------|
-| `extension/src/services/auraApiService.ts` | API client |
-| `extension/src/providers/workflowTreeProvider.ts` | Workflow tree view |
-
-Key: Extension filters workflows by `repositoryPath` matching VS Code workspace.
+Related config sections:
+- `Aura:Embedding` — `Provider`, `BatchSize` (default 100), `FallbackModel` (default `nomic-embed-text`)
+- `Aura:OpenAiEmbedding` — `BaseUrl`, `ApiKey`, `TimeoutSeconds` (default 60)
+- `Aura:Ollama` — `BaseUrl` (default `http://localhost:11434`)

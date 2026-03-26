@@ -1,211 +1,121 @@
-# Code Indexing
+# Indexing
 
-Aura indexes your codebase to provide intelligent code search, context-aware chat, and accurate workflow generation.
+Aura indexes your codebase into two structures: a **RAG vector store** (pgvector) for semantic search and a **code graph** (nodes + edges) for structural navigation. Seven ingestors handle different file types.
 
-## How Indexing Works
+## Ingestors
 
-When you index a repository, Aura:
+| Ingestor | ID | File Extensions | Description |
+|---|---|---|---|
+| **Roslyn** | `roslyn-code` | `.cs`, `.csx` | Full Roslyn semantic analysis. Produces RAG chunks and code graph nodes/edges with type relationships, call graphs, and member details. |
+| **TreeSitter** | `treesitter-code` | `.py`, `.ts`, `.tsx`, `.js`, `.jsx`, `.go`, `.rs`, `.java`, `.cpp`, `.c`, `.h`, `.rb`, `.swift`, `.kt` | AST-aware parsing via TreeSitter grammars. Produces RAG chunks and code graph. Skips `.cs`/`.csx` (handled by Roslyn). |
+| **Markdown** | `markdown` | `.md`, `.markdown`, `.mdx` | Splits by headings; preserves code blocks as separate chunks. |
+| **StructuredData** | `structured-data` | `.json`, `.yaml`, `.yml`, `.xml`, `.toml`, `.env`, `.properties` | Structure-aware chunking by top-level keys. |
+| **PDF** | `pdf` | `.pdf` | Uses `pdftotext` (poppler-utils). Paragraph-based chunking with metadata extraction. |
+| **Code** (regex) | `code` | `.cs`, `.ts`, `.js`, `.py`, `.rs`, `.go`, `.java`, `.cpp`, `.c`, `.h`, `.hpp`, `.fs`, `.fsx` | Regex-based fallback. Overridden by Roslyn or TreeSitter when those modules are loaded. |
+| **PlainText** | `plaintext` | `.txt`, `.text`, `.log`, `.cfg`, `.ini`, `.conf` + extensionless | Line-based chunking (1500 chars, 200 overlap). Catch-all fallback. |
 
-1. **Scans** all source files
-2. **Parses** code using language-specific parsers
-3. **Extracts** semantic information (functions, classes, types)
-4. **Creates embeddings** for semantic search
-5. **Builds a code graph** of relationships
+### Priority
 
-## Starting an Index
+When multiple ingestors match the same extension, the last registered one wins. The registration order (from lowest to highest priority) is:
 
-### From VS Code
+1. Markdown → 2. Code (regex) → 3. StructuredData → 4. PlainText → 5. PDF → 6. Roslyn → 7. TreeSitter
 
-1. Open a project folder
-2. Click **Aura** in the Activity Bar
-3. Find **"Code Graph"** section
-4. Click **"Index Repository"**
+In practice: `.cs` files are handled by Roslyn, `.py`/`.ts`/`.js`/`.go` etc. by TreeSitter, `.pdf` by PDF, and so on.
 
-### What Gets Indexed
+## Triggering Indexing
 
-| Language | Parser | Features |
-|----------|--------|----------|
-
-| **C#** | Roslyn | Full semantic analysis, types, references |
-| **TypeScript** | TreeSitter | Functions, classes, types, imports |
-| **JavaScript** | TreeSitter | Functions, classes, exports |
-| **Python** | TreeSitter | Functions, classes, decorators |
-| **Go** | TreeSitter | Functions, types, interfaces |
-| **Java** | TreeSitter | Classes, methods, annotations |
-| **Rust** | TreeSitter | Functions, structs, traits |
-
-### Files Skipped
-
-Aura automatically skips:
-
-- `node_modules/`, `vendor/`, `.git/`
-- Binary files, images, compiled output
-- Files matching `.gitignore` patterns
-- Very large files (>1MB by default)
-
-## Viewing Index Status
-
-The **Code Graph** section shows:
-
-- **Status**: Idle, Indexing, Ready
-- **Files**: Number of indexed files
-- **Symbols**: Total extracted symbols
-- **Last Updated**: When index was refreshed
-
-## Re-indexing
-
-Aura doesn't automatically re-index. Trigger manually when:
-
-- You've pulled significant changes
-- Added new files or directories
-- Changed project structure
-
-### Incremental vs Full
-
-Currently, indexing is **full** (scans everything). Incremental indexing is planned for future releases.
-
-## The Code Graph
-
-Beyond text search, Aura builds a **code graph** with:
-
-### Nodes
-
-- Files
-- Classes/Structs/Interfaces
-- Functions/Methods
-- Properties/Fields
-- Types
-
-### Relationships (Coming Soon)
-
-- Inheritance
-- Dependencies
-- Call graphs
-- Type references
-
-## Semantic Search
-
-Indexing enables **semantic search** - finding code by meaning, not just keywords:
-
-```text
-Query: "where are orders processed"
-Finds: OrderProcessor.cs, ProcessOrder method, OrderHandler class
-       (even if they don't contain the word "processed")
-```
-
-This powers:
-
-- Chat context retrieval
-- Workflow planning
-- Code exploration
-
-## Worktree-Aware Indexing
-
-When working in a **git worktree** (created for a workflow/story), Aura automatically shares the index with the main repository:
-
-```text
-main repo:     ~/projects/myapp/              ← Index lives here
-worktree 1:    ~/projects/myapp-worktrees/feature-x/   ← Shares main index
-worktree 2:    ~/projects/myapp-worktrees/feature-y/   ← Shares main index
-```
-
-### How It Works
-
-1. **Index the main repository** once
-2. When opening a worktree, Aura detects it's linked to an indexed repo
-3. Search and navigation use the shared index
-4. You don't need to re-index each worktree
-
-### Benefits
-
-- **Faster workflow startup** - No waiting for index
-- **Less storage** - One index per repo, not per worktree
-- **Consistent results** - Same code understanding across all worktrees
-
-### Automatic Detection
-
-Aura uses `git worktree list` to detect worktree relationships. This happens automatically when:
-
-- Opening a worktree folder in VS Code
-- Starting a workflow that creates a worktree
-- Using MCP tools from a worktree path
-
-## Configuration
-
-### Excluded Paths
-
-In `appsettings.json`:
+### Via MCP
 
 ```json
 {
-  "Aura": {
-    "Indexing": {
-      "ExcludedPaths": [
-        "**/node_modules/**",
-        "**/bin/**",
-        "**/obj/**",
-        "**/.git/**"
-      ]
-    }
+  "name": "aura_index",
+  "arguments": {
+    "operation": "index_directory",
+    "path": "C:/projects/my-app",
+    "recursive": true
   }
 }
 ```
 
-### Max File Size
+### Via REST API
+
+```bash
+# Register workspace with immediate indexing
+curl -X POST http://localhost:5300/api/workspaces \
+  -H "Content-Type: application/json" \
+  -d '{"path": "C:/projects/my-app", "startIndexing": true}'
+
+# Re-index an existing workspace
+curl -X POST http://localhost:5300/api/workspaces/{workspaceId}/index
+```
+
+### Filtering by File Pattern
+
+Index only specific files:
 
 ```json
 {
-  "Aura": {
-    "Indexing": {
-      "MaxFileSizeKb": 1024
-    }
+  "name": "aura_index",
+  "arguments": {
+    "operation": "index_directory",
+    "path": "C:/projects/research",
+    "filePattern": "*.pdf"
   }
 }
 ```
 
-## Troubleshooting
+## Index Status
 
-### Index Taking Too Long
+```json
+{
+  "name": "aura_index",
+  "arguments": {
+    "operation": "stats",
+    "path": "C:/projects/my-app"
+  }
+}
+```
 
-Large repositories may take several minutes. Progress is shown in the status panel.
+Or via REST:
 
-To speed up:
+```bash
+curl http://localhost:5300/api/workspaces/{workspaceId}/index
+```
 
-1. Ensure excluded paths are configured
-2. Check for large generated files to exclude
-3. Consider indexing specific directories
+Returns freshness (`fresh`, `stale`, `not-indexed`), chunk count, graph node count, and last-indexed commit.
 
-### Symbols Not Found
+## Default Include / Exclude Patterns
 
-If expected code isn't found:
+**Included by default:**
 
-1. Check the file is in a supported language
-2. Verify the file isn't excluded
-3. Try re-indexing the repository
+`*.cs`, `*.md`, `*.txt`, `*.json`, `*.yaml`, `*.yml`, `*.ts`, `*.tsx`, `*.js`, `*.jsx`, `*.py`, `*.rs`, `*.csproj`, `*.sln`, `*.props`, `*.targets`, `*.fsproj`, `*.pdf`, `*.go`, `*.java`, `*.cpp`, `*.c`, `*.h`, `*.rb`, `*.swift`, `*.kt`, `*.xml`, `*.toml`
 
-### Out of Memory
+**Excluded by default:**
 
-For very large repositories:
+`**/bin/**`, `**/obj/**`, `**/node_modules/**`, `**/.git/**`, `**/.vs/**`, `**/packages/**`, `**/dist/**`, `**/.nuget/**`, `**/*.dll`, `**/*.exe`, `**/*.pdb`, `**/*.cache`, `**/wwwroot/lib/**`, `**/.idea/**`, `**/coverage/**`, `**/.venv/**`, `**/venv/**`, `**/cache/**`, `**/publish/**`, `**/temp/**`, `**/TestResults/**`, `**/__pycache__/**`
 
-1. Index specific directories instead
-2. Increase exclusions
-3. Consider splitting into multiple repos
+Override these in configuration — see [Settings Reference](../configuration/settings.md).
 
-## Storage
+## Clearing the Index
 
-Index data is stored in:
+```bash
+# Clear RAG chunks
+curl -X DELETE http://localhost:5300/api/workspaces/{workspaceId}/index
 
-- **PostgreSQL** - Code graph and metadata
-- **pgvector** - Embedding vectors for semantic search
+# Clear code graph
+curl -X DELETE http://localhost:5300/api/workspaces/{workspaceId}/graph
+```
 
-Location: Aura's bundled PostgreSQL in `C:\Program Files\Aura\data\`
+## Git Worktree Support
 
-## Privacy
+Aura detects git worktrees and maps worktree paths back to the main repository workspace. Use `aura_workspace` with `detect_worktree` to check whether a path is inside a worktree:
 
-All indexing happens **locally**:
-
-- Code never leaves your machine
-- Embeddings generated by local Ollama
-- Database stored on your disk
-
-If using cloud LLM providers, only search queries are sent (not your full codebase).
+```json
+{
+  "name": "aura_workspace",
+  "arguments": {
+    "operation": "detect_worktree",
+    "path": "C:/projects/my-app-feature-branch"
+  }
+}
+```

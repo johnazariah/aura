@@ -1,41 +1,35 @@
 # Aura Documentation
 
-Aura is now a local indexing platform plus MCP server. The documentation below is the current product surface; older extension/workflow-era docs have been removed or retained only as historical project records under `.project/`.
+Aura is a personal knowledge MCP server. It indexes codebases and documents locally — using Roslyn, TreeSitter, and pgvector RAG — and exposes tools to GitHub Copilot via the Model Context Protocol.
 
 ## Getting Started
 
-1. [Installation](getting-started/installation.md)
-2. [First Run](getting-started/first-run.md)
-3. [Quick Start](getting-started/quick-start.md)
+1. [Installation](getting-started/installation.md) — Windows installer or macOS manual setup
+2. [First Run](getting-started/first-run.md) — Verify health endpoints, check Ollama models, index a folder
+3. [Quick Start](getting-started/quick-start.md) — Register a workspace, trigger indexing, search via Copilot
 
 ## User Guide
 
-- [Use Cases](user-guide/use-cases.md)
-- [Cheat Sheet](user-guide/cheat-sheet.md)
-- [Code Indexing](user-guide/indexing.md)
-- [MCP Tools](user-guide/mcp-tools.md)
-- [Operational Patterns](user-guide/patterns.md)
+- [MCP Tools](user-guide/mcp-tools.md) — All 10 tools with operations and examples
+- [Indexing](user-guide/indexing.md) — 7 ingestors, supported file types, how indexing works
+- [Use Cases](user-guide/use-cases.md) — Code search, PDF research, config search, multi-language projects
+- [Cheat Sheet](user-guide/cheat-sheet.md) — Quick reference for REST endpoints and MCP tool operations
 
 ## Configuration
 
-- [LLM Providers](configuration/llm-providers.md)
-- [Settings Reference](configuration/settings.md)
+- [Settings Reference](configuration/settings.md) — All config sections with defaults
+- [LLM Providers](configuration/llm-providers.md) — Ollama, OpenAI, auto-failover
 
-## MCP and API Reference
+## MCP Tools / API Reference
 
-- [MCP Tools Reference](mcp-tools/api-reference.md)
-- [Aura Docs Tool](mcp-tools/aura_docs.md)
+- [API Reference](mcp-tools/api-reference.md) — Detailed MCP tool schemas for all 10 tools
 
 ## Troubleshooting
 
-- [Common Issues](troubleshooting/common-issues.md)
-- [Logs & Diagnostics](troubleshooting/logs.md)
-- [Getting Help](troubleshooting/support.md)
+- [Common Issues](troubleshooting/common-issues.md) — Ollama, PostgreSQL, embedding, service problems
+- [Logs & Diagnostics](troubleshooting/logs.md) — Log locations and interpretation
+- [Getting Help](troubleshooting/support.md) — Bug reports, feature requests, community
 
-## Project Documentation
+## Benchmarks
 
-- [Project Status](../.project/STATUS.md)
-- [ADRs](../.project/adr)
-- [Reference](../.project/reference)
-
-See the root `README.md` for the current architecture summary.
+- [README Review Benchmark](benchmarks/brightsword-readme-review-benchmark.md) — LLM output quality scoring

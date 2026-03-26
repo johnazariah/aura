@@ -2,180 +2,124 @@
 
 **Base URL**: `http://localhost:5300`
 
-## Health & Status
+## Health
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/health` | Overall health check |
-| GET | `/health/agents` | Agent registry health |
-| GET | `/health/db` | Database connectivity |
-| GET | `/health/ollama` | Ollama LLM provider status |
-| GET | `/health/rag` | RAG service status |
+| Method | Route | Description |
+|--------|-------|-------------|
+| GET | `/health` | Overall status (`status`, `startedAt`, `deployTag`) |
+| GET | `/health/db` | PostgreSQL connectivity |
+| GET | `/health/rag` | RAG service status + chunk count |
+| GET | `/health/mcp` | MCP server readiness + tool list |
 
-## Workflows (Developer Module)
+## MCP
 
-### Workflow Lifecycle
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/developer/workflows` | Create new workflow |
-| GET | `/api/developer/workflows` | List all workflows |
-| GET | `/api/developer/workflows/{id}` | Get workflow details with steps |
-| POST | `/api/developer/workflows/{id}/analyze` | Analyze/enrich workflow (step 1) |
-| POST | `/api/developer/workflows/{id}/plan` | Generate execution plan (step 2) |
-| POST | `/api/developer/workflows/{id}/complete` | Mark workflow complete |
-| POST | `/api/developer/workflows/{id}/cancel` | Cancel workflow |
-| DELETE | `/api/developer/workflows/{id}` | Delete workflow |
-| POST | `/api/developer/workflows/{id}/chat` | Chat with workflow context |
-
-### Step Management
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/developer/workflows/{wfId}/steps/{stepId}/execute` | Execute a step |
-| POST | `/api/developer/workflows/{wfId}/steps/{stepId}/approve` | Approve step output |
-| POST | `/api/developer/workflows/{wfId}/steps/{stepId}/reject` | Reject step (request rework) |
-| POST | `/api/developer/workflows/{wfId}/steps/{stepId}/skip` | Skip a step |
-| POST | `/api/developer/workflows/{wfId}/steps/{stepId}/chat` | Chat about specific step |
-| POST | `/api/developer/workflows/{wfId}/steps/{stepId}/reassign` | Reassign to different agent |
-| PUT | `/api/developer/workflows/{wfId}/steps/{stepId}/description` | Update step description |
-| POST | `/api/developer/workflows/{id}/steps` | Add new step |
-| DELETE | `/api/developer/workflows/{wfId}/steps/{stepId}` | Remove step |
-
-## Workflow Quick Start
-
-```powershell
-# 1. Create workflow
-$body = '{"title": "My Task", "description": "Details", "repositoryPath": "c:\\work\\myrepo"}'
-curl -X POST "http://localhost:5300/api/developer/workflows" -H "Content-Type: application/json" -d $body
-
-# 2. Analyze (enriches with context)
-curl -X POST "http://localhost:5300/api/developer/workflows/{id}/analyze"
-
-# 3. Plan (generates steps)
-curl -X POST "http://localhost:5300/api/developer/workflows/{id}/plan"
-
-# 4. Execute steps one by one
-curl -X POST "http://localhost:5300/api/developer/workflows/{wfId}/steps/{stepId}/execute"
-
-# 5. Approve/reject step output
-curl -X POST "http://localhost:5300/api/developer/workflows/{wfId}/steps/{stepId}/approve"
-```
-
-## Agents
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/agents` | List all registered agents |
-| GET | `/api/agents/{agentId}` | Get agent details |
-| GET | `/api/agents/best?capability=X&language=Y` | Find best agent for task |
-| POST | `/api/agents/{agentId}/execute` | Execute agent directly |
-| POST | `/api/agents/{agentId}/execute/rag` | Execute with RAG context |
-
-## Tools (ReAct)
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/tools` | List available tools |
-| POST | `/api/tools/{toolId}/execute` | Execute a single tool |
-| POST | `/api/tools/react` | Run ReAct loop with tools |
+| Method | Route | Description |
+|--------|-------|-------------|
+| POST | `/mcp` | JSON-RPC 2.0 — routes to `McpHandler.HandleAsync()` |
 
 ## Workspaces
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/workspaces` | Onboard workspace (registers + indexes) |
-| GET | `/api/workspaces` | List all workspaces |
-| GET | `/api/workspaces/{id}` | Get workspace details with stats |
-| POST | `/api/workspaces/{id}/reindex` | Reindex existing workspace |
-| DELETE | `/api/workspaces/{id}` | Remove workspace and its data |
-| GET | `/api/workspaces/lookup?path=X` | Look up workspace by path |
+| Method | Route | Description |
+|--------|-------|-------------|
+| GET | `/api/workspaces` | List workspaces (`?limit=N`) |
+| GET | `/api/workspaces/{idOrPath}` | Get workspace by ID or URL-encoded path |
+| POST | `/api/workspaces` | Create workspace |
+| DELETE | `/api/workspaces/{id}` | Remove workspace + RAG chunks + graph |
 
-## RAG (Retrieval-Augmented Generation)
+## Index (`/api/workspaces/{workspaceId}/index`)
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/rag/index` | Index a single file |
-| POST | `/api/rag/query` | Query indexed content |
-| GET | `/api/rag/stats` | Get RAG statistics |
-| DELETE | `/api/rag/{contentId}` | Delete specific content |
+| Method | Route | Description |
+|--------|-------|-------------|
+| GET | `/api/workspaces/{workspaceId}/index/` | Index status (RAG + graph health, staleness) |
+| POST | `/api/workspaces/{workspaceId}/index/` | Trigger reindex → `202 Accepted` + jobId |
+| DELETE | `/api/workspaces/{workspaceId}/index/` | Clear RAG index (workspace preserved) |
+| GET | `/api/workspaces/{workspaceId}/index/jobs` | List active jobs |
+| GET | `/api/workspaces/{workspaceId}/index/jobs/{jobId:guid}` | Get specific job status |
 
-## Background Indexing
+## Search
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/index/jobs/{jobId}` | Check job status |
-| GET | `/api/index/status` | Overall indexing status |
+| Method | Route | Description |
+|--------|-------|-------------|
+| POST | `/api/workspaces/{workspaceId}/search` | Semantic search |
 
-## Code Graph (Roslyn)
+## Graph (`/api/workspaces/{workspaceId}/graph`)
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/graph/find/{name}` | Find symbol by name |
-| GET | `/api/graph/members/{typeName}` | Get type members |
-| GET | `/api/graph/callers/{methodName}` | Find method callers |
-| GET | `/api/graph/implementations/{interface}` | Find implementations |
-| GET | `/api/graph/namespace/{ns}` | List namespace contents |
-| DELETE | `/api/graph/{workspacePath}` | Clear graph for workspace |
-
-## Git Operations
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/git/status` | Get git status |
-| POST | `/api/git/branch` | Create branch |
-| POST | `/api/git/commit` | Commit changes |
-| GET | `/api/git/worktrees` | List worktrees |
-| POST | `/api/git/worktrees` | Create worktree |
-| DELETE | `/api/git/worktrees` | Delete worktree |
-
-## Conversations
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/conversations` | Create conversation |
-| GET | `/api/conversations` | List conversations |
-| GET | `/api/conversations/{id}` | Get conversation |
-| POST | `/api/conversations/{id}/messages` | Add message |
-
-## Executions
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/executions` | List execution history |
+| Method | Route | Description |
+|--------|-------|-------------|
+| GET | `.../graph/` | Graph stats (nodes, edges by type) |
+| DELETE | `.../graph/` | Clear code graph + metadata |
+| GET | `.../graph/symbols/{name}` | Find symbols (`?nodeType=`) |
+| GET | `.../graph/implementations/{interfaceName}` | Find implementations |
+| GET | `.../graph/callers/{methodName}` | Find callers (`?containingType=`) |
+| GET | `.../graph/members/{typeName}` | Get type members |
+| GET | `.../graph/namespaces/{namespaceName}` | List types in namespace |
 
 ---
 
-## Common Request Bodies
+## Request / Response Bodies
 
-### Create Workflow
+### Create Workspace
+
 ```json
 {
-  "title": "Task title",
-  "description": "Optional description",
-  "repositoryPath": "c:\\work\\myrepo"
+  "path": "C:\\work\\my-repo",
+  "alias": "my-repo",
+  "tags": ["dotnet"]
 }
 ```
 
-### Execute Step
-```json
-{
-  "agentId": "optional-agent-override"
-}
-```
+### Search
 
-### Reject Step
-```json
-{
-  "feedback": "What needs to be fixed"
-}
-```
-
-### RAG Query
 ```json
 {
   "query": "search text",
-  "workspacePath": "optional path filter",
-  "topK": 5
+  "topK": 5,
+  "minScore": 0.7
 }
+```
+
+Response:
+
+```json
+{
+  "workspaceId": "...",
+  "query": "...",
+  "resultCount": 3,
+  "results": [
+    {
+      "contentId": "...",
+      "chunkIndex": 0,
+      "text": "...",
+      "score": 0.92,
+      "sourcePath": "...",
+      "contentType": "Code"
+    }
+  ]
+}
+```
+
+---
+
+## Quick Start
+
+```powershell
+# Health check
+curl -s http://localhost:5300/health
+
+# Create workspace
+curl -s -X POST http://localhost:5300/api/workspaces `
+  -H "Content-Type: application/json" `
+  -d '{"path":"C:\\work\\my-repo"}'
+
+# Trigger indexing
+curl -s -X POST http://localhost:5300/api/workspaces/{id}/index/
+
+# Search
+curl -s -X POST http://localhost:5300/api/workspaces/{id}/search `
+  -H "Content-Type: application/json" `
+  -d '{"query":"authentication middleware","topK":5}'
+
+# Find implementations
+curl -s http://localhost:5300/api/workspaces/{id}/graph/implementations/IService
+```
 ```

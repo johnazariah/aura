@@ -1,193 +1,163 @@
 # Common Issues
 
-Solutions to frequently encountered problems.
+## Ollama Not Running
 
-## Installation Issues
+**Symptoms:** `/health/rag` returns 503, embedding failures, search returns no results.
 
-### "Windows protected your PC" SmartScreen Warning
+**Fix:**
 
-**Problem:** Windows blocks the installer from running.
+```powershell
+# Check if Ollama is running
+ollama list
 
-**Solution:**
+# Start Ollama (if not running)
+ollama serve
 
-1. Click "More info"
-2. Click "Run anyway"
+# Pull the required model
+ollama pull nomic-embed-text
+```
 
-This is normal for new/unsigned applications.
+Verify:
 
-### MCP Tools Not Appearing
+```bash
+curl http://localhost:11434/api/tags
+```
 
-**Problem:** Copilot does not show Aura tools.
+## PostgreSQL Connection Failed
 
-**Solution:**
+**Symptoms:** `/health/db` returns 503, service won't start, `NpgsqlException: Connection refused`.
 
-1. Verify MCP health:
+**Fix (Windows):**
 
-   ```powershell
-   curl http://localhost:5300/health/mcp
-   ```
+```powershell
+# Check the AuraDB service
+Get-Service AuraDB
+Start-Service AuraDB
 
-2. Verify global config exists:
+# Verify the port (default: 5433)
+Test-NetConnection -ComputerName localhost -Port 5433
+```
 
-   ```powershell
-   type "$env:USERPROFILE\.copilot\mcp-config.json"
-   ```
+**Fix (macOS):**
 
-3. Start a new Copilot session so tools are rediscovered.
+```bash
+brew services start postgresql@17
+psql -d auradb -c "SELECT 1;"
+```
 
-### Installer Fails with "Access Denied"
+**Connection string mismatch:** Ensure `appsettings.json` matches your PostgreSQL setup:
 
-**Problem:** Permission error during installation.
+```json
+{
+  "ConnectionStrings": {
+    "auradb": "Host=localhost;Port=5433;Database=auradb;Username=postgres"
+  }
+}
+```
 
-**Solution:**
+## Embedding Failures
 
-1. Run installer as Administrator
-2. Or install to a user-writable location
+**Symptoms:** Indexing completes but search returns no results, RAG health shows 0 chunks.
 
-## Startup Issues
+**Possible causes:**
 
-### "Aura API not responding"
+1. **Ollama model not pulled:** Run `ollama pull nomic-embed-text`
+2. **Wrong embedding provider:** Check `Aura:Embedding:Provider` in settings
+3. **OpenAI API key missing:** If provider is `openai` or `auto`, ensure the API key is set
+4. **Dimension mismatch:** If you switched models, the `Aura:Rag:EmbeddingDimension` must match
 
-**Problem:** VS Code shows API as disconnected.
+**Debug:**
 
-**Solutions:**
+```powershell
+curl http://localhost:5300/health/rag
+```
 
-1. **Check Windows Service:**
+Check the response for chunk counts and error messages.
 
-   ```powershell
-   Get-Service AuraService
-   # If stopped:
-   Start-Service AuraService
-   ```
+## Service Won't Start (Windows)
 
-2. **Check manually:**
+**Symptoms:** AuraService shows Stopped, `Start-Service` fails.
 
-   ```powershell
-   curl http://localhost:5300/health
-   ```
+**Check logs:**
 
-3. **Check logs:**
-   - Open Event Viewer
-   - Windows Logs → Application
-   - Filter by Source: "AuraService"
+```powershell
+# Recent event log entries
+Get-EventLog -LogName Application -Source ".NET Runtime","AuraService" -Newest 20
 
-### "Database connection failed"
+# File-based logs
+Get-Content "C:\ProgramData\Aura\logs\aura-*.log" -Tail 50
+```
 
-**Problem:** Can't connect to PostgreSQL.
+**Common causes:**
 
-**Solutions:**
+| Cause | Fix |
+|-------|-----|
+| Port 5300 in use | Stop the conflicting process or change the Kestrel port |
+| Database unavailable | Start AuraDB first |
+| Missing .NET runtime | Reinstall Aura (bundles the runtime) |
+| Corrupt config | Check `appsettings.json` for syntax errors |
 
-1. **Check PostgreSQL service:**
+## MCP Tools Not Appearing in Copilot
 
-   ```powershell
-   Get-Service AuraDB
-   # If stopped:
-   Start-Service AuraDB
-   ```
+**Symptoms:** Copilot doesn't show Aura tools, MCP tool calls fail.
 
-2. **Verify port:**
+**Checklist:**
 
-   ```powershell
-   Test-NetConnection localhost -Port 5432
-   ```
+1. Verify Aura is running: `curl http://localhost:5300/health/mcp`
+2. Check VS Code settings:
 
-3. **Check connection string** in `appsettings.json`
+```json
+{
+  "mcp": {
+    "servers": {
+      "aura": {
+        "type": "sse",
+        "url": "http://localhost:5300/mcp"
+      }
+    }
+  }
+}
+```
 
-### "No LLM provider available"
+3. Restart VS Code after changing MCP settings
+4. Check the MCP tool count: the `/health/mcp` response should list 10 tools
 
-**Problem:** Aura can't connect to any LLM.
+## Search Returns No Results
 
-**Solutions:**
+**Possible causes:**
 
-1. **Check Ollama is running:**
-   - Look for Ollama in system tray
-   - Or run: `ollama list`
+1. **Workspace not indexed:** Check index status via `GET /api/workspaces/{id}/index`
+2. **Wrong workspace:** Ensure `workspacePath` matches a registered workspace
+3. **Content type filter too narrow:** Try `contentType: "all"` or omit it
+4. **MinRelevanceScore too high:** Lower `Aura:Rag:MinRelevanceScore` (default: 0.3)
 
-2. **Pull a model:**
+## Indexing Stuck or Slow
 
-   ```powershell
-   ollama pull qwen2.5-coder:7b
-   ```
+**Check job status:**
 
-3. **Check provider config** in `appsettings.json`
+```bash
+curl http://localhost:5300/api/workspaces/{id}/index/jobs
+```
 
-## Search Issues
+**Common causes:**
 
-### Search Not Finding Relevant Content
+- Large repository with many files — indexing is sequential per file
+- Ollama running on CPU only — set `NumGpu: -1` to use GPU
+- PDF files without `pdftotext` installed — install poppler-utils
 
-**Problem:** Aura search returns weak or empty results.
+## Windows SmartScreen Warning
 
-**Solutions:**
+When running the installer, Windows SmartScreen may show a warning because the installer is not code-signed.
 
-1. Re-index the workspace
-2. Confirm the workspace is registered
-3. Check supported content types and exclusions
-4. Check embedding provider health (Ollama or OpenAI)
+**Fix:** Click "More info" → "Run anyway". This is safe for builds you downloaded from the official GitHub Releases page.
 
-## Indexing Issues
+## Port Conflicts
 
-### Indexing Takes Forever
+The installer checks for port conflicts on **5433** (PostgreSQL) and **5300** (API).
 
-**Problem:** Indexing never completes for large repos.
+To find what's using a port:
 
-**Solutions:**
-
-1. **Add exclusions** to skip unnecessary files:
-   - `node_modules/`
-   - `vendor/`
-   - Large generated files
-
-2. **Index specific directories** instead of whole repo
-
-3. **Check for very large files** (>1MB)
-
-### "Out of memory" During Indexing
-
-**Problem:** Process crashes during indexing.
-
-**Solutions:**
-
-1. **Increase exclusions**
-2. **Index in smaller batches**
-3. **Ensure 8GB+ RAM available**
-
-## Performance Issues
-
-### High CPU Usage
-
-**Problem:** Aura using too much CPU.
-
-**Causes:**
-
-- Active indexing
-- LLM processing
-- Multiple workflows
-
-**Solutions:**
-
-1. Wait for indexing to complete
-2. Run one workflow at a time
-3. Use cloud LLM to offload processing
-
-### High Memory Usage
-
-**Problem:** Aura using too much RAM.
-
-**Causes:**
-
-- Large model loaded in Ollama
-- Many files indexed
-
-**Solutions:**
-
-1. Use a smaller model
-2. Restart services to clear memory
-3. Close unused workflows
-
-## Getting More Help
-
-If these solutions don't help:
-
-1. Check [GitHub Issues](https://github.com/johnazariah/aura/issues)
-2. See [Logs & Diagnostics](logs.md) for debugging
-3. See [Getting Help](support.md) for support options
+```powershell
+Get-NetTCPConnection -LocalPort 5300 | Select-Object OwningProcess
+Get-Process -Id <PID>
+```
