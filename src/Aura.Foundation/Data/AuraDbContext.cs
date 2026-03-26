@@ -275,7 +275,12 @@ public class AuraDbContext : DbContext
             entity.Property(e => e.GitRemoteUrl).HasColumnName("git_remote_url").HasMaxLength(2048);
             entity.Property(e => e.DefaultBranch).HasColumnName("default_branch").HasMaxLength(255);
 
+            entity.Property(e => e.Alias).HasColumnName("alias").HasMaxLength(100);
+            entity.Property(e => e.Tags).HasColumnName("tags").HasColumnType("jsonb");
+            entity.Property(e => e.IsDefault).HasColumnName("is_default").HasDefaultValue(false);
+
             entity.HasIndex(e => e.CanonicalPath).IsUnique();
+            entity.HasIndex(e => e.Alias).IsUnique().HasFilter("alias IS NOT NULL");
             entity.HasIndex(e => e.Status);
             entity.HasIndex(e => e.LastAccessedAt);
         });
