@@ -18,11 +18,10 @@ docs/
 │   ├── first-run.md             # Initial configuration
 │   └── quick-start.md           # 5-minute quickstart
 ├── user-guide/
-│   ├── workflows.md             # Workflow management
-│   ├── chat.md                  # Chat interface usage
 │   ├── indexing.md              # Code indexing
-│   ├── extension.md             # VS Code extension
 │   ├── cheat-sheet.md           # Quick reference
+│   ├── mcp-tools.md             # MCP tool reference
+│   ├── patterns.md              # Operational patterns
 │   └── use-cases.md             # Common scenarios
 ├── configuration/
 │   ├── llm-providers.md         # LLM provider setup

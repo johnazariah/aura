@@ -139,16 +139,16 @@ Instead of one massive workflow:
 ❌ "Implement the entire user management system"
 ```
 
-Create multiple focused workflows:
+Create multiple focused indexing or refactoring tasks:
 
 ```text
-✅ "Add user registration endpoint"
-✅ "Add user login with JWT"
-✅ "Add password reset functionality"
+✅ "Index the payment-service repository"
+✅ "Find all implementations of IPaymentGateway"
+✅ "Generate tests for the order validation logic"
 ```
 
 ## Next Steps
 
-- **[Workflows Deep Dive](../user-guide/workflows.md)** - Advanced workflow features
-- **[Chat](../user-guide/chat.md)** - Ask questions about your code
+- **[MCP Tools](../user-guide/mcp-tools.md)** - Search, navigate, refactor, validate, and index
+- **[Code Indexing](../user-guide/indexing.md)** - How workspaces, watchers, and ingestors behave
 - **[Troubleshooting](../troubleshooting/common-issues.md)** - If something goes wrong

@@ -173,7 +173,7 @@ Results are ranked by similarity score, with the most relevant documentation app
     "results": [
       {
         "content": "# Workflow Best Practices\n\n1. **Use git worktrees** - Each workflow gets its own worktree for isolation\n2. **Keep workflows focused** - One feature or bug fix per workflow\n3. **Update workflow steps** - Use `aura_workflow` to track progress\n4. **Complete properly** - Follow the completion ceremony for documentation",
-        "sourcePath": "docs/user-guide/workflows.md",
+        "sourcePath": "docs/user-guide/mcp-tools.md",
         "score": 0.88,
         "contentType": "Documentation",
         "metadata": {

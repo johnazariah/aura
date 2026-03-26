@@ -447,22 +447,21 @@ Aura provides full support for these languages:
 
 | Language | Indexing | Workflows | Specialist Agent |
 |----------|----------|-----------|------------------|
-| C# | ✅ Full (Roslyn) | ✅ | ✅ RoslynCodingAgent |
-| TypeScript | ✅ TreeSitter | ✅ | ✅ LanguageSpecialist |
-| JavaScript | ✅ TreeSitter | ✅ | ✅ LanguageSpecialist |
-| Python | ✅ TreeSitter | ✅ | ✅ LanguageSpecialist |
-| Go | ✅ TreeSitter | ✅ | ✅ LanguageSpecialist |
-| Rust | ✅ TreeSitter | ✅ | ✅ LanguageSpecialist |
-| Java | ✅ TreeSitter | ✅ | ✅ LanguageSpecialist |
-| F# | ✅ TreeSitter | ✅ | ✅ LanguageSpecialist |
+| C# | ✅ Full (Roslyn) | ✅ | ✅ Roslyn + MCP operations |
+| TypeScript | ✅ TreeSitter | ✅ | ✅ TreeSitter + ts-morph operations |
+| JavaScript | ✅ TreeSitter | ✅ | ✅ TreeSitter + ts-morph operations |
+| Python | ✅ TreeSitter | ✅ | ✅ TreeSitter + rope operations |
+| Go | ✅ TreeSitter | ✅ | ✅ TreeSitter indexing |
+| Rust | ✅ TreeSitter | ✅ | ✅ TreeSitter indexing |
+| Java | ✅ TreeSitter | ✅ | ✅ TreeSitter indexing |
+| F# | ✅ TreeSitter | ✅ | ✅ TreeSitter indexing |
 
-Other languages use the generic coding agent which handles most languages well.
+Other languages fall back to generic code chunking plus semantic search.
 
 ---
 
 ## Next Steps
 
-- [Workflows Guide](workflows.md) - Detailed workflow documentation
-- [Chat Guide](chat.md) - Advanced chat features
+- [MCP Tools](mcp-tools.md) - Detailed MCP tool documentation
 - [Indexing Guide](indexing.md) - Code indexing details
 - [LLM Configuration](../configuration/llm-providers.md) - Configure AI providers
