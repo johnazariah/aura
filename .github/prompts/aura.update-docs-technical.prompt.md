@@ -75,29 +75,13 @@ See `.project/adr/024-hybrid-architecture.md` for the authoritative architecture
 - ❌ `DynamicAgentRegistry` for code-based agents — only markdown agents remain
 - ❌ Agent Hub, Task Monitor, Insights views in extension — removed
 - ❌ Port 5258 — now 5300
-- ❌ `.NET 10` — project uses .NET 9
+- ❌ `.NET 9` — project uses .NET 10
 
 ## Documentation to Update
 
 ### Architecture & Concepts (`docs/configuration/`)
-- `docs/configuration/llm-providers.md` — Azure OpenAI is default, Ollama is option
-- `docs/configuration/agents.md` — markdown-only agent definitions
+- `docs/configuration/llm-providers.md` — embedding provider setup and fallback behavior
 - `docs/configuration/settings.md` — appsettings.json structure
-
-### Agent Development
-Agent development now means writing **markdown files** in `agents/` with:
-```yaml
----
-name: agent-name
-capabilities: [capability1, capability2]
-provider: azureopenai  # or ollama
-model: gpt-4.1-mini
----
-# System Prompt
-You are an expert...
-```
-
-There are no code-based agents. The `ConfigurableAgent` class in Foundation handles execution of all markdown agents.
 
 ### RAG & Knowledge
 - `src/Aura.Foundation/Rag/RagService.cs` — vector search

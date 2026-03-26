@@ -1,6 +1,6 @@
 # Aura Project Status
 
-> **Last Updated**: 2026-03-03
+> **Last Updated**: 2026-03-26
 > **Current Branch**: trim/personal-knowledge-mcp
 > **Overall Status**: 🔄 Major Pivot In Progress
 
@@ -11,6 +11,12 @@ Aura is a **personal knowledge indexing platform** with an MCP interface. It ind
 **This is a major architectural pivot from the previous agent-orchestration platform.** See [ADR-025](adr/025-personal-knowledge-mcp-pivot.md) for rationale.
 
 ## Recent Changes
+
+- **2026-03-26**: Workspace Model Unified
+  - Replaced dual workspace storage (DB + JSON registry) with a single DB-backed model
+  - Added `Alias`, `Tags`, and `IsDefault` to the `Workspace` entity
+  - Updated MCP `aura_workspace` and REST `/api/workspaces` to share one model
+  - Removed stale workflow/extension/chat docs and obsolete installer helper scripts
 
 - **2026-03-03**: Personal Knowledge MCP Pivot
   - Removed agent orchestration, VS Code extension, prompt templates, story lifecycle, GitHub integration, Aspire host (~60,000 lines deleted)
@@ -63,7 +69,7 @@ Copilot CLI / Copilot Chat
               │
               ├─ Embedding Layer
               │   ├─ OllamaProvider (local, nomic-embed-text, 768d)
-              │   └─ OpenAiEmbeddingProvider (hosted, text-embedding-3-small, 1536d)
+              │   └─ OpenAiEmbeddingProvider (hosted, dimensions configurable to match local index)
               │
               └─ Storage (PostgreSQL + pgvector)
 ```

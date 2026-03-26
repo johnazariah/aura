@@ -1,52 +1,41 @@
 # Aura Documentation
 
-Welcome to Aura - your local-first, privacy-safe AI assistant for software development.
+Aura is now a local indexing platform plus MCP server. The documentation below is the current product surface; older extension/workflow-era docs have been removed or retained only as historical project records under `.project/`.
 
 ## Getting Started
 
-New to Aura? Start here:
-
-1. **[Installation](getting-started/installation.md)** - Download and install Aura
-2. **[First Run](getting-started/first-run.md)** - Set up Ollama and verify everything works
-3. **[Quick Start](getting-started/quick-start.md)** - Create your first AI-assisted workflow
+1. [Installation](getting-started/installation.md)
+2. [First Run](getting-started/first-run.md)
+3. [Quick Start](getting-started/quick-start.md)
 
 ## User Guide
 
-Learn how to use Aura effectively:
-
-- **[Use Cases](user-guide/use-cases.md)** - Practical examples for common tasks
-- **[Cheat Sheet](user-guide/cheat-sheet.md)** - Quick reference for developers
-- **[Workflows](user-guide/workflows.md)** - Create, manage, and execute AI workflows
-- **[Operational Patterns](user-guide/patterns.md)** - Step-by-step playbooks for complex tasks
-- **[Chat](user-guide/chat.md)** - Code-aware conversations with your codebase
-- **[Code Indexing](user-guide/indexing.md)** - How Aura understands your code
-- **[VS Code Extension](user-guide/extension.md)** - Extension features and shortcuts
-- **[MCP Tools](user-guide/mcp-tools.md)** - MCP integration with GitHub Copilot
+- [Use Cases](user-guide/use-cases.md)
+- [Cheat Sheet](user-guide/cheat-sheet.md)
+- [Code Indexing](user-guide/indexing.md)
+- [MCP Tools](user-guide/mcp-tools.md)
+- [Operational Patterns](user-guide/patterns.md)
 
 ## Configuration
 
-Customize Aura for your needs:
+- [LLM Providers](configuration/llm-providers.md)
+- [Settings Reference](configuration/settings.md)
 
-- **[LLM Providers](configuration/llm-providers.md)** - Configure Ollama, Azure OpenAI, or OpenAI
-- **[Settings Reference](configuration/settings.md)** - All configuration options
-- **[Creating Agents](configuration/agents.md)** - Define custom AI agents
+## MCP and API Reference
+
+- [MCP Tools Reference](mcp-tools/api-reference.md)
+- [Aura Docs Tool](mcp-tools/aura_docs.md)
 
 ## Troubleshooting
 
-Having issues? Find solutions here:
+- [Common Issues](troubleshooting/common-issues.md)
+- [Logs & Diagnostics](troubleshooting/logs.md)
+- [Getting Help](troubleshooting/support.md)
 
-- **[Common Issues](troubleshooting/common-issues.md)** - FAQ and quick fixes
-- **[Logs & Diagnostics](troubleshooting/logs.md)** - Finding and reading logs
-- **[Getting Help](troubleshooting/support.md)** - Community and support options
+## Project Documentation
 
-## For Developers
+- [Project Status](../.project/STATUS.md)
+- [ADRs](../.project/adr)
+- [Reference](../.project/reference)
 
-Building or extending Aura:
-
-- **[Architecture](.project/spec/00-overview.md)** - System design and components
-- **[API Reference](https://github.com/johnazariah/aura)** - REST API documentation
-- **[Contributing](CONTRIBUTING.md)** - How to contribute
-
----
-
-**Version:** See [Releases](https://github.com/johnazariah/aura/releases) for the latest version.
+See the root `README.md` for the current architecture summary.

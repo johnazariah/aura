@@ -204,14 +204,11 @@ publish/win-x64/
 │   └── ... (DLLs, Roslyn, etc.)
 ├── tray/             # ~25MB - System tray app
 │   └── Aura.Tray.exe
-├── agents/           # ~50KB - Agent markdown definitions
+├── patterns/         # ~10KB - Operational patterns
 │   └── *.md
-├── prompts/          # ~20KB - Handlebars templates
-│   └── *.prompt
-├── extension/        # ~300KB - VS Code extension
-│   └── aura-1.0.1.vsix
-├── scripts/          # ~2KB - Helper scripts
-│   └── install-extension.ps1
+├── scripts/          # ~5KB - Helper scripts
+│   ├── Deploy-Dev.ps1
+│   └── Register-WorkspacesViaApi.ps1
 └── pgsql/            # ~120MB - PostgreSQL 16 (trimmed)
     ├── bin/
     ├── lib/

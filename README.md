@@ -2,127 +2,103 @@
 
 [![CI](https://github.com/johnazariah/aura/actions/workflows/ci.yml/badge.svg)](https://github.com/johnazariah/aura/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/johnazariah/aura/graph/badge.svg)](https://codecov.io/gh/johnazariah/aura)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: MIT](https://img.shields.io/badge/License/MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Aura is an AI coding assistant that indexes your codebase locally and helps you implement features through a VS Code extension. It uses cloud LLMs (Azure OpenAI, OpenAI) or local models (Ollama) for inference, and integrates with GitHub Copilot via MCP.
+Aura is a local-first indexing and MCP server for code, documents, PDFs, and structured files. It keeps the index on your machine, exposes semantic and structural tools to GitHub Copilot via MCP, and can use either local Ollama embeddings or hosted OpenAI embeddings.
 
-## What Can You Do With It?
+## What Aura Is Now
 
-### Start a coding task from a GitHub issue
+- Local semantic indexing for mixed-content workspaces
+- Structural code intelligence for C# via Roslyn and polyglot parsing via Tree-sitter
+- MCP tools for search, navigation, inspection, refactoring, validation, indexing, and workspace management
+- Windows service deployment with a cross-platform tray app
+- PostgreSQL + pgvector for local storage
 
+Aura is no longer a VS Code extension product, internal agent runtime, or story/workflow orchestrator. Copilot is the UI; Aura is the local intelligence layer behind it.
+
+## Core Capabilities
+
+### Index local content
+
+Aura can index:
+
+- C# with Roslyn-backed chunks and code graph data
+- TypeScript, JavaScript, Python, Go, Rust, Java, C/C++, and more via Tree-sitter
+- PDF documents via `pdftotext`
+- Markdown
+- JSON, YAML, XML, TOML, and `.env`-style structured files
+- Plain text fallback for everything else
+
+### Serve GitHub Copilot via MCP
+
+Aura exposes these MCP tools:
+
+- `aura_search`
+- `aura_navigate`
+- `aura_inspect`
+- `aura_refactor`
+- `aura_generate`
+- `aura_validate`
+- `aura_index`
+- `aura_workspace`
+- `aura_tree`
+- `aura_architect`
+
+### Use local or hosted embeddings
+
+Aura supports:
+
+- Ollama for local embeddings
+- OpenAI for hosted embeddings
+- Auto mode with OpenAI-first configuration and local fallback when dimensions are compatible
+
+## Architecture
+
+```text
+Copilot Chat / Copilot CLI
+  -> MCP
+     -> Aura.Api
+        -> Ingestor pipeline
+           -> RoslynCodeIngestor
+           -> TreeSitterCodeIngestor
+           -> StructuredDataIngestor
+           -> PdfIngestor
+           -> MarkdownIngestor
+           -> CodeIngestor
+           -> PlainTextIngestor
+        -> Embedding providers
+           -> OllamaProvider
+           -> OpenAiEmbeddingProvider
+        -> PostgreSQL + pgvector
 ```
-Command: "Aura: Start Story from Issue"
-→ Paste: https://github.com/org/repo/issues/42
-→ Aura creates a git worktree and branch
-→ Opens a new VS Code window in that worktree
-→ Shows the issue context and lets you chat with the agent
+
+## Getting Started
+
+### Prerequisites
+
+- [.NET 10 SDK](https://dotnet.microsoft.com/download)
+- PostgreSQL with `pgvector`
+- [Ollama](https://ollama.ai/) or an OpenAI-compatible embedding endpoint
+
+### Build and test
+
+```powershell
+dotnet build
+dotnet test --filter "FullyQualifiedName!~IntegrationTests"
 ```
 
-### Chat to implement features
+### Run locally
 
-The workflow panel has a chat interface. You describe what you want:
+```powershell
+dotnet run --project src/Aura.Api
+```
 
-> "Add a Redis cache to the UserService"
+### Connect Copilot to Aura
 
-The agent reads your codebase, writes the code, and shows you what changed. You can review, ask for modifications, or continue with the next task.
-
-### Index your codebase for context
-
-Aura indexes your code two ways:
-
-1. **Text search** - Finds relevant code snippets when you ask questions
-2. **Code graph** - Understands types, methods, and relationships (C# via Roslyn, other languages via Tree-sitter)
-
-When you ask the agent to implement something, it automatically searches your codebase for relevant context.
-
-### Use local or cloud LLMs
-
-Works with:
-
-- **Ollama** - Run models locally (llama3, codellama, mistral, etc.)
-- **OpenAI** - GPT-4, GPT-4o
-- **Azure OpenAI** - Your own Azure deployment
-
-Configure in `appsettings.json`:
+Repo-local MCP configuration:
 
 ```json
 {
-  "Llm": {
-    "Provider": "ollama",
-    "Model": "llama3.2"
-  }
-}
-```
-
-### Define custom agents
-
-Agents are Markdown files. Create a new `.md` file in `agents/` and it's immediately available:
-
-```markdown
-# My Custom Agent
-
-## System Prompt
-You are an expert in...
-
-## Capabilities
-- code-review
-- documentation
-
-## Provider
-openai/gpt-4o
-```
-
-No restart required - agents hot-reload.
-
-### Work on multiple tasks in parallel
-
-Each workflow runs in its own **git worktree** - a separate directory with its own branch, sharing the same `.git` history. This means:
-
-- Start a feature, get blocked, start another feature - no stashing, no branch switching
-- Each VS Code window is isolated - changes in one don't affect the other
-- No risk of git corruption - worktrees are a native git feature
-- When done, merge the branch and delete the worktree
-
-```
-main repo:     ~/projects/myapp/           (main branch)
-workflow 1:    ~/projects/myapp-worktrees/add-caching/    (feature/add-caching)
-workflow 2:    ~/projects/myapp-worktrees/fix-auth-bug/   (feature/fix-auth-bug)
-```
-
-You can have any number of workflows in progress, each with its own chat history and file changes, without conflicts.
-
----
-
-## Developer Module Features
-
-The Developer Module provides workflow automation for coding tasks:
-
-| Feature | Description |
-|---------|-------------|
-| **Workflows** | Track a coding task from start to PR |
-| **Git worktrees** | Each workflow gets an isolated branch and directory |
-| **GitHub integration** | Create workflows from issues, sync status back |
-| **Step execution** | Break work into steps, execute with different agents |
-| **Assisted mode** | Review each step before proceeding |
-| **Autonomous mode** | Let the agent run multiple steps automatically |
-| **Chat history** | Conversation persists across sessions |
-| **Build-fix loops** | Iteratively build and fix errors until success |
-
-### MCP Server for GitHub Copilot
-
-Aura exposes your indexed codebase to GitHub Copilot via MCP (Model Context Protocol). This means Copilot can:
-
-- Search your codebase semantically ("find authentication code")
-- Navigate code relationships (callers, implementations, derived types)
-- Understand your project's structure before suggesting code
-
-Configure in VS Code `settings.json`:
-
-```json
-{
-  "github.copilot.chat.codeGeneration.instructions": [
-    { "file": ".github/copilot-instructions.md" }
-  ],
   "mcp": {
     "servers": {
       "aura": {
@@ -133,91 +109,27 @@ Configure in VS Code `settings.json`:
 }
 ```
 
-### Build-Fix Loops
+Machine-wide configuration can also be written to `~/.copilot/mcp-config.json`.
 
-The agent can run iterative build-fix cycles until your code compiles:
+## Repository Layout
 
-```
-You: "Build this and fix any errors"
+```text
+src/
+├── Aura.Foundation/
+├── Aura.Module.Developer/
+├── Aura.Module.Researcher/
+├── Aura.Api/
+├── Aura.Tray/
+└── Aura.ServiceDefaults/
 
-Agent: 🔨 Building... ❌ 3 errors
-       → Fixing CS1002: Missing semicolon...
-       → Fixing CS0246: Type not found...
-       🔨 Rebuilding... ✅ Build succeeded
-```
-
-Works for C#, Rust, TypeScript, Go, and Python.
-
-### Architecture Visualization
-
-Generate diagrams of your codebase:
-
-```
-You: "Show me the class hierarchy for UserService"
-
-Agent: ```mermaid
-       classDiagram
-           IUserService <|.. UserService
-           UserService --> ICacheService
-           UserService --> IUserRepository
-       ```
+tests/
+├── Aura.Foundation.Tests/
+├── Aura.Module.Developer.Tests/
+├── Aura.Module.Researcher.Tests/
+└── Aura.Api.Tests/
 ```
 
-Supports dependency graphs, class hierarchies, and call graphs.
-
-### Supported Languages
-
-Code indexing and agents work with:
-
-| Language | Indexing | Coding Agent |
-|----------|----------|--------------|
-| C# | Roslyn (full semantic) | ✅ |
-| TypeScript | Tree-sitter | ✅ |
-| Python | Tree-sitter | ✅ |
-| Rust | Tree-sitter | ✅ |
-| Go | Tree-sitter | ✅ |
-| F# | Tree-sitter | ✅ |
-| PowerShell | Tree-sitter | ✅ |
-
----
-
-## Getting Started
-
-### Prerequisites
-
-- [.NET 9.0 SDK](https://dotnet.microsoft.com/download)
-- [Docker](https://www.docker.com/products/docker-desktop/) or [Podman](https://podman.io/) (for PostgreSQL)
-- [Ollama](https://ollama.ai/) (for local LLM) or OpenAI API key
-
-### Install
-
-```powershell
-# Clone the repository
-git clone https://github.com/johnazariah/aura.git
-cd aura
-
-# Build everything
-dotnet build
-
-# Start the services (PostgreSQL + API)
-dotnet run --project src/Aura.AppHost
-```
-
-### VS Code Extension
-
-1. Open the `extension/` folder in VS Code
-2. Press F5 to launch with the extension
-3. Or build and install: `.\scripts\Build-Extension.ps1`
-
-### First Run
-
-1. Ensure Aura service is running (check system tray or Windows Services)
-2. Open VS Code with the extension installed
-3. Open a folder with code you want to index
-4. Run command: "Aura: Index Workspace"
-5. Run command: "Aura: Create Workflow" to start a coding task
-
----
+See `.project/STATUS.md` for the current project state and `.project/adr/025-personal-knowledge-mcp-pivot.md` for the architectural pivot.
 
 ## Configuration
 
@@ -296,14 +208,13 @@ Agents can self-critique their responses for higher quality output:
 
 ```
 src/
-├── Aura.Foundation/       # Core: LLM, RAG, agents, database
-├── Aura.Module.Developer/ # Workflows, git, code analysis
-├── Aura.Api/              # HTTP API
-└── Aura.AppHost/          # .NET Aspire orchestration
+├── Aura.Foundation/       # Core: embeddings, RAG, data, shell, git
+├── Aura.Module.Developer/ # Roslyn and multi-language code intelligence
+├── Aura.Module.Researcher/# PDF and document ingestion
+├── Aura.Api/              # HTTP API + MCP host
+├── Aura.ServiceDefaults/  # Shared service configuration
+└── Aura.Tray/             # Cross-platform tray app
 
-extension/                 # VS Code extension
-agents/                    # Agent definitions (Markdown)
-prompts/                   # Prompt templates (Handlebars)
 patterns/                  # Operational patterns for complex tasks
 ```
 
@@ -317,16 +228,15 @@ patterns/                  # Operational patterns for complex tasks
 - [Quick Start](docs/getting-started/quick-start.md)
 
 **User Guide:**
-- [Workflows](docs/user-guide/workflows.md)
 - [Operational Patterns](docs/user-guide/patterns.md)
 - [MCP Tools](docs/user-guide/mcp-tools.md)
 - [Code Indexing](docs/user-guide/indexing.md)
 - [Use Cases](docs/user-guide/use-cases.md)
+- [Cheat Sheet](docs/user-guide/cheat-sheet.md)
 
 **Configuration:**
 - [LLM Providers](docs/configuration/llm-providers.md)
 - [Settings Reference](docs/configuration/settings.md)
-- [Creating Agents](docs/configuration/agents.md)
 
 ## License
 

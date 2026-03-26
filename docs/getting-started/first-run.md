@@ -115,11 +115,11 @@ Aura will search your indexed code and provide context-aware answers.
 | Ollama not detected | Ensure Ollama is running (check system tray) |
 | No models available | Run `ollama pull qwen2.5-coder:7b` |
 | Database not starting | Check Windows Services for "AuraDB" |
-| Extension not visible | Reinstall: `& "$env:ProgramFiles\Aura\scripts\install-extension.ps1"` |
+| MCP tools not appearing | Start a new Copilot session and verify `http://localhost:5300/health/mcp` |
 
 ## Next Steps
 
-→ Continue to **[Quick Start](quick-start.md)** to create your first AI-assisted workflow.
+→ Continue to **[Quick Start](quick-start.md)** to register your first workspace and search it through MCP.
 
 ## Optional: Configure Cloud LLM
 

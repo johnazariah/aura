@@ -4,7 +4,7 @@ description: Onboard the current repository to Aura — register workspace, trig
 
 # Aura Onboard
 
-Register the current repository as an Aura workspace, trigger code indexing, and verify everything is ready for code intelligence.
+Register the current repository as an Aura workspace, trigger indexing, and verify everything is ready for code intelligence.
 
 ## Step 1: Check Aura Health
 
@@ -14,7 +14,7 @@ Verify the Aura service is running:
 curl -s http://localhost:5300/health
 ```
 
-If it fails, tell the user: "Aura service is not running. Start it or run `Update-LocalInstall.ps1` as Administrator."
+If it fails, tell the user: "Aura service is not running. Start it or redeploy with `scripts/Deploy-Dev.ps1` from an elevated shell."
 
 ## Step 2: Check Existing Workspaces
 
@@ -41,23 +41,23 @@ aura_workspace(operation: "status", path: "<repo-root-path>")
 ```
 
 The response shows:
-- `indexed: true/false` — whether RAG indexing has been done
-- `chunkCount` — number of indexed code chunks
+- `indexed: true/false` — whether indexing has been done
+- `chunkCount` — number of indexed chunks
 
 If already indexed with a reasonable chunk count, skip to **Step 6**.
 
 ## Step 5: Trigger Indexing
 
-Use the workspace ID from registration (or from the list):
+Use the MCP tool directly:
 
-```bash
-curl -s -X POST http://localhost:5300/api/workspaces/<workspace-id>/index
+```text
+aura_index(operation: "index_directory", path: "<repo-root-path>")
 ```
 
 Then poll for progress:
 
-```bash
-curl -s http://localhost:5300/api/workspaces/<workspace-id>/index
+```text
+aura_index(operation: "status", jobId: "<job-id>")
 ```
 
 Report progress to the user:
@@ -80,7 +80,8 @@ You can now use:
   • aura_search — semantic code search
   • aura_navigate — find callers, implementations, references
   • aura_inspect — explore type structures
-  • /aura-create-story — start working on features
+  • aura_index — trigger indexing for folders and files
+  • aura_workspace — manage indexed collections
 ```
 
 ## Notes

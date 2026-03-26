@@ -1,6 +1,6 @@
 # Aura - Copilot Instructions
 
-Aura is an AI-powered development assistant with local code intelligence. It indexes codebases locally (Roslyn, TreeSitter, pgvector RAG) and exposes tools via MCP for GitHub Copilot. LLM inference uses cloud providers (Azure OpenAI by default; Ollama for local).
+Aura is a local indexing platform plus MCP server. It indexes codebases and documents locally (Roslyn, TreeSitter, pgvector RAG, PDF ingestion) and exposes tools via MCP for GitHub Copilot. Embeddings come from configurable providers such as OpenAI and Ollama.
 
 > Read `.project/STATUS.md` for current project state and feature inventory.
 > Read `.project/reference/coding-standards.md` for full coding standards.
@@ -25,9 +25,6 @@ dotnet test --filter "FullyQualifiedName~TokenTrackerTests.TrackUsage_AddsTokens
 # Lint / format check
 dotnet format --verify-no-changes
 
-# Build the VS Code extension
-.\scripts\Build-Extension.ps1
-
 # Test the running API
 curl http://localhost:5300/health
 ```
@@ -40,39 +37,33 @@ curl http://localhost:5300/health
 
 ```
 src/
-├── Aura.Foundation/          # Core: agents, LLM, RAG, data, tools, shell, git
-├── Aura.Module.Developer/    # Developer vertical: workflows, Roslyn, code indexing, GitHub
-├── Aura.Module.Researcher/   # Research vertical: papers, sources, excerpts
+├── Aura.Foundation/          # Core: embeddings, RAG, data, shell, git
+├── Aura.Module.Developer/    # Roslyn + multi-language code intelligence
+├── Aura.Module.Researcher/   # PDF and document ingestion
 ├── Aura.Api/                 # HTTP + MCP host (endpoints + MCP handlers)
-├── Aura.AppHost/             # .NET Aspire orchestration (PostgreSQL, API)
 ├── Aura.ServiceDefaults/     # Shared service configuration
 └── Aura.Tray/                # System tray app
 
-extension/                    # VS Code extension (TypeScript, webpack)
-agents/                       # Agent definitions (Markdown, hot-reloadable)
-prompts/                      # Handlebars prompt templates
-patterns/                     # Step-by-step operational patterns for complex tasks
+patterns/                     # Operational patterns for complex tasks
 ```
 
 ### Key architectural patterns
 
 - **API endpoints**: All defined via `Map*Endpoints()` extension methods called from `src/Aura.Api/Program.cs`. Each endpoint group is in its own file under `src/Aura.Api/Endpoints/`.
-- **MCP handlers**: `src/Aura.Api/Mcp/McpHandler.cs` is a partial class split by domain (`.Edit.cs`, `.Generate.cs`, `.Navigate.cs`, `.Refactor.cs`, `.Search.cs`, `.Validate.cs`, `.Workflow.cs`, etc.).
+- **MCP handlers**: `src/Aura.Api/Mcp/McpHandler.cs` is a partial class split by domain (`.Generate.cs`, `.Index.cs`, `.Inspect.cs`, `.Navigate.cs`, `.Refactor.cs`, `.Search.cs`, `.Tree.cs`, `.Validate.cs`, `.Workspaces.cs`).
 - **DI registration**: Each project exposes an `Add{Module}()` extension method on `IServiceCollection` (e.g., `AddAuraFoundation()`, `AddDeveloperModule()`). These chain sub-registrations internally.
-- **Module pattern**: `Aura.Module.Developer` and `Aura.Module.Researcher` are vertical slices that register their own services, agents, and tools independently.
+- **Module pattern**: `Aura.Module.Developer` and `Aura.Module.Researcher` are vertical slices that register their own services and ingestors independently.
 - **Data layer**: EF Core with `AuraDbContext` in `Aura.Foundation/Data/`. Migrations are code-first.
-- **Agent definitions**: Markdown files in `agents/` that hot-reload. Each defines a system prompt, capabilities, and provider.
-- **Prompt templates**: Handlebars `.prompt` files in `prompts/` used by the agent execution pipeline.
 
 ### Service deployment
 
-Aura runs as a **Windows Service** deployed to `C:\Program Files\Aura`. The `scripts\Update-LocalInstall.ps1` script rebuilds and deploys — it requires Administrator elevation. After server code changes, ask the user to run this script; do not run it directly.
+Aura runs as a **Windows Service** deployed to `C:\Program Files\Aura`. Use `scripts\Deploy-Dev.ps1` for local redeploys when running elevated.
 
 Logs are at `C:\ProgramData\Aura\logs\aura-YYYYMMDD.log`.
 
 ## Conventions
 
-### C# (.NET 9, C# latest)
+### C# (.NET 10, C# latest)
 
 - **Nullable reference types enabled** globally (`Directory.Build.props`)
 - **Warnings as errors** — all warnings must be resolved
@@ -89,7 +80,6 @@ Logs are at `C:\ProgramData\Aura\logs\aura-YYYYMMDD.log`.
 - **Framework**: xUnit with `[Fact]` and `[Theory]`/`[InlineData]`
 - **Assertions**: FluentAssertions (`result.Should().BeTrue()`)
 - **Mocking**: NSubstitute (`Substitute.For<IService>()`)
-- **File system**: `System.IO.Abstractions` with `MockFileSystem` from TestingHelpers
 - **Loggers in tests**: Use `NullLogger<T>.Instance`, not `Substitute.For<ILogger>()`
 - **Naming**: `{ClassName}Tests` for class, `{Method}_{Scenario}_{Expected}` for methods
 - **Test projects mirror source**: `tests/Aura.Foundation.Tests/` → `src/Aura.Foundation/`

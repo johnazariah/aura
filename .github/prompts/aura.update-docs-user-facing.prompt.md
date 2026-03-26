@@ -30,18 +30,13 @@ docs/
 │   ├── first-run.md             # Initial configuration
 │   └── quick-start.md           # 5-minute quickstart
 ├── user-guide/
-│   ├── workflows.md             # Story management
-│   ├── chat.md                  # Chat interface usage
 │   ├── indexing.md              # Code indexing
-│   ├── extension.md             # VS Code extension
 │   ├── cheat-sheet.md           # Quick reference
 │   ├── mcp-tools.md             # MCP tool reference
 │   ├── patterns.md              # Operational patterns
-│   ├── sdd-mapping.md           # SDD methodology mapping
 │   └── use-cases.md             # Common scenarios
 ├── configuration/
 │   ├── llm-providers.md         # LLM provider setup
-│   ├── agents.md                # Agent configuration
 │   └── settings.md              # Configuration options
 ├── troubleshooting/
 │   ├── common-issues.md         # FAQ and fixes

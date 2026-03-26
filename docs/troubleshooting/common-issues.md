@@ -15,17 +15,25 @@ Solutions to frequently encountered problems.
 
 This is normal for new/unsigned applications.
 
-### VS Code Extension Not Installed
+### MCP Tools Not Appearing
 
-**Problem:** Extension wasn't installed during setup.
+**Problem:** Copilot does not show Aura tools.
 
 **Solution:**
 
-```powershell
-& "$env:ProgramFiles\Aura\scripts\install-extension.ps1"
-```
+1. Verify MCP health:
 
-Then reload VS Code.
+   ```powershell
+   curl http://localhost:5300/health/mcp
+   ```
+
+2. Verify global config exists:
+
+   ```powershell
+   type "$env:USERPROFILE\.copilot\mcp-config.json"
+   ```
+
+3. Start a new Copilot session so tools are rediscovered.
 
 ### Installer Fails with "Access Denied"
 
@@ -103,91 +111,18 @@ Then reload VS Code.
 
 3. **Check provider config** in `appsettings.json`
 
-## Workflow Issues
+## Search Issues
 
-### Workflow Stuck in "Analyzing"
+### Search Not Finding Relevant Content
 
-**Problem:** Workflow never completes analysis.
-
-**Solutions:**
-
-1. **Check LLM is responding:**
-
-   ```powershell
-   curl http://localhost:11434/api/generate -d '{"model":"qwen2.5-coder:7b","prompt":"Hi"}'
-   ```
-
-2. **Increase timeout** in settings
-
-3. **Try a smaller model** for faster response
-
-### "Failed to create worktree"
-
-**Problem:** Git worktree creation fails.
+**Problem:** Aura search returns weak or empty results.
 
 **Solutions:**
 
-1. **Check you're in a git repository:**
-
-   ```powershell
-   git status
-   ```
-
-2. **Check worktree directory is writable:**
-
-   ```powershell
-   Test-Path .worktrees
-   ```
-
-3. **Clean up old worktrees:**
-
-   ```powershell
-   git worktree prune
-   ```
-
-### Steps Generating Wrong Code
-
-**Problem:** AI-generated code doesn't match expectations.
-
-**Solutions:**
-
-1. **Be more specific** in workflow description
-2. **Add context** about existing patterns
-3. **Try a better model** (gpt-4o vs local)
-4. **Edit steps** before approving
-
-## Chat Issues
-
-### Chat Not Finding Code
-
-**Problem:** Chat can't find relevant code.
-
-**Solutions:**
-
-1. **Re-index the repository:**
-   - Aura panel → Code Graph → Index Repository
-
-2. **Check file is in supported language**
-
-3. **Verify file isn't excluded** from indexing
-
-### Chat Responses Are Slow
-
-**Problem:** Long wait times for chat responses.
-
-**Solutions:**
-
-1. **Use a smaller model:**
-
-   ```powershell
-   ollama pull llama3.2:3b
-   ```
-
-2. **Check system resources:**
-   - RAM usage
-   - GPU availability
-
-3. **Reduce context** by being more specific
+1. Re-index the workspace
+2. Confirm the workspace is registered
+3. Check supported content types and exclusions
+4. Check embedding provider health (Ollama or OpenAI)
 
 ## Indexing Issues
 
@@ -215,41 +150,6 @@ Then reload VS Code.
 1. **Increase exclusions**
 2. **Index in smaller batches**
 3. **Ensure 8GB+ RAM available**
-
-## Extension Issues
-
-### Extension Not Visible in VS Code
-
-**Problem:** Aura icon missing from sidebar.
-
-**Solutions:**
-
-1. **Check extension is installed:**
-   - `Ctrl+Shift+X` → Search "Aura"
-
-2. **Reinstall:**
-
-   ```powershell
-   & "$env:ProgramFiles\Aura\scripts\install-extension.ps1"
-   ```
-
-3. **Reload VS Code:**
-   - `Ctrl+Shift+P` → "Developer: Reload Window"
-
-### Extension Shows Errors
-
-**Problem:** Red error indicators in extension.
-
-**Solutions:**
-
-1. **Check Output panel:**
-   - View → Output
-   - Select "Aura" from dropdown
-
-2. **Check API connection**
-
-3. **Restart extension host:**
-   - `Ctrl+Shift+P` → "Developer: Restart Extension Host"
 
 ## Performance Issues
 
