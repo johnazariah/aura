@@ -1,129 +1,96 @@
-# First Run Setup
+# First Run
 
-After installing Aura, follow these steps to get everything working.
+After installation, verify that all components are healthy before indexing your first project.
 
-## 1. Install and Start Ollama
-
-Aura uses Ollama to run AI models locally on your machine.
-
-### Install Ollama
-
-If you haven't already:
-
-1. Download from [ollama.com](https://ollama.com)
-2. Run the installer
-3. Ollama starts automatically
-
-### Verify Ollama is Running
-
-Look for the Ollama icon in your system tray. You can also check in PowerShell:
+## 1. Check Services (Windows)
 
 ```powershell
-ollama --version
+Get-Service AuraDB, AuraService | Format-Table Name, Status
 ```
 
-## 2. Download an AI Model
-
-Ollama needs at least one model to work. Open PowerShell and run:
+Both should show **Running**. If not:
 
 ```powershell
-# Recommended: Good balance of speed and quality
-ollama pull qwen2.5-coder:7b
+Start-Service AuraDB
+Start-Service AuraService
+```
 
-# Also pull an embedding model for code search
+## 2. Verify Health Endpoints
+
+```powershell
+# Overall health
+curl http://localhost:5300/health
+
+# Database connection
+curl http://localhost:5300/health/db
+
+# RAG subsystem
+curl http://localhost:5300/health/rag
+
+# MCP handler and tool count
+curl http://localhost:5300/health/mcp
+```
+
+All should return `200 OK`. The `/health/mcp` response lists the registered tools and their count (expect 10).
+
+## 3. Confirm Ollama Models
+
+```powershell
+ollama list
+```
+
+You should see `nomic-embed-text` (required for embeddings). If missing:
+
+```powershell
 ollama pull nomic-embed-text
 ```
 
-### Model Options
+Optional but recommended for code generation tasks:
 
-| Model | Size | Best For |
-|-------|------|----------|
+```powershell
+ollama pull qwen2.5-coder:7b
+```
 
-| `qwen2.5-coder:7b` | ~4GB | General coding tasks (recommended) |
-| `qwen2.5-coder:14b` | ~8GB | Better quality, needs more RAM |
-| `llama3.2:3b` | ~2GB | Faster responses, less capable |
-| `deepseek-coder:6.7b` | ~4GB | Alternative coding model |
+## 4. Index Your First Folder
 
-> **Tip:** Start with `qwen2.5-coder:7b`. You can always pull more models later.
+Pick a project directory and index it via the REST API:
 
-## 3. Verify Aura is Running
+```powershell
+# Register a workspace
+curl -X POST http://localhost:5300/api/workspaces `
+  -H "Content-Type: application/json" `
+  -d '{"path": "C:/projects/my-app", "startIndexing": true}'
+```
 
-### Check the System Tray
+This creates the workspace and immediately begins indexing. Check progress:
 
-1. Look for the Aura icon in your system tray (bottom-right of taskbar)
-2. Click it to open the status window
-3. You should see:
-   - ✅ **AuraDB** - Database running
-   - ✅ **Aura API** - API service running
-   - ✅ **Ollama** - LLM provider available
+```powershell
+curl http://localhost:5300/api/workspaces/{workspaceId}/index
+```
 
-### Check from VS Code
+The response shows `fresh`, `stale`, or `not-indexed` status, plus chunk and graph node counts.
 
-1. Open VS Code
-2. Look for "Aura" in the Activity Bar (left sidebar)
-3. Click to open the Aura panel
-4. Check "System Status" - all items should be green
+## 5. Run a Test Search
 
-## 4. Index Your First Project
+```powershell
+curl -X POST http://localhost:5300/api/workspaces/{workspaceId}/search `
+  -H "Content-Type: application/json" `
+  -d '{"query": "main entry point", "topK": 3}'
+```
 
-Before Aura can help with your code, it needs to understand your project:
-
-1. Open a project folder in VS Code
-2. In the Aura panel, find "Code Graph"
-3. Click **"Index Repository"**
-4. Wait for indexing to complete (progress shown in status)
-
-### What Gets Indexed
-
-Aura extracts:
-
-- **Functions & Methods** - Names, signatures, documentation
-- **Classes & Types** - Structure and relationships
-- **Files** - Content for semantic search
-
-### Supported Languages
-
-| Language | Parser |
-|----------|--------|
-
-| C# | Roslyn (full semantic analysis) |
-| TypeScript/JavaScript | TreeSitter |
-| Python | TreeSitter |
-| Go | TreeSitter |
-| Java | TreeSitter |
-| Rust | TreeSitter |
-| And more... | TreeSitter |
-
-## 5. Test with Chat
-
-Try asking Aura about your code:
-
-1. In VS Code, open Command Palette (`Ctrl+Shift+P`)
-2. Run "Aura: Open Chat"
-3. Ask a question like:
-   - "What does the `UserService` class do?"
-   - "How is authentication implemented?"
-   - "Find all API endpoints"
-
-Aura will search your indexed code and provide context-aware answers.
+You should see results with file paths, content snippets, and similarity scores.
 
 ## Troubleshooting First Run
 
-| Issue | Solution |
-|-------|----------|
-
-| Ollama not detected | Ensure Ollama is running (check system tray) |
-| No models available | Run `ollama pull qwen2.5-coder:7b` |
-| Database not starting | Check Windows Services for "AuraDB" |
-| MCP tools not appearing | Start a new Copilot session and verify `http://localhost:5300/health/mcp` |
+| Symptom | Cause | Fix |
+|---|---|---|
+| `/health/db` returns 503 | PostgreSQL not running | `Start-Service AuraDB` (Windows) or `brew services start postgresql@17` (macOS) |
+| `/health/rag` returns 503 | Ollama not running or model missing | Start Ollama; `ollama pull nomic-embed-text` |
+| Port 5300 refused | AuraService not running | `Start-Service AuraService` or check logs |
+| No search results | Workspace not indexed | Trigger indexing and wait for completion |
 
 ## Next Steps
 
-→ Continue to **[Quick Start](quick-start.md)** to register your first workspace and search it through MCP.
+- [Quick Start](quick-start.md) — register and search via Copilot MCP tools
+- [Configuration](../configuration/settings.md) — tune RAG, embedding, and LLM settings
 
-## Optional: Configure Cloud LLM
-
-For better quality responses, you can use cloud LLM providers:
-
-- [Configure Azure OpenAI](../configuration/llm-providers.md#azure-openai)
-- [Configure OpenAI](../configuration/llm-providers.md#openai)

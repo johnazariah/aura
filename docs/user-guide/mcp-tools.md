@@ -1,16 +1,6 @@
-# MCP Tools Reference
+# MCP Tools
 
-Aura exposes a comprehensive set of tools via the Model Context Protocol (MCP). These tools enable AI assistants like GitHub Copilot to interact with your codebase semantically.
-
-## What is MCP?
-
-MCP (Model Context Protocol) is a standard for exposing capabilities to AI assistants. When you configure Aura as an MCP server, GitHub Copilot can:
-
-- Search your codebase semantically
-- Navigate code relationships
-- Generate code using project context
-- Run refactoring operations
-- Execute verification checks
+Aura exposes 10 MCP tools to GitHub Copilot. All tools are called via JSON-RPC over the `/mcp` endpoint.
 
 ## Setup
 
@@ -21,6 +11,7 @@ Add to your VS Code `settings.json`:
   "mcp": {
     "servers": {
       "aura": {
+        "type": "sse",
         "url": "http://localhost:5300/mcp"
       }
     }
@@ -28,214 +19,294 @@ Add to your VS Code `settings.json`:
 }
 ```
 
-## Tool Categories
+## Tool Summary
 
-### Code Search (`aura_search`)
+| Tool | Access | Description |
+|------|--------|-------------|
+| `aura_search` | Read | Semantic search across indexed codebases |
+| `aura_navigate` | Read | Find callers, implementations, derived types, usages, references |
+| `aura_inspect` | Read | Examine type members and class listings |
+| `aura_tree` | Read | Hierarchical codebase exploration |
+| `aura_refactor` | Write | Rename, extract, change signatures, safe delete |
+| `aura_generate` | Write | Create types, implement interfaces, add members, generate tests |
+| `aura_validate` | Read | Check compilation, run tests |
+| `aura_index` | Read/Write | Trigger and manage content indexing |
+| `aura_workspace` | Read/Write | Workspace registry CRUD |
+| `aura_architect` | Read | Architecture analysis (coming soon) |
 
-Semantic search across your indexed codebase. Returns relevant code chunks with similarity scores.
+## aura_search
 
-**Operations:**
-- Search by concept, symbol name, or keyword
-- Filter by content type (code, docs, config)
-- Automatic worktree resolution
+Semantic search across indexed code, docs, and config. Exact symbol matches are boosted above RAG results.
 
-**Example:**
-```
-"Search for authentication logic"
-→ Finds AuthService.cs, login methods, auth middleware
-```
+**Operations:** single search action (no `operation` parameter)
 
-### Code Navigation (`aura_navigate`)
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `query` | string | ✅ | Search query — concept, symbol name, or keyword |
+| `workspacePath` | string | | Path to workspace or worktree |
+| `workspaces` | string[] | | Workspace IDs or aliases; `["*"]` for all |
+| `limit` | integer | | Max results (default 10) |
+| `contentType` | enum | | `code`, `docs`, `config`, or `all` |
 
-Find code relationships - callers, implementations, usages.
-
-**Operations:**
-
-| Operation | Description |
-|-----------|-------------|
-| `callers` | Find all methods that call a function |
-| `implementations` | Find implementations of an interface |
-| `derived_types` | Find classes that inherit from a type |
-| `usages` | Find all usages of a symbol |
-| `references` | Find references to a symbol |
-| `definition` | Jump to symbol definition |
-| `by_attribute` | Find types/methods with a specific attribute |
-| `extension_methods` | Find extension methods for a type |
-
-**Example:**
-```
-"Find all callers of UserService.GetById"
-→ Lists every method that calls GetById
-```
-
-### Code Inspection (`aura_inspect`)
-
-Explore type structure and project contents.
-
-**Operations:**
-
-| Operation | Description |
-|-----------|-------------|
-| `type_members` | List all members of a class/interface |
-| `list_types` | List types in a project or namespace |
-
-**Example:**
-```
-"Show me all members of the OrderService class"
-→ Lists constructors, methods, properties
+```json
+{
+  "name": "aura_search",
+  "arguments": {
+    "query": "dependency injection registration",
+    "workspacePath": "C:/projects/my-app",
+    "contentType": "code",
+    "limit": 5
+  }
+}
 ```
 
-### Code Validation (`aura_validate`)
+## aura_navigate
 
-Check compilation and run tests.
+Find code elements and their relationships. Auto-detects language from file extension, solution path, or project path.
 
-**Operations:**
+**Operations:** `callers`, `implementations`, `derived_types`, `usages`, `by_attribute`, `extension_methods`, `by_return_type`, `references`, `definition`
 
-| Operation | Description |
-|-----------|-------------|
-| `compilation` | Build the solution and check for errors |
-| `tests` | Run unit tests with optional filter |
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `operation` | enum | ✅ | Navigation operation |
+| `symbolName` | string | | Symbol to navigate from |
+| `containingType` | string | | Disambiguate overloaded symbols |
+| `solutionPath` | string | | `.sln` path — required for C# |
+| `filePath` | string | | File path — required for Python |
+| `offset` | integer | | Character offset — required for Python |
+| `projectPath` | string | | Project root — required for Python/TS |
+| `attributeName` | string | | For `by_attribute` operation |
+| `targetType` | string | | For `extension_methods` / `by_return_type` |
+| `targetKind` | enum | | `method`, `class`, `property`, `all` |
 
-**Example:**
-```
-"Build the solution and run tests"
-→ Shows build result and test pass/fail count
-```
-
-### Refactoring (`aura_refactor`)
-
-Semantic code transformations with blast radius analysis.
-
-**Operations:**
-
-| Operation | Description |
-|-----------|-------------|
-| `rename` | Rename a symbol across the codebase |
-| `extract_method` | Extract code into a new method |
-| `extract_variable` | Extract expression into a variable |
-| `extract_interface` | Create interface from class members |
-| `change_signature` | Add/remove parameters from a method |
-| `safe_delete` | Delete a symbol if it has no usages |
-| `move_type_to_file` | Move a type to its own file |
-
-**Analyze Mode:**
-
-By default, refactoring shows a **blast radius analysis** before making changes:
-
-```
-Rename: User → Customer
-Blast radius: 64 references across 12 files
-Related symbols: UserService, IUserRepository, UserDto
+```json
+{
+  "name": "aura_navigate",
+  "arguments": {
+    "operation": "implementations",
+    "symbolName": "IUserService",
+    "solutionPath": "C:/projects/my-app/MyApp.sln"
+  }
+}
 ```
 
-Then confirm to execute the actual refactoring.
+## aura_inspect
 
-### Code Generation (`aura_generate`)
+Examine code structure — list types in a project or get members of a specific type.
 
-Create new code elements with proper structure.
+**Operations:** `type_members`, `list_types`
 
-**Operations:**
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `operation` | enum | ✅ | Inspection operation |
+| `typeName` | string | | Type to inspect (for `type_members`) |
+| `solutionPath` | string | | `.sln` path for C# |
+| `projectPath` | string | | Project root for TS/Python |
+| `projectName` | string | | Filter by project name |
+| `namespaceFilter` | string | | Partial namespace match |
+| `nameFilter` | string | | Partial type name match |
 
-| Operation | Description |
-|-----------|-------------|
-| `create_type` | Create a new class/interface/record |
-| `tests` | Generate comprehensive unit tests |
-| `implement_interface` | Implement interface members |
-| `constructor` | Generate constructor |
-| `property` | Add a property to a class |
-| `method` | Add a method to a class |
-
-**Example:**
-```
-"Generate tests for OrderService"
-→ Creates OrderServiceTests.cs with test cases
-```
-
-### Workflow Management (`aura_workflow`)
-
-Manage development workflows (stories).
-
-**Operations:**
-
-| Operation | Description |
-|-----------|-------------|
-| `list` | List all active workflows |
-| `get` | Get details of a specific workflow |
-| `get_by_path` | Find workflow for a worktree path |
-| `create` | Create a new workflow |
-| `enrich` | Enrich workflow with issue details |
-| `update_step` | Update a workflow step |
-| `complete` | Complete with squash merge and PR |
-
-### Operational Patterns (`aura_pattern`)
-
-Load step-by-step playbooks for complex tasks.
-
-**Operations:**
-
-| Operation | Description |
-|-----------|-------------|
-| `list` | Show available patterns |
-| `get` | Load a specific pattern |
-
-**Example:**
-```
-"Load the comprehensive-rename pattern"
-→ Returns step-by-step procedure for domain renames
+```json
+{
+  "name": "aura_inspect",
+  "arguments": {
+    "operation": "type_members",
+    "typeName": "UserService",
+    "solutionPath": "C:/projects/my-app/MyApp.sln"
+  }
+}
 ```
 
-### Documentation Search (`aura_docs`)
+## aura_tree
 
-Search Aura's indexed documentation using semantic search.
+Browse the codebase hierarchy — files, types, and members — or retrieve full source for a specific node.
 
-**Purpose:**
-- Self-service help for configuration, troubleshooting, best practices
-- Find examples and usage patterns
-- Understand Aura capabilities without asking the user
+**Operations:** `explore`, `get_node`
 
-**Example:**
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `workspacePath` | string | ✅ | Workspace root |
+| `operation` | enum | | `explore` or `get_node` (default: `explore`) |
+| `pattern` | string | | Filter pattern (default: `.`) |
+| `maxDepth` | integer | | 1 = files, 2 = +types, 3 = +members (default 2) |
+| `detail` | enum | | `min` or `max` |
+| `nodeId` | string | | Node ID from explore results (for `get_node`) |
+
+```json
+{
+  "name": "aura_tree",
+  "arguments": {
+    "workspacePath": "C:/projects/my-app",
+    "operation": "explore",
+    "pattern": "Services",
+    "maxDepth": 3
+  }
+}
 ```
-"How do I configure OpenAI GPT-4?"
-→ Returns relevant docs about LLM configuration
+
+## aura_refactor
+
+Transform existing code with language-aware refactoring. Supports C# (Roslyn), Python (Rope), and TypeScript (ts-morph).
+
+**Operations:** `rename`, `change_signature`, `extract_interface`, `extract_method`, `extract_variable`, `safe_delete`, `move_type_to_file`, `move_members_to_partial`
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `operation` | enum | ✅ | Refactoring operation |
+| `symbolName` | string | | Symbol to refactor |
+| `newName` | string | | New name (rename, extract) |
+| `solutionPath` | string | | `.sln` path for C# |
+| `filePath` | string | | File containing the code |
+| `containingType` | string | | For disambiguation |
+| `analyze` | boolean | | Blast radius analysis only (default: true) |
+| `preview` | boolean | | Return changes without applying |
+| `validate` | boolean | | Build after refactoring |
+
+**Language support:**
+
+| Operation | C# | Python | TypeScript |
+|-----------|:---:|:---:|:---:|
+| `rename` | ✅ | ✅ | ✅ |
+| `extract_method` | | ✅ | ✅ |
+| `extract_variable` | | ✅ | ✅ |
+| `change_signature` | ✅ | | |
+| `extract_interface` | ✅ | | |
+| `safe_delete` | ✅ | | |
+| `move_type_to_file` | ✅ | | |
+| `move_members_to_partial` | ✅ | | |
+
+```json
+{
+  "name": "aura_refactor",
+  "arguments": {
+    "operation": "rename",
+    "symbolName": "GetUser",
+    "newName": "GetUserById",
+    "solutionPath": "C:/projects/my-app/MyApp.sln",
+    "analyze": false
+  }
+}
 ```
 
-**Details:** See [aura_docs reference](../mcp-tools/aura_docs.md) for complete documentation with JSON-RPC examples.
+## aura_generate
 
-## Best Practices
+Generate new code — types, interfaces, constructors, properties, methods, and test suites.
 
-### Use Semantic Tools First
+**Operations:** `create_type`, `implement_interface`, `constructor`, `property`, `method`, `tests`
 
-Before reading files manually, use Aura's semantic tools:
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `operation` | enum | ✅ | Generation operation |
+| `solutionPath` | string | | `.sln` path |
+| `className` | string | | Target class for member operations |
+| `typeName` | string | | Name of type to create |
+| `typeKind` | enum | | `class`, `interface`, `record`, `struct` |
+| `target` | string | | Test generation target |
+| `preview` | boolean | | Return changes without applying |
 
-| Instead of... | Use... |
-|---------------|--------|
-| Reading many files to understand a class | `aura_inspect(operation: "type_members")` |
-| Grep searching for usages | `aura_navigate(operation: "usages")` |
-| Manual find/replace for renames | `aura_refactor(operation: "rename")` |
+See [API Reference](../mcp-tools/api-reference.md) for the full parameter list.
 
-### Path Resolution
+```json
+{
+  "name": "aura_generate",
+  "arguments": {
+    "operation": "tests",
+    "target": "UserService",
+    "solutionPath": "C:/projects/my-app/MyApp.sln",
+    "focus": "edge_cases",
+    "maxTests": 10
+  }
+}
+```
 
-Always use absolute paths anchored to the workspace root. When in a worktree, use the worktree path—Aura automatically resolves to the shared index.
+## aura_validate
 
-### Refactoring Safety
+Check compilation or run tests. Auto-detects language from the provided path.
 
-1. Always analyze first (default behavior)
-2. Review the blast radius
-3. Get confirmation before executing
-4. Build after each refactoring step
-5. Sweep for residuals with grep
+**Operations:** `compilation`, `tests`
 
-## Language Support
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `operation` | enum | ✅ | `compilation` or `tests` |
+| `solutionPath` | string | | `.sln` path for C# |
+| `projectPath` | string | | Project root for TS/Python |
+| `projectName` | string | | Filter to one project |
+| `includeWarnings` | boolean | | Include warnings (default: false) |
+| `filter` | string | | Test filter expression |
+| `timeoutSeconds` | integer | | Timeout (default: 120) |
 
-| Feature | C# | TypeScript | Python | Go | Rust |
-|---------|----|-----------:|-------:|---:|-----:|
-| `aura_search` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `aura_navigate` | ✅ (Roslyn) | ⚠️ (basic) | ⚠️ (basic) | ⚠️ (basic) | ⚠️ (basic) |
-| `aura_inspect` | ✅ (Roslyn) | ⚠️ (basic) | ⚠️ (basic) | ⚠️ (basic) | ⚠️ (basic) |
-| `aura_refactor` | ✅ (Roslyn) | ❌ | ⚠️ (Rope) | ❌ | ❌ |
-| `aura_generate` | ✅ (Roslyn) | ❌ | ❌ | ❌ | ❌ |
-| `aura_validate` | ✅ | ✅ | ✅ | ✅ | ✅ |
+```json
+{
+  "name": "aura_validate",
+  "arguments": {
+    "operation": "tests",
+    "solutionPath": "C:/projects/my-app/MyApp.sln",
+    "filter": "FullyQualifiedName~UserServiceTests"
+  }
+}
+```
 
-**Legend:** ✅ Full support | ⚠️ Basic/partial | ❌ Not supported
+## aura_index
 
-C# has the richest support via Roslyn. Other languages have semantic search and validation, with navigation based on Tree-sitter parsing.
+Trigger and manage content indexing — index directories/files, check job status, view statistics.
+
+**Operations:** `index_directory`, `index_file`, `status`, `stats`
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `operation` | enum | ✅ | Indexing operation |
+| `path` | string | | Directory or file to index |
+| `recursive` | boolean | | Recurse into subdirectories (default: true) |
+| `filePattern` | string | | Glob filter, e.g. `*.pdf` |
+| `jobId` | string | | Job ID for `status` operation |
+
+```json
+{
+  "name": "aura_index",
+  "arguments": {
+    "operation": "index_directory",
+    "path": "C:/projects/my-app",
+    "recursive": true,
+    "filePattern": "*.cs"
+  }
+}
+```
+
+## aura_workspace
+
+Manage the workspace registry — add, remove, list, set default, detect worktrees, invalidate caches.
+
+**Operations:** `list`, `add`, `remove`, `set_default`, `detect_worktree`, `invalidate_cache`, `status`
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `operation` | enum | ✅ | Workspace operation |
+| `path` | string | | Workspace path (add, detect, invalidate, status) |
+| `id` | string | | Workspace ID (remove, set_default) |
+| `alias` | string | | Short alias (add) |
+| `tags` | string[] | | Tags for categorization (add) |
+
+```json
+{
+  "name": "aura_workspace",
+  "arguments": {
+    "operation": "add",
+    "path": "C:/projects/my-app",
+    "alias": "my-app",
+    "tags": ["dotnet", "web"]
+  }
+}
+```
+
+## aura_architect
+
+Analyze codebase architecture. **This tool is coming soon** — all operations currently return a placeholder message.
+
+**Operations:** `dependencies`, `layer_check`, `public_api`
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `operation` | enum | ✅ | Architecture operation |
+| `projectPath` | string | | Project or solution path |
+| `targetLayer` | string | | Target layer for `layer_check` |
+

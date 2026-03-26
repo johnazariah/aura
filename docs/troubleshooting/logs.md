@@ -23,13 +23,6 @@ cd "C:\Program Files\Aura\api"
 
 Logs appear in the console with timestamps.
 
-### Extension Logs
-
-In VS Code:
-
-1. View → Output (`Ctrl+Shift+U`)
-2. Select "Aura" from the dropdown
-
 ## Log Levels
 
 | Level | Color | Meaning |
@@ -49,7 +42,7 @@ In VS Code:
 ```text
 [INF] Starting Aura API...
 [INF] Database connection established
-[INF] Loaded 12 agents from agents/
+[INF] MCP handler registered 10 tools
 [INF] Ollama provider available at http://localhost:11434
 [INF] Listening on http://localhost:5300
 ```
@@ -73,16 +66,6 @@ In VS Code:
 ```
 
 **Solution:** Start the AuraDB service.
-
-### Agent Loading Error
-
-```text
-[WRN] Failed to load agent from agents/broken-agent.md
-[WRN] Parse error at line 15: Invalid YAML
-[INF] Loaded 11 agents (1 failed)
-```
-
-**Solution:** Fix the agent file syntax.
 
 ## Enabling Debug Logging
 
@@ -190,14 +173,6 @@ For Ollama issues:
 Get-Content "$env:LOCALAPPDATA\Ollama\logs\server.log" -Tail 50
 ```
 
-## Extension Diagnostics
-
-In VS Code, open Developer Tools:
-
-1. Help → Toggle Developer Tools (`Ctrl+Shift+I`)
-2. Click "Console" tab
-3. Filter by "aura" to see extension logs
-
 ## Reporting Issues
 
 When reporting a bug, include:
@@ -211,7 +186,6 @@ When reporting a bug, include:
    ```powershell
    Get-Content "$env:ProgramFiles\Aura\version.json"
    ollama --version
-   code --version
    ```
 
 Submit at: [GitHub Issues](https://github.com/johnazariah/aura/issues)

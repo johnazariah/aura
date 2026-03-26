@@ -1,37 +1,72 @@
 # Settings Reference
 
-Complete reference for Aura configuration options.
-
-## Configuration Files
-
-| File | Purpose |
-|------|---------|
-
-| `appsettings.json` | Main configuration |
-| `appsettings.Development.json` | Development overrides |
-| `appsettings.Local.json` | Local overrides (git-ignored) |
-
-Location: `C:\Program Files\Aura\api\`
+Aura is configured through `appsettings.json` (or environment variables). The API listens on `http://localhost:5300` by default.
 
 ## Connection Strings
 
 ```json
 {
   "ConnectionStrings": {
-    "auradb": "Host=localhost;Port=5432;Database=auradb;Username=postgres"
+    "auradb": "Host=localhost;Port=5433;Database=auradb;Username=postgres"
   }
 }
 ```
 
-| Setting | Default | Description |
-|---------|---------|-------------|
+The Windows installer uses port **5433** to avoid conflicts with existing PostgreSQL installations. macOS defaults to port **5432**.
 
-| `Host` | `localhost` | PostgreSQL server |
-| `Port` | `5432` | PostgreSQL port |
-| `Database` | `auradb` | Database name |
-| `Username` | `postgres` | Database user |
+## Aura:Embedding
 
-## LLM Configuration
+Controls which provider generates vector embeddings.
+
+```json
+{
+  "Aura": {
+    "Embedding": {
+      "Provider": "auto",
+      "BatchSize": 100,
+      "FallbackModel": "nomic-embed-text"
+    }
+  }
+}
+```
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `Provider` | `auto` | `auto` (try OpenAI, fall back to Ollama), `ollama`, or `openai` |
+| `BatchSize` | `100` | Number of chunks embedded per batch |
+| `FallbackModel` | `nomic-embed-text` | Model used when the primary provider is unavailable |
+
+## Aura:Rag
+
+RAG indexing and search parameters.
+
+```json
+{
+  "Aura": {
+    "Rag": {
+      "EmbeddingModel": "nomic-embed-text",
+      "EmbeddingDimension": 768,
+      "ChunkSize": 2000,
+      "ChunkOverlap": 200,
+      "DefaultTopK": 5,
+      "MinRelevanceScore": 0.3
+    }
+  }
+}
+```
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `EmbeddingModel` | `nomic-embed-text` | Model name for embeddings |
+| `EmbeddingDimension` | `768` | Vector dimension (must match the model) |
+| `ChunkSize` | `2000` | Maximum characters per chunk |
+| `ChunkOverlap` | `200` | Overlap between adjacent chunks |
+| `DefaultTopK` | `5` | Default number of search results |
+| `MinRelevanceScore` | `0.3` | Minimum similarity score to return |
+
+## Aura:Llm
+
+LLM provider configuration for code generation and analysis tasks.
 
 ```json
 {
@@ -43,20 +78,22 @@ Location: `C:\Program Files\Aura\api\`
           "BaseUrl": "http://localhost:11434",
           "DefaultModel": "qwen2.5-coder:7b",
           "DefaultEmbeddingModel": "nomic-embed-text",
-          "TimeoutSeconds": 300
-        },
-        "AzureOpenAI": {
-          "Endpoint": "",
-          "ApiKey": "",
-          "DefaultDeployment": "gpt-4o",
-          "MaxTokens": 4096,
-          "TimeoutSeconds": 120
+          "TimeoutSeconds": 300,
+          "NumGpu": -1,
+          "MaxEmbeddingTextLength": 30000
         },
         "OpenAI": {
           "ApiKey": "",
           "DefaultModel": "gpt-4o",
           "MaxTokens": 4096,
           "TimeoutSeconds": 120
+        },
+        "AzureOpenAI": {
+          "Endpoint": "",
+          "ApiKey": "",
+          "DefaultDeployment": "gpt-4o",
+          "MaxTokens": 4096,
+          "TimeoutSeconds": 300
         }
       }
     }
@@ -64,130 +101,69 @@ Location: `C:\Program Files\Aura\api\`
 }
 ```
 
-### LLM Settings
+### Ollama Provider
 
-| Setting | Type | Description |
-|---------|------|-------------|
+| Key | Default | Description |
+|-----|---------|-------------|
+| `BaseUrl` | `http://localhost:11434` | Ollama API endpoint |
+| `DefaultModel` | `qwen2.5-coder:7b` | Model for generation tasks |
+| `DefaultEmbeddingModel` | `nomic-embed-text` | Model for embeddings |
+| `TimeoutSeconds` | `300` | Request timeout |
+| `NumGpu` | `-1` | GPU layers (`-1` = all, `0` = CPU only) |
+| `MaxEmbeddingTextLength` | `30000` | Max input characters for embedding |
 
-| `DefaultProvider` | string | Which provider to use: `Ollama`, `AzureOpenAI`, `OpenAI` |
-| `Providers.*.BaseUrl` | string | API endpoint URL |
-| `Providers.*.ApiKey` | string | API key for authentication |
-| `Providers.*.DefaultModel` | string | Model to use for generation |
-| `Providers.*.DefaultEmbeddingModel` | string | Model for embeddings (Ollama only) |
-| `Providers.*.TimeoutSeconds` | int | Request timeout |
-| `Providers.*.MaxTokens` | int | Max tokens in response |
+### OpenAI Provider
 
-## Agent Configuration
+| Key | Default | Description |
+|-----|---------|-------------|
+| `ApiKey` | *(empty)* | OpenAI API key |
+| `DefaultModel` | `gpt-4o` | Model for generation tasks |
+| `MaxTokens` | `4096` | Max response tokens |
+| `TimeoutSeconds` | `120` | Request timeout |
+
+### Azure OpenAI Provider
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `Endpoint` | *(empty)* | Azure OpenAI endpoint URL |
+| `ApiKey` | *(empty)* | Azure OpenAI API key |
+| `DefaultDeployment` | `gpt-4o` | Deployment name |
+| `MaxTokens` | `4096` | Max response tokens |
+| `TimeoutSeconds` | `300` | Request timeout |
+
+## Researcher Module
 
 ```json
 {
-  "Aura": {
-    "Agents": {
-      "Directories": ["agents"],
-      "EnableHotReload": true
-    }
+  "Researcher": {
+    "StoragePath": "~/.aura/research",
+    "AutoDownloadPdfs": true,
+    "DefaultEnhancementLevel": "Basic",
+    "SemanticScholarApiKey": null
   }
 }
 ```
 
-| Setting | Default | Description |
-|---------|---------|-------------|
+| Key | Default | Description |
+|-----|---------|-------------|
+| `StoragePath` | `~/.aura/research` | Where downloaded PDFs are stored |
+| `AutoDownloadPdfs` | `true` | Automatically download linked PDFs |
+| `DefaultEnhancementLevel` | `Basic` | PDF enhancement level |
+| `SemanticScholarApiKey` | `null` | Optional API key for Semantic Scholar |
 
-| `Directories` | `["agents"]` | Paths to agent definition files |
-| `EnableHotReload` | `true` | Reload agents when files change |
-
-## Prompt Configuration
-
-```json
-{
-  "Aura": {
-    "Prompts": {
-      "Directories": ["prompts"]
-    }
-  }
-}
-```
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-
-| `Directories` | `["prompts"]` | Paths to prompt template files |
-
-## Developer Module
+## Kestrel (HTTP Server)
 
 ```json
 {
-  "Aura": {
-    "Modules": {
-      "Developer": {
-        "BranchPrefix": "workflow",
-        "WorktreeDirectory": ".worktrees"
+  "Kestrel": {
+    "Endpoints": {
+      "Http": {
+        "Url": "http://localhost:5300"
       }
     }
   }
 }
 ```
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `BranchPrefix` | `workflow` | Prefix for workflow branches |
-| `WorktreeDirectory` | `.worktrees` | Where to create git worktrees |
-
-## Verification
-
-Aura automatically runs verification checks (build, tests) before completing workflows.
-
-```json
-{
-  "Aura": {
-    "Modules": {
-      "Developer": {
-        "Verification": {
-          "TimeoutSeconds": 300,
-          "RunTests": true
-        }
-      }
-    }
-  }
-}
-```
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `TimeoutSeconds` | `300` | Maximum time for verification steps |
-| `RunTests` | `true` | Whether to run tests as part of verification |
-
-### Project Detection
-
-Aura auto-detects project type by looking for:
-
-| File | Project Type | Verification Steps |
-|------|--------------|-------------------|
-| `*.sln` or `*.csproj` | .NET | `dotnet build`, `dotnet test` |
-| `package.json` | Node.js | `npm run build`, `npm test` |
-| `Cargo.toml` | Rust | `cargo build`, `cargo test` |
-| `go.mod` | Go | `go build`, `go test` |
-| `pyproject.toml` | Python | `pytest` (if available) |
-
-## Patterns
-
-Operational patterns are stored in the `patterns/` directory.
-
-```json
-{
-  "Aura": {
-    "Patterns": {
-      "Directory": "patterns"
-    }
-  }
-}
-```
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `Directory` | `patterns` | Path to pattern files |
-
-Patterns support language overlays in subdirectories (e.g., `patterns/csharp/`).
 
 ## Logging
 
@@ -196,99 +172,41 @@ Patterns support language overlays in subdirectories (e.g., `patterns/csharp/`).
   "Logging": {
     "LogLevel": {
       "Default": "Information",
-      "Microsoft.AspNetCore": "Warning",
-      "Microsoft.EntityFrameworkCore": "Warning"
+      "Aura": "Information",
+      "Microsoft.AspNetCore": "Warning"
     }
   }
 }
 ```
 
-### Log Levels
-
-| Level | Description |
-|-------|-------------|
-
-| `Trace` | Most detailed (debugging only) |
-| `Debug` | Detailed debug info |
-| `Information` | General operational info |
-| `Warning` | Unexpected but handled events |
-| `Error` | Errors and exceptions |
-| `Critical` | Fatal errors |
-
-### Common Overrides
-
-For debugging LLM calls:
+Override per-component for debugging:
 
 ```json
 {
   "Logging": {
     "LogLevel": {
-      "Aura.Foundation.Llm": "Debug"
+      "Aura.Foundation.Rag": "Debug",
+      "Aura.Module.Developer": "Debug"
     }
   }
 }
 ```
 
-For debugging database:
+### Log Locations
 
-```json
-{
-  "Logging": {
-    "LogLevel": {
-      "Microsoft.EntityFrameworkCore": "Debug"
-    }
-  }
-}
-```
+| Platform | Location |
+|----------|----------|
+| Windows (service) | `C:\ProgramData\Aura\logs\aura-YYYYMMDD.log` + Windows Event Log |
+| Windows (console) | stdout |
+| macOS | `/usr/local/var/log/aura/` or `~/.local/share/Aura/logs/` |
 
 ## Environment Variables
 
-Any setting can be overridden via environment variables:
+Any setting can be overridden via environment variables using the `__` separator:
 
 ```powershell
-# Pattern: Section__SubSection__Key
-$env:Aura__Llm__DefaultProvider = "OpenAI"
+$env:ConnectionStrings__auradb = "Host=localhost;Port=5433;Database=auradb;Username=postgres"
+$env:Aura__Embedding__Provider = "ollama"
 $env:Aura__Llm__Providers__OpenAI__ApiKey = "sk-..."
 ```
 
-## Full Example
-
-```json
-{
-  "ConnectionStrings": {
-    "auradb": "Host=localhost;Port=5432;Database=auradb;Username=postgres"
-  },
-  "Logging": {
-    "LogLevel": {
-      "Default": "Information",
-      "Microsoft.AspNetCore": "Warning"
-    }
-  },
-  "Aura": {
-    "Llm": {
-      "DefaultProvider": "Ollama",
-      "Providers": {
-        "Ollama": {
-          "BaseUrl": "http://localhost:11434",
-          "DefaultModel": "qwen2.5-coder:7b",
-          "DefaultEmbeddingModel": "nomic-embed-text",
-          "TimeoutSeconds": 300
-        }
-      }
-    },
-    "Agents": {
-      "Directories": ["agents"],
-      "EnableHotReload": true
-    },
-    "Prompts": {
-      "Directories": ["prompts"]
-    },
-    "Modules": {
-      "Developer": {
-        "BranchPrefix": "workflow",
-        "WorktreeDirectory": ".worktrees"
-      }
-    }
-  }
-}
-```

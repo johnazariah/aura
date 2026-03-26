@@ -1,698 +1,348 @@
-# Aura REST API Reference
+# API Reference
 
-This document provides the definitive API reference for agents and tools to use when interacting with Aura.
+Complete MCP tool schemas and REST endpoint reference.
 
-## Base URL
+## MCP Protocol
 
-```
-http://localhost:5300
-```
+- **Protocol version:** `2024-11-05`
+- **Server name:** `Aura`
+- **Endpoint:** `POST /mcp` (JSON-RPC over SSE)
 
-## Authentication
+### JSON-RPC Request Format
 
-Most endpoints require no authentication. GitHub-related endpoints accept a `X-GitHub-Token` header for accessing private repositories.
-
----
-
-## Workspace Management
-
-Workspaces are the top-level resource representing indexed repositories/directories.
-
-### List Workspaces
-
-```http
-GET /api/workspaces
-```
-
-**Query Parameters:**
-| Name | Type | Description |
-|------|------|-------------|
-| `limit` | int | Maximum number of workspaces to return |
-
-**Response:**
 ```json
 {
-  "count": 2,
-  "workspaces": [
-    {
-      "id": "a1b2c3d4e5f67890",
-      "name": "aura",
-      "path": "c:/work/aura",
-      "status": "ready",
-      "createdAt": "2026-01-15T10:00:00Z",
-      "lastAccessedAt": "2026-01-30T14:30:00Z",
-      "gitRemoteUrl": "https://github.com/user/repo",
-      "defaultBranch": "main"
-    }
-  ]
-}
-```
-
-### Get Workspace
-
-```http
-GET /api/workspaces/{idOrPath}
-```
-
-**Path Parameters:**
-| Name | Type | Description |
-|------|------|-------------|
-| `idOrPath` | string | 16-char hex workspace ID OR URL-encoded filesystem path |
-
-**Response:**
-```json
-{
-  "id": "a1b2c3d4e5f67890",
-  "name": "aura",
-  "path": "c:/work/aura",
-  "status": "ready",
-  "createdAt": "2026-01-15T10:00:00Z",
-  "lastAccessedAt": "2026-01-30T14:30:00Z",
-  "gitRemoteUrl": "https://github.com/user/repo",
-  "defaultBranch": "main",
-  "stats": {
-    "files": 150,
-    "chunks": 2500,
-    "graphNodes": 1200,
-    "graphEdges": 3500
-  },
-  "indexingJob": null
-}
-```
-
-### Create Workspace
-
-```http
-POST /api/workspaces
-```
-
-**Request Body:**
-```json
-{
-  "path": "c:/work/my-project",
-  "name": "My Project",
-  "startIndexing": true,
-  "options": {
-    "includePatterns": ["**/*.cs", "**/*.py"],
-    "excludePatterns": ["**/bin/**", "**/obj/**"]
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "tools/call",
+  "params": {
+    "name": "tool_name",
+    "arguments": { ... }
   }
 }
 ```
 
-**Response:**
+### Discovery
+
 ```json
-{
-  "id": "a1b2c3d4e5f67890",
-  "name": "My Project",
-  "path": "c:/work/my-project",
-  "status": "indexing",
-  "isNew": true,
-  "jobId": "550e8400-e29b-41d4-a716-446655440000",
-  "message": "Workspace created and indexing started"
-}
-```
-
-### Delete Workspace
-
-```http
-DELETE /api/workspaces/{id}
-```
-
-Deletes the workspace and all associated data (RAG chunks, code graph, metadata).
-
-**Response:**
-```json
-{
-  "success": true,
-  "id": "a1b2c3d4e5f67890",
-  "path": "c:/work/my-project",
-  "message": "Workspace deleted. Removed 2500 RAG chunks."
-}
+{ "jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {} }
 ```
 
 ---
 
-## Workspace Index
+## Tool Schemas
 
-Per-workspace index management endpoints.
+### aura_search
 
-### Get Index Status
-
-```http
-GET /api/workspaces/{workspaceId}/index
-```
-
-Returns detailed index health and statistics.
-
-**Response:**
 ```json
 {
-  "workspaceId": "a1b2c3d4e5f67890",
-  "workspacePath": "c:/work/aura",
-  "status": "fresh",
-  "isGitRepository": true,
-  "currentCommitSha": "abc1234",
-  "currentCommitAt": "2026-01-30T10:00:00Z",
-  "rag": {
-    "status": "fresh",
-    "files": 150,
-    "chunks": 2500,
-    "indexedAt": "2026-01-30T09:00:00Z",
-    "indexedCommitSha": "abc1234",
-    "commitsBehind": 0
-  },
-  "graph": {
-    "status": "fresh",
-    "indexedAt": "2026-01-30T09:00:00Z",
-    "indexedCommitSha": "abc1234",
-    "commitsBehind": 0
-  },
-  "activeJob": null
-}
-```
-
-**Status Values:**
-- `fresh` - Index is up-to-date
-- `stale` - Index is behind current commit
-- `not-indexed` - No index exists
-
-### Trigger Re-index
-
-```http
-POST /api/workspaces/{workspaceId}/index
-```
-
-Queues a re-indexing job for the workspace.
-
-**Response (202 Accepted):**
-```json
-{
-  "workspaceId": "a1b2c3d4e5f67890",
-  "jobId": "550e8400-e29b-41d4-a716-446655440000",
-  "isNewJob": true,
-  "message": "Re-indexing started"
-}
-```
-
-### Clear Index
-
-```http
-DELETE /api/workspaces/{workspaceId}/index
-```
-
-Clears the RAG index for a workspace. Preserves the workspace record.
-
-**Response:**
-```json
-{
-  "success": true,
-  "workspaceId": "a1b2c3d4e5f67890",
-  "chunksRemoved": 2500,
-  "message": "Index cleared. Workspace preserved."
-}
-```
-
-### List Jobs
-
-```http
-GET /api/workspaces/{workspaceId}/index/jobs
-```
-
-Lists indexing jobs for this workspace.
-
-**Response:**
-```json
-{
-  "workspaceId": "a1b2c3d4e5f67890",
-  "count": 1,
-  "jobs": [
-    {
-      "jobId": "550e8400-e29b-41d4-a716-446655440000",
-      "state": "processing",
-      "processedItems": 50,
-      "totalItems": 150,
-      "progressPercent": 33,
-      "startedAt": "2026-01-30T14:00:00Z",
-      "completedAt": null,
-      "error": null
-    }
-  ]
-}
-```
-
-### Get Job Status
-
-```http
-GET /api/workspaces/{workspaceId}/index/jobs/{jobId}
-```
-
-**Response:**
-```json
-{
-  "jobId": "550e8400-e29b-41d4-a716-446655440000",
-  "workspaceId": "a1b2c3d4e5f67890",
-  "source": "c:/work/aura",
-  "state": "completed",
-  "totalItems": 150,
-  "processedItems": 150,
-  "failedItems": 0,
-  "progressPercent": 100,
-  "startedAt": "2026-01-30T14:00:00Z",
-  "completedAt": "2026-01-30T14:05:00Z",
-  "error": null
-}
-```
-
-**Job States:**
-- `queued` - Waiting to start
-- `processing` - Currently indexing
-- `completed` - Finished successfully
-- `failed` - Finished with error
-
----
-
-## Workspace Code Graph
-
-Per-workspace code structure navigation.
-
-### Get Graph Stats
-
-```http
-GET /api/workspaces/{workspaceId}/graph
-```
-
-**Response:**
-```json
-{
-  "workspaceId": "a1b2c3d4e5f67890",
-  "totalNodes": 1200,
-  "totalEdges": 3500,
-  "nodesByType": {
-    "Class": 150,
-    "Method": 800,
-    "Property": 200,
-    "Interface": 50
-  },
-  "edgesByType": {
-    "Calls": 2000,
-    "Inherits": 100,
-    "Implements": 50,
-    "References": 1350
+  "name": "aura_search",
+  "description": "Semantic search across the indexed codebase. Returns relevant code chunks with file paths and similarity scores. Exact symbol matches are boosted.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "query": { "type": "string", "description": "The search query (concept, symbol name, or keyword)" },
+      "workspacePath": { "type": "string", "description": "Path to the current workspace or worktree" },
+      "workspaces": { "type": "array", "items": { "type": "string" }, "description": "Workspace IDs or aliases to search. Use ['*'] for all." },
+      "limit": { "type": "integer", "description": "Maximum results (default 10)" },
+      "contentType": { "type": "string", "enum": ["code", "docs", "config", "all"], "description": "Filter by content type" }
+    },
+    "required": ["query"]
   }
 }
 ```
 
-### Find Implementations
+### aura_navigate
 
-```http
-GET /api/workspaces/{workspaceId}/graph/implementations/{interfaceName}
-```
-
-Finds all types that implement the given interface.
-
-**Response:**
 ```json
 {
-  "workspaceId": "a1b2c3d4e5f67890",
-  "interfaceName": "IRagService",
-  "count": 2,
-  "implementations": [
-    {
-      "name": "RagService",
-      "fullName": "Aura.Foundation.Rag.RagService",
-      "filePath": "c:/work/aura/src/Aura.Foundation/Rag/RagService.cs",
-      "lineNumber": 15
-    }
-  ]
-}
-```
-
-### Find Callers
-
-```http
-GET /api/workspaces/{workspaceId}/graph/callers/{methodName}
-```
-
-**Query Parameters:**
-| Name | Type | Description |
-|------|------|-------------|
-| `containingType` | string | Filter to callers from a specific type |
-
-**Response:**
-```json
-{
-  "workspaceId": "a1b2c3d4e5f67890",
-  "methodName": "QueryAsync",
-  "containingType": null,
-  "count": 5,
-  "callers": [
-    {
-      "name": "ExecuteWithRag",
-      "fullName": "Aura.Api.Endpoints.AgentEndpoints.ExecuteWithRag",
-      "signature": "Task<IResult> ExecuteWithRag(...)",
-      "filePath": "c:/work/aura/src/Aura.Api/Endpoints/AgentEndpoints.cs",
-      "lineNumber": 85
-    }
-  ]
-}
-```
-
-### Get Type Members
-
-```http
-GET /api/workspaces/{workspaceId}/graph/members/{typeName}
-```
-
-**Response:**
-```json
-{
-  "workspaceId": "a1b2c3d4e5f67890",
-  "typeName": "RagService",
-  "count": 8,
-  "members": [
-    {
-      "name": "QueryAsync",
-      "nodeType": "Method",
-      "signature": "Task<IReadOnlyList<RagQueryResult>> QueryAsync(...)",
-      "modifiers": "public async",
-      "lineNumber": 45
-    }
-  ]
-}
-```
-
-### Get Types in Namespace
-
-```http
-GET /api/workspaces/{workspaceId}/graph/namespaces/{namespaceName}
-```
-
-**Response:**
-```json
-{
-  "workspaceId": "a1b2c3d4e5f67890",
-  "namespaceName": "Aura.Foundation.Rag",
-  "count": 10,
-  "types": [
-    {
-      "name": "RagService",
-      "fullName": "Aura.Foundation.Rag.RagService",
-      "nodeType": "Class",
-      "filePath": "c:/work/aura/src/Aura.Foundation/Rag/RagService.cs",
-      "lineNumber": 15
-    }
-  ]
-}
-```
-
-### Find Symbols
-
-```http
-GET /api/workspaces/{workspaceId}/graph/symbols/{name}
-```
-
-Search for symbols by name.
-
-**Query Parameters:**
-| Name | Type | Description |
-|------|------|-------------|
-| `nodeType` | string | Filter by type: Class, Method, Property, Interface, etc. |
-
-**Response:**
-```json
-{
-  "workspaceId": "a1b2c3d4e5f67890",
-  "query": "Query",
-  "nodeType": null,
-  "count": 12,
-  "symbols": [
-    {
-      "name": "QueryAsync",
-      "fullName": "Aura.Foundation.Rag.RagService.QueryAsync",
-      "nodeType": "Method",
-      "filePath": "c:/work/aura/src/Aura.Foundation/Rag/RagService.cs",
-      "lineNumber": 45,
-      "signature": "Task<IReadOnlyList<RagQueryResult>> QueryAsync(...)"
-    }
-  ]
-}
-```
-
-### Clear Graph
-
-```http
-DELETE /api/workspaces/{workspaceId}/graph
-```
-
-Clears the code graph for a workspace.
-
-**Response:**
-```json
-{
-  "success": true,
-  "workspaceId": "a1b2c3d4e5f67890",
-  "message": "Code graph cleared. Workspace preserved."
-}
-```
-
----
-
-## Workspace Search
-
-Semantic search within a workspace.
-
-### Search Workspace
-
-```http
-POST /api/workspaces/{workspaceId}/search
-```
-
-**Request Body:**
-```json
-{
-  "query": "authentication middleware",
-  "topK": 5,
-  "minScore": 0.7
-}
-```
-
-**Response:**
-```json
-{
-  "workspaceId": "a1b2c3d4e5f67890",
-  "query": "authentication middleware",
-  "resultCount": 3,
-  "results": [
-    {
-      "contentId": "c:/work/aura/src/middleware/auth.cs",
-      "chunkIndex": 0,
-      "text": "public class AuthenticationMiddleware...",
-      "score": 0.92,
-      "sourcePath": "c:/work/aura/src/middleware/auth.cs",
-      "contentType": "CSharp"
-    }
-  ]
-}
-```
-
----
-
-## Global Index Status
-
-Global indexer queue status (not workspace-specific).
-
-### Get Indexer Status
-
-```http
-GET /api/index/status
-```
-
-**Response:**
-```json
-{
-  "queuedItems": 0,
-  "processedItems": 1500,
-  "failedItems": 2,
-  "isProcessing": false,
-  "activeJobs": 0
-}
-```
-
-### Get Job Status (Global)
-
-```http
-GET /api/index/jobs/{jobId}
-```
-
-Get status of any job by ID.
-
----
-
-## RAG Endpoints
-
-Low-level RAG operations (for advanced use).
-
-### Index Content
-
-```http
-POST /api/rag/index
-```
-
-Index a single content item directly.
-
-**Request Body:**
-```json
-{
-  "contentId": "manual-doc-1",
-  "text": "Documentation content here...",
-  "contentType": "PlainText",
-  "sourcePath": "/docs/readme.md",
-  "language": null
-}
-```
-
-### Query RAG
-
-```http
-POST /api/rag/query
-```
-
-Query the RAG index directly (use workspace search for scoped queries).
-
-**Request Body:**
-```json
-{
-  "query": "how does authentication work",
-  "topK": 5,
-  "minScore": null,
-  "sourcePathPrefix": null
-}
-```
-
-### Get Global RAG Stats
-
-```http
-GET /api/rag/stats
-```
-
-**Response:**
-```json
-{
-  "totalDocuments": 500,
-  "totalChunks": 5000,
-  "chunksByType": {
-    "CSharp": 3000,
-    "Python": 500,
-    "Markdown": 1500
+  "name": "aura_navigate",
+  "description": "Find code elements and their relationships: callers, implementations, derived types, usages, references.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "operation": { "type": "string", "enum": ["callers", "implementations", "derived_types", "usages", "by_attribute", "extension_methods", "by_return_type", "references", "definition"] },
+      "symbolName": { "type": "string", "description": "Symbol name to navigate from" },
+      "containingType": { "type": "string", "description": "Type containing the symbol (for disambiguation)" },
+      "solutionPath": { "type": "string", "description": "Path to .sln file — required for C#" },
+      "filePath": { "type": "string", "description": "Path to file — required for Python" },
+      "offset": { "type": "integer", "description": "Character offset — required for Python" },
+      "projectPath": { "type": "string", "description": "Project root — required for Python/TS" },
+      "attributeName": { "type": "string", "description": "Attribute name for by_attribute" },
+      "targetType": { "type": "string", "description": "Target type for extension_methods or by_return_type" },
+      "targetKind": { "type": "string", "enum": ["method", "class", "property", "all"], "description": "Filter by symbol kind" }
+    },
+    "required": ["operation"]
   }
 }
 ```
 
-### Remove Content
-
-```http
-DELETE /api/rag/{contentId}
-```
-
-Remove a specific content item by ID.
-
----
-
-## Health Endpoints
-
-### Basic Health
-
-```http
-GET /health
-```
-
-**Response:**
-```json
-{
-  "status": "ok",
-  "healthy": true
-}
-```
-
-### Database Health
-
-```http
-GET /health/db
-```
-
-### RAG Health
-
-```http
-GET /health/rag
-```
-
-### LLM Health
-
-```http
-GET /health/ollama
-```
-
-### Agent Health
-
-```http
-GET /health/agents
-```
-
-### MCP Health
-
-```http
-GET /health/mcp
-```
-
----
-
-## Error Responses
-
-All errors follow RFC 7807 Problem Details format:
+### aura_inspect
 
 ```json
 {
-  "type": "https://aura.dev/problems/workspace-not-found",
-  "title": "Workspace Not Found",
-  "status": 404,
-  "detail": "Workspace 'a1b2c3d4e5f67890' not found.",
-  "instance": "/api/workspaces/a1b2c3d4e5f67890",
-  "traceId": "00-abc123..."
+  "name": "aura_inspect",
+  "description": "Examine code structure: type members, class listings, project exploration.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "operation": { "type": "string", "enum": ["type_members", "list_types"] },
+      "typeName": { "type": "string", "description": "Type name for type_members" },
+      "solutionPath": { "type": "string", "description": "Path to .sln — enables Roslyn" },
+      "projectPath": { "type": "string", "description": "Project root for TS/Python" },
+      "projectName": { "type": "string", "description": "Project name for list_types" },
+      "namespaceFilter": { "type": "string", "description": "Partial namespace match" },
+      "nameFilter": { "type": "string", "description": "Partial type name match" }
+    },
+    "required": ["operation"]
+  }
 }
 ```
 
-**Common Problem Types:**
-- `workspace-not-found` - Workspace doesn't exist
-- `validation-failed` - Request validation error
-- `internal-error` - Server error
+### aura_tree
+
+```json
+{
+  "name": "aura_tree",
+  "description": "Explore codebase hierarchically: list files/types/members, or get full source for a node.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "workspacePath": { "type": "string", "description": "Path to the workspace root" },
+      "operation": { "type": "string", "enum": ["explore", "get_node"], "description": "Default: explore" },
+      "pattern": { "type": "string", "description": "Filter pattern (default: '.')" },
+      "maxDepth": { "type": "integer", "description": "1=files, 2=+types, 3=+members (default 2)" },
+      "detail": { "type": "string", "enum": ["min", "max"] },
+      "nodeId": { "type": "string", "description": "Node ID for get_node" }
+    },
+    "required": ["workspacePath"]
+  }
+}
+```
+
+### aura_refactor
+
+```json
+{
+  "name": "aura_refactor",
+  "description": "Transform existing code: rename symbols, change signatures, extract methods/variables/interfaces, safe delete, move type to file.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "operation": { "type": "string", "enum": ["rename", "change_signature", "extract_interface", "extract_method", "extract_variable", "safe_delete", "move_type_to_file", "move_members_to_partial"] },
+      "symbolName": { "type": "string" },
+      "newName": { "type": "string" },
+      "containingType": { "type": "string" },
+      "solutionPath": { "type": "string" },
+      "filePath": { "type": "string" },
+      "projectPath": { "type": "string" },
+      "offset": { "type": "integer" },
+      "startOffset": { "type": "integer" },
+      "endOffset": { "type": "integer" },
+      "className": { "type": "string" },
+      "memberNames": { "type": "array", "items": { "type": "string" } },
+      "members": { "type": "array", "items": { "type": "string" } },
+      "targetFileName": { "type": "string" },
+      "targetDirectory": { "type": "string" },
+      "addParameters": { "type": "array", "items": { "type": "object", "properties": { "name": { "type": "string" }, "type": { "type": "string" }, "defaultValue": { "type": "string" } } } },
+      "removeParameters": { "type": "array", "items": { "type": "string" } },
+      "analyze": { "type": "boolean", "description": "Blast radius analysis only (default: true)" },
+      "preview": { "type": "boolean", "description": "Return changes without applying (default: false)" },
+      "validate": { "type": "boolean", "description": "Build after refactoring (default: false)" }
+    },
+    "required": ["operation"]
+  }
+}
+```
+
+### aura_generate
+
+```json
+{
+  "name": "aura_generate",
+  "description": "Generate new code: create types, implement interfaces, generate constructors, add properties/methods, generate tests.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "operation": { "type": "string", "enum": ["implement_interface", "constructor", "property", "method", "create_type", "tests"] },
+      "solutionPath": { "type": "string" },
+      "className": { "type": "string" },
+      "typeName": { "type": "string" },
+      "typeKind": { "type": "string", "enum": ["class", "interface", "record", "struct"] },
+      "targetDirectory": { "type": "string" },
+      "baseClass": { "type": "string" },
+      "implements": { "type": "array", "items": { "type": "string" } },
+      "isSealed": { "type": "boolean" },
+      "isAbstract": { "type": "boolean" },
+      "isStatic": { "type": "boolean" },
+      "documentationSummary": { "type": "string" },
+      "primaryConstructorParameters": { "type": "array", "items": { "type": "object", "properties": { "name": { "type": "string" }, "type": { "type": "string" }, "defaultValue": { "type": "string" } } } },
+      "typeParameters": { "type": "array", "items": { "type": "object", "properties": { "name": { "type": "string" }, "constraints": { "type": "array", "items": { "type": "string" } } } } },
+      "interfaceName": { "type": "string" },
+      "explicitImplementation": { "type": "boolean" },
+      "members": { "type": "array", "items": { "type": "string" } },
+      "propertyName": { "type": "string" },
+      "propertyType": { "type": "string" },
+      "accessModifier": { "type": "string" },
+      "hasGetter": { "type": "boolean" },
+      "hasSetter": { "type": "boolean" },
+      "hasInit": { "type": "boolean" },
+      "isRequired": { "type": "boolean" },
+      "initialValue": { "type": "string" },
+      "isField": { "type": "boolean" },
+      "isReadonly": { "type": "boolean" },
+      "methodName": { "type": "string" },
+      "returnType": { "type": "string" },
+      "parameters": { "type": "array", "items": { "type": "object", "properties": { "name": { "type": "string" }, "type": { "type": "string" }, "defaultValue": { "type": "string" } } } },
+      "methodModifier": { "type": "string", "enum": ["virtual", "override", "abstract", "sealed", "new"] },
+      "isAsync": { "type": "boolean" },
+      "isExtension": { "type": "boolean" },
+      "body": { "type": "string" },
+      "attributes": { "type": "array", "items": { "type": "object", "properties": { "name": { "type": "string" }, "arguments": { "type": "array", "items": { "type": "string" } } } } },
+      "documentation": { "type": "string" },
+      "testAttribute": { "type": "string" },
+      "target": { "type": "string", "description": "Test target: class, Class.Method, or namespace" },
+      "count": { "type": "integer" },
+      "maxTests": { "type": "integer", "description": "Default: 20" },
+      "focus": { "type": "string", "enum": ["all", "happy_path", "edge_cases", "error_handling"] },
+      "testFramework": { "type": "string" },
+      "outputDirectory": { "type": "string" },
+      "analyzeOnly": { "type": "boolean" },
+      "validateCompilation": { "type": "boolean" },
+      "preview": { "type": "boolean" }
+    },
+    "required": ["operation"]
+  }
+}
+```
+
+### aura_validate
+
+```json
+{
+  "name": "aura_validate",
+  "description": "Validate code: check compilation, run tests.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "operation": { "type": "string", "enum": ["compilation", "tests"] },
+      "solutionPath": { "type": "string" },
+      "projectName": { "type": "string" },
+      "projectPath": { "type": "string" },
+      "includeWarnings": { "type": "boolean", "description": "Default: false" },
+      "filter": { "type": "string", "description": "Test filter expression" },
+      "timeoutSeconds": { "type": "integer", "description": "Default: 120" }
+    },
+    "required": ["operation"]
+  }
+}
+```
+
+### aura_index
+
+```json
+{
+  "name": "aura_index",
+  "description": "Trigger and manage content indexing. Index directories or files, check job status, get index statistics.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "operation": { "type": "string", "enum": ["index_directory", "index_file", "status", "stats"] },
+      "path": { "type": "string", "description": "Directory or file to index" },
+      "recursive": { "type": "boolean", "description": "Recurse subdirectories (default: true)" },
+      "filePattern": { "type": "string", "description": "Glob filter, e.g. '*.pdf'" },
+      "jobId": { "type": "string", "description": "Job ID for status operation" }
+    },
+    "required": ["operation"]
+  }
+}
+```
+
+### aura_workspace
+
+```json
+{
+  "name": "aura_workspace",
+  "description": "Manage workspaces: registry CRUD, worktree detection, cache invalidation.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "operation": { "type": "string", "enum": ["list", "add", "remove", "set_default", "detect_worktree", "invalidate_cache", "status"] },
+      "path": { "type": "string", "description": "Workspace path" },
+      "id": { "type": "string", "description": "Workspace ID" },
+      "alias": { "type": "string", "description": "Short alias" },
+      "tags": { "type": "array", "items": { "type": "string" }, "description": "Tags for categorization" }
+    },
+    "required": ["operation"]
+  }
+}
+```
+
+### aura_architect
+
+```json
+{
+  "name": "aura_architect",
+  "description": "Analyze codebase architecture: dependencies, layer violations, public API surface. [Coming Soon]",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "operation": { "type": "string", "enum": ["dependencies", "layer_check", "public_api"] },
+      "projectPath": { "type": "string" },
+      "targetLayer": { "type": "string" }
+    },
+    "required": ["operation"]
+  }
+}
+```
 
 ---
 
-## Path Handling
+## REST API Reference
 
-### Workspace IDs
+### Health
 
-Workspace IDs are 16-character hexadecimal strings derived from the normalized path hash. Example: `a1b2c3d4e5f67890`
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/health` | Service status, start time, deploy tag |
+| GET | `/health/db` | Database connectivity |
+| GET | `/health/rag` | RAG subsystem health + stats |
+| GET | `/health/mcp` | MCP handler status + tool list |
 
-### Path Normalization
+### Workspaces
 
-Paths are normalized to:
-- Forward slashes (`/`)
-- Lowercase
-- No trailing slash
+| Method | Path | Body / Params | Description |
+|--------|------|---------------|-------------|
+| GET | `/api/workspaces` | `?limit=N` | List all workspaces |
+| GET | `/api/workspaces/{idOrPath}` | | Get by ID or URL-encoded path |
+| POST | `/api/workspaces` | `{ "path", "name?", "startIndexing?", "options?": { "includePatterns", "excludePatterns" } }` | Create workspace |
+| DELETE | `/api/workspaces/{id}` | | Delete workspace and all data |
 
-Example: `C:\Work\Aura\` → `c:/work/aura`
+### Workspace Index
 
-### Using Paths in URLs
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/workspaces/{id}/index` | Index freshness, chunk/graph counts |
+| POST | `/api/workspaces/{id}/index` | Trigger re-index (returns 202) |
+| DELETE | `/api/workspaces/{id}/index` | Clear RAG index data |
+| GET | `/api/workspaces/{id}/index/jobs` | List indexing jobs |
+| GET | `/api/workspaces/{id}/index/jobs/{jobId}` | Single job status |
 
-When using filesystem paths in URLs:
-1. Normalize the path
-2. URL-encode the result
-3. Use as path parameter
+### Workspace Graph
 
-Example:
-```
-Path: c:/work/aura
-Encoded: c%3A%2Fwork%2Faura
-URL: /api/workspaces/c%3A%2Fwork%2Faura
-```
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/workspaces/{id}/graph` | Graph statistics |
+| DELETE | `/api/workspaces/{id}/graph` | Clear graph |
+| GET | `/api/workspaces/{id}/graph/implementations/{name}` | Find interface implementations |
+| GET | `/api/workspaces/{id}/graph/callers/{name}?containingType=` | Find method callers |
+| GET | `/api/workspaces/{id}/graph/members/{typeName}` | Get type members |
+| GET | `/api/workspaces/{id}/graph/namespaces/{ns}` | Types in namespace |
+| GET | `/api/workspaces/{id}/graph/symbols/{name}?nodeType=` | Find symbols by name |
+
+### Workspace Search
+
+| Method | Path | Body |
+|--------|------|------|
+| POST | `/api/workspaces/{id}/search` | `{ "query": "...", "topK?": 5, "minScore?": 0.3 }` |
+

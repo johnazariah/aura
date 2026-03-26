@@ -5,6 +5,40 @@ All notable changes to Aura will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v2.0.0 — Personal Knowledge MCP Server (2026-03-03)
+
+### Breaking Changes
+- Removed agent orchestration, VS Code extension, prompt templates, story lifecycle
+- Removed Aspire orchestration host
+- MCP tools reduced from 13 to 10 (removed aura_workflow, aura_pattern, aura_edit, aura_docs)
+
+### Added
+- TreeSitterCodeIngestor for Python, TypeScript, JavaScript, Go, Rust, Java, C/C++
+- StructuredDataIngestor for JSON, YAML, XML, TOML
+- PdfIngestor for PDF document indexing
+- `aura_index` MCP tool for on-demand indexing
+- OpenAI embedding provider with configurable batching
+- Auto-failover embedding (OpenAI → Ollama)
+- Cross-platform system tray app (Avalonia)
+- macOS build support in release pipeline
+- Deploy-Dev.ps1 for quick development deployment
+- Global Copilot MCP config at ~/.copilot/mcp-config.json
+
+### Changed
+- RoslynCodeIngestor now registered as primary C# handler (was regex fallback)
+- IncrementalIndexer routes through ingestor pipeline (was plain text only)
+- Default embedding provider changed to "auto" (try OpenAI, fall back to Ollama)
+- Embedding dimensions normalized to 768 for provider compatibility
+- CI pipeline simplified (removed coverage/integration test jobs)
+
+### Removed
+- ~60,000 lines of agent/orchestration/extension code
+- agents/, prompts/, extension/ directories
+- 128 agent tools, prompt templates, guardian system
+- Azure OpenAI and OpenAI chat providers (kept embedding only)
+
+See [ADR-025](.project/adr/025-personal-knowledge-mcp-pivot.md) for rationale.
+
 ## [1.5.0] - 2026-01-30
 
 ### Added

@@ -1,49 +1,51 @@
-# Configuring LLM Providers
+# LLM Providers
 
-Aura supports multiple LLM providers for AI capabilities. You can use local models with Ollama or cloud providers for better quality.
+Aura uses LLM providers for two purposes: **embeddings** (vector search) and **generation** (code analysis and creation). Embedding and generation can use different providers.
 
-## Available Providers
+## Embedding Providers
 
-| Provider | Type | Best For |
-|----------|------|----------|
+The `Aura:Embedding:Provider` setting controls which provider generates embeddings:
 
-| **Ollama** | Local | Privacy, offline use, no API costs |
-| **Azure OpenAI** | Cloud | Enterprise, compliance, GPT-4 quality |
-| **OpenAI** | Cloud | Best quality, easy setup |
+| Value | Behavior |
+|-------|----------|
+| `auto` (default) | Try OpenAI first; fall back to Ollama if OpenAI is unavailable or unconfigured |
+| `ollama` | Always use local Ollama |
+| `openai` | Always use OpenAI API |
 
-## Ollama (Default)
+### Ollama (Local — Recommended for Getting Started)
 
-Ollama runs models locally on your machine.
+Ollama runs entirely on your machine. No API keys, no network calls.
 
-### Setup
+**Setup:**
 
-1. Install Ollama from [ollama.com](https://ollama.com)
-2. Pull a model:
+1. Install Ollama from [ollama.com](https://ollama.com/)
+2. Pull the embedding model:
 
-   ```powershell
-   ollama pull qwen2.5-coder:7b
-   ollama pull nomic-embed-text
-   ```
+```bash
+ollama pull nomic-embed-text
+```
 
-3. Ollama is auto-detected by Aura
+3. Verify it's running:
 
-### Configuration
+```bash
+ollama list
+curl http://localhost:11434/api/tags
+```
 
-In `C:\Program Files\Aura\api\appsettings.json`:
+**Configuration:**
 
 ```json
 {
   "Aura": {
+    "Embedding": {
+      "Provider": "ollama"
+    },
     "Llm": {
-      "DefaultProvider": "Ollama",
       "Providers": {
         "Ollama": {
           "BaseUrl": "http://localhost:11434",
-          "DefaultModel": "qwen2.5-coder:7b",
           "DefaultEmbeddingModel": "nomic-embed-text",
-          "TimeoutSeconds": 300,
-          "NumGpu": -1,
-          "MaxEmbeddingTextLength": 30000
+          "NumGpu": -1
         }
       }
     }
@@ -51,60 +53,55 @@ In `C:\Program Files\Aura\api\appsettings.json`:
 }
 ```
 
-### GPU Configuration
+**GPU settings:**
 
-| Setting | Value | Description |
-|---------|-------|-------------|
-| `NumGpu` | `-1` | Use all available GPU layers (recommended) |
-| `NumGpu` | `0` | Force CPU only |
-| `NumGpu` | `null` | Let Ollama auto-detect (may sometimes fail) |
-| `NumCtx` | `8192` | Context window size (optional, use model default) |
+| `NumGpu` | Meaning |
+|----------|---------|
+| `-1` | Use all available GPU layers (default) |
+| `0` | CPU only |
+| `N` | Use N GPU layers |
 
-**If Ollama is using CPU when a GPU is available:**
+**Recommended models:**
 
-1. Set `"NumGpu": -1` in the configuration
-2. Restart the Aura service
-3. Verify GPU drivers are installed correctly
-4. Check Ollama logs: `ollama show --verbose qwen2.5-coder:7b`
+| Purpose | Model | Size |
+|---------|-------|------|
+| Embeddings | `nomic-embed-text` | ~270 MB |
+| Code generation | `qwen2.5-coder:7b` | ~4 GB |
 
-### Embedding Text Limits
+### OpenAI (Hosted)
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `MaxEmbeddingTextLength` | `30000` | Maximum characters per text for embeddings |
+Uses the OpenAI API for embeddings. Higher quality on some benchmarks, but requires an API key and network access.
 
-Large files (e.g., big XML/JSON files) are automatically truncated to prevent "context length exceeded" errors from the embedding model.
+**Configuration:**
 
-### Recommended Models
+```json
+{
+  "Aura": {
+    "Embedding": {
+      "Provider": "openai"
+    },
+    "Llm": {
+      "Providers": {
+        "OpenAI": {
+          "ApiKey": "sk-..."
+        }
+      }
+    }
+  }
+}
+```
 
-| Model | Size | Use Case |
-|-------|------|----------|
+Or via environment variable:
 
-| `qwen2.5-coder:7b` | ~4GB | General coding (recommended) |
-| `qwen2.5-coder:14b` | ~8GB | Better quality, needs 16GB+ RAM |
-| `codellama:7b` | ~4GB | Alternative coding model |
-| `llama3.2:3b` | ~2GB | Faster, less capable |
+```bash
+export Aura__Llm__Providers__OpenAI__ApiKey="sk-..."
+```
 
-For embeddings:
+The default embedding model is `text-embedding-3-small` (1536 dimensions). When using OpenAI embeddings, the `Aura:Rag:EmbeddingDimension` should match the model's output dimension.
 
-| Model | Size | Use Case |
-|-------|------|----------|
+### Azure OpenAI
 
-| `nomic-embed-text` | ~275MB | Best quality (recommended) |
-| `all-minilm` | ~45MB | Smaller, faster |
-
-## Azure OpenAI
-
-Use Azure's hosted OpenAI models for enterprise scenarios.
-
-### Prerequisites
-
-1. Azure subscription
-2. Azure OpenAI resource created
-3. Model deployment (e.g., gpt-4o)
-4. API key or managed identity
-
-### Configuration
+If you have an Azure OpenAI resource:
 
 ```json
 {
@@ -113,30 +110,8 @@ Use Azure's hosted OpenAI models for enterprise scenarios.
       "DefaultProvider": "AzureOpenAI",
       "Providers": {
         "AzureOpenAI": {
-          "Endpoint": "https://your-resource.openai.azure.com/",
-          "ApiKey": "your-api-key",
-          "DefaultDeployment": "gpt-4o",
-          "MaxTokens": 4096,
-          "TimeoutSeconds": 120
-        }
-      }
-    }
-  }
-}
-```
-
-### Using Managed Identity
-
-For Azure VMs or App Service:
-
-```json
-{
-  "Aura": {
-    "Llm": {
-      "Providers": {
-        "AzureOpenAI": {
-          "Endpoint": "https://your-resource.openai.azure.com/",
-          "UseAzureAD": true,
+          "Endpoint": "https://my-resource.openai.azure.com/",
+          "ApiKey": "...",
           "DefaultDeployment": "gpt-4o"
         }
       }
@@ -145,130 +120,55 @@ For Azure VMs or App Service:
 }
 ```
 
-## OpenAI
+## Auto-Failover
 
-Use OpenAI's API directly.
+When `Aura:Embedding:Provider` is set to `auto` (the default):
 
-### Prerequisites
+1. Aura checks whether an OpenAI API key is configured
+2. If yes, it uses OpenAI for embeddings
+3. If OpenAI is unavailable or returns errors, it falls back to the `FallbackModel` on Ollama (`nomic-embed-text`)
+4. If Ollama is also unavailable, embedding fails and the health endpoint reports unhealthy
 
-1. OpenAI account
-2. API key from [platform.openai.com](https://platform.openai.com)
+This means you can configure both providers and Aura will use the best available option.
 
-### Configuration
+## Generation Providers
 
-```json
-{
-  "Aura": {
-    "Llm": {
-      "DefaultProvider": "OpenAI",
-      "Providers": {
-        "OpenAI": {
-          "ApiKey": "sk-your-api-key",
-          "DefaultModel": "gpt-4o",
-          "MaxTokens": 4096,
-          "TimeoutSeconds": 120
-        }
-      }
-    }
-  }
-}
-```
-
-### Available Models
-
-| Model | Quality | Speed | Cost |
-|-------|---------|-------|------|
-
-| `gpt-4o` | Best | Fast | $$ |
-| `gpt-4o-mini` | Good | Fastest | $ |
-| `gpt-4-turbo` | Best | Slower | $$$ |
-
-## Multiple Providers
-
-You can configure multiple providers and Aura will fall back:
+The `Aura:Llm:DefaultProvider` setting controls which provider handles generation (code analysis, test generation, etc.):
 
 ```json
 {
   "Aura": {
     "Llm": {
-      "DefaultProvider": "AzureOpenAI",
-      "FallbackProviders": ["Ollama"],
-      "Providers": {
-        "AzureOpenAI": { ... },
-        "Ollama": { ... }
-      }
+      "DefaultProvider": "Ollama"
     }
   }
 }
 ```
 
-If Azure is unavailable, Aura uses Ollama.
+Valid values: `Ollama`, `OpenAI`, `AzureOpenAI`.
 
-## Choosing a Provider
+## Verifying Provider Health
 
-| Scenario | Recommended |
-|----------|-------------|
+```bash
+# Check RAG health (includes embedding provider status)
+curl http://localhost:5300/health/rag
 
-| **Privacy-critical** | Ollama |
-| **Offline use** | Ollama |
-| **Best quality** | Azure OpenAI / OpenAI |
-| **Enterprise compliance** | Azure OpenAI |
-| **Low budget** | Ollama |
-| **Mixed use** | Azure + Ollama fallback |
+# Check Ollama directly
+curl http://localhost:11434/api/tags
+ollama list
+```
 
-## Applying Changes
+## Switching Providers
 
-After editing `appsettings.json`:
+To switch from Ollama to OpenAI embeddings:
 
-1. Restart Aura service:
-
-   ```powershell
-   Restart-Service AuraService
+1. Set the provider:
+   ```json
+   { "Aura": { "Embedding": { "Provider": "openai" } } }
    ```
+2. Configure the API key
+3. Restart AuraService
+4. Re-index your workspaces (embeddings from different models are not compatible)
 
-2. Or restart from system tray:
-   - Right-click Aura tray icon
-   - Click "Restart"
+> **Important:** When switching embedding providers, you must re-index all workspaces. Vectors from different models live in incompatible embedding spaces.
 
-## Security Best Practices
-
-### API Keys
-
-- Never commit API keys to source control
-- Use environment variables for CI/CD:
-
-  ```json
-  {
-    "Aura": {
-      "Llm": {
-        "Providers": {
-          "OpenAI": {
-            "ApiKey": "${OPENAI_API_KEY}"
-          }
-        }
-      }
-    }
-  }
-  ```
-
-### Azure Managed Identity
-
-Prefer managed identity over API keys when running on Azure.
-
-### Local Development
-
-For local development, use `appsettings.Local.json` (git-ignored):
-
-```json
-{
-  "Aura": {
-    "Llm": {
-      "Providers": {
-        "AzureOpenAI": {
-          "ApiKey": "your-dev-key"
-        }
-      }
-    }
-  }
-}
-```
